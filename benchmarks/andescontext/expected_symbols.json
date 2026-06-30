@@ -1,0 +1,159 @@
+{
+  "Q1": {
+    "question": "How is the backend structured?",
+    "expected_symbols": [
+      "CogneeService",
+      "IndexingService",
+      "ContextService"
+    ],
+    "critical_symbols": [
+      "CogneeService",
+      "ContextService"
+    ]
+  },
+  "Q2": {
+    "question": "What is the data flow from indexing to package?",
+    "expected_symbols": [
+      "index_repository",
+      "generate_context_package",
+      "remember",
+      "recall"
+    ],
+    "critical_symbols": [
+      "index_repository",
+      "generate_context_package"
+    ]
+  },
+  "Q3": {
+    "question": "How does CogneeService initialize providers?",
+    "expected_symbols": [
+      "CogneeService.initialize",
+      "configure_cognee"
+    ],
+    "critical_symbols": [
+      "CogneeService.initialize"
+    ]
+  },
+  "Q4": {
+    "question": "Where to add Rust file support?",
+    "expected_symbols": [
+      "SUPPORTED_EXTENSIONS"
+    ],
+    "critical_symbols": [
+      "SUPPORTED_EXTENSIONS"
+    ]
+  },
+  "Q5": {
+    "question": "Where is the CLI entry point?",
+    "expected_symbols": [
+      "app"
+    ],
+    "critical_symbols": [
+      "app"
+    ]
+  },
+  "Q6": {
+    "question": "Where are Pydantic schemas?",
+    "expected_symbols": [
+      "ContextRequest",
+      "ContextResponse",
+      "ErrorResponse"
+    ],
+    "critical_symbols": [
+      "ContextRequest",
+      "ContextResponse"
+    ]
+  },
+  "Q7": {
+    "question": "What API commands exist?",
+    "expected_symbols": [
+      "health",
+      "get_backend_status",
+      "index_repository",
+      "generate_context",
+      "forget_dataset"
+    ],
+    "critical_symbols": [
+      "generate_context",
+      "index_repository"
+    ]
+  },
+  "Q8": {
+    "question": "How does forget work?",
+    "expected_symbols": [
+      "forget_dataset",
+      "ForgetRequest"
+    ],
+    "critical_symbols": [
+      "forget_dataset"
+    ]
+  },
+  "Q9": {
+    "question": "What naming conventions?",
+    "expected_symbols": [],
+    "critical_symbols": []
+  },
+  "Q10": {
+    "question": "How are errors handled?",
+    "expected_symbols": [
+      "CogneeServiceError",
+      "IndexingError"
+    ],
+    "critical_symbols": [
+      "CogneeServiceError"
+    ]
+  },
+  "Q11": {
+    "question": "Where to add a new pipeline stage?",
+    "expected_symbols": [
+      "generate_context_package"
+    ],
+    "critical_symbols": [
+      "generate_context_package"
+    ]
+  },
+  "Q12": {
+    "question": "How to add a new CLI command?",
+    "expected_symbols": [
+      "app"
+    ],
+    "critical_symbols": [
+      "app"
+    ]
+  },
+  "Q13": {
+    "question": "How does categorization work?",
+    "expected_symbols": [
+      "_categorize",
+      "_classify_memory",
+      "SectionType"
+    ],
+    "critical_symbols": [
+      "_categorize",
+      "SectionType"
+    ]
+  },
+  "Q14": {
+    "question": "How does indexing handle large repos?",
+    "expected_symbols": [
+      "batch_files",
+      "DEFAULT_BATCH_SIZE",
+      "IndexingProgress"
+    ],
+    "critical_symbols": [
+      "batch_files",
+      "IndexingProgress"
+    ]
+  },
+  "Q15": {
+    "question": "What environment variables are required?",
+    "expected_symbols": [
+      "HUGGINGFACE_TOKENIZER",
+      "COGNEE_SKIP_CONNECTION_TEST",
+      "LLM_MODEL"
+    ],
+    "critical_symbols": [
+      "HUGGINGFACE_TOKENIZER"
+    ]
+  }
+}

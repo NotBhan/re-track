@@ -1,0 +1,155 @@
+{
+  "Q1": {
+    "question": "How is the backend structured? What are the main layers and how do they communicate?",
+    "expected_files": [
+      "backend/app/services/__init__.py",
+      "backend/app/api/commands.py",
+      "backend/app/cli/main.py",
+      "backend/app/services/cognee_service.py",
+      "backend/app/services/indexing_service.py",
+      "backend/app/services/context_service.py"
+    ],
+    "critical_files": [
+      "backend/app/services/__init__.py",
+      "backend/app/api/commands.py"
+    ]
+  },
+  "Q2": {
+    "question": "What is the data flow from repository indexing to Context Package generation?",
+    "expected_files": [
+      "backend/app/services/indexing_service.py",
+      "backend/app/services/context_service.py",
+      "backend/app/services/cognee_service.py"
+    ],
+    "critical_files": [
+      "backend/app/services/indexing_service.py",
+      "backend/app/services/context_service.py"
+    ]
+  },
+  "Q3": {
+    "question": "How does CogneeService initialize the local AI providers?",
+    "expected_files": [
+      "backend/app/services/cognee_service.py",
+      "backend/app/config/settings.py"
+    ],
+    "critical_files": [
+      "backend/app/services/cognee_service.py",
+      "backend/app/config/settings.py"
+    ]
+  },
+  "Q4": {
+    "question": "Where should I add support for Rust files (.rs)?",
+    "expected_files": [
+      "backend/app/services/indexing_service.py"
+    ],
+    "critical_files": [
+      "backend/app/services/indexing_service.py"
+    ]
+  },
+  "Q5": {
+    "question": "Where is the CLI entry point and how are commands registered?",
+    "expected_files": [
+      "backend/andescontext.py",
+      "backend/app/cli/main.py"
+    ],
+    "critical_files": [
+      "backend/app/cli/main.py"
+    ]
+  },
+  "Q6": {
+    "question": "Where are the Pydantic request/response schemas defined?",
+    "expected_files": [
+      "backend/app/api/schemas.py"
+    ],
+    "critical_files": [
+      "backend/app/api/schemas.py"
+    ]
+  },
+  "Q7": {
+    "question": "What API commands are available and what does each do?",
+    "expected_files": [
+      "backend/app/api/commands.py",
+      "backend/app/api/schemas.py"
+    ],
+    "critical_files": [
+      "backend/app/api/commands.py"
+    ]
+  },
+  "Q8": {
+    "question": "How does the forget command work? What parameters does it accept?",
+    "expected_files": [
+      "backend/app/api/commands.py",
+      "backend/app/api/schemas.py"
+    ],
+    "critical_files": [
+      "backend/app/api/commands.py"
+    ]
+  },
+  "Q9": {
+    "question": "What naming conventions does this project use?",
+    "expected_files": [
+      "backend/app/services/context_service.py",
+      "backend/app/models/responses.py"
+    ],
+    "critical_files": []
+  },
+  "Q10": {
+    "question": "How are errors handled in the backend?",
+    "expected_files": [
+      "backend/app/models/errors.py",
+      "backend/app/api/commands.py"
+    ],
+    "critical_files": [
+      "backend/app/models/errors.py"
+    ]
+  },
+  "Q11": {
+    "question": "If I wanted to add a new pipeline stage, where would I hook in?",
+    "expected_files": [
+      "backend/app/services/context_service.py"
+    ],
+    "critical_files": [
+      "backend/app/services/context_service.py"
+    ]
+  },
+  "Q12": {
+    "question": "How would I add a new CLI command?",
+    "expected_files": [
+      "backend/app/cli/main.py",
+      "backend/app/api/commands.py",
+      "backend/app/api/schemas.py"
+    ],
+    "critical_files": [
+      "backend/app/cli/main.py",
+      "backend/app/api/commands.py"
+    ]
+  },
+  "Q13": {
+    "question": "How does ContextService categorize retrieved memories into sections?",
+    "expected_files": [
+      "backend/app/services/context_service.py"
+    ],
+    "critical_files": [
+      "backend/app/services/context_service.py"
+    ]
+  },
+  "Q14": {
+    "question": "How does the indexing pipeline handle large repositories?",
+    "expected_files": [
+      "backend/app/services/indexing_service.py"
+    ],
+    "critical_files": [
+      "backend/app/services/indexing_service.py"
+    ]
+  },
+  "Q15": {
+    "question": "What environment variables are required for Cognee to work locally?",
+    "expected_files": [
+      "backend/app/config/settings.py",
+      "docs/cognee_integration.md"
+    ],
+    "critical_files": [
+      "backend/app/config/settings.py"
+    ]
+  }
+}
