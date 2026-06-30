@@ -324,6 +324,7 @@ class TestGenerateContextCommand:
         _, _, _, mock_context = mock_services
         package = ContextPackage(
             task="Add auth",
+            objective="Add authentication middleware",
             markdown="# Task\n\nAdd auth",
             sections=[
                 PackageSection(

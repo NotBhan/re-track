@@ -163,6 +163,7 @@ class ContextService:
 
         package = ContextPackage(
             task=task,
+            objective=task,
             markdown=markdown,
             sections=sections,
             source_count=len(ranked),
