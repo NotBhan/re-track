@@ -156,6 +156,26 @@ export interface MemoryStatsResponse {
   dataset_count: number;
 }
 
+export interface BenchmarkResultItem {
+  question: string;
+  latency_ms: number;
+  token_count: number;
+  section_count: number;
+  retrieved_memories: number;
+  compression_ratio: number;
+  quality_score: number;
+  passed: boolean;
+}
+
+export interface BenchmarkSuiteResponse {
+  success: boolean;
+  results: BenchmarkResultItem[];
+  avg_latency_ms: number;
+  avg_tokens: number;
+  pass_rate: number;
+  total_questions: number;
+}
+
 // --- API functions ---
 
 /**
@@ -225,4 +245,11 @@ export async function getDashboardStats(): Promise<DashboardStats> {
  */
 export async function getMemoryStats(): Promise<MemoryStatsResponse> {
   return invoke<MemoryStatsResponse>("get_memory_stats");
+}
+
+/**
+ * Run a benchmark suite.
+ */
+export async function runBenchmark(): Promise<BenchmarkSuiteResponse> {
+  return invoke<BenchmarkSuiteResponse>("run_benchmark");
 }

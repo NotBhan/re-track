@@ -21,6 +21,7 @@ from app.api.commands import (
     forget_dataset,
     list_datasets,
     get_repository_summaries,
+    run_benchmark,
     initialize_backend,
 )
 from app.api.schemas import (
@@ -139,6 +140,15 @@ async def dashboard_stats_endpoint():
 async def memory_stats_endpoint():
     """Get memory topology statistics."""
     result = await get_memory_stats()
+    if isinstance(result, ErrorResponse):
+        raise HTTPException(status_code=500, detail=result.model_dump())
+    return result.model_dump()
+
+
+@app.post("/benchmarks/run")
+async def benchmarks_run_endpoint():
+    """Run a benchmark suite."""
+    result = await run_benchmark()
     if isinstance(result, ErrorResponse):
         raise HTTPException(status_code=500, detail=result.model_dump())
     return result.model_dump()

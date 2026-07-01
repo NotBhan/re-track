@@ -19,6 +19,8 @@ from typing import Optional
 
 from app.api.schemas import (
     BackendStatusResponse,
+    BenchmarkResultItem,
+    BenchmarkSuiteResponse,
     ContextResponse,
     DashboardStats,
     DatasetInfo,
@@ -670,4 +672,54 @@ async def get_memory_stats() -> MemoryStatsResponse | ErrorResponse:
         return ErrorResponse(
             error=type(e).__name__,
             message=f"Failed to get memory stats: {e}",
+        )
+
+
+async def run_benchmark() -> BenchmarkSuiteResponse | ErrorResponse:
+    """Run a benchmark suite against the generate_context endpoint."""
+    start = time.monotonic()
+    logger.info("command: run_benchmark()")
+
+    try:
+        from app.api.benchmarks import run_benchmark_suite
+
+        _ensure_services()
+        suite = await run_benchmark_suite()
+
+        response = BenchmarkSuiteResponse(
+            success=True,
+            results=[
+                BenchmarkResultItem(
+                    question=r.question,
+                    latency_ms=r.latency_ms,
+                    token_count=r.token_count,
+                    section_count=r.section_count,
+                    retrieved_memories=r.retrieved_memories,
+                    compression_ratio=r.compression_ratio,
+                    quality_score=r.quality_score,
+                    passed=r.passed,
+                )
+                for r in suite.results
+            ],
+            avg_latency_ms=suite.avg_latency_ms,
+            avg_tokens=suite.avg_tokens,
+            pass_rate=suite.pass_rate,
+            total_questions=suite.total_questions,
+        )
+
+        elapsed = time.monotonic() - start
+        logger.info(
+            "command: run_benchmark() complete | questions=%d | pass_rate=%.1f%% | %.2fs",
+            suite.total_questions,
+            suite.pass_rate,
+            elapsed,
+        )
+        return response
+
+    except Exception as e:
+        elapsed = time.monotonic() - start
+        logger.error("command: run_benchmark() failed | %.2fs | %s", elapsed, e)
+        return ErrorResponse(
+            error=type(e).__name__,
+            message=f"Benchmark failed: {e}",
         )

@@ -228,3 +228,30 @@ class MemoryStatsResponse(BaseModel):
     graph_nodes: int = Field(description="Number of graph nodes")
     graph_edges: int = Field(description="Number of graph edges")
     dataset_count: int = Field(description="Number of indexed datasets")
+
+
+# --- Benchmark Schemas ---
+
+
+class BenchmarkResultItem(BaseModel):
+    """A single benchmark result."""
+
+    question: str = Field(description="Benchmark question")
+    latency_ms: float = Field(description="Latency in milliseconds")
+    token_count: int = Field(description="Token count of generated context")
+    section_count: int = Field(description="Number of sections generated")
+    retrieved_memories: int = Field(description="Memories retrieved")
+    compression_ratio: float = Field(description="Compression ratio")
+    quality_score: float = Field(default=0.0, description="Quality score")
+    passed: bool = Field(default=False, description="Whether benchmark passed")
+
+
+class BenchmarkSuiteResponse(BaseModel):
+    """Response from a benchmark suite run."""
+
+    success: bool = Field(description="Whether the suite completed")
+    results: list[BenchmarkResultItem] = Field(default_factory=list)
+    avg_latency_ms: float = Field(default=0.0, description="Average latency")
+    avg_tokens: float = Field(default=0.0, description="Average token count")
+    pass_rate: float = Field(default=0.0, description="Pass rate percentage")
+    total_questions: int = Field(default=0, description="Total questions tested")

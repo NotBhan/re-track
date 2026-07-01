@@ -143,6 +143,35 @@ fn get_memory_stats() -> Result<serde_json::Value, String> {
     http_get("/memory/stats")
 }
 
+#[tauri::command]
+fn run_benchmark() -> Result<serde_json::Value, String> {
+    // POST with empty body — benchmarks can be slow, reuse 300s timeout
+    let url = format!("{}/benchmarks/run", BACKEND_URL);
+    let client = reqwest::blocking::Client::new();
+    let resp = client
+        .post(&url)
+        .json(&serde_json::json!({}))
+        .timeout(Duration::from_secs(300))
+        .send()
+        .map_err(|e| format!("HTTP request failed: {}", e))?;
+
+    let status = resp.status();
+    let body: serde_json::Value = resp
+        .json()
+        .map_err(|e| format!("Failed to parse response: {}", e))?;
+
+    if status.is_success() {
+        Ok(body)
+    } else {
+        Err(body
+            .get("detail")
+            .and_then(|d| d.get("message"))
+            .and_then(|m| m.as_str())
+            .unwrap_or("Unknown error")
+            .to_string())
+    }
+}
+
 // --- Backend lifecycle management ---
 
 fn start_backend() -> Result<Child, String> {
@@ -266,6 +295,7 @@ pub fn run() {
             get_repository_summaries,
             get_dashboard_stats,
             get_memory_stats,
+            run_benchmark,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
