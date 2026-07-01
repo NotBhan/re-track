@@ -137,6 +137,17 @@ export interface RepositoryListResponse {
   total_count: number;
 }
 
+export interface DashboardStats {
+  success: boolean;
+  indexed_repos: number;
+  total_files: number;
+  total_embeddings: number;
+  packages_generated: number;
+  avg_gen_time_ms: number;
+  last_indexed_repo: string;
+  last_indexed_time: string;
+}
+
 // --- API functions ---
 
 /**
@@ -192,4 +203,11 @@ export async function listDatasets(): Promise<DatasetListResponse> {
  */
 export async function getRepositorySummaries(): Promise<RepositoryListResponse> {
   return invoke<RepositoryListResponse>("get_repository_summaries");
+}
+
+/**
+ * Get aggregate dashboard statistics.
+ */
+export async function getDashboardStats(): Promise<DashboardStats> {
+  return invoke<DashboardStats>("get_dashboard_stats");
 }

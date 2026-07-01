@@ -192,6 +192,22 @@ class RepositoryListResponse(BaseModel):
     total_count: int = Field(default=0, description="Total number of repositories")
 
 
+# --- Dashboard Stats Schemas ---
+
+
+class DashboardStats(BaseModel):
+    """Aggregate dashboard statistics."""
+
+    success: bool = Field(description="Whether the query succeeded")
+    indexed_repos: int = Field(description="Number of indexed repositories")
+    total_files: int = Field(description="Total files across all repositories")
+    total_embeddings: int = Field(description="Approximate total embeddings")
+    packages_generated: int = Field(description="Number of packages generated")
+    avg_gen_time_ms: float = Field(description="Average generation time in milliseconds")
+    last_indexed_repo: str = Field(description="Name of most recently indexed repository")
+    last_indexed_time: str = Field(description="ISO 8601 timestamp of most recent indexing")
+
+
 # --- Error Schema ---
 
 

@@ -20,6 +20,7 @@ from typing import Optional
 from app.api.schemas import (
     BackendStatusResponse,
     ContextResponse,
+    DashboardStats,
     DatasetInfo,
     DatasetListResponse,
     ErrorResponse,
@@ -548,4 +549,53 @@ async def get_repository_summaries() -> RepositoryListResponse | ErrorResponse:
         return ErrorResponse(
             error=type(e).__name__,
             message=f"Failed to list repositories: {e}",
+        )
+
+
+async def get_dashboard_stats() -> DashboardStats | ErrorResponse:
+    """Return aggregate dashboard statistics from the indexed repos store."""
+    start = time.monotonic()
+    logger.info("command: get_dashboard_stats()")
+
+    try:
+        store = _load_repo_store()
+        repos = store.get("repositories", [])
+
+        indexed_repos = len(repos)
+        total_files = sum(r.get("file_count", 0) for r in repos)
+        total_embeddings = total_files * 5
+
+        last_repo = ""
+        last_time = ""
+        if repos:
+            latest = max(repos, key=lambda r: r.get("last_indexed", ""))
+            last_repo = latest.get("name", "")
+            last_time = latest.get("last_indexed", "")
+
+        response = DashboardStats(
+            success=True,
+            indexed_repos=indexed_repos,
+            total_files=total_files,
+            total_embeddings=total_embeddings,
+            packages_generated=0,
+            avg_gen_time_ms=0.0,
+            last_indexed_repo=last_repo,
+            last_indexed_time=last_time,
+        )
+
+        elapsed = time.monotonic() - start
+        logger.info(
+            "command: get_dashboard_stats() complete | repos=%d | files=%d | %.2fs",
+            indexed_repos,
+            total_files,
+            elapsed,
+        )
+        return response
+
+    except Exception as e:
+        elapsed = time.monotonic() - start
+        logger.error("command: get_dashboard_stats() failed | %.2fs | %s", elapsed, e)
+        return ErrorResponse(
+            error=type(e).__name__,
+            message=f"Failed to get dashboard stats: {e}",
         )

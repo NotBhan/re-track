@@ -14,6 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.commands import (
     health,
     get_backend_status,
+    get_dashboard_stats,
     index_repository,
     generate_context,
     forget_dataset,
@@ -119,6 +120,15 @@ async def forget_endpoint(request: ForgetDatasetRequest):
 async def repositories_endpoint():
     """List all indexed repositories with metadata."""
     result = await get_repository_summaries()
+    if isinstance(result, ErrorResponse):
+        raise HTTPException(status_code=500, detail=result.model_dump())
+    return result.model_dump()
+
+
+@app.get("/dashboard/stats")
+async def dashboard_stats_endpoint():
+    """Get aggregate dashboard statistics."""
+    result = await get_dashboard_stats()
     if isinstance(result, ErrorResponse):
         raise HTTPException(status_code=500, detail=result.model_dump())
     return result.model_dump()
