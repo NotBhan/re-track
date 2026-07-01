@@ -1,14 +1,19 @@
 import { useSettingsStore } from "@/stores/settings-store";
 import { cn } from "@/lib/utils";
-import { mockSettingTabs } from "@/data/mock";
+
+const configTabs = [
+  { id: "backend", label: "Backend" },
+  { id: "cognee", label: "Cognee" },
+  { id: "ollama", label: "Ollama" },
+  { id: "storage", label: "Storage" },
+];
+const appTabs = [
+  { id: "theme", label: "Theme" },
+  { id: "about", label: "About" },
+];
 
 export function SettingsNav() {
   const { activeTab, setActiveTab } = useSettingsStore();
-
-  const configTabs = mockSettingTabs.filter(
-    (t) => t.category === "Configuration"
-  );
-  const appTabs = mockSettingTabs.filter((t) => t.category === "Application");
 
   return (
     <div className="w-[220px] h-full border-r border-outline-variant bg-surface/50 flex flex-col py-8 px-4 overflow-y-auto">

@@ -1,8 +1,21 @@
 import { useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
+import { useHealthStore } from "@/stores/health-store";
+import { health } from "@/lib/api";
 
 export function BackendSettings() {
   const [showKey, setShowKey] = useState(false);
+  const [testResult, setTestResult] = useState<"success" | "error" | null>(null);
+  const status = useHealthStore((s) => s.status);
+
+  const handleTestConnection = async () => {
+    try {
+      await health();
+      setTestResult("success");
+    } catch {
+      setTestResult("error");
+    }
+  };
 
   return (
     <div className="space-y-8">
@@ -31,7 +44,7 @@ export function BackendSettings() {
             <div className="md:w-2/3">
               <input
                 type="text"
-                defaultValue="http://127.0.0.1"
+                defaultValue={status?.ollama_host ?? "http://127.0.0.1"}
                 className="w-full bg-surface-container h-10 px-3 rounded-md border border-outline-variant focus:border-primary focus:ring-1 focus:ring-primary text-on-surface font-mono text-[13px] leading-[20px] transition-colors placeholder-outline"
               />
             </div>
@@ -47,7 +60,7 @@ export function BackendSettings() {
             <div className="md:w-2/3">
               <input
                 type="number"
-                defaultValue={8000}
+                defaultValue={status?.ollama_port ?? 8000}
                 className="w-full max-w-[150px] bg-surface-container h-10 px-3 rounded-md border border-outline-variant focus:border-primary focus:ring-1 focus:ring-primary text-on-surface font-mono text-[13px] leading-[20px] transition-colors"
               />
             </div>
@@ -84,8 +97,17 @@ export function BackendSettings() {
         </div>
       </div>
 
-      <div className="flex justify-end">
-        <button className="px-4 py-2 bg-primary/10 text-primary hover:bg-primary/20 border border-primary/20 rounded-md text-[12px] leading-[16px] tracking-[0.02em] font-medium transition-colors">
+      <div className="flex justify-end items-center gap-3">
+        {testResult === "success" && (
+          <span className="text-[13px] text-green-600">Connection successful</span>
+        )}
+        {testResult === "error" && (
+          <span className="text-[13px] text-red-600">Connection failed</span>
+        )}
+        <button
+          onClick={handleTestConnection}
+          className="px-4 py-2 bg-primary/10 text-primary hover:bg-primary/20 border border-primary/20 rounded-md text-[12px] leading-[16px] tracking-[0.02em] font-medium transition-colors"
+        >
           Test Connection
         </button>
       </div>

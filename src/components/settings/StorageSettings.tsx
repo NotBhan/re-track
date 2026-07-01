@@ -1,6 +1,8 @@
 import { FolderOpen } from "lucide-react";
+import { useHealthStore } from "@/stores/health-store";
 
 export function StorageSettings() {
+  const status = useHealthStore((s) => s.status);
   return (
     <div className="space-y-8">
       <div>
@@ -23,7 +25,7 @@ export function StorageSettings() {
             <input
               type="text"
               readOnly
-              defaultValue="~/.andes/data"
+              defaultValue={status?.data_root ?? "~/.andes/data"}
               className="w-full bg-surface-container h-10 px-3 rounded-md border border-outline-variant text-outline font-mono text-[13px] leading-[20px] cursor-not-allowed"
             />
             <button className="px-3 h-10 bg-surface-container hover:bg-surface-bright border border-outline-variant rounded-md text-on-surface transition-colors">
