@@ -1,15 +1,18 @@
-import { Folder, RefreshCw, Play, MoreVertical, Trash2 } from "lucide-react";
+import { Folder, RefreshCw, Trash2 } from "lucide-react";
 import { LanguageBadge } from "./LanguageBadge";
 import { cn } from "@/lib/utils";
-import type { Repository } from "@/types";
+import type { RepositorySummaryInfo } from "@/lib/api";
+import { useRepositoryStore } from "@/stores/repository-store";
 
 interface RepoCardProps {
-  repo: Repository;
+  repo: RepositorySummaryInfo;
   selected: boolean;
   onSelect: () => void;
 }
 
 export function RepoCard({ repo, selected, onSelect }: RepoCardProps) {
+  const { indexRepo, removeRepo } = useRepositoryStore();
+
   return (
     <div
       onClick={onSelect}
@@ -50,7 +53,7 @@ export function RepoCard({ repo, selected, onSelect }: RepoCardProps) {
             Files
           </p>
           <p className="text-[14px] leading-[20px] text-on-surface">
-            {repo.fileCount.toLocaleString()}
+            {repo.file_count.toLocaleString()}
           </p>
         </div>
         <div>
@@ -58,7 +61,7 @@ export function RepoCard({ repo, selected, onSelect }: RepoCardProps) {
             Memory Size
           </p>
           <p className="text-[14px] leading-[20px] text-on-surface">
-            {repo.memorySize}
+            {repo.memory_size}
           </p>
         </div>
         <div>
@@ -66,34 +69,32 @@ export function RepoCard({ repo, selected, onSelect }: RepoCardProps) {
             Last Indexed
           </p>
           <p className="text-[14px] leading-[20px] text-on-surface">
-            {repo.lastIndexed}
+            {repo.last_indexed}
           </p>
         </div>
       </div>
 
       {/* Actions */}
       <div className="flex gap-2">
-        {repo.status === "indexed" ? (
-          <>
-            <button className="flex-1 bg-surface-variant hover:bg-surface-bright text-on-surface text-[12px] leading-[16px] tracking-[0.02em] font-medium rounded py-1.5 transition-colors flex items-center justify-center gap-1">
-              <RefreshCw className="w-4 h-4" />
-              Re-index
-            </button>
-            <button className="bg-surface-variant hover:bg-error-container hover:text-on-error-container text-on-surface text-[12px] leading-[16px] tracking-[0.02em] font-medium rounded px-3 py-1.5 transition-colors">
-              <Trash2 className="w-4 h-4" />
-            </button>
-          </>
-        ) : (
-          <>
-            <button className="flex-1 border border-outline-variant hover:border-primary text-on-surface text-[12px] leading-[16px] tracking-[0.02em] font-medium rounded py-1.5 transition-colors flex items-center justify-center gap-1">
-              <Play className="w-4 h-4" />
-              Index
-            </button>
-            <button className="bg-transparent hover:bg-surface-variant text-on-surface text-[12px] leading-[16px] tracking-[0.02em] font-medium rounded px-3 py-1.5 transition-colors">
-              <MoreVertical className="w-4 h-4" />
-            </button>
-          </>
-        )}
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            indexRepo(repo.path, repo.name);
+          }}
+          className="flex-1 bg-surface-variant hover:bg-surface-bright text-on-surface text-[12px] leading-[16px] tracking-[0.02em] font-medium rounded py-1.5 transition-colors flex items-center justify-center gap-1"
+        >
+          <RefreshCw className="w-4 h-4" />
+          Re-index
+        </button>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            removeRepo(repo.id);
+          }}
+          className="bg-surface-variant hover:bg-error-container hover:text-on-error-container text-on-surface text-[12px] leading-[16px] tracking-[0.02em] font-medium rounded px-3 py-1.5 transition-colors"
+        >
+          <Trash2 className="w-4 h-4" />
+        </button>
       </div>
     </div>
   );

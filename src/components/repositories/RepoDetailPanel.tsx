@@ -78,13 +78,13 @@ export function RepoDetailPanel() {
         )}
 
         {/* Key Components */}
-        {selected.keyComponents && selected.keyComponents.length > 0 && (
+        {selected.components && selected.components.length > 0 && (
           <section>
             <h4 className="text-[12px] leading-[16px] tracking-[0.02em] font-medium text-on-surface-variant mb-2 uppercase tracking-wider">
               Key Components
             </h4>
             <ul className="space-y-2">
-              {selected.keyComponents.map((comp, i) => (
+              {selected.components.map((comp, i) => (
                 <li
                   key={i}
                   className="font-mono text-[13px] leading-[20px] text-on-surface bg-surface-variant px-2 py-1.5 rounded flex justify-between"
