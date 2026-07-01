@@ -121,3 +121,6 @@ examples/generated/
 
 .cognee/
 cognee_data/
+.mimocode/
+Hackathon/
+andes-context-mimocode/docs/compose/*
