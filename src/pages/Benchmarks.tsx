@@ -3,7 +3,7 @@ import { TopBar } from "@/components/layout/TopBar";
 import { MetricCard } from "@/components/benchmarks/MetricCard";
 import { LatencyChart } from "@/components/benchmarks/LatencyChart";
 import { ThroughputChart } from "@/components/benchmarks/ThroughputChart";
-import { mockBenchmarkMetrics } from "@/data/mock";
+const benchmarkMetrics: never[] = [];
 
 export default function Benchmarks() {
   return (
@@ -35,7 +35,7 @@ export default function Benchmarks() {
 
         {/* Metric Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-          {mockBenchmarkMetrics.map((metric, i) => (
+          {benchmarkMetrics.map((metric, i) => (
             <MetricCard key={i} metric={metric} />
           ))}
         </div>
