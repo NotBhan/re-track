@@ -141,6 +141,7 @@ class TestContextCommand:
         response = ContextResponse(
             success=True,
             task="How does auth work?",
+            objective="Explain authentication mechanism",
             markdown="# Task\n\nAuth uses JWT tokens.",
             section_count=1,
             source_count=3,

@@ -34,7 +34,7 @@ class GenerateContextRequest(BaseModel):
     datasets: list[str] = Field(
         ..., description="Dataset names to search"
     )
-    top_k: int = Field(default=15, ge=1, le=100, description="Maximum memories to retrieve")
+    top_k: int = Field(default=20, ge=1, le=100, description="Maximum memories to retrieve")
 
 
 class ForgetDatasetRequest(BaseModel):
@@ -101,11 +101,22 @@ class ContextResponse(BaseModel):
 
     success: bool = Field(description="Whether generation succeeded")
     task: str = Field(description="Original developer request")
+    objective: str = Field(description="Derived objective from the task")
     markdown: str = Field(description="Generated Markdown context")
     section_count: int = Field(description="Number of sections")
     source_count: int = Field(description="Number of memory sources used")
     token_estimate: int = Field(description="Estimated token count")
     dataset: str = Field(description="Datasets searched")
+    # Metadata fields
+    retrieved_memories: int = Field(default=0, description="Total memories retrieved")
+    deduplicated_memories: int = Field(default=0, description="Memories after dedup")
+    compressed_memories: int = Field(default=0, description="Memories after compression")
+    compression_ratio: float = Field(default=1.0, description="Input/output token ratio")
+    retrieval_time_ms: int = Field(default=0, description="Time spent in Cognee recall")
+    total_time_ms: int = Field(default=0, description="Total generation time")
+    # Reference fields
+    reference_count: int = Field(default=0, description="Number of traceable references")
+    section_headings: list[str] = Field(default_factory=list, description="Headings of generated sections")
 
 
 class ForgetDatasetResponse(BaseModel):

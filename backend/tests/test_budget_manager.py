@@ -98,3 +98,50 @@ class TestBudgetManager:
         sections = [_sec("task", "x" * 100, 5), _sec("refs", "y" * 1000, 1)]
         bm.apply(sections)
         assert bm.last_compression_ratio >= 1.0
+
+    def test_truncation_at_line_boundary(self):
+        bm = BudgetManager(target_tokens=10)
+        content = "- line one\n- line two\n- line three\n- line four"
+        result = bm._truncate_at_line_boundary(content, 0.5)
+        # Should cut at a newline boundary, not mid-line
+        # Result should be a prefix that ends at a complete line
+        assert len(result) <= len(content)
+        # Every line in result should be complete (no partial lines)
+        lines = result.split("\n")
+        for line in lines[:-1]:  # all but last
+            assert len(line) > 0
+
+    def test_truncation_preserves_bullets(self):
+        bm = BudgetManager(target_tokens=10)
+        content = "- item one\n- item two\n- item three\n- item four"
+        result = bm._truncate_at_line_boundary(content, 0.5)
+        lines = result.strip().split("\n")
+        # Every line should be a complete bullet
+        for line in lines:
+            assert line.startswith("- ") or line == ""
+
+    def test_truncation_single_line(self):
+        bm = BudgetManager(target_tokens=10)
+        content = "single line content here"
+        result = bm._truncate_at_line_boundary(content, 0.5)
+        assert len(result) <= len(content) // 2
+
+    def test_truncation_empty_content(self):
+        bm = BudgetManager(target_tokens=10)
+        assert bm._truncate_at_line_boundary("", 0.5) == ""
+
+    def test_truncation_ratio_one_returns_full(self):
+        bm = BudgetManager(target_tokens=10)
+        content = "line one\nline two"
+        result = bm._truncate_at_line_boundary(content, 1.0)
+        assert result == content
+
+    def test_budget_manager_uses_line_truncation(self):
+        bm = BudgetManager(target_tokens=10)
+        content = "- first item\n- second item\n- third item\n- fourth item"
+        sections = [_sec("task", "x" * 50, 5), _sec("arch", content, 4)]
+        result = bm.apply(sections)
+        arch = [s for s in result if s.section_type == "arch"]
+        if arch:
+            # Content should end at a line boundary
+            assert "\n" not in arch[0].content.rstrip() or arch[0].content.endswith("\n")

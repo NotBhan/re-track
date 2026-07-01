@@ -132,3 +132,15 @@ class TestContextServiceV2:
     async def test_generate_pipeline_version(self, mock_cognee):
         pkg = await ContextService(mock_cognee).generate_context_package("q", ["ws"])
         assert pkg.metadata.pipeline_version == "1.0"
+
+    @pytest.mark.asyncio
+    async def test_generate_retrieval_time_recorded(self, mock_cognee):
+        pkg = await ContextService(mock_cognee).generate_context_package("q", ["ws"])
+        # Retrieval time should be >= 0 (mock is fast but timing is real)
+        assert pkg.metadata.retrieval_time_ms >= 0
+
+    @pytest.mark.asyncio
+    async def test_generate_total_time_includes_recall(self, mock_cognee):
+        pkg = await ContextService(mock_cognee).generate_context_package("q", ["ws"])
+        # Total time should be >= retrieval time
+        assert pkg.metadata.total_time_ms >= pkg.metadata.retrieval_time_ms

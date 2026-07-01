@@ -15,6 +15,7 @@ Only memory retrieval and deterministic package generation.
 """
 
 import logging
+import time
 
 from app.models.responses import ContextPackage, RepositorySummary
 from app.services.cognee_service import CogneeService
@@ -70,24 +71,29 @@ class ContextService:
             top_k,
         )
 
+        # Measure recall time separately from package building
+        recall_start = time.monotonic()
         recall = await self._cognee.recall(
             query_text=task,
             datasets=datasets,
             top_k=top_k,
         )
+        retrieval_ms = int((time.monotonic() - recall_start) * 1000)
 
         package = self._builder.build(
             task=task,
             results=recall.results,
             repository_summary=self._repository_summary,
             datasets=datasets,
+            retrieval_time_ms=retrieval_ms,
         )
 
         logger.info(
-            "context package generated | sections=%d | sources=%d | ~%d tokens",
+            "context package generated | sections=%d | sources=%d | ~%d tokens | recall=%dms",
             package.section_count,
             package.source_count,
             package.token_estimate,
+            retrieval_ms,
         )
 
         return package

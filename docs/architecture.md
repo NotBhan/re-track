@@ -159,19 +159,93 @@ Implementation: `backend/app/services/indexing_service.py`
 
 ## ContextService ✅
 
-Transforms retrieved memory into Context Packages.
+Orchestrates memory retrieval and delegates to PackageBuilder.
 
 Responsibilities:
 
-- retrieve memories via CogneeService
-- remove duplicates
-- rank relevance
-- categorize by section type
-- generate structured Markdown output
+- retrieve memories via CogneeService (with timing)
+- delegate package assembly to PackageBuilder
+- pass RepositorySummary to PackageBuilder
 
-This service defines the primary value of AndesContext.
+This service is the entry point for Context Package generation.
 
 Implementation: `backend/app/services/context_service.py`
+
+---
+
+## PackageBuilder ✅
+
+Assembles Context Packages from pipeline output.
+
+Responsibilities:
+
+- orchestrate retrieval pipeline (dedup → rank → compress → categorize)
+- build sections from categorized results
+- apply budget enforcement
+- resolve references
+- render Markdown
+- generate package metadata
+
+Implementation: `backend/app/services/package_builder.py`
+
+---
+
+## BudgetManager ✅
+
+Enforces soft-target token budgets on sections.
+
+Responsibilities:
+
+- prioritize sections by importance (Critical/High/Medium/Low)
+- remove low-priority sections when over budget
+- compress high-priority sections at line boundaries
+- track compression ratio
+
+Implementation: `backend/app/services/budget_manager.py`
+
+---
+
+## MarkdownRenderer ✅
+
+Renders structured package data as Markdown.
+
+Responsibilities:
+
+- render Task, Objective, Repository Context, Sections, References
+- skip empty sections
+- render Repository Summary when available
+
+Implementation: `backend/app/services/renderer.py`
+
+---
+
+## RepositorySummaryGenerator ✅
+
+Generates stable project knowledge from indexed files.
+
+Responsibilities:
+
+- extract technology stack from file extensions
+- build repository directory map
+- infer architecture from structure
+- extract key components
+- infer project purpose from README
+
+Implementation: `backend/app/services/repository_summary.py`
+
+---
+
+## Pipeline Stages ✅
+
+Independent, composable retrieval processing stages.
+
+- **Deduplicator**: removes duplicate memories via normalized text
+- **Ranker**: multi-factor scoring (semantic × confidence × type weight)
+- **Compressor**: merges redundant entries, preserves executable facts
+- **Categorizer**: rule-based classification into section types
+- **ReferenceResolver**: formats traceable citations with provenance
+
+Implementation: `backend/app/services/pipeline/`
 
 ---
 
@@ -227,19 +301,19 @@ ContextService.generate_context_package()
 
 ↓
 
-CogneeService.recall()
+CogneeService.recall() (timed)
 
 ↓
 
-Memory Results
+PackageBuilder.build()
 
 ↓
 
-Dedup + Rank + Categorize
+Dedup → Rank → Compress → Categorize → Budget → References → Render
 
 ↓
 
-Markdown Context Package
+Context Package (Markdown + metadata + references)
 
 ↓
 
@@ -261,12 +335,24 @@ backend/app/
     models/
         __init__.py
         errors.py            # Exception hierarchy
-        responses.py         # Data models (RememberResult, RecallResult, ContextPackage, etc.)
+        responses.py         # Data models (ContextPackage, RepositorySummary, PackageMetadata, etc.)
     services/
         __init__.py
         cognee_service.py    # Thin Cognee wrapper
         indexing_service.py  # Repository indexing pipeline
-        context_service.py  # Context Package generation
+        context_service.py   # Entry point for Context Package generation
+        package_builder.py   # Pipeline orchestrator
+        budget_manager.py    # Token budget enforcement
+        renderer.py          # Markdown rendering
+        repository_summary.py # Repository Summary generator
+        stats_logger.py      # Package statistics logging
+        pipeline/
+            __init__.py
+            dedup.py         # Deduplication stage
+            ranking.py       # Multi-factor ranking stage
+            compression.py   # Semantic compression stage
+            categorization.py # Rule-based categorization stage
+            references.py    # Reference resolution stage
     api/
         __init__.py          # ✅ implemented — API command exports
         commands.py          # ✅ implemented — Async commands (health, index, context, forget)

@@ -100,7 +100,7 @@ class BudgetManager:
         priorities: set[int],
         ratio: float,
     ) -> list[PackageSection]:
-        """Compress sections matching given priorities by truncating content.
+        """Compress sections matching given priorities by truncating at line boundaries.
 
         Args:
             sections: Sections to compress.
@@ -108,16 +108,16 @@ class BudgetManager:
             ratio: Fraction of content to keep (0.0-1.0).
 
         Returns:
-            Compressed sections.
+            Compressed sections with intact markdown formatting.
         """
         result = []
         for s in sections:
             if s.priority in priorities:
-                truncated_len = int(len(s.content) * ratio)
+                truncated = self._truncate_at_line_boundary(s.content, ratio)
                 result.append(PackageSection(
                     section_type=s.section_type,
                     heading=s.heading,
-                    content=s.content[:truncated_len],
+                    content=truncated,
                     priority=s.priority,
                     source_sections=s.source_sections,
                     reference_count=s.reference_count,
@@ -125,6 +125,37 @@ class BudgetManager:
             else:
                 result.append(s)
         return result
+
+    def _truncate_at_line_boundary(self, content: str, ratio: float) -> str:
+        """Truncate content at a line boundary to preserve markdown formatting.
+
+        Finds the last complete line before the character limit.
+        Ensures truncated content doesn't end mid-line or mid-bullet.
+
+        Args:
+            content: Text content to truncate.
+            ratio: Fraction of content to keep (0.0-1.0).
+
+        Returns:
+            Truncated content ending at a complete line.
+        """
+        if not content:
+            return content
+
+        target_len = int(len(content) * ratio)
+        if target_len >= len(content):
+            return content
+
+        # Find the last newline before the target length
+        truncated = content[:target_len]
+        last_newline = truncated.rfind("\n")
+
+        if last_newline > 0:
+            # Cut at the last complete line
+            return content[:last_newline]
+
+        # No newline found — return as-is (single line content)
+        return truncated
 
     def _finalize(self, sections: list[PackageSection], original_tokens: int) -> list[PackageSection]:
         """Record compression ratio and return sections.

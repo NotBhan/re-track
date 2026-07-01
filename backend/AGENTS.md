@@ -2,7 +2,7 @@
 
 Owns the backend services for AndesContext.
 
-Responsibilities include project indexing, Cognee integration, context retrieval, and memory management.
+Responsibilities include project indexing, Cognee integration, context retrieval, memory management, and Context Package generation.
 
 ---
 
@@ -13,6 +13,12 @@ Owns:
 - CogneeService
 - IndexingService
 - ContextService
+- PackageBuilder
+- BudgetManager
+- MarkdownRenderer
+- RepositorySummaryGenerator
+- Pipeline stages (Deduplicator, Ranker, Compressor, Categorizer, ReferenceResolver)
+- StatsLogger
 - Configuration
 - Data Models
 - Error Handling
@@ -24,24 +30,39 @@ Owns:
 
 Milestone 1 — Backend Foundation: **Completed**
 Milestone 2 — API Layer: **Completed**
+Milestone 3 — Package Generation: **Completed**
+Milestone 4 — Integration: **Completed**
+Milestone 5 — Evidence & Validation: **Completed**
 
 Production services implemented and verified:
 
 - CogneeService ✅
 - IndexingService ✅
-- ContextService ✅
+- ContextService (rewired to PackageBuilder) ✅
+- PackageBuilder ✅
+- BudgetManager ✅
+- MarkdownRenderer ✅
+- RepositorySummaryGenerator ✅
+- Pipeline stages (dedup, rank, compress, categorize, references) ✅
+- StatsLogger ✅
 
 API layer implemented and verified:
 
 - Commands (health, get_backend_status, index_repository, generate_context, forget_dataset) ✅
-- Schemas (Pydantic request/response models) ✅
+- Schemas (Pydantic request/response models with full metadata) ✅
 
 CLI implemented and verified:
 
 - CLI commands (health, status, index, context, forget) ✅
 - Rich terminal formatting (tables, panels, spinners, markdown) ✅
 
-Next: Milestone 3 — Frontend Foundation
+Evaluation implemented and verified:
+
+- Benchmark framework (15 questions) ✅
+- Quality metrics ✅
+- Stats logging ✅
+
+Next: Frontend Foundation
 
 ---
 
@@ -100,13 +121,16 @@ app/core/
 Structured logging.
 
 app/models/
-Data models (RememberResult, RecallResult, ContextPackage, IndexingProgress) and error hierarchy.
+Data models (RememberResult, RecallResult, ContextPackage, RepositorySummary, PackageMetadata, IndexingProgress) and error hierarchy.
 
 app/services/
-CogneeService, IndexingService, ContextService.
+CogneeService, IndexingService, ContextService, PackageBuilder, BudgetManager, MarkdownRenderer, RepositorySummaryGenerator, StatsLogger.
+
+app/services/pipeline/
+Pipeline stages: Deduplicator, Ranker, Compressor, Categorizer, ReferenceResolver.
 
 app/api/
-API layer: async commands exposing services, Pydantic request/response schemas.
+API layer: async commands exposing services, Pydantic request/response schemas with full metadata.
 
 app/cli/
 CLI layer: Typer application exposing API commands to developers. Rich terminal formatting.

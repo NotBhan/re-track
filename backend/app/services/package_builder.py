@@ -82,6 +82,7 @@ class PackageBuilder:
         results: list[RecallResult],
         repository_summary: RepositorySummary | None,
         datasets: list[str],
+        retrieval_time_ms: int = 0,
     ) -> ContextPackage:
         """Build a complete Context Package.
 
@@ -100,6 +101,7 @@ class PackageBuilder:
             results: Raw recall results from Cognee.
             repository_summary: Optional cached summary.
             datasets: Dataset names used.
+            retrieval_time_ms: Time spent in Cognee recall (ms).
 
         Returns:
             Complete ContextPackage with metadata and Markdown.
@@ -134,7 +136,7 @@ class PackageBuilder:
             compression_ratio=self._budget.last_compression_ratio,
             estimated_tokens=len(markdown) // 4,
             pipeline_version="1.0",
-            retrieval_time_ms=0,
+            retrieval_time_ms=retrieval_time_ms,
             total_time_ms=elapsed_ms,
         )
 

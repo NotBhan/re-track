@@ -252,11 +252,20 @@ async def generate_context(
         response = ContextResponse(
             success=True,
             task=package.task,
+            objective=package.objective,
             markdown=package.markdown,
             section_count=package.section_count,
             source_count=package.source_count,
             token_estimate=package.token_estimate,
             dataset=package.dataset,
+            retrieved_memories=package.metadata.retrieved_memory_count if package.metadata else 0,
+            deduplicated_memories=package.metadata.deduplicated_count if package.metadata else 0,
+            compressed_memories=package.metadata.compressed_count if package.metadata else 0,
+            compression_ratio=package.metadata.compression_ratio if package.metadata else 1.0,
+            retrieval_time_ms=package.metadata.retrieval_time_ms if package.metadata else 0,
+            total_time_ms=package.metadata.total_time_ms if package.metadata else 0,
+            reference_count=len(package.references),
+            section_headings=[s.heading for s in package.sections],
         )
 
         elapsed = time.monotonic() - start

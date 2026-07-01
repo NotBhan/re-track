@@ -138,7 +138,7 @@ class TestGenerateContextRequest:
             task="Add auth middleware",
             datasets=["repo-1", "repo-2"],
         )
-        assert r.top_k == 15  # default
+        assert r.top_k == 20  # default
         assert len(r.datasets) == 2
 
     def test_empty_task_rejected(self):
@@ -155,6 +155,7 @@ class TestContextResponse:
         r = ContextResponse(
             success=True,
             task="test",
+            objective="test objective",
             markdown="# Task\n\nhello",
             section_count=2,
             source_count=5,
@@ -163,6 +164,7 @@ class TestContextResponse:
         )
         assert r.success is True
         assert r.token_estimate == 100
+        assert r.objective == "test objective"
 
 
 class TestForgetDatasetRequest:
@@ -322,17 +324,29 @@ class TestGenerateContextCommand:
     @pytest.mark.asyncio
     async def test_generate_context(self, mock_services):
         _, _, _, mock_context = mock_services
+        from app.models.responses import PackageMetadata, PackageReference
+        meta = PackageMetadata(
+            package_version="1.0", repository_summary_version="none",
+            generated_at="2026-01-01T00:00:00Z", datasets_used=["repo"],
+            retrieved_memory_count=10, deduplicated_count=7,
+            compressed_count=7, compression_ratio=1.3,
+            estimated_tokens=200, pipeline_version="1.0",
+            retrieval_time_ms=500, total_time_ms=800,
+        )
+        refs = [PackageReference("file", "auth.py", None, 0.9, ["recall:test"])]
         package = ContextPackage(
             task="Add auth",
             objective="Add authentication middleware",
             markdown="# Task\n\nAdd auth",
             sections=[
                 PackageSection(
-                    section_type=SectionType.ARCHITECTURE,
+                    section_type="architecture",
                     heading="Architecture Notes",
                     content="- Uses middleware pattern",
                 )
             ],
+            references=refs,
+            metadata=meta,
             source_count=3,
             dataset="repo",
         )
@@ -347,6 +361,14 @@ class TestGenerateContextCommand:
         assert result.section_count == 1
         assert result.source_count == 3
         assert "Add auth" in result.markdown
+        assert result.objective == "Add authentication middleware"
+        assert result.retrieved_memories == 10
+        assert result.deduplicated_memories == 7
+        assert result.compression_ratio == 1.3
+        assert result.retrieval_time_ms == 500
+        assert result.total_time_ms == 800
+        assert result.reference_count == 1
+        assert result.section_headings == ["Architecture Notes"]
 
     @pytest.mark.asyncio
     async def test_generate_context_empty_task(self, mock_services):
@@ -417,15 +439,27 @@ class TestSerializationRoundtrip:
         r = ContextResponse(
             success=True,
             task="test",
+            objective="test objective",
             markdown="# hello",
             section_count=1,
             source_count=2,
             token_estimate=10,
             dataset="repo",
+            retrieved_memories=5,
+            deduplicated_memories=3,
+            compressed_memories=3,
+            compression_ratio=1.5,
+            retrieval_time_ms=100,
+            total_time_ms=200,
+            reference_count=2,
+            section_headings=["Files"],
         )
         j = r.model_dump_json()
         r2 = ContextResponse.model_validate_json(j)
         assert r2.markdown == "# hello"
+        assert r2.objective == "test objective"
+        assert r2.retrieved_memories == 5
+        assert r2.reference_count == 2
 
     def test_error_response_json(self):
         r = ErrorResponse(error="TestError", message="boom")
