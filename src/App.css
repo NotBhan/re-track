@@ -1,37 +1,187 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap");
 @import "tailwindcss";
 
-:root {
-  font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
-  font-size: 16px;
-  line-height: 24px;
-  font-weight: 400;
-  color: #0f0f0f;
-  background-color: #f6f6f6;
+/*
+ * shadcn/ui CSS variables — mapped to MD3 dark palette.
+ * These satisfy shadcn component internals (e.g. border-ring, ring-offset).
+ */
+@theme inline {
+  --color-background: hsl(225 30% 6%);
+  --color-foreground: hsl(225 20% 91%);
+  --color-card: hsl(225 25% 7%);
+  --color-card-foreground: hsl(225 20% 91%);
+  --color-popover: hsl(225 25% 7%);
+  --color-popover-foreground: hsl(225 20% 91%);
+  --color-primary: hsl(219 79% 83%);
+  --color-primary-foreground: hsl(219 87% 21%);
+  --color-secondary: hsl(155 67% 62%);
+  --color-secondary-foreground: hsl(155 80% 12%);
+  --color-muted: hsl(225 15% 13%);
+  --color-muted-foreground: hsl(225 10% 55%);
+  --color-accent: hsl(225 15% 13%);
+  --color-accent-foreground: hsl(225 20% 91%);
+  --color-destructive: hsl(4 78% 83%);
+  --color-destructive-foreground: hsl(4 78% 83%);
+  --color-border: hsl(225 15% 26%);
+  --color-input: hsl(225 15% 26%);
+  --color-ring: hsl(219 79% 83%);
+  --color-chart-1: hsl(219 79% 83%);
+  --color-chart-2: hsl(155 67% 62%);
+  --color-chart-3: hsl(38 92% 62%);
+  --color-chart-4: hsl(4 78% 83%);
+  --color-chart-5: hsl(225 15% 55%);
+  --color-sidebar: hsl(225 30% 5%);
+  --color-sidebar-foreground: hsl(225 20% 91%);
+  --color-sidebar-primary: hsl(219 79% 83%);
+  --color-sidebar-primary-foreground: hsl(219 87% 21%);
+  --color-sidebar-accent: hsl(225 15% 13%);
+  --color-sidebar-accent-foreground: hsl(225 20% 91%);
+  --color-sidebar-border: hsl(225 15% 18%);
+  --color-sidebar-ring: hsl(219 79% 83%);
+  --radius: 0.5rem;
+}
+
+/*
+ * MD3 Surface + Accent Tokens
+ * Used directly as Tailwind utilities: bg-surface, text-primary, etc.
+ */
+@theme {
+  --color-on-primary: #002e6a;
+  --color-on-primary-container: #00285d;
+  --color-primary-container: #4d8eff;
+  --color-on-secondary-container: #00311f;
+  --color-secondary-container: #00a572;
+  --color-on-tertiary-container: #3e2400;
+  --color-tertiary: #ffb95f;
+  --color-tertiary-container: #ca8100;
+  --color-on-surface: #e1e2ec;
+  --color-on-surface-variant: #c2c6d6;
+  --color-surface: #10131a;
+  --color-surface-dim: #10131a;
+  --color-surface-container-lowest: #0b0e15;
+  --color-surface-container-low: #191b23;
+  --color-surface-container: #1d2027;
+  --color-surface-container-high: #272a31;
+  --color-surface-container-highest: #32353c;
+  --color-surface-variant: #32353c;
+  --color-surface-bright: #363941;
+  --color-on-error-container: #ffdad6;
+  --color-error-container: #93000a;
+  --color-outline: #8c909f;
+  --color-outline-variant: #424754;
+  --color-inverse-surface: #e1e2ec;
+  --color-inverse-on-surface: #2e3038;
+  --color-inverse-primary: #005ac2;
+
+  --font-sans: "Inter", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+
+  --spacing-sidebar: 240px;
+  --spacing-gutter: 16px;
+  --spacing-card: 20px;
+  --spacing-stack-gap: 12px;
+  --spacing-container-margin: 24px;
+
+  --animate-pipeline: slide-gradient 2s linear infinite;
+  --animate-glow-pulse: pulse-glow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  --animate-shimmer: shimmer 2s infinite;
+}
+
+/* ---- Global ---- */
+
+*,
+*::before,
+*::after {
+  border-color: hsl(225 15% 26%);
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  font-family: "Inter", system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 20px;
+  color: #e1e2ec;
+  background-color: #10131a;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   -webkit-text-size-adjust: 100%;
+  margin: 0;
+  overflow-x: hidden;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    color: #f6f6f6;
-    background-color: #1a1a2e;
-  }
-}
+/* ---- Scrollbar ---- */
 
-/* Scrollbar styling */
 ::-webkit-scrollbar {
-  width: 8px;
+  width: 6px;
+  height: 6px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #888;
-  border-radius: 4px;
+  background-color: #32353c;
+  border-radius: 20px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #555;
+  background-color: #424754;
+}
+
+/* ---- Custom Keyframes ---- */
+
+@keyframes slide-gradient {
+  0% { background-position: 100% -100%; }
+  100% { background-position: 100% 100%; }
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    opacity: 1;
+    box-shadow: 0 0 15px rgba(59, 130, 246, 0.2);
+  }
+  50% {
+    opacity: 0.5;
+    box-shadow: 0 0 30px rgba(59, 130, 246, 0.5);
+  }
+}
+
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+/* ---- Utility Classes ---- */
+
+.pipeline-line {
+  position: absolute;
+  left: 15px;
+  top: 24px;
+  bottom: 24px;
+  width: 2px;
+  background: linear-gradient(to bottom, #adc6ff 50%, #424754 50%);
+  background-size: 100% 200%;
+  animation: slide-gradient 2s linear infinite;
+}
+
+.glow-pulse {
+  animation: pulse-glow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.chart-grid {
+  background-image:
+    linear-gradient(to right, #32353c 1px, transparent 1px),
+    linear-gradient(to bottom, #32353c 1px, transparent 1px);
+  background-size: 40px 40px;
+  opacity: 0.2;
+}
+
+/* ---- Selection ---- */
+
+::selection {
+  background-color: #4d8eff;
+  color: #00285d;
 }
