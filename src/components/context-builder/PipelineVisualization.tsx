@@ -1,9 +1,8 @@
-import { Check, Loader2, Circle } from "lucide-react";
+import { Check, Loader2 } from "lucide-react";
 import { useContextStore } from "@/stores/context-store";
-import { cn } from "@/lib/utils";
 
 export function PipelineVisualization() {
-  const { pipelineSteps, result } = useContextStore();
+  const { loading, result } = useContextStore();
 
   return (
     <div className="w-1/3 flex flex-col gap-6">
@@ -15,7 +14,7 @@ export function PipelineVisualization() {
             Elapsed Time
           </span>
           <span className="font-mono text-[13px] leading-[20px] text-primary text-xl font-bold z-10">
-            {result ? `${(result.total_time_ms / 1000).toFixed(1)}s` : "02.4s"}
+            {result ? `${(result.total_time_ms / 1000).toFixed(1)}s` : "--"}
           </span>
         </div>
         <div className="bg-surface-container border border-outline-variant rounded-xl p-4 flex flex-col justify-center items-center relative overflow-hidden">
@@ -26,7 +25,7 @@ export function PipelineVisualization() {
           <span className="font-mono text-[13px] leading-[20px] text-secondary text-xl font-bold z-10">
             {result
               ? `~${result.token_estimate.toLocaleString()}`
-              : "~4,250"}
+              : "--"}
           </span>
         </div>
       </div>
@@ -42,63 +41,44 @@ export function PipelineVisualization() {
           {/* Animated Pipeline Line */}
           <div className="pipeline-line" />
 
-          {pipelineSteps.map((step) => (
-            <div key={step.id} className="relative z-10 flex items-start gap-4">
-              {/* Step Indicator */}
-              <div
-                className={cn(
-                  "w-8 h-8 rounded-full flex items-center justify-center -ml-[30px] mt-1 flex-shrink-0",
-                  step.status === "completed" &&
-                    "bg-secondary/20 border border-secondary",
-                  step.status === "active" &&
-                    "bg-primary/20 border-2 border-primary glow-pulse",
-                  step.status === "pending" &&
-                    "bg-surface-variant border border-outline-variant"
-                )}
-              >
-                {step.status === "completed" && (
-                  <Check className="w-4 h-4 text-secondary" />
-                )}
-                {step.status === "active" && (
-                  <Loader2 className="w-4 h-4 text-primary animate-spin" />
-                )}
-                {step.status === "pending" && (
-                  <Circle className="w-4 h-4 text-on-surface-variant" />
-                )}
+          {loading ? (
+            <div className="relative z-10 flex items-start gap-4">
+              <div className="w-8 h-8 rounded-full flex items-center justify-center -ml-[30px] mt-1 flex-shrink-0 bg-primary/20 border-2 border-primary glow-pulse">
+                <Loader2 className="w-4 h-4 text-primary animate-spin" />
               </div>
-
-              {/* Step Content */}
-              <div
-                className={cn(
-                  step.status === "active" &&
-                    "bg-surface-container-highest p-3 rounded-lg border border-primary/30 w-full shadow-[0_0_15px_rgba(173,198,255,0.05)]",
-                  step.status === "pending" && "opacity-40"
-                )}
-              >
-                <h4
-                  className={cn(
-                    "text-[12px] leading-[16px] tracking-[0.02em] font-semibold",
-                    step.status === "active"
-                      ? "text-primary font-bold"
-                      : "text-on-surface"
-                  )}
-                >
-                  {step.label}
+              <div className="bg-surface-container-highest p-3 rounded-lg border border-primary/30 w-full shadow-[0_0_15px_rgba(173,198,255,0.05)]">
+                <h4 className="text-[12px] leading-[16px] tracking-[0.02em] font-semibold text-primary font-bold">
+                  Generating Context Package...
                 </h4>
                 <p className="text-[14px] leading-[20px] text-on-surface-variant text-sm mt-1">
-                  {step.description}
+                  Retrieving and compressing memories
                 </p>
-                {step.status === "active" && step.progress !== undefined && (
-                  <div className="mt-3 w-full bg-surface-container-lowest rounded-full h-1.5 overflow-hidden">
-                    <div
-                      className="bg-primary h-1.5 rounded-full transition-all duration-500"
-                      style={{ width: `${step.progress}%` }}
-                    />
-                  </div>
-                )}
+                <div className="mt-3 w-full bg-surface-container-lowest rounded-full h-1.5 overflow-hidden">
+                  <div className="bg-primary h-1.5 rounded-full animate-pulse" style={{ width: "60%" }} />
+                </div>
               </div>
             </div>
-          ))}
+          ) : result ? (
+            <div className="relative z-10 flex items-start gap-4">
+              <div className="w-8 h-8 rounded-full flex items-center justify-center -ml-[30px] mt-1 flex-shrink-0 bg-secondary/20 border border-secondary">
+                <Check className="w-4 h-4 text-secondary" />
+              </div>
+              <div className="p-3 rounded-lg w-full">
+                <h4 className="text-[12px] leading-[16px] tracking-[0.02em] font-semibold text-secondary font-bold">
+                  Complete
+                </h4>
+                <p className="text-[14px] leading-[20px] text-on-surface-variant text-sm mt-1">
+                  {result.section_count} sections · {result.retrieved_memories} memories · {result.deduplicated_memories} deduplicated
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="relative z-10 opacity-40 text-center py-8">
+              <p className="text-[14px] leading-[20px] text-on-surface-variant">
+                Configure inputs and click Generate to start
+              </p>
+            </div>
+          )}
         </div>
       </div>
     </div>

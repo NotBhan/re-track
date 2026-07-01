@@ -14,6 +14,8 @@ export function InputParameters() {
     setTopK,
     advancedOptions,
     toggleAdvanced,
+    loading,
+    generatePackage,
   } = useContextStore();
 
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -132,9 +134,17 @@ export function InputParameters() {
 
       {/* Generate Button */}
       <div className="p-5 border-t border-outline-variant bg-surface-container-high/50 mt-auto">
-        <button className="w-full bg-primary hover:bg-primary-container text-surface-container-lowest text-[12px] leading-[16px] tracking-[0.02em] font-semibold py-3 rounded-lg transition-all active:scale-[0.98] shadow-[0_0_15px_rgba(173,198,255,0.2)] hover:shadow-[0_0_20px_rgba(173,198,255,0.4)] flex items-center justify-center gap-2">
-          <Play className="w-4 h-4" />
-          Generate Context Package
+        <button
+          onClick={() => generatePackage()}
+          disabled={loading || !objective.trim()}
+          className="w-full bg-primary hover:bg-primary-container text-surface-container-lowest text-[12px] leading-[16px] tracking-[0.02em] font-semibold py-3 rounded-lg transition-all active:scale-[0.98] shadow-[0_0_15px_rgba(173,198,255,0.2)] hover:shadow-[0_0_20px_rgba(173,198,255,0.4)] flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          {loading ? (
+            <div className="animate-spin w-4 h-4 border-2 border-current border-t-transparent rounded-full" />
+          ) : (
+            <Play className="w-4 h-4" />
+          )}
+          {loading ? "Generating..." : "Generate Context Package"}
         </button>
       </div>
     </div>

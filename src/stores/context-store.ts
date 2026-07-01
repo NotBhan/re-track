@@ -1,13 +1,13 @@
 import { create } from "zustand";
-import type { ContextResponse, AdvancedOptions, PipelineStep } from "@/types";
-import { mockPipelineSteps } from "@/data/mock";
+import type { ContextResponse, AdvancedOptions } from "@/types";
+
+import { generateContext } from "@/lib/api";
 
 interface ContextStore {
   objective: string;
   selectedRepo: string;
   topK: number;
   advancedOptions: AdvancedOptions;
-  pipelineSteps: PipelineStep[];
   result: ContextResponse | null;
   loading: boolean;
   error: string | null;
@@ -19,6 +19,7 @@ interface ContextStore {
   setLoading: (v: boolean) => void;
   setError: (v: string | null) => void;
   setResult: (r: ContextResponse) => void;
+  generatePackage: () => Promise<void>;
   reset: () => void;
 }
 
@@ -28,12 +29,11 @@ const initialAdvanced: AdvancedOptions = {
   aggressiveCompress: false,
 };
 
-export const useContextStore = create<ContextStore>((set) => ({
+export const useContextStore = create<ContextStore>((set, get) => ({
   objective: "",
   selectedRepo: "andes-core-api",
   topK: 25,
   advancedOptions: initialAdvanced,
-  pipelineSteps: mockPipelineSteps,
   result: null,
   loading: false,
   error: null,
@@ -56,6 +56,29 @@ export const useContextStore = create<ContextStore>((set) => ({
       result: r,
       history: [r, ...state.history].slice(0, 10),
     })),
+  generatePackage: async () => {
+    const { objective, selectedRepo, topK } = get();
+    if (!objective.trim()) return;
+
+    set({ loading: true, error: null, result: null });
+    try {
+      const response = await generateContext({
+        task: objective.trim(),
+        datasets: [selectedRepo],
+        top_k: topK,
+      });
+      set((state) => ({
+        result: response,
+        loading: false,
+        history: [response, ...state.history].slice(0, 10),
+      }));
+    } catch (e) {
+      set({
+        error: e instanceof Error ? e.message : "Generation failed",
+        loading: false,
+      });
+    }
+  },
   reset: () =>
     set({
       objective: "",
