@@ -219,6 +219,12 @@ class CogneeService:
                 kwargs["data_id"] = data_id
             await cognee.forget(**kwargs)
             logger.info("forget() completed")
+        except AttributeError as e:
+            # Handle Cognee error when dataset doesn't exist
+            if "NoneType" in str(e):
+                logger.warning("forget() dataset not found: %s", dataset)
+                return
+            raise CogneeServiceError(f"forget() failed: {e}") from e
         except Exception as e:
             logger.error("forget() failed: %s", e)
             raise CogneeServiceError(f"forget() failed: {e}") from e
