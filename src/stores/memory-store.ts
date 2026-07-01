@@ -1,9 +1,15 @@
 import { create } from "zustand";
-import type { Dataset } from "@/types";
-import { mockDatasets } from "@/data/mock";
+import {
+  listDatasets,
+  getMemoryStats,
+  type DatasetInfo,
+  type MemoryStatsResponse,
+} from "@/lib/api";
 
 interface MemoryStore {
-  datasets: Dataset[];
+  datasets: DatasetInfo[];
+  stats: MemoryStatsResponse | null;
+  loading: boolean;
   selectedDatasetId: string | null;
   filterType: "all" | "vectors" | "graphs" | "document";
   viewMode: "list" | "grid";
@@ -13,10 +19,14 @@ interface MemoryStore {
   setSort: (s: "date" | "name" | "size") => void;
   selectDataset: (id: string | null) => void;
   removeDataset: (id: string) => void;
+  fetchDatasets: () => Promise<void>;
+  fetchStats: () => Promise<void>;
 }
 
 export const useMemoryStore = create<MemoryStore>((set) => ({
-  datasets: mockDatasets,
+  datasets: [],
+  stats: null,
+  loading: false,
   selectedDatasetId: null,
   filterType: "all",
   viewMode: "list",
@@ -32,4 +42,29 @@ export const useMemoryStore = create<MemoryStore>((set) => ({
       selectedDatasetId:
         state.selectedDatasetId === id ? null : state.selectedDatasetId,
     })),
+
+  fetchDatasets: async () => {
+    set({ loading: true });
+    try {
+      const response = await listDatasets();
+      if (response.success) {
+        set({ datasets: response.datasets });
+      }
+    } catch (error) {
+      console.error("Failed to fetch datasets:", error);
+    } finally {
+      set({ loading: false });
+    }
+  },
+
+  fetchStats: async () => {
+    try {
+      const response = await getMemoryStats();
+      if (response.success) {
+        set({ stats: response });
+      }
+    } catch (error) {
+      console.error("Failed to fetch memory stats:", error);
+    }
+  },
 }));

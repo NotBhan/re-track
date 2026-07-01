@@ -1,7 +1,19 @@
 import { Database } from "lucide-react";
-import { mockMemoryTopology } from "@/data/mock";
+import { useMemoryStore } from "@/stores/memory-store";
 
 export function MemoryStats() {
+  const stats = useMemoryStore((s) => s.stats);
+
+  const formatNumber = (num: number): string => {
+    if (num >= 1000000) {
+      return `${(num / 1000000).toFixed(1)}M`;
+    }
+    if (num >= 1000) {
+      return `${(num / 1000).toFixed(1)}K`;
+    }
+    return num.toString();
+  };
+
   return (
     <div className="w-full xl:w-80 flex flex-col gap-6">
       <div className="bg-surface-container border border-outline-variant rounded-lg p-5 relative overflow-hidden group">
@@ -18,10 +30,7 @@ export function MemoryStats() {
               Total Stored Data
             </div>
             <div className="text-[32px] leading-[40px] tracking-[-0.02em] font-semibold text-on-surface flex items-baseline gap-1">
-              1.2{" "}
-              <span className="text-[20px] leading-[28px] font-medium text-on-surface-variant">
-                TB
-              </span>
+              {stats?.total_size_display || "N/A"}
             </div>
           </div>
           <div className="grid grid-cols-2 gap-4 pt-3 border-t border-outline-variant/50">
@@ -30,7 +39,7 @@ export function MemoryStats() {
                 Graph Nodes
               </div>
               <div className="text-[20px] leading-[28px] font-semibold text-on-surface">
-                {mockMemoryTopology.graphNodes}
+                {formatNumber(stats?.graph_nodes || 0)}
               </div>
             </div>
             <div>
@@ -38,7 +47,7 @@ export function MemoryStats() {
                 Graph Edges
               </div>
               <div className="text-[20px] leading-[28px] font-semibold text-secondary">
-                {mockMemoryTopology.graphEdges}
+                {formatNumber(stats?.graph_edges || 0)}
               </div>
             </div>
           </div>

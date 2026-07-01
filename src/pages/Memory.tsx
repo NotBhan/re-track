@@ -1,16 +1,36 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { TopBar } from "@/components/layout/TopBar";
 import { DatasetTable } from "@/components/memory/DatasetTable";
 import { MemoryStats } from "@/components/memory/MemoryStats";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
-import { Search, Bell, User, Plus } from "lucide-react";
+import { Search, Bell, User, Plus, Loader2 } from "lucide-react";
 import { useMemoryStore } from "@/stores/memory-store";
+import { forgetDataset as forgetDatasetApi } from "@/lib/api";
 
 export default function Memory() {
   const [forgetDataset, setForgetDataset] = useState<{
     id: string;
     name: string;
   } | null>(null);
+
+  const { loading, fetchDatasets, fetchStats } = useMemoryStore();
+
+  useEffect(() => {
+    fetchDatasets();
+    fetchStats();
+  }, [fetchDatasets, fetchStats]);
+
+  const handleConfirmForget = async () => {
+    if (forgetDataset) {
+      try {
+        await forgetDatasetApi({ dataset: forgetDataset.name });
+        await fetchDatasets();
+      } catch (error) {
+        console.error("Failed to forget dataset:", error);
+      }
+      setForgetDataset(null);
+    }
+  };
 
   return (
     <>
@@ -53,8 +73,16 @@ export default function Memory() {
 
       <main className="flex-1 overflow-y-auto p-6">
         <div className="max-w-[1440px] mx-auto flex gap-6 h-full flex-col xl:flex-row">
-          <DatasetTable onForget={setForgetDataset} />
-          <MemoryStats />
+          {loading ? (
+            <div className="flex-1 flex items-center justify-center">
+              <Loader2 className="w-8 h-8 text-primary animate-spin" />
+            </div>
+          ) : (
+            <>
+              <DatasetTable onForget={setForgetDataset} />
+              <MemoryStats />
+            </>
+          )}
         </div>
       </main>
 
@@ -66,12 +94,7 @@ export default function Memory() {
         warning="This action cannot be undone and will remove all vector embeddings."
         confirmLabel="Forget Dataset"
         variant="destructive"
-        onConfirm={() => {
-          if (forgetDataset) {
-            useMemoryStore.getState().removeDataset(forgetDataset.id);
-            setForgetDataset(null);
-          }
-        }}
+        onConfirm={handleConfirmForget}
       />
     </>
   );

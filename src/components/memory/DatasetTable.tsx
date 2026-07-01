@@ -23,8 +23,33 @@ const filterOptions = [
   { key: "document" as const, label: "Document", color: "bg-outline" },
 ];
 
+function formatDate(dateString: string): string {
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+
+  if (diffMins < 1) return "just now";
+  if (diffMins < 60) return `${diffMins} min${diffMins > 1 ? "s" : ""} ago`;
+  if (diffHours < 24)
+    return `${diffHours} hour${diffHours > 1 ? "s" : ""} ago`;
+  if (diffDays < 30) return `${diffDays} day${diffDays > 1 ? "s" : ""} ago`;
+  return date.toLocaleDateString();
+}
+
+function formatBytes(bytes: number | null): string {
+  if (bytes === null) return "N/A";
+  if (bytes === 0) return "0 B";
+  const k = 1024;
+  const sizes = ["B", "KB", "MB", "GB", "TB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
+}
+
 export function DatasetTable({ onForget }: DatasetTableProps) {
-  const { datasets, filterType, viewMode, setFilter, setViewMode } =
+  const { datasets, filterType, viewMode, setFilter, setViewMode, loading } =
     useMemoryStore();
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
@@ -33,12 +58,30 @@ export function DatasetTable({ onForget }: DatasetTableProps) {
       ? datasets
       : datasets.filter((d) => {
           const typeMap = {
-            vectors: "Vector DB",
-            graphs: "Graph",
-            document: "Document",
+            vectors: "vector_db",
+            graphs: "graph",
+            document: "document",
           };
           return d.type === typeMap[filterType];
         });
+
+  const isEmpty = !loading && datasets.length === 0;
+
+  if (isEmpty) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center text-center py-12">
+        <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
+          <Database className="w-8 h-8 text-primary" />
+        </div>
+        <h3 className="text-[16px] leading-[24px] font-semibold text-on-surface mb-2">
+          No datasets indexed yet
+        </h3>
+        <p className="text-[14px] leading-[20px] text-on-surface-variant">
+          Index a repository to get started
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex-1 flex flex-col min-w-0">
@@ -131,7 +174,7 @@ export function DatasetTable({ onForget }: DatasetTableProps) {
                     {dataset.name}
                   </div>
                   <div className="font-mono text-on-surface-variant/70 text-[11px] mt-0.5">
-                    {dataset.sourceRepo}
+                    {dataset.source_path || "N/A"}
                   </div>
                 </div>
               </div>
@@ -142,10 +185,10 @@ export function DatasetTable({ onForget }: DatasetTableProps) {
                 </span>
               </div>
               <div className="font-mono text-[13px] leading-[20px] text-on-surface-variant text-right">
-                {dataset.size}
+                {formatBytes(dataset.size_bytes)}
               </div>
               <div className="text-[14px] leading-[20px] text-on-surface-variant flex items-center gap-2">
-                {dataset.creationDate}
+                {formatDate(dataset.created_at)}
               </div>
               <div className="relative">
                 <button
