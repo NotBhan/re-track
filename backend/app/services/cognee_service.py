@@ -229,6 +229,46 @@ class CogneeService:
             logger.error("forget() failed: %s", e)
             raise CogneeServiceError(f"forget() failed: {e}") from e
 
+    async def list_datasets(self) -> list[dict[str, Any]]:
+        """List all datasets stored in Cognee memory.
+
+        Returns:
+            List of dicts with keys: id, name, created_at, file_count.
+
+        Raises:
+            CogneeServiceError: If listing fails.
+        """
+        self._ensure_initialized()
+        try:
+            logger.info("list_datasets()")
+            raw_datasets = await cognee.datasets.list_datasets()
+
+            datasets: list[dict[str, Any]] = []
+            for ds in raw_datasets:
+                file_count = 0
+                try:
+                    data_items = await cognee.datasets.list_data(ds.id)
+                    file_count = len(data_items)
+                except Exception:
+                    pass
+
+                created = None
+                if ds.created_at:
+                    created = ds.created_at.isoformat() if hasattr(ds.created_at, "isoformat") else str(ds.created_at)
+
+                datasets.append({
+                    "id": str(ds.id),
+                    "name": ds.name or "",
+                    "created_at": created,
+                    "file_count": file_count,
+                })
+
+            logger.info("list_datasets() | count=%d", len(datasets))
+            return datasets
+        except Exception as e:
+            logger.error("list_datasets() failed: %s", e)
+            raise CogneeServiceError(f"list_datasets() failed: {e}") from e
+
     def _ensure_initialized(self) -> None:
         """Raise if service is not initialized."""
         if not self._initialized:

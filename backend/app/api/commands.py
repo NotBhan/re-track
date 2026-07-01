@@ -125,34 +125,17 @@ async def list_datasets() -> DatasetListResponse | ErrorResponse:
             logger.info("command: list_datasets() | cognee not initialized, returning empty")
             return DatasetListResponse(success=True, datasets=[], total_count=0)
 
-        import cognee as cognee_sdk
+        raw_datasets = await cognee.list_datasets()
 
-        raw_datasets = await cognee_sdk.datasets.list_datasets()
-
-        datasets = []
-        for ds in raw_datasets:
-            file_count = 0
-            try:
-                data_items = await cognee_sdk.datasets.list_data(ds.id)
-                file_count = len(data_items)
-            except Exception:
-                pass
-
-            created = ""
-            if ds.created_at:
-                created = ds.created_at.isoformat() if hasattr(ds.created_at, 'isoformat') else str(ds.created_at)
-
-            datasets.append(
-                DatasetInfo(
-                    id=str(ds.id),
-                    name=ds.name or "",
-                    type="repository",
-                    size_bytes=0,
-                    created_at=created,
-                    file_count=file_count,
-                    source_path="",
-                )
+        datasets = [
+            DatasetInfo(
+                id=ds["id"],
+                name=ds["name"],
+                created_at=ds["created_at"],
+                file_count=ds["file_count"],
             )
+            for ds in raw_datasets
+        ]
 
         response = DatasetListResponse(
             success=True,

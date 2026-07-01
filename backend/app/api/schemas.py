@@ -132,10 +132,10 @@ class DatasetInfo(BaseModel):
     id: str = Field(description="UUID of the dataset")
     name: str = Field(description="Dataset name")
     type: str = Field(default="repository", description="Dataset type")
-    size_bytes: int = Field(default=0, description="Total size in bytes")
-    created_at: str = Field(description="ISO 8601 creation timestamp")
+    size_bytes: Optional[int] = Field(default=None, description="Total size in bytes (unknown if unavailable)")
+    created_at: Optional[str] = Field(default=None, description="ISO 8601 creation timestamp")
     file_count: int = Field(default=0, description="Number of files in dataset")
-    source_path: str = Field(default="", description="Source repository path")
+    source_path: Optional[str] = Field(default=None, description="Source repository path (unknown if unavailable)")
 
 
 class DatasetListResponse(BaseModel):
