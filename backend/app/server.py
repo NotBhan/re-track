@@ -17,6 +17,7 @@ from app.api.commands import (
     index_repository,
     generate_context,
     forget_dataset,
+    list_datasets,
     initialize_backend,
 )
 from app.api.schemas import (
@@ -63,6 +64,15 @@ async def health_endpoint():
     result = await health()
     if isinstance(result, ErrorResponse):
         raise HTTPException(status_code=503, detail=result.model_dump())
+    return result.model_dump()
+
+
+@app.get("/datasets")
+async def datasets_endpoint():
+    """List all stored datasets."""
+    result = await list_datasets()
+    if isinstance(result, ErrorResponse):
+        raise HTTPException(status_code=500, detail=result.model_dump())
     return result.model_dump()
 
 

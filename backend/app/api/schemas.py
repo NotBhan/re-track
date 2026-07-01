@@ -126,6 +126,26 @@ class ForgetDatasetResponse(BaseModel):
     message: str = Field(description="Human-readable status message")
 
 
+class DatasetInfo(BaseModel):
+    """Metadata for a single stored dataset."""
+
+    id: str = Field(description="UUID of the dataset")
+    name: str = Field(description="Dataset name")
+    type: str = Field(default="repository", description="Dataset type")
+    size_bytes: int = Field(default=0, description="Total size in bytes")
+    created_at: str = Field(description="ISO 8601 creation timestamp")
+    file_count: int = Field(default=0, description="Number of files in dataset")
+    source_path: str = Field(default="", description="Source repository path")
+
+
+class DatasetListResponse(BaseModel):
+    """Response listing all stored datasets."""
+
+    success: bool = Field(description="Whether the query succeeded")
+    datasets: list[DatasetInfo] = Field(default_factory=list, description="List of datasets")
+    total_count: int = Field(default=0, description="Total number of datasets")
+
+
 # --- Error Schema ---
 
 

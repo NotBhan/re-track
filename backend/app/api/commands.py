@@ -19,6 +19,8 @@ from typing import Optional
 from app.api.schemas import (
     BackendStatusResponse,
     ContextResponse,
+    DatasetInfo,
+    DatasetListResponse,
     ErrorResponse,
     ForgetDatasetRequest,
     GenerateContextRequest,
@@ -106,6 +108,72 @@ async def health() -> HealthResponse | ErrorResponse:
         return ErrorResponse(
             error=type(e).__name__,
             message=f"Health check failed: {e}",
+        )
+
+
+async def list_datasets() -> DatasetListResponse | ErrorResponse:
+    """List all datasets stored in Cognee memory.
+
+    Returns an empty list gracefully if Cognee is not initialized.
+    """
+    start = time.monotonic()
+    logger.info("command: list_datasets()")
+
+    try:
+        cognee = _cognee_service
+        if cognee is None or not cognee.is_initialized:
+            logger.info("command: list_datasets() | cognee not initialized, returning empty")
+            return DatasetListResponse(success=True, datasets=[], total_count=0)
+
+        import cognee as cognee_sdk
+
+        raw_datasets = await cognee_sdk.datasets.list_datasets()
+
+        datasets = []
+        for ds in raw_datasets:
+            file_count = 0
+            try:
+                data_items = await cognee_sdk.datasets.list_data(ds.id)
+                file_count = len(data_items)
+            except Exception:
+                pass
+
+            created = ""
+            if ds.created_at:
+                created = ds.created_at.isoformat() if hasattr(ds.created_at, 'isoformat') else str(ds.created_at)
+
+            datasets.append(
+                DatasetInfo(
+                    id=str(ds.id),
+                    name=ds.name or "",
+                    type="repository",
+                    size_bytes=0,
+                    created_at=created,
+                    file_count=file_count,
+                    source_path="",
+                )
+            )
+
+        response = DatasetListResponse(
+            success=True,
+            datasets=datasets,
+            total_count=len(datasets),
+        )
+
+        elapsed = time.monotonic() - start
+        logger.info(
+            "command: list_datasets() complete | count=%d | %.2fs",
+            len(datasets),
+            elapsed,
+        )
+        return response
+
+    except Exception as e:
+        elapsed = time.monotonic() - start
+        logger.error("command: list_datasets() failed | %.2fs | %s", elapsed, e)
+        return ErrorResponse(
+            error=type(e).__name__,
+            message=f"Failed to list datasets: {e}",
         )
 
 

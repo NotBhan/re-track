@@ -123,6 +123,11 @@ fn forget_dataset(request: ForgetRequest) -> Result<serde_json::Value, String> {
     http_post("/forget", &request)
 }
 
+#[tauri::command]
+fn list_datasets() -> Result<serde_json::Value, String> {
+    http_get("/datasets")
+}
+
 // --- Backend lifecycle management ---
 
 fn start_backend() -> Result<Child, String> {
@@ -242,6 +247,7 @@ pub fn run() {
             index_repository,
             generate_context,
             forget_dataset,
+            list_datasets,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

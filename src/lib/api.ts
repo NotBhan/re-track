@@ -92,6 +92,22 @@ export interface ErrorResponse {
   details?: string;
 }
 
+export interface DatasetInfo {
+  id: string;
+  name: string;
+  type: string;
+  size_bytes: number;
+  created_at: string;
+  file_count: number;
+  source_path: string;
+}
+
+export interface DatasetListResponse {
+  success: boolean;
+  datasets: DatasetInfo[];
+  total_count: number;
+}
+
 // --- API functions ---
 
 /**
@@ -133,4 +149,11 @@ export async function forgetDataset(
   request: ForgetDatasetRequest
 ): Promise<ForgetDatasetResponse> {
   return invoke<ForgetDatasetResponse>("forget_dataset", { request });
+}
+
+/**
+ * List all datasets stored in Cognee memory.
+ */
+export async function listDatasets(): Promise<DatasetListResponse> {
+  return invoke<DatasetListResponse>("list_datasets");
 }
