@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use std::process::{Child, Command, Stdio};
 use std::sync::Mutex;
 use std::time::Duration;
-use tauri::{Manager, State};
+use tauri::Manager;
 
 /// Backend process handle
 struct BackendProcess(Mutex<Option<Child>>);
@@ -18,31 +18,7 @@ struct BackendProcess(Mutex<Option<Child>>);
 /// Base URL for the Python HTTP server
 const BACKEND_URL: &str = "http://127.0.0.1:8765";
 
-// --- Response types matching Python schemas ---
-
-#[derive(Serialize, Deserialize, Debug)]
-struct HealthResponse {
-    status: String,
-    ollama_reachable: bool,
-    cognee_initialized: bool,
-    version: String,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-struct BackendStatusResponse {
-    status: String,
-    ollama_reachable: bool,
-    ollama_host: String,
-    ollama_port: u16,
-    llm_model: String,
-    embedding_model: String,
-    vector_db: String,
-    graph_db: String,
-    relational_db: String,
-    data_root: String,
-    system_root: String,
-    cognee_initialized: bool,
-}
+// --- Request types (used for JSON serialization) ---
 
 #[derive(Serialize, Deserialize, Debug)]
 struct IndexRequest {
@@ -52,43 +28,10 @@ struct IndexRequest {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-struct IndexResponse {
-    success: bool,
-    repository_path: String,
-    dataset_name: String,
-    total_files: u32,
-    processed_files: u32,
-    failed_files: u32,
-    total_batches: u32,
-    failed_paths: Vec<String>,
-    summary: String,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
 struct ContextRequest {
     task: String,
     datasets: Vec<String>,
     top_k: Option<u32>,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-struct ContextResponse {
-    success: bool,
-    task: String,
-    objective: String,
-    markdown: String,
-    section_count: u32,
-    source_count: u32,
-    token_estimate: u32,
-    dataset: String,
-    retrieved_memories: u32,
-    deduplicated_memories: u32,
-    compressed_memories: u32,
-    compression_ratio: f64,
-    retrieval_time_ms: u64,
-    total_time_ms: u64,
-    reference_count: u32,
-    section_headings: Vec<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
