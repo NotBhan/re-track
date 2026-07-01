@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   FolderOpen,
@@ -9,9 +10,16 @@ import {
 import { TopBar } from "@/components/layout/TopBar";
 import { StatCard } from "@/components/shared/StatCard";
 import { ActivityTimeline } from "@/components/dashboard/ActivityTimeline";
+import { useHealthStore } from "@/stores/health-store";
 
 export default function Dashboard() {
   const navigate = useNavigate();
+  const stats = useHealthStore((s) => s.dashboardStats);
+  const fetchDashboardStats = useHealthStore((s) => s.fetchDashboardStats);
+
+  useEffect(() => {
+    fetchDashboardStats();
+  }, [fetchDashboardStats]);
 
   return (
     <>
@@ -52,33 +60,33 @@ export default function Dashboard() {
               <StatCard
                 icon={<FolderOpen className="w-4 h-4 text-primary" />}
                 label="Indexed Repositories"
-                value="12"
+                value={String(stats?.indexed_repos ?? 0)}
                 glow
               />
               <StatCard
                 icon={<Plus className="w-4 h-4 text-tertiary" />}
                 label="Memories Stored"
-                value="1.2M"
+                value={String(stats?.total_embeddings ?? 0)}
               />
               <StatCard
                 icon={<Sparkles className="w-4 h-4 text-secondary" />}
                 label="Packages Generated"
-                value="45"
+                value={String(stats?.packages_generated ?? 0)}
               />
               <StatCard
                 icon={<RefreshCw className="w-4 h-4" />}
                 label="Avg. Gen Time"
-                value="1.4s"
+                value={stats?.avg_gen_time_ms ? (stats.avg_gen_time_ms / 1000).toFixed(1) + 's' : '--'}
               />
               <StatCard
                 icon={<FolderOpen className="w-4 h-4" />}
                 label="Avg. Package Size"
-                value="12KB"
+                value="--"
               />
               <StatCard
                 icon={<Zap className="w-4 h-4" />}
                 label="Last Indexed"
-                value="andes-core"
+                value={stats?.last_indexed_repo ?? '--'}
                 isBadge
               />
             </div>

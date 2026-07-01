@@ -1,6 +1,49 @@
 import { Link, Zap, RefreshCw } from "lucide-react";
-import { mockActivities } from "@/data/mock";
 import { cn } from "@/lib/utils";
+
+// TODO: Replace with real activity data when backend activity endpoint is available
+const mockActivities = [
+  {
+    id: "1",
+    type: "index" as const,
+    message: "Indexed repository",
+    repoName: "andes-core",
+    timestamp: "2 min ago",
+    detail: "342 files processed",
+  },
+  {
+    id: "2",
+    type: "generate" as const,
+    message: "Generated context package",
+    repoName: null,
+    timestamp: "15 min ago",
+    detail: "Auth module refactoring",
+  },
+  {
+    id: "3",
+    type: "sync" as const,
+    message: "Synced memory graph",
+    repoName: null,
+    timestamp: "1 hour ago",
+    detail: "12 new relationships",
+  },
+  {
+    id: "4",
+    type: "index" as const,
+    message: "Indexed repository",
+    repoName: "cognee-sdk",
+    timestamp: "3 hours ago",
+    detail: "891 files processed",
+  },
+  {
+    id: "5",
+    type: "generate" as const,
+    message: "Generated context package",
+    repoName: null,
+    timestamp: "5 hours ago",
+    detail: "API endpoint migration",
+  },
+];
 
 const iconMap = {
   index: { icon: Link, color: "text-primary", bg: "bg-primary/20", border: "border-primary/50" },
