@@ -108,6 +108,35 @@ export interface DatasetListResponse {
   total_count: number;
 }
 
+export interface RepoArchInfo {
+  icon: string;
+  label: string;
+}
+
+export interface RepoComponentInfo {
+  path: string;
+  centrality: string;
+}
+
+export interface RepositorySummaryInfo {
+  id: string;
+  name: string;
+  path: string;
+  languages: string[];
+  file_count: number;
+  memory_size: string;
+  last_indexed: string;
+  purpose?: string;
+  architecture?: RepoArchInfo[];
+  components?: RepoComponentInfo[];
+}
+
+export interface RepositoryListResponse {
+  success: boolean;
+  repositories: RepositorySummaryInfo[];
+  total_count: number;
+}
+
 // --- API functions ---
 
 /**
@@ -156,4 +185,11 @@ export async function forgetDataset(
  */
 export async function listDatasets(): Promise<DatasetListResponse> {
   return invoke<DatasetListResponse>("list_datasets");
+}
+
+/**
+ * List all indexed repositories with metadata.
+ */
+export async function getRepositorySummaries(): Promise<RepositoryListResponse> {
+  return invoke<RepositoryListResponse>("get_repository_summaries");
 }

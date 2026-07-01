@@ -11,6 +11,7 @@ Every command:
 - Catches and wraps errors in ErrorResponse
 """
 
+import json
 import logging
 import time
 from pathlib import Path
@@ -27,17 +28,44 @@ from app.api.schemas import (
     HealthResponse,
     IndexRepositoryRequest,
     IndexRepositoryResponse,
+    RepoArchInfo,
+    RepoComponentInfo,
+    RepositoryListResponse,
+    RepositorySummaryInfo,
 )
 from app.config.settings import Settings, get_settings
 from app.models.errors import AndesContextError, CogneeServiceError
 from app.services.context_service import ContextService
 from app.services.cognee_service import CogneeService
 from app.services.indexing_service import IndexingService
+from app.services.repository_summary import RepositorySummaryGenerator
 
 logger = logging.getLogger(__name__)
 
 # Backend version
 VERSION = "0.1.0"
+
+# Persistent store for indexed repository metadata
+_REPO_STORE_PATH = Path.home() / ".andes" / "indexed_repos.json"
+
+
+# --- Repo metadata store ---
+
+
+def _load_repo_store() -> dict:
+    """Load the indexed repos store from disk."""
+    if _REPO_STORE_PATH.exists():
+        try:
+            return json.loads(_REPO_STORE_PATH.read_text())
+        except (json.JSONDecodeError, OSError):
+            return {"repositories": []}
+    return {"repositories": []}
+
+
+def _save_repo_store(data: dict) -> None:
+    """Persist the indexed repos store to disk."""
+    _REPO_STORE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    _REPO_STORE_PATH.write_text(json.dumps(data, indent=2))
 
 
 # --- Service singletons (lazy-initialized) ---
@@ -230,6 +258,10 @@ async def index_repository(
             dataset_name=request.dataset_name,
         )
 
+        # Persist repository metadata after successful indexing
+        if progress.failed_files == 0:
+            _persist_repo_metadata(repo_path, progress.processed_files)
+
         response = IndexRepositoryResponse(
             success=progress.failed_files == 0,
             repository_path=str(repo_path),
@@ -402,4 +434,118 @@ async def forget_dataset(
         return ErrorResponse(
             error=type(e).__name__,
             message=f"Forget operation failed: {e}",
+        )
+
+
+def _persist_repo_metadata(repo_path: Path, file_count: int) -> None:
+    """Persist repository metadata to the indexed repos store after indexing."""
+    try:
+        generator = RepositorySummaryGenerator()
+        # Collect indexed files by scanning the repo path
+        indexed_files = [
+            f for f in repo_path.rglob("*")
+            if f.is_file() and not f.name.startswith(".")
+        ]
+        summary = generator.generate(repo_path, indexed_files)
+
+        repo_id = str(repo_path).replace("/", "_").replace("\\", "_").replace(":", "_")
+
+        architecture = None
+        if summary.architecture.pattern:
+            arch_icons = {
+                "layered": "layers",
+                "microservice": "cloud",
+                "monolith": "box",
+            }
+            architecture = [
+                RepoArchInfo(
+                    icon=arch_icons.get(summary.architecture.pattern, "code"),
+                    label=summary.architecture.pattern.title(),
+                )
+            ]
+
+        components = None
+        if summary.key_components:
+            components = [
+                RepoComponentInfo(
+                    path=comp.name,
+                    centrality="core" if i < 3 else "peripheral",
+                )
+                for i, comp in enumerate(summary.key_components)
+            ]
+
+        entry = {
+            "id": repo_id,
+            "name": repo_path.name,
+            "path": str(repo_path),
+            "languages": summary.technology_stack.languages,
+            "file_count": file_count,
+            "memory_size": f"{len(indexed_files)} files",
+            "last_indexed": summary.generated_at,
+            "purpose": summary.project_purpose,
+            "architecture": [a.model_dump() for a in architecture] if architecture else None,
+            "components": [c.model_dump() for c in components] if components else None,
+        }
+
+        store = _load_repo_store()
+        # Update existing entry or add new one
+        repos = store.get("repositories", [])
+        for i, r in enumerate(repos):
+            if r.get("id") == repo_id:
+                repos[i] = entry
+                break
+        else:
+            repos.append(entry)
+        store["repositories"] = repos
+        _save_repo_store(store)
+        logger.info("Persisted repo metadata for %s", repo_path)
+    except Exception as e:
+        logger.warning("Failed to persist repo metadata: %s", e)
+
+
+async def get_repository_summaries() -> RepositoryListResponse | ErrorResponse:
+    """List all indexed repositories with metadata."""
+    start = time.monotonic()
+    logger.info("command: get_repository_summaries()")
+
+    try:
+        store = _load_repo_store()
+        repos_data = store.get("repositories", [])
+
+        repositories = [
+            RepositorySummaryInfo(
+                id=r["id"],
+                name=r["name"],
+                path=r["path"],
+                languages=r.get("languages", []),
+                file_count=r.get("file_count", 0),
+                memory_size=r.get("memory_size", "0 B"),
+                last_indexed=r["last_indexed"],
+                purpose=r.get("purpose"),
+                architecture=[RepoArchInfo(**a) for a in r["architecture"]] if r.get("architecture") else None,
+                components=[RepoComponentInfo(**c) for c in r["components"]] if r.get("components") else None,
+            )
+            for r in repos_data
+        ]
+
+        response = RepositoryListResponse(
+            success=True,
+            repositories=repositories,
+            total_count=len(repositories),
+        )
+
+        elapsed = time.monotonic() - start
+        logger.info(
+            "command: get_repository_summaries() complete | count=%d | %.2fs",
+            len(repositories),
+            elapsed,
+        )
+        return response
+
+    except Exception as e:
+        elapsed = time.monotonic() - start
+        logger.error("command: get_repository_summaries() failed | %.2fs | %s", elapsed, e)
+        return ErrorResponse(
+            error=type(e).__name__,
+            message=f"Failed to list repositories: {e}",
         )

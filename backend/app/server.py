@@ -18,6 +18,7 @@ from app.api.commands import (
     generate_context,
     forget_dataset,
     list_datasets,
+    get_repository_summaries,
     initialize_backend,
 )
 from app.api.schemas import (
@@ -109,6 +110,15 @@ async def forget_endpoint(request: ForgetDatasetRequest):
     result = await forget_dataset(request)
     if result is None:
         return {"success": True, "message": "Dataset forgotten successfully"}
+    if isinstance(result, ErrorResponse):
+        raise HTTPException(status_code=500, detail=result.model_dump())
+    return result.model_dump()
+
+
+@app.get("/repositories")
+async def repositories_endpoint():
+    """List all indexed repositories with metadata."""
+    result = await get_repository_summaries()
     if isinstance(result, ErrorResponse):
         raise HTTPException(status_code=500, detail=result.model_dump())
     return result.model_dump()

@@ -146,6 +146,52 @@ class DatasetListResponse(BaseModel):
     total_count: int = Field(default=0, description="Total number of datasets")
 
 
+# --- Repository Summary Schemas ---
+
+
+class RepoArchInfo(BaseModel):
+    """Architecture pattern for a repository."""
+
+    icon: str = Field(description="Icon identifier for the pattern")
+    label: str = Field(description="Human-readable architecture label")
+
+
+class RepoComponentInfo(BaseModel):
+    """A key component in the repository."""
+
+    path: str = Field(description="Relative path to the component")
+    centrality: str = Field(description="Centrality level (e.g., core, peripheral)")
+
+
+class RepositorySummaryInfo(BaseModel):
+    """Metadata for a single indexed repository."""
+
+    id: str = Field(description="Unique repository identifier")
+    name: str = Field(description="Repository name")
+    path: str = Field(description="Repository file path")
+    languages: list[str] = Field(default_factory=list, description="Programming languages detected")
+    file_count: int = Field(default=0, description="Number of indexed files")
+    memory_size: str = Field(default="0 B", description="Human-readable memory size")
+    last_indexed: str = Field(description="ISO 8601 timestamp of last indexing")
+    purpose: Optional[str] = Field(default=None, description="Inferred project purpose")
+    architecture: Optional[list[RepoArchInfo]] = Field(
+        default=None, description="Architecture patterns detected"
+    )
+    components: Optional[list[RepoComponentInfo]] = Field(
+        default=None, description="Key components detected"
+    )
+
+
+class RepositoryListResponse(BaseModel):
+    """Response listing all indexed repositories."""
+
+    success: bool = Field(description="Whether the query succeeded")
+    repositories: list[RepositorySummaryInfo] = Field(
+        default_factory=list, description="List of indexed repositories"
+    )
+    total_count: int = Field(default=0, description="Total number of repositories")
+
+
 # --- Error Schema ---
 
 
