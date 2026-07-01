@@ -29,6 +29,7 @@ from app.api.schemas import (
     HealthResponse,
     IndexRepositoryRequest,
     IndexRepositoryResponse,
+    MemoryStatsResponse,
     RepoArchInfo,
     RepoComponentInfo,
     RepositoryListResponse,
@@ -598,4 +599,75 @@ async def get_dashboard_stats() -> DashboardStats | ErrorResponse:
         return ErrorResponse(
             error=type(e).__name__,
             message=f"Failed to get dashboard stats: {e}",
+        )
+
+
+async def get_memory_stats() -> MemoryStatsResponse | ErrorResponse:
+    """Return memory topology statistics for the memory page sidebar.
+
+    Aggregates total size from indexed repos, counts datasets,
+    and queries graph engine for node/edge counts.
+    """
+    start = time.monotonic()
+    logger.info("command: get_memory_stats()")
+
+    try:
+        store = _load_repo_store()
+        repos = store.get("repositories", [])
+
+        # Count datasets from indexed repos
+        dataset_count = len(repos)
+
+        # Calculate total size display from memory_size values
+        total_size_display = "N/A"
+        if repos:
+            # Sum up file counts from memory_size strings (e.g., "42 files")
+            total_files = 0
+            for repo in repos:
+                memory_size = repo.get("memory_size", "0 files")
+                try:
+                    # Extract number from "X files" format
+                    count = int(memory_size.split()[0])
+                    total_files += count
+                except (ValueError, IndexError):
+                    # If parsing fails, try to get file_count directly
+                    total_files += repo.get("file_count", 0)
+            if total_files > 0:
+                total_size_display = f"{total_files} files"
+
+        # Get graph stats from CogneeService
+        graph_nodes = 0
+        graph_edges = 0
+        if _cognee_service and _cognee_service.is_initialized:
+            try:
+                graph_stats = await _cognee_service.get_graph_stats()
+                graph_nodes = graph_stats.get("graph_nodes", 0)
+                graph_edges = graph_stats.get("graph_edges", 0)
+            except Exception as e:
+                logger.warning("Failed to get graph stats: %s", e)
+
+        response = MemoryStatsResponse(
+            success=True,
+            total_size_display=total_size_display,
+            graph_nodes=graph_nodes,
+            graph_edges=graph_edges,
+            dataset_count=dataset_count,
+        )
+
+        elapsed = time.monotonic() - start
+        logger.info(
+            "command: get_memory_stats() complete | datasets=%d | nodes=%d | edges=%d | %.2fs",
+            dataset_count,
+            graph_nodes,
+            graph_edges,
+            elapsed,
+        )
+        return response
+
+    except Exception as e:
+        elapsed = time.monotonic() - start
+        logger.error("command: get_memory_stats() failed | %.2fs | %s", elapsed, e)
+        return ErrorResponse(
+            error=type(e).__name__,
+            message=f"Failed to get memory stats: {e}",
         )

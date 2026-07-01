@@ -15,6 +15,7 @@ from app.api.commands import (
     health,
     get_backend_status,
     get_dashboard_stats,
+    get_memory_stats,
     index_repository,
     generate_context,
     forget_dataset,
@@ -129,6 +130,15 @@ async def repositories_endpoint():
 async def dashboard_stats_endpoint():
     """Get aggregate dashboard statistics."""
     result = await get_dashboard_stats()
+    if isinstance(result, ErrorResponse):
+        raise HTTPException(status_code=500, detail=result.model_dump())
+    return result.model_dump()
+
+
+@app.get("/memory/stats")
+async def memory_stats_endpoint():
+    """Get memory topology statistics."""
+    result = await get_memory_stats()
     if isinstance(result, ErrorResponse):
         raise HTTPException(status_code=500, detail=result.model_dump())
     return result.model_dump()

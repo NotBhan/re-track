@@ -148,6 +148,14 @@ export interface DashboardStats {
   last_indexed_time: string;
 }
 
+export interface MemoryStatsResponse {
+  success: boolean;
+  total_size_display: string;
+  graph_nodes: number;
+  graph_edges: number;
+  dataset_count: number;
+}
+
 // --- API functions ---
 
 /**
@@ -210,4 +218,11 @@ export async function getRepositorySummaries(): Promise<RepositoryListResponse> 
  */
 export async function getDashboardStats(): Promise<DashboardStats> {
   return invoke<DashboardStats>("get_dashboard_stats");
+}
+
+/**
+ * Get memory topology statistics.
+ */
+export async function getMemoryStats(): Promise<MemoryStatsResponse> {
+  return invoke<MemoryStatsResponse>("get_memory_stats");
 }

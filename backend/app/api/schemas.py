@@ -218,3 +218,13 @@ class ErrorResponse(BaseModel):
     message: str = Field(description="Human-readable error message")
     success: bool = Field(default=False, description="Always False for errors")
     details: Optional[str] = Field(default=None, description="Additional error context")
+
+
+class MemoryStatsResponse(BaseModel):
+    """Memory topology statistics for the memory page sidebar."""
+
+    success: bool = Field(description="Whether the query succeeded")
+    total_size_display: str = Field(description="Human-readable total memory size")
+    graph_nodes: int = Field(description="Number of graph nodes")
+    graph_edges: int = Field(description="Number of graph edges")
+    dataset_count: int = Field(description="Number of indexed datasets")

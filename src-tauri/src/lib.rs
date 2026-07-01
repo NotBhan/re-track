@@ -138,6 +138,11 @@ fn get_dashboard_stats() -> Result<serde_json::Value, String> {
     http_get("/dashboard/stats")
 }
 
+#[tauri::command]
+fn get_memory_stats() -> Result<serde_json::Value, String> {
+    http_get("/memory/stats")
+}
+
 // --- Backend lifecycle management ---
 
 fn start_backend() -> Result<Child, String> {
@@ -260,6 +265,7 @@ pub fn run() {
             list_datasets,
             get_repository_summaries,
             get_dashboard_stats,
+            get_memory_stats,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

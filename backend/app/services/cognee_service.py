@@ -269,6 +269,41 @@ class CogneeService:
             logger.error("list_datasets() failed: %s", e)
             raise CogneeServiceError(f"list_datasets() failed: {e}") from e
 
+    async def get_graph_stats(self) -> dict[str, int]:
+        """Get graph engine statistics if available.
+
+        Returns:
+            Dict with keys: graph_nodes, graph_edges.
+            Returns 0 for both if graph engine is not available.
+
+        Raises:
+            CogneeServiceError: If stats retrieval fails unexpectedly.
+        """
+        self._ensure_initialized()
+        try:
+            # Try to access graph engine through Cognee's public API
+            # Cognee may expose graph_stats or similar methods
+            graph_nodes = 0
+            graph_edges = 0
+
+            # Attempt to get graph stats through cognee's graph module
+            try:
+                if hasattr(cognee, "graph"):
+                    graph_module = cognee.graph
+                    if hasattr(graph_module, "get_node_count"):
+                        graph_nodes = await graph_module.get_node_count()
+                    if hasattr(graph_module, "get_edge_count"):
+                        graph_edges = await graph_module.get_edge_count()
+            except Exception:
+                # Graph engine not available or doesn't support stats
+                pass
+
+            return {"graph_nodes": graph_nodes, "graph_edges": graph_edges}
+        except Exception as e:
+            # Gracefully return zeros if anything goes wrong
+            logger.warning("get_graph_stats() failed, returning zeros: %s", e)
+            return {"graph_nodes": 0, "graph_edges": 0}
+
     def _ensure_initialized(self) -> None:
         """Raise if service is not initialized."""
         if not self._initialized:
