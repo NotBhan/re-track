@@ -7,6 +7,7 @@ import {
   Clock,
   FileCode,
 } from "lucide-react";
+import { IndexProgress } from "./IndexProgress";
 import {
   Dialog,
   DialogContent,
@@ -46,10 +47,12 @@ export function CreateRepositoryIndexModal({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [createdRepoId, setCreatedRepoId] = useState<string | null>(null);
+  const [indexingStarted, setIndexingStarted] = useState(false);
 
   // Reset state when modal closes
   useEffect(() => {
     if (!open) {
+      setIndexingStarted(false);
       setSourceType("github");
       setGithubUrl("");
       setLocalPath("");
@@ -144,15 +147,23 @@ export function CreateRepositoryIndexModal({
   const handleIndexNow = async () => {
     if (!createdRepoId) return;
     setSubmitting(true);
+    setIndexingStarted(true);
     try {
       await indexRepo(createdRepoId);
-      onOpenChange(false);
     } catch {
       // error is set by store
     } finally {
       setSubmitting(false);
     }
   };
+
+  // Auto-close modal 1s after indexing completes
+  useEffect(() => {
+    if (indexingStarted && !indexing && !error) {
+      const timer = setTimeout(() => onOpenChange(false), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [indexingStarted, indexing, error, onOpenChange]);
 
   const isScanning = scanning;
   const isIndexing = indexing;
@@ -362,75 +373,87 @@ export function CreateRepositoryIndexModal({
         ) : (
           /* Scan Results */
           <div className="space-y-5">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="rounded-lg bg-surface-container-lowest border border-outline-variant p-4">
-                <div className="flex items-center gap-2 mb-3">
-                  <FileCode className="w-4 h-4 text-primary" />
-                  <span className="text-sm font-medium text-on-surface">
-                    Languages
-                  </span>
-                </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {lastScan!.languages.length > 0 ? (
-                    lastScan!.languages.map((lang) => (
-                      <Badge
-                        key={lang}
-                        variant="secondary"
-                        className="bg-primary/10 text-primary border-primary/20"
-                      >
-                        {lang}
-                      </Badge>
-                    ))
-                  ) : (
-                    <span className="text-xs text-on-surface-variant">
-                      No languages detected
-                    </span>
-                  )}
-                </div>
-              </div>
+            {isIndexing && (
+              <IndexProgress
+                repositoryName={repoName}
+                status="indexing"
+                error={error}
+              />
+            )}
+            {!isIndexing && (
+              <>
+                {/* Languages and Frameworks cards */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="rounded-lg bg-surface-container-lowest border border-outline-variant p-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <FileCode className="w-4 h-4 text-primary" />
+                      <span className="text-sm font-medium text-on-surface">
+                        Languages
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {lastScan!.languages.length > 0 ? (
+                        lastScan!.languages.map((lang) => (
+                          <Badge
+                            key={lang}
+                            variant="secondary"
+                            className="bg-primary/10 text-primary border-primary/20"
+                          >
+                            {lang}
+                          </Badge>
+                        ))
+                      ) : (
+                        <span className="text-xs text-on-surface-variant">
+                          No languages detected
+                        </span>
+                      )}
+                    </div>
+                  </div>
 
-              <div className="rounded-lg bg-surface-container-lowest border border-outline-variant p-4">
-                <div className="flex items-center gap-2 mb-3">
-                  <CheckCircle2 className="w-4 h-4 text-primary" />
-                  <span className="text-sm font-medium text-on-surface">
-                    Frameworks
-                  </span>
+                  <div className="rounded-lg bg-surface-container-lowest border border-outline-variant p-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <CheckCircle2 className="w-4 h-4 text-primary" />
+                      <span className="text-sm font-medium text-on-surface">
+                        Frameworks
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {lastScan!.frameworks.length > 0 ? (
+                        lastScan!.frameworks.map((fw) => (
+                          <Badge
+                            key={fw}
+                            variant="secondary"
+                            className="bg-secondary/10 text-secondary border-secondary/20"
+                          >
+                            {fw}
+                          </Badge>
+                        ))
+                      ) : (
+                        <span className="text-xs text-on-surface-variant">
+                          No frameworks detected
+                        </span>
+                      )}
+                    </div>
+                  </div>
                 </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {lastScan!.frameworks.length > 0 ? (
-                    lastScan!.frameworks.map((fw) => (
-                      <Badge
-                        key={fw}
-                        variant="secondary"
-                        className="bg-secondary/10 text-secondary border-secondary/20"
-                      >
-                        {fw}
-                      </Badge>
-                    ))
-                  ) : (
-                    <span className="text-xs text-on-surface-variant">
-                      No frameworks detected
-                    </span>
-                  )}
-                </div>
-              </div>
-            </div>
 
-            <div className="flex gap-6 text-sm text-on-surface-variant">
-              <div className="flex items-center gap-1.5">
-                <FileCode className="w-4 h-4" />
-                <span>
-                  {lastScan!.file_count.toLocaleString()} files
-                </span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <Clock className="w-4 h-4" />
-                <span>
-                  ~{Math.ceil(lastScan!.estimated_index_time_ms / 1000)}s estimated
-                  indexing time
-                </span>
-              </div>
-            </div>
+                <div className="flex gap-6 text-sm text-on-surface-variant">
+                  <div className="flex items-center gap-1.5">
+                    <FileCode className="w-4 h-4" />
+                    <span>
+                      {lastScan!.file_count.toLocaleString()} files
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <Clock className="w-4 h-4" />
+                    <span>
+                      ~{Math.ceil(lastScan!.estimated_index_time_ms / 1000)}s estimated
+                      indexing time
+                    </span>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         )}
 
