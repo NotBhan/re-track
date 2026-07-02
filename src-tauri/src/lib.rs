@@ -96,6 +96,32 @@ fn http_get(path: &str) -> Result<serde_json::Value, String> {
     }
 }
 
+fn http_delete(path: &str) -> Result<serde_json::Value, String> {
+    let url = format!("{}{}", BACKEND_URL, path);
+    let client = reqwest::blocking::Client::new();
+    let resp = client
+        .delete(&url)
+        .timeout(Duration::from_secs(30))
+        .send()
+        .map_err(|e| format!("HTTP request failed: {}", e))?;
+
+    let status = resp.status();
+    let body: serde_json::Value = resp
+        .json()
+        .map_err(|e| format!("Failed to parse response: {}", e))?;
+
+    if status.is_success() {
+        Ok(body)
+    } else {
+        Err(body
+            .get("detail")
+            .and_then(|d| d.get("message"))
+            .and_then(|m| m.as_str())
+            .unwrap_or("Unknown error")
+            .to_string())
+    }
+}
+
 // --- Tauri commands ---
 
 #[tauri::command]
@@ -170,6 +196,31 @@ fn run_benchmark() -> Result<serde_json::Value, String> {
             .unwrap_or("Unknown error")
             .to_string())
     }
+}
+
+// --- Repository commands ---
+
+#[tauri::command]
+fn list_repositories() -> Result<serde_json::Value, String> {
+    http_get("/repositories")
+}
+
+#[tauri::command]
+fn create_repository(request: serde_json::Value) -> Result<serde_json::Value, String> {
+    http_post("/repositories", &request)
+}
+
+#[tauri::command]
+fn scan_repository(repo_id: String) -> Result<serde_json::Value, String> {
+    http_post(
+        &format!("/repositories/{}/scan", repo_id),
+        &serde_json::json!({}),
+    )
+}
+
+#[tauri::command]
+fn delete_repository(repo_id: String) -> Result<serde_json::Value, String> {
+    http_delete(&format!("/repositories/{}", repo_id))
 }
 
 // --- Backend lifecycle management ---
@@ -260,6 +311,7 @@ fn stop_backend(process: &mut Option<Child>) {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .manage(BackendProcess(Mutex::new(None)))
         .setup(|app| {
             // Start Python backend
@@ -296,6 +348,10 @@ pub fn run() {
             get_dashboard_stats,
             get_memory_stats,
             run_benchmark,
+            list_repositories,
+            create_repository,
+            scan_repository,
+            delete_repository,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -7,6 +7,8 @@
 
 import { invoke } from "@tauri-apps/api/core";
 
+import type { Repository, ScanResult } from "@/types/repository";
+
 // --- Types matching backend schemas ---
 
 export interface HealthResponse {
@@ -252,4 +254,39 @@ export async function getMemoryStats(): Promise<MemoryStatsResponse> {
  */
 export async function runBenchmark(): Promise<BenchmarkSuiteResponse> {
   return invoke<BenchmarkSuiteResponse>("run_benchmark");
+}
+
+// --- Repository management ---
+
+/**
+ * List all repositories.
+ */
+export async function listRepositories(): Promise<{ success: boolean; repositories: Repository[]; total_count: number }> {
+  return invoke("list_repositories");
+}
+
+/**
+ * Create a new repository.
+ */
+export async function createRepository(req: {
+  source_type: string;
+  source_url?: string;
+  local_path?: string;
+  name?: string;
+}): Promise<Repository> {
+  return invoke("create_repository", { request: req });
+}
+
+/**
+ * Scan a repository for languages and frameworks.
+ */
+export async function scanRepository(repoId: string): Promise<ScanResult> {
+  return invoke("scan_repository", { repoId });
+}
+
+/**
+ * Delete a repository.
+ */
+export async function deleteRepository(repoId: string): Promise<{ success: boolean }> {
+  return invoke("delete_repository", { repoId });
 }
