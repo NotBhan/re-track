@@ -1,22 +1,39 @@
 import { create } from "zustand";
-import type { RepositorySummaryInfo } from "@/lib/api";
+import type { Repository, ScanResult } from "@/types/repository";
 import {
-  getRepositorySummaries,
+  listRepositories,
+  createRepository,
+  scanRepository,
   indexRepository,
-  forgetDataset,
+  deleteRepository,
 } from "@/lib/api";
 
 interface RepositoryStore {
-  repositories: RepositorySummaryInfo[];
+  repositories: Repository[];
   selectedId: string | null;
-  selected: RepositorySummaryInfo | undefined;
+  selected: Repository | undefined;
   searchQuery: string;
+
   loading: boolean;
+  indexing: boolean;
+  scanning: boolean;
+  error: string | null;
+
+  lastScan: ScanResult | null;
+
+  fetchRepositories: () => Promise<void>;
+  createAndScan: (req: {
+    source_type: string;
+    source_url?: string;
+    local_path?: string;
+    name?: string;
+  }) => Promise<Repository>;
+  indexRepo: (repoId: string) => Promise<void>;
+  removeRepo: (repoId: string) => Promise<void>;
   select: (id: string | null) => void;
   setSearchQuery: (q: string) => void;
-  fetchRepositories: () => Promise<void>;
-  indexRepo: (path: string, name: string) => Promise<void>;
-  removeRepo: (id: string) => Promise<void>;
+  clearError: () => void;
+  clearScan: () => void;
 }
 
 export const useRepositoryStore = create<RepositoryStore>((set, get) => ({
@@ -24,7 +41,85 @@ export const useRepositoryStore = create<RepositoryStore>((set, get) => ({
   selectedId: null,
   selected: undefined,
   searchQuery: "",
+
   loading: false,
+  indexing: false,
+  scanning: false,
+  error: null,
+
+  lastScan: null,
+
+  fetchRepositories: async () => {
+    set({ loading: true });
+    try {
+      const response = await listRepositories();
+      set({ repositories: response.repositories, loading: false });
+    } catch {
+      set({ loading: false });
+    }
+  },
+
+  createAndScan: async (req) => {
+    set({ loading: true, error: null });
+    try {
+      const repository = await createRepository(req);
+      set({ loading: false });
+
+      set({ scanning: true });
+      try {
+        const scanResult = await scanRepository(repository.id);
+        set({ lastScan: scanResult, scanning: false });
+      } catch {
+        set({ scanning: false });
+      }
+
+      await get().fetchRepositories();
+      return repository;
+    } catch (err) {
+      set({
+        loading: false,
+        error: err instanceof Error ? err.message : "Failed to create repository",
+      });
+      throw err;
+    }
+  },
+
+  indexRepo: async (repoId: string) => {
+    set({ indexing: true, error: null });
+    try {
+      const repo = get().repositories.find((r) => r.id === repoId);
+      if (!repo) throw new Error("Repository not found");
+
+      await indexRepository({
+        repository_path: repo.local_path,
+        dataset_name: repo.name,
+      });
+
+      set({ indexing: false });
+      await get().fetchRepositories();
+    } catch (err) {
+      set({
+        indexing: false,
+        error: err instanceof Error ? err.message : "Failed to index repository",
+      });
+    }
+  },
+
+  removeRepo: async (repoId: string) => {
+    try {
+      await deleteRepository(repoId);
+      set((state) => ({
+        repositories: state.repositories.filter((r) => r.id !== repoId),
+        selectedId: state.selectedId === repoId ? null : state.selectedId,
+        selected: state.selectedId === repoId ? undefined : state.selected,
+      }));
+      await get().fetchRepositories();
+    } catch (err) {
+      set({
+        error: err instanceof Error ? err.message : "Failed to delete repository",
+      });
+    }
+  },
 
   select: (id) =>
     set({
@@ -34,32 +129,7 @@ export const useRepositoryStore = create<RepositoryStore>((set, get) => ({
 
   setSearchQuery: (q) => set({ searchQuery: q }),
 
-  fetchRepositories: async () => {
-    set({ loading: true });
-    try {
-      const response = await getRepositorySummaries();
-      if (response.success) {
-        set({ repositories: response.repositories, loading: false });
-      } else {
-        set({ loading: false });
-      }
-    } catch {
-      set({ loading: false });
-    }
-  },
+  clearError: () => set({ error: null }),
 
-  indexRepo: async (path: string, name: string) => {
-    await indexRepository({ repository_path: path, dataset_name: name });
-    await get().fetchRepositories();
-  },
-
-  removeRepo: async (id: string) => {
-    await forgetDataset({ dataset: id });
-    set((state) => ({
-      repositories: state.repositories.filter((r) => r.id !== id),
-      selectedId: state.selectedId === id ? null : state.selectedId,
-      selected: state.selectedId === id ? undefined : state.selected,
-    }));
-    await get().fetchRepositories();
-  },
+  clearScan: () => set({ lastScan: null }),
 }));
