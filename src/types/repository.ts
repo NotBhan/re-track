@@ -13,6 +13,12 @@ export interface Repository {
   size_bytes: number;
   indexed_at: string | null;
   error_message: string | null;
+  summary: string;
+  entry_points: string[];
+  architecture: string;
+  components: string[];
+  dependencies: string[];
+  metadata: Record<string, unknown>;
 }
 
 export interface ScanResult {

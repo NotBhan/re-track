@@ -350,6 +350,12 @@ class RepositoryResponse(BaseModel):
     size_bytes: int = Field(default=0, description="Total size in bytes")
     indexed_at: Optional[str] = Field(default=None, description="ISO 8601 indexing timestamp")
     error_message: Optional[str] = Field(default=None, description="Error if status is error")
+    summary: str = Field(default="", description="Repository summary")
+    entry_points: list[str] = Field(default_factory=list, description="Main entry point files")
+    architecture: str = Field(default="", description="Inferred architecture pattern")
+    components: list[str] = Field(default_factory=list, description="Top-level code directories")
+    dependencies: list[str] = Field(default_factory=list, description="External dependencies")
+    metadata: dict = Field(default_factory=dict, description="Extensible metadata")
 
 
 class RepositoryListResponse(BaseModel):

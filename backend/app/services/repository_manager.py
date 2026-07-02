@@ -121,6 +121,12 @@ class RepositoryManager:
             "indexed_at": repo.indexed_at,
             "error_message": repo.error_message,
             "created_at": repo.created_at,
+            "summary": repo.summary,
+            "entry_points": repo.entry_points,
+            "architecture": repo.architecture,
+            "components": repo.components,
+            "dependencies": repo.dependencies,
+            "metadata": repo.metadata,
         }
         if repo.scan_result is not None:
             d["scan_result"] = {
@@ -165,6 +171,12 @@ class RepositoryManager:
             scan_result=scan_result,
             error_message=d.get("error_message"),
             created_at=d.get("created_at", ""),
+            summary=d.get("summary", ""),
+            entry_points=d.get("entry_points", []),
+            architecture=d.get("architecture", ""),
+            components=d.get("components", []),
+            dependencies=d.get("dependencies", []),
+            metadata=d.get("metadata", {}),
         )
 
     # ── CRUD ──────────────────────────────────────────────────────
@@ -252,6 +264,17 @@ class RepositoryManager:
         file_count = 0
         size_bytes = 0
 
+        # Metadata extraction helpers
+        code_extensions = set(EXTENSION_LANGUAGE_MAP.keys())
+        COMPONENTS_EXCLUDE = frozenset({"node_modules", "dist", "build", "__pycache__", ".git", ".venv", "venv", "target"})
+        entry_point_names = {
+            "main.py", "index.ts", "index.tsx", "lib.rs", "main.go",
+            "App.tsx", "app.py", "server.py",
+        }
+        entry_points: list[str] = []
+        top_level_dirs: set[str] = set()
+        top_level_with_code: dict[str, bool] = {}
+
         for root, dirs, files in Path(repo.local_path).walk():
             dirs[:] = [d for d in dirs if d not in IGNORED_DIRS]
             for f in files:
@@ -265,9 +288,39 @@ class RepositoryManager:
                 if ext in EXTENSION_LANGUAGE_MAP:
                     languages.add(EXTENSION_LANGUAGE_MAP[ext])
 
+                # Entry points
+                if f in entry_point_names and len(entry_points) < 5:
+                    rel = str(Path(root).relative_to(repo.local_path) / f)
+                    if rel not in entry_points:
+                        entry_points.append(rel)
+
+                # Components: track top-level dirs containing code
+                rel_path = Path(root).relative_to(repo.local_path)
+                parts = rel_path.parts
+                if parts and parts[0] not in COMPONENTS_EXCLUDE:
+                    top_level_dirs.add(parts[0])
+                    if ext in code_extensions:
+                        top_level_with_code[parts[0]] = True
+
             for marker, framework in FRAMEWORK_MARKERS.items():
                 if (Path(root) / marker).exists():
                     frameworks.add(framework)
+
+        # Architecture inference
+        has_src = (Path(repo.local_path) / "src").is_dir()
+        code_dir_count = len([d for d in top_level_dirs if d in top_level_with_code])
+        if has_src:
+            architecture = "modular"
+        elif code_dir_count >= 3:
+            architecture = "multi-module"
+        else:
+            architecture = "flat"
+
+        # Components: top-level dirs with code files
+        components = sorted(top_level_with_code.keys())
+
+        # Dependencies: parse known manifest files
+        dependencies = self._extract_dependencies(repo.local_path)
 
         estimated_index_time = file_count * ESTIMATED_INDEX_TIME_MS_PER_FILE
 
@@ -285,6 +338,10 @@ class RepositoryManager:
         d["file_count"] = scan_result.file_count
         d["size_bytes"] = scan_result.size_bytes
         d["status"] = "scanning"
+        d["entry_points"] = entry_points
+        d["architecture"] = architecture
+        d["components"] = components
+        d["dependencies"] = dependencies
         d["scan_result"] = {
             "languages": scan_result.languages,
             "frameworks": scan_result.frameworks,
@@ -296,6 +353,76 @@ class RepositoryManager:
         }
         self._save()
         return scan_result
+
+    @staticmethod
+    def _extract_dependencies(local_path: str) -> list[str]:
+        root = Path(local_path)
+        deps: list[str] = []
+
+        # requirements.txt
+        req_file = root / "requirements.txt"
+        if req_file.exists():
+            for line in req_file.read_text().splitlines():
+                line = line.strip()
+                if line and not line.startswith("#") and not line.startswith("-"):
+                    name = line.split("==")[0].split(">=")[0].split("<=")[0].split("!=")[0].strip()
+                    if name:
+                        deps.append(name)
+
+        # package.json
+        pkg_file = root / "package.json"
+        if pkg_file.exists():
+            try:
+                pkg = json.loads(pkg_file.read_text())
+                for dep_name in list(pkg.get("dependencies", {}).keys()) + list(pkg.get("devDependencies", {}).keys()):
+                    deps.append(dep_name)
+            except (json.JSONDecodeError, AttributeError):
+                pass
+
+        # Cargo.toml
+        cargo_file = root / "Cargo.toml"
+        if cargo_file.exists():
+            try:
+                text = cargo_file.read_text()
+                in_deps = False
+                for line in text.splitlines():
+                    stripped = line.strip()
+                    if stripped.startswith("["):
+                        in_deps = stripped in ("[dependencies]", "[dev-dependencies]")
+                    elif in_deps and "=" in stripped:
+                        dep_name = stripped.split("=")[0].strip()
+                        if dep_name and not dep_name.startswith("#"):
+                            deps.append(dep_name)
+            except Exception:
+                pass
+
+        # go.mod
+        go_file = root / "go.mod"
+        if go_file.exists():
+            try:
+                in_require = False
+                for line in go_file.read_text().splitlines():
+                    stripped = line.strip()
+                    if stripped.startswith("require"):
+                        in_require = True
+                        # inline require: require github.com/foo v1.0.0
+                        rest = stripped[len("require"):].strip()
+                        if rest and not rest.startswith("("):
+                            dep_name = rest.split()[0] if rest.split() else ""
+                            if dep_name:
+                                deps.append(dep_name)
+                            in_require = False
+                    elif in_require:
+                        if stripped == ")":
+                            in_require = False
+                        else:
+                            dep_name = stripped.split()[0] if stripped.split() else ""
+                            if dep_name:
+                                deps.append(dep_name)
+            except Exception:
+                pass
+
+        return sorted(set(deps))
 
     # ── Helpers ───────────────────────────────────────────────────
 
