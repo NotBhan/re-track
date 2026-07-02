@@ -3,8 +3,7 @@ import { TopBar } from "@/components/layout/TopBar";
 import { RepoCard } from "@/components/repositories/RepoCard";
 import { RepoDetailPanel } from "@/components/repositories/RepoDetailPanel";
 import { useRepositoryStore } from "@/stores/repository-store";
-import { Search, FolderOpen, Loader2, Plus } from "lucide-react";
-import { open } from "@tauri-apps/plugin-dialog";
+import { Search, FolderOpen, Loader2 } from "lucide-react";
 
 export default function Repositories() {
   const {
@@ -14,7 +13,6 @@ export default function Repositories() {
     setSearchQuery,
     select,
     fetchRepositories,
-    indexRepo,
     loading,
   } = useRepositoryStore();
 
@@ -25,16 +23,8 @@ export default function Repositories() {
   const filtered = repositories.filter(
     (r) =>
       r.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      r.path.toLowerCase().includes(searchQuery.toLowerCase())
+      r.local_path.toLowerCase().includes(searchQuery.toLowerCase())
   );
-
-  const handleNewIndex = async () => {
-    const selected = await open({ directory: true, multiple: false });
-    if (selected) {
-      const name = selected.split("/").pop() || "repo";
-      await indexRepo(selected, name);
-    }
-  };
 
   return (
     <>
@@ -58,13 +48,6 @@ export default function Repositories() {
               Active Repositories
             </h2>
             <div className="flex gap-2">
-              <button
-                onClick={handleNewIndex}
-                className="bg-primary hover:bg-primary/90 text-on-primary text-[12px] leading-[16px] tracking-[0.02em] font-medium rounded px-3 py-1.5 transition-colors flex items-center gap-2"
-              >
-                <Plus className="w-4 h-4" />
-                New Index
-              </button>
               <button className="border border-outline-variant bg-transparent hover:bg-surface-variant text-on-surface text-[12px] leading-[16px] tracking-[0.02em] font-medium rounded px-3 py-1.5 transition-colors flex items-center gap-2">
                 Filter
               </button>
@@ -89,15 +72,6 @@ export default function Repositories() {
                   ? "No repositories match your search"
                   : "No repositories indexed yet"}
               </p>
-              {!searchQuery && (
-                <button
-                  onClick={handleNewIndex}
-                  className="bg-primary hover:bg-primary/90 text-on-primary text-[12px] leading-[16px] tracking-[0.02em] font-medium rounded px-4 py-2 transition-colors flex items-center gap-2"
-                >
-                  <Plus className="w-4 h-4" />
-                  Index a Repository
-                </button>
-              )}
             </div>
           ) : (
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">

@@ -1,13 +1,21 @@
 import { Folder, RefreshCw, Trash2 } from "lucide-react";
 import { LanguageBadge } from "./LanguageBadge";
 import { cn } from "@/lib/utils";
-import type { RepositorySummaryInfo } from "@/lib/api";
+import type { Repository } from "@/types/repository";
 import { useRepositoryStore } from "@/stores/repository-store";
 
 interface RepoCardProps {
-  repo: RepositorySummaryInfo;
+  repo: Repository;
   selected: boolean;
   onSelect: () => void;
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return "0 B";
+  const k = 1024;
+  const sizes = ["B", "KB", "MB", "GB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
 }
 
 export function RepoCard({ repo, selected, onSelect }: RepoCardProps) {
@@ -36,7 +44,7 @@ export function RepoCard({ repo, selected, onSelect }: RepoCardProps) {
             {repo.name}
           </h3>
           <p className="font-mono text-[13px] leading-[20px] text-on-surface-variant mt-1">
-            {repo.path}
+            {repo.local_path}
           </p>
         </div>
         <div className="flex gap-1">
@@ -58,18 +66,18 @@ export function RepoCard({ repo, selected, onSelect }: RepoCardProps) {
         </div>
         <div>
           <p className="text-[12px] leading-[16px] tracking-[0.02em] font-medium text-on-surface-variant">
-            Memory Size
+            Size
           </p>
           <p className="text-[14px] leading-[20px] text-on-surface">
-            {repo.memory_size}
+            {formatBytes(repo.size_bytes)}
           </p>
         </div>
         <div>
           <p className="text-[12px] leading-[16px] tracking-[0.02em] font-medium text-on-surface-variant">
-            Last Indexed
+            Status
           </p>
           <p className="text-[14px] leading-[20px] text-on-surface">
-            {repo.last_indexed}
+            {repo.status}
           </p>
         </div>
       </div>
@@ -79,7 +87,7 @@ export function RepoCard({ repo, selected, onSelect }: RepoCardProps) {
         <button
           onClick={(e) => {
             e.stopPropagation();
-            indexRepo(repo.path, repo.name);
+            indexRepo(repo.id);
           }}
           className="flex-1 bg-surface-variant hover:bg-surface-bright text-on-surface text-[12px] leading-[16px] tracking-[0.02em] font-medium rounded py-1.5 transition-colors flex items-center justify-center gap-1"
         >

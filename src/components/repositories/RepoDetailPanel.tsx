@@ -1,11 +1,14 @@
-import { X, GitBranch, Database } from "lucide-react";
+import { X } from "lucide-react";
 import { useRepositoryStore } from "@/stores/repository-store";
 import { StatusDot } from "@/components/shared/StatusDot";
 
-const archIcons: Record<string, typeof GitBranch> = {
-  "git-branch": GitBranch,
-  database: Database,
-};
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return "0 B";
+  const k = 1024;
+  const sizes = ["B", "KB", "MB", "GB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
+}
 
 export function RepoDetailPanel() {
   const { selected, select } = useRepositoryStore();
@@ -36,64 +39,96 @@ export function RepoDetailPanel() {
           </button>
         </div>
         <div className="flex items-center gap-2 font-mono text-[13px] leading-[20px] text-primary">
-          <StatusDot status="online" size="sm" />
-          Index Healthy
+          <StatusDot
+            status={selected.status === "indexed" ? "online" : selected.status === "error" ? "error" : "idle"}
+            size="sm"
+          />
+          {selected.status === "indexed" ? "Index Healthy" : selected.status}
         </div>
       </div>
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto p-5 space-y-6">
-        {/* Purpose */}
-        {selected.purpose && (
-          <section>
-            <h4 className="text-[12px] leading-[16px] tracking-[0.02em] font-medium text-on-surface-variant mb-2 uppercase tracking-wider">
-              Purpose
-            </h4>
-            <p className="text-[14px] leading-[20px] text-on-surface bg-surface-container-lowest p-3 rounded border border-outline-variant/50">
-              {selected.purpose}
-            </p>
-          </section>
-        )}
+        {/* Basic Info */}
+        <section>
+          <h4 className="text-[12px] leading-[16px] tracking-[0.02em] font-medium text-on-surface-variant mb-2 uppercase tracking-wider">
+            Details
+          </h4>
+          <div className="bg-surface-container-lowest p-3 rounded border border-outline-variant/50 space-y-2">
+            <div className="flex justify-between">
+              <span className="text-[14px] leading-[20px] text-on-surface-variant">Source</span>
+              <span className="text-[14px] leading-[20px] text-on-surface">{selected.source_type}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-[14px] leading-[20px] text-on-surface-variant">Files</span>
+              <span className="text-[14px] leading-[20px] text-on-surface">{selected.file_count.toLocaleString()}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-[14px] leading-[20px] text-on-surface-variant">Size</span>
+              <span className="text-[14px] leading-[20px] text-on-surface">{formatBytes(selected.size_bytes)}</span>
+            </div>
+            {selected.indexed_at && (
+              <div className="flex justify-between">
+                <span className="text-[14px] leading-[20px] text-on-surface-variant">Last Indexed</span>
+                <span className="text-[14px] leading-[20px] text-on-surface">
+                  {new Date(selected.indexed_at).toLocaleDateString()}
+                </span>
+              </div>
+            )}
+          </div>
+        </section>
 
-        {/* Architecture */}
-        {selected.architecture && selected.architecture.length > 0 && (
+        {/* Languages */}
+        {selected.languages.length > 0 && (
           <section>
             <h4 className="text-[12px] leading-[16px] tracking-[0.02em] font-medium text-on-surface-variant mb-2 uppercase tracking-wider">
-              Architecture
+              Languages
             </h4>
-            <div className="bg-surface-container-lowest p-3 rounded border border-outline-variant/50 space-y-2">
-              {selected.architecture.map((item, i) => {
-                const Icon = archIcons[item.icon] || GitBranch;
-                return (
-                  <div key={i} className="flex items-center gap-2">
-                    <Icon className="w-4 h-4 text-primary" />
-                    <span className="text-[14px] leading-[20px] text-on-surface">
-                      {item.label}
-                    </span>
-                  </div>
-                );
-              })}
+            <div className="bg-surface-container-lowest p-3 rounded border border-outline-variant/50">
+              <div className="flex flex-wrap gap-2">
+                {selected.languages.map((lang) => (
+                  <span
+                    key={lang}
+                    className="text-[13px] leading-[20px] text-on-surface bg-surface-variant px-2 py-1 rounded"
+                  >
+                    {lang}
+                  </span>
+                ))}
+              </div>
             </div>
           </section>
         )}
 
-        {/* Key Components */}
-        {selected.components && selected.components.length > 0 && (
+        {/* Frameworks */}
+        {selected.frameworks.length > 0 && (
           <section>
             <h4 className="text-[12px] leading-[16px] tracking-[0.02em] font-medium text-on-surface-variant mb-2 uppercase tracking-wider">
-              Key Components
+              Frameworks
             </h4>
-            <ul className="space-y-2">
-              {selected.components.map((comp, i) => (
-                <li
-                  key={i}
-                  className="font-mono text-[13px] leading-[20px] text-on-surface bg-surface-variant px-2 py-1.5 rounded flex justify-between"
-                >
-                  <span>{comp.path}</span>
-                  <span className="text-on-surface-variant">{comp.centrality}</span>
-                </li>
-              ))}
-            </ul>
+            <div className="bg-surface-container-lowest p-3 rounded border border-outline-variant/50">
+              <div className="flex flex-wrap gap-2">
+                {selected.frameworks.map((fw) => (
+                  <span
+                    key={fw}
+                    className="text-[13px] leading-[20px] text-on-surface bg-surface-variant px-2 py-1 rounded"
+                  >
+                    {fw}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* Error */}
+        {selected.error_message && (
+          <section>
+            <h4 className="text-[12px] leading-[16px] tracking-[0.02em] font-medium text-on-surface-variant mb-2 uppercase tracking-wider">
+              Error
+            </h4>
+            <p className="text-[14px] leading-[20px] text-error bg-error-container p-3 rounded">
+              {selected.error_message}
+            </p>
           </section>
         )}
       </div>
