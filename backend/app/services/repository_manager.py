@@ -200,6 +200,7 @@ class RepositoryManager:
         source_type: str,
         source_url: str | None = None,
         local_path: str | None = None,
+        name: str | None = None,
     ) -> Repository:
         if source_type == "github":
             if not source_url:
@@ -208,14 +209,14 @@ class RepositoryManager:
             source = GitHubSource(url=source_url, workspace=workspace)
             local_path_resolved = str(source.import_to())
             branch, commit_hash = self._get_git_info(local_path_resolved)
-            repo_name = source.get_repo_name()
+            repo_name = name or source.get_repo_name()
         elif source_type == "local":
             if not local_path:
                 raise ValueError("local_path required for local source")
             source = LocalSource(path=local_path)
             local_path_resolved = str(source.import_to())
             branch, commit_hash = self._get_git_info(local_path_resolved)
-            repo_name = Path(local_path).name
+            repo_name = name or Path(local_path).name
         else:
             raise ValueError(f"Unknown source type: {source_type}")
 

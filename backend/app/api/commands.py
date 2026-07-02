@@ -801,6 +801,7 @@ async def create_repository(
             source_type=request.source_type,
             source_url=request.source_url,
             local_path=request.local_path,
+            name=request.name,
         )
         response = _repo_to_response(repo)
         elapsed = time.monotonic() - start

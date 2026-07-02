@@ -202,25 +202,25 @@ fn run_benchmark() -> Result<serde_json::Value, String> {
 
 #[tauri::command]
 fn list_repositories() -> Result<serde_json::Value, String> {
-    http_get("/repositories")
+    http_get("/repos")
 }
 
 #[tauri::command]
 fn create_repository(request: serde_json::Value) -> Result<serde_json::Value, String> {
-    http_post("/repositories", &request)
+    http_post("/repos", &request)
 }
 
 #[tauri::command]
 fn scan_repository(repo_id: String) -> Result<serde_json::Value, String> {
     http_post(
-        &format!("/repositories/{}/scan", repo_id),
+        &format!("/repos/{}/scan", repo_id),
         &serde_json::json!({}),
     )
 }
 
 #[tauri::command]
 fn delete_repository(repo_id: String) -> Result<serde_json::Value, String> {
-    http_delete(&format!("/repositories/{}", repo_id))
+    http_delete(&format!("/repos/{}", repo_id))
 }
 
 // --- Backend lifecycle management ---

@@ -69,8 +69,11 @@ export const useRepositoryStore = create<RepositoryStore>((set, get) => ({
       try {
         const scanResult = await scanRepository(repository.id);
         set({ lastScan: scanResult, scanning: false });
-      } catch {
-        set({ scanning: false });
+      } catch (scanErr) {
+        set({
+          scanning: false,
+          error: scanErr instanceof Error ? scanErr.message : "Scan failed",
+        });
       }
 
       await get().fetchRepositories();
