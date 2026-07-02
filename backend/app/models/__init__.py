@@ -8,6 +8,7 @@ from app.models.errors import (
     OllamaConnectionError,
     TokenizerError,
 )
+from app.models.repository import Repository, ScanResult
 from app.models.responses import (
     ContextPackage,
     IndexingProgress,
@@ -29,7 +30,9 @@ __all__ = [
     "PackageSection",
     "RecallResult",
     "RecallResponse",
+    "Repository",
     "RememberResult",
+    "ScanResult",
     "SectionType",
     "TokenizerError",
 ]
