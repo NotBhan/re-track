@@ -2,10 +2,12 @@ import { create } from "zustand";
 import type { ContextResponse, AdvancedOptions } from "@/types";
 
 import { generateContext } from "@/lib/api";
+import { useRepositoryStore } from "@/stores/repository-store";
 
 interface ContextStore {
   objective: string;
   selectedRepo: string;
+  selectedRepoId: string | null;
   topK: number;
   advancedOptions: AdvancedOptions;
   result: ContextResponse | null;
@@ -14,6 +16,8 @@ interface ContextStore {
   history: ContextResponse[];
   setObjective: (v: string) => void;
   setSelectedRepo: (v: string) => void;
+  setSelectedRepoById: (repoId: string) => void;
+  clearSelectedRepoId: () => void;
   setTopK: (v: number) => void;
   toggleAdvanced: (key: keyof AdvancedOptions) => void;
   setLoading: (v: boolean) => void;
@@ -32,6 +36,7 @@ const initialAdvanced: AdvancedOptions = {
 export const useContextStore = create<ContextStore>((set, get) => ({
   objective: "",
   selectedRepo: "andes-core-api",
+  selectedRepoId: null,
   topK: 25,
   advancedOptions: initialAdvanced,
   result: null,
@@ -41,6 +46,13 @@ export const useContextStore = create<ContextStore>((set, get) => ({
 
   setObjective: (v) => set({ objective: v }),
   setSelectedRepo: (v) => set({ selectedRepo: v }),
+  setSelectedRepoById: (repoId) => {
+    const repo = useRepositoryStore.getState().repositories.find((r) => r.id === repoId);
+    if (repo) {
+      set({ selectedRepo: repo.name, selectedRepoId: repoId });
+    }
+  },
+  clearSelectedRepoId: () => set({ selectedRepoId: null }),
   setTopK: (v) => set({ topK: v }),
   toggleAdvanced: (key) =>
     set((state) => ({

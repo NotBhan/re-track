@@ -1,11 +1,21 @@
 import { useState, type ReactNode } from "react";
-import { Copy, Check, Save, Download, FileText } from "lucide-react";
+import { Copy, Check, Save, Download, FileText, Plus } from "lucide-react";
 import { useContextStore } from "@/stores/context-store";
+import { useContextPackageStore } from "@/stores/context-package-store";
+import { useRepositoryStore } from "@/stores/repository-store";
 import { cn } from "@/lib/utils";
 
 export function OutputPanel() {
-  const { result, loading, error } = useContextStore();
+  const { result, loading, error, selectedRepoId } = useContextStore();
+  const { savePackage, appendToPackage, fetchPackages } = useContextPackageStore();
+  const repositories = useRepositoryStore((s) => s.repositories);
   const [copied, setCopied] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [appending, setAppending] = useState(false);
+
+  const selectedRepo = selectedRepoId
+    ? repositories.find((r) => r.id === selectedRepoId)
+    : null;
 
   const handleCopy = async () => {
     if (!result?.markdown) return;
@@ -15,6 +25,70 @@ export function OutputPanel() {
       setTimeout(() => setCopied(false), 2000);
     } catch {
       // Clipboard not available
+    }
+  };
+
+  const handleSave = async () => {
+    if (!result) return;
+    const name = prompt("Package name:");
+    if (!name) return;
+
+    setSaving(true);
+    try {
+      await savePackage({
+        name,
+        task: result.task,
+        objective: result.objective,
+        repository_id: selectedRepoId || "",
+        repository_name: selectedRepo?.name || "",
+        repository_branch: selectedRepo?.branch || "",
+        repository_commit: selectedRepo?.commit_hash || "",
+        markdown: result.markdown,
+        section_count: result.section_count,
+        token_estimate: result.token_estimate,
+        retrieved_memories: result.retrieved_memories,
+        deduplicated_memories: result.deduplicated_memories,
+        compression_ratio: result.compression_ratio,
+        total_time_ms: result.total_time_ms,
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleAppend = async () => {
+    if (!result) return;
+
+    setAppending(true);
+    try {
+      await fetchPackages();
+      const packages = useContextPackageStore.getState().packages;
+
+      if (packages.length === 0) {
+        alert("No saved packages found. Save a package first.");
+        return;
+      }
+
+      const packageNames = packages.map((p, i) => `${i + 1}. ${p.name}`).join("\n");
+      const selection = prompt(
+        `Select a package to append to:\n${packageNames}\n\nEnter number:`
+      );
+      if (!selection) return;
+
+      const index = parseInt(selection, 10) - 1;
+      if (index < 0 || index >= packages.length) {
+        alert("Invalid selection.");
+        return;
+      }
+
+      await appendToPackage(
+        packages[index].id,
+        result.task,
+        result.markdown,
+        result.objective
+      );
+    } finally {
+      setAppending(false);
     }
   };
 
@@ -40,10 +114,28 @@ export function OutputPanel() {
             )}
           </button>
           <button
-            className="p-1.5 text-on-surface-variant hover:text-secondary hover:bg-secondary/10 rounded transition-colors"
+            onClick={handleSave}
+            disabled={!result || saving}
+            className="p-1.5 text-on-surface-variant hover:text-secondary hover:bg-secondary/10 rounded transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             title="Save Package"
           >
-            <Save className="w-5 h-5" />
+            {saving ? (
+              <div className="animate-spin w-5 h-5 border-2 border-current border-t-transparent rounded-full" />
+            ) : (
+              <Save className="w-5 h-5" />
+            )}
+          </button>
+          <button
+            onClick={handleAppend}
+            disabled={!result || appending}
+            className="p-1.5 text-on-surface-variant hover:text-tertiary hover:bg-tertiary/10 rounded transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            title="Append to Package"
+          >
+            {appending ? (
+              <div className="animate-spin w-5 h-5 border-2 border-current border-t-transparent rounded-full" />
+            ) : (
+              <Plus className="w-5 h-5" />
+            )}
           </button>
           <button
             className="p-1.5 text-on-surface-variant hover:text-on-surface hover:bg-surface-variant rounded transition-colors"

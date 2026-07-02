@@ -1,15 +1,39 @@
-import { ChevronDown, ChevronUp, Play } from "lucide-react";
+import { ChevronDown, ChevronUp, Play, X } from "lucide-react";
 import { useState } from "react";
 import { Slider } from "@/components/ui/slider";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useContextStore } from "@/stores/context-store";
+import { useRepositoryStore } from "@/stores/repository-store";
 
-export function InputParameters() {
+function StatusBadge({ status }: { status: string }) {
+  const colorMap: Record<string, string> = {
+    indexed: "bg-secondary/20 text-secondary",
+    scanning: "bg-tertiary/20 text-tertiary",
+    indexing: "bg-tertiary/20 text-tertiary",
+    registered: "bg-on-surface-variant/20 text-on-surface-variant",
+    error: "bg-error/20 text-error",
+    not_indexed: "bg-on-surface-variant/20 text-on-surface-variant",
+  };
+
+  return (
+    <span className={`text-[10px] leading-[14px] tracking-[0.04em] font-medium px-2 py-0.5 rounded-full ${colorMap[status] || colorMap.registered}`}>
+      {status.replace("_", " ")}
+    </span>
+  );
+}
+
+interface InputParametersProps {
+  repoPreselected?: boolean;
+}
+
+export function InputParameters({ repoPreselected = false }: InputParametersProps) {
   const {
     objective,
     setObjective,
     selectedRepo,
     setSelectedRepo,
+    selectedRepoId,
+    clearSelectedRepoId,
     topK,
     setTopK,
     advancedOptions,
@@ -18,7 +42,17 @@ export function InputParameters() {
     generatePackage,
   } = useContextStore();
 
+  const repositories = useRepositoryStore((s) => s.repositories);
   const [showAdvanced, setShowAdvanced] = useState(false);
+
+  const preselectedRepo = selectedRepoId
+    ? repositories.find((r) => r.id === selectedRepoId)
+    : null;
+
+  const handleClearSelection = () => {
+    clearSelectedRepoId();
+    setSelectedRepo("andes-core-api");
+  };
 
   return (
     <div className="w-1/3 flex flex-col bg-surface-container rounded-xl border border-outline-variant overflow-y-auto shadow-lg shadow-black/20">
@@ -50,18 +84,45 @@ export function InputParameters() {
           <label className="text-[12px] leading-[16px] tracking-[0.02em] font-medium text-on-surface-variant">
             Source Repository
           </label>
-          <div className="relative">
-            <select
-              value={selectedRepo}
-              onChange={(e) => setSelectedRepo(e.target.value)}
-              className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg p-3 text-[14px] leading-[20px] text-on-surface appearance-none focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
-            >
-              <option value="andes-core-api">andes-core-api</option>
-              <option value="andes-web-client">andes-web-client</option>
-              <option value="infra-deployments">infra-deployments</option>
-            </select>
-            <ChevronDown className="absolute right-3 top-3 w-5 h-5 text-on-surface-variant pointer-events-none" />
-          </div>
+          {repoPreselected && preselectedRepo ? (
+            <div className="flex items-center justify-between bg-surface-container-lowest border border-outline-variant rounded-lg p-3">
+              <div className="flex items-center gap-3">
+                <span className="text-[14px] leading-[20px] text-on-surface font-medium">
+                  {preselectedRepo.name}
+                </span>
+                <StatusBadge status={preselectedRepo.status} />
+              </div>
+              <button
+                onClick={handleClearSelection}
+                className="p-1 text-on-surface-variant hover:text-error hover:bg-error/10 rounded transition-colors"
+                title="Change Repository"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          ) : (
+            <div className="relative">
+              <select
+                value={selectedRepo}
+                onChange={(e) => setSelectedRepo(e.target.value)}
+                className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg p-3 text-[14px] leading-[20px] text-on-surface appearance-none focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
+              >
+                {repositories.map((repo) => (
+                  <option key={repo.id} value={repo.name}>
+                    {repo.name}
+                  </option>
+                ))}
+                {repositories.length === 0 && (
+                  <>
+                    <option value="andes-core-api">andes-core-api</option>
+                    <option value="andes-web-client">andes-web-client</option>
+                    <option value="infra-deployments">infra-deployments</option>
+                  </>
+                )}
+              </select>
+              <ChevronDown className="absolute right-3 top-3 w-5 h-5 text-on-surface-variant pointer-events-none" />
+            </div>
+          )}
         </div>
 
         {/* Top-K Slider */}
