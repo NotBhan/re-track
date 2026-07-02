@@ -1,5 +1,6 @@
 """Data models package."""
 
+from app.models.context_package import SavedContextPackage
 from app.models.errors import (
     AndesContextError,
     ConfigurationError,
@@ -32,6 +33,7 @@ __all__ = [
     "RecallResponse",
     "Repository",
     "RememberResult",
+    "SavedContextPackage",
     "ScanResult",
     "SectionType",
     "TokenizerError",
