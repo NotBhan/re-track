@@ -21,6 +21,10 @@ from app.api.schemas import (
     BackendStatusResponse,
     BenchmarkResultItem,
     BenchmarkSuiteResponse,
+    ContextPackageAppendRequest,
+    ContextPackageListResponse,
+    ContextPackageResponse,
+    ContextPackageSaveRequest,
     ContextResponse,
     DashboardStats,
     DatasetInfo,
@@ -45,8 +49,10 @@ from app.config.settings import Settings, get_settings
 from app.models.errors import AndesContextError, CogneeServiceError
 from app.models.repository import Repository
 from app.services.context_service import ContextService
+from app.services.context_package_repository import JsonContextPackageRepository
 from app.services.cognee_service import CogneeService
 from app.services.indexing_service import IndexingService
+from app.models.context_package import SavedContextPackage
 from app.services.repository_manager import RepositoryManager
 from app.services.repository_summary import RepositorySummaryGenerator
 
@@ -892,4 +898,197 @@ async def delete_repository(repo_id: str) -> dict | ErrorResponse:
         return ErrorResponse(
             error=type(e).__name__,
             message=f"Failed to delete repository: {e}",
+        )
+
+
+# --- Context Package Commands ---
+
+_pkg_repo = JsonContextPackageRepository()
+
+
+def _pkg_to_response(pkg: SavedContextPackage) -> ContextPackageResponse:
+    """Convert a SavedContextPackage dataclass to a Pydantic response model."""
+    return ContextPackageResponse(
+        id=pkg.id,
+        name=pkg.name,
+        task=pkg.task,
+        objective=pkg.objective,
+        repository_id=pkg.repository_id,
+        repository_name=pkg.repository_name,
+        repository_branch=pkg.repository_branch,
+        repository_commit=pkg.repository_commit,
+        indexing_version=pkg.indexing_version,
+        markdown=pkg.markdown,
+        section_count=pkg.section_count,
+        token_estimate=pkg.token_estimate,
+        retrieved_memories=pkg.retrieved_memories,
+        deduplicated_memories=pkg.deduplicated_memories,
+        compression_ratio=pkg.compression_ratio,
+        total_time_ms=pkg.total_time_ms,
+        created_at=pkg.created_at,
+        updated_at=pkg.updated_at,
+        tags=pkg.tags,
+    )
+
+
+async def save_context_package(
+    request: ContextPackageSaveRequest,
+) -> ContextPackageResponse | ErrorResponse:
+    """Save a context package."""
+    import uuid
+    from datetime import datetime, timezone
+
+    start = time.monotonic()
+    logger.info("command: save_context_package() | name=%s", request.name)
+
+    try:
+        now = datetime.now(timezone.utc).isoformat()
+        pkg_id = str(uuid.uuid4())
+
+        pkg = SavedContextPackage(
+            id=pkg_id,
+            name=request.name,
+            task=request.task,
+            objective=request.objective,
+            repository_id=request.repository_id,
+            repository_name=request.repository_name,
+            repository_branch=request.repository_branch,
+            repository_commit=request.repository_commit,
+            indexing_version=request.indexing_version,
+            markdown=request.markdown,
+            section_count=request.section_count,
+            token_estimate=request.token_estimate,
+            retrieved_memories=request.retrieved_memories,
+            deduplicated_memories=request.deduplicated_memories,
+            compression_ratio=request.compression_ratio,
+            total_time_ms=int(request.total_time_ms),
+            created_at=now,
+            updated_at=now,
+            tags=request.tags,
+        )
+
+        saved = await _pkg_repo.save(pkg)
+        elapsed = time.monotonic() - start
+        logger.info("command: save_context_package() complete | id=%s | %.2fs", saved.id, elapsed)
+        return _pkg_to_response(saved)
+
+    except Exception as e:
+        elapsed = time.monotonic() - start
+        logger.error("command: save_context_package() failed | %.2fs | %s", elapsed, e)
+        return ErrorResponse(
+            error=type(e).__name__,
+            message=f"Failed to save context package: {e}",
+        )
+
+
+async def list_context_packages() -> ContextPackageListResponse | ErrorResponse:
+    """List all saved context packages."""
+    start = time.monotonic()
+    logger.info("command: list_context_packages()")
+
+    try:
+        packages = await _pkg_repo.list_all()
+        packages.sort(key=lambda p: p.created_at, reverse=True)
+
+        elapsed = time.monotonic() - start
+        logger.info(
+            "command: list_context_packages() complete | count=%d | %.2fs",
+            len(packages),
+            elapsed,
+        )
+        return ContextPackageListResponse(
+            success=True,
+            packages=[_pkg_to_response(p) for p in packages],
+            total_count=len(packages),
+        )
+
+    except Exception as e:
+        elapsed = time.monotonic() - start
+        logger.error("command: list_context_packages() failed | %.2fs | %s", elapsed, e)
+        return ErrorResponse(
+            error=type(e).__name__,
+            message=f"Failed to list context packages: {e}",
+        )
+
+
+async def get_context_package(
+    package_id: str,
+) -> ContextPackageResponse | ErrorResponse | None:
+    """Get a single context package by ID."""
+    start = time.monotonic()
+    logger.info("command: get_context_package() | id=%s", package_id)
+
+    try:
+        pkg = await _pkg_repo.get(package_id)
+        if pkg is None:
+            return None
+
+        elapsed = time.monotonic() - start
+        logger.info("command: get_context_package() complete | %.2fs", elapsed)
+        return _pkg_to_response(pkg)
+
+    except Exception as e:
+        elapsed = time.monotonic() - start
+        logger.error("command: get_context_package() failed | %.2fs | %s", elapsed, e)
+        return ErrorResponse(
+            error=type(e).__name__,
+            message=f"Failed to get context package: {e}",
+        )
+
+
+async def delete_context_package(package_id: str) -> dict | ErrorResponse:
+    """Delete a context package."""
+    start = time.monotonic()
+    logger.info("command: delete_context_package() | id=%s", package_id)
+
+    try:
+        deleted = await _pkg_repo.delete(package_id)
+        elapsed = time.monotonic() - start
+        if deleted:
+            logger.info("command: delete_context_package() complete | %.2fs", elapsed)
+            return {"success": True, "message": f"Package {package_id} deleted"}
+        else:
+            return ErrorResponse(
+                error="NotFoundError",
+                message=f"Package {package_id} not found",
+            )
+
+    except Exception as e:
+        elapsed = time.monotonic() - start
+        logger.error("command: delete_context_package() failed | %.2fs | %s", elapsed, e)
+        return ErrorResponse(
+            error=type(e).__name__,
+            message=f"Failed to delete context package: {e}",
+        )
+
+
+async def append_context_package(
+    package_id: str,
+    request: ContextPackageAppendRequest,
+) -> ContextPackageResponse | ErrorResponse | None:
+    """Append content to an existing context package."""
+    start = time.monotonic()
+    logger.info("command: append_context_package() | id=%s", package_id)
+
+    try:
+        pkg = await _pkg_repo.append(
+            package_id=package_id,
+            additional_task=request.additional_task,
+            additional_markdown=request.additional_markdown,
+            additional_objective=request.additional_objective,
+        )
+
+        if pkg is None:
+            return None
+
+        elapsed = time.monotonic() - start
+        logger.info("command: append_context_package() complete | %.2fs", elapsed)
+        return _pkg_to_response(pkg)
+
+    except Exception as e:
+        elapsed = time.monotonic() - start
+        logger.error("command: append_context_package() failed | %.2fs | %s", elapsed, e)
+        return ErrorResponse(
+            error=type(e).__name__,
+            message=f"Failed to append to context package: {e}",
         )

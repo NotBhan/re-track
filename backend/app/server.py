@@ -27,8 +27,15 @@ from app.api.commands import (
     create_repository,
     scan_repository,
     delete_repository,
+    save_context_package,
+    list_context_packages,
+    get_context_package,
+    delete_context_package,
+    append_context_package,
 )
 from app.api.schemas import (
+    ContextPackageAppendRequest,
+    ContextPackageSaveRequest,
     ErrorResponse,
     ForgetDatasetRequest,
     GenerateContextRequest,
@@ -196,3 +203,55 @@ async def repos_delete_endpoint(repo_id: str):
     if isinstance(result, ErrorResponse):
         raise HTTPException(status_code=400, detail=result.model_dump())
     return result
+
+
+# --- Context Package Routes ---
+
+
+@app.get("/packages")
+async def packages_list_endpoint():
+    """List all saved context packages."""
+    result = await list_context_packages()
+    if isinstance(result, ErrorResponse):
+        raise HTTPException(status_code=500, detail=result.model_dump())
+    return result.model_dump()
+
+
+@app.post("/packages")
+async def packages_save_endpoint(request: ContextPackageSaveRequest):
+    """Save a context package."""
+    result = await save_context_package(request)
+    if isinstance(result, ErrorResponse):
+        raise HTTPException(status_code=500, detail=result.model_dump())
+    return result.model_dump()
+
+
+@app.get("/packages/{package_id}")
+async def packages_get_endpoint(package_id: str):
+    """Get a single context package by ID."""
+    result = await get_context_package(package_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Package not found")
+    if isinstance(result, ErrorResponse):
+        raise HTTPException(status_code=500, detail=result.model_dump())
+    return result.model_dump()
+
+
+@app.delete("/packages/{package_id}")
+async def packages_delete_endpoint(package_id: str):
+    """Delete a context package."""
+    result = await delete_context_package(package_id)
+    if isinstance(result, ErrorResponse):
+        raise HTTPException(status_code=500, detail=result.model_dump())
+    return result
+
+
+@app.post("/packages/{package_id}/append")
+async def packages_append_endpoint(package_id: str, request: ContextPackageAppendRequest):
+    """Append content to an existing context package."""
+    result = await append_context_package(package_id, request)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Package not found")
+    if isinstance(result, ErrorResponse):
+        raise HTTPException(status_code=500, detail=result.model_dump())
+    return result.model_dump()

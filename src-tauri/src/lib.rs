@@ -223,6 +223,36 @@ fn delete_repository(repo_id: String) -> Result<serde_json::Value, String> {
     http_delete(&format!("/repos/{}", repo_id))
 }
 
+// --- Context Package commands ---
+
+#[tauri::command]
+fn list_context_packages() -> Result<serde_json::Value, String> {
+    http_get("/packages")
+}
+
+#[tauri::command]
+fn save_context_package(request: serde_json::Value) -> Result<serde_json::Value, String> {
+    http_post("/packages", &request)
+}
+
+#[tauri::command]
+fn get_context_package(package_id: String) -> Result<serde_json::Value, String> {
+    http_get(&format!("/packages/{}", package_id))
+}
+
+#[tauri::command]
+fn delete_context_package(package_id: String) -> Result<serde_json::Value, String> {
+    http_delete(&format!("/packages/{}", package_id))
+}
+
+#[tauri::command]
+fn append_context_package(
+    package_id: String,
+    request: serde_json::Value,
+) -> Result<serde_json::Value, String> {
+    http_post(&format!("/packages/{}/append", package_id), &request)
+}
+
 // --- Backend lifecycle management ---
 
 fn start_backend() -> Result<Child, String> {
@@ -352,6 +382,11 @@ pub fn run() {
             create_repository,
             scan_repository,
             delete_repository,
+            list_context_packages,
+            save_context_package,
+            get_context_package,
+            delete_context_package,
+            append_context_package,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -178,6 +178,61 @@ export interface BenchmarkSuiteResponse {
   total_questions: number;
 }
 
+// --- Context Package types ---
+
+export interface SavedContextPackage {
+  id: string;
+  name: string;
+  task: string;
+  objective: string;
+  repository_id: string;
+  repository_name: string;
+  repository_branch: string;
+  repository_commit: string;
+  indexing_version: string;
+  markdown: string;
+  section_count: number;
+  token_estimate: number;
+  retrieved_memories: number;
+  deduplicated_memories: number;
+  compression_ratio: number;
+  total_time_ms: number;
+  created_at: string;
+  updated_at: string;
+  tags: string[];
+}
+
+export interface ContextPackageSaveRequest {
+  name: string;
+  task?: string;
+  objective?: string;
+  repository_id?: string;
+  repository_name?: string;
+  repository_branch?: string;
+  repository_commit?: string;
+  indexing_version?: string;
+  markdown?: string;
+  section_count?: number;
+  token_estimate?: number;
+  retrieved_memories?: number;
+  deduplicated_memories?: number;
+  compression_ratio?: number;
+  total_time_ms?: number;
+  tags?: string[];
+}
+
+export interface ContextPackageListResponse {
+  success: boolean;
+  packages: SavedContextPackage[];
+  total_count: number;
+}
+
+export interface ContextPackageAppendRequest {
+  additional_task: string;
+  additional_markdown?: string;
+  additional_objective?: string;
+}
+
 // --- API functions ---
 
 /**
@@ -289,4 +344,50 @@ export async function scanRepository(repoId: string): Promise<ScanResult> {
  */
 export async function deleteRepository(repoId: string): Promise<{ success: boolean }> {
   return invoke("delete_repository", { repoId });
+}
+
+// --- Context Package management ---
+
+/**
+ * List all saved context packages.
+ */
+export async function listContextPackages(): Promise<ContextPackageListResponse> {
+  return invoke<ContextPackageListResponse>("list_context_packages");
+}
+
+/**
+ * Save a context package.
+ */
+export async function saveContextPackage(
+  req: ContextPackageSaveRequest
+): Promise<SavedContextPackage> {
+  return invoke<SavedContextPackage>("save_context_package", { request: req });
+}
+
+/**
+ * Get a single context package by ID.
+ */
+export async function getContextPackage(
+  packageId: string
+): Promise<SavedContextPackage> {
+  return invoke<SavedContextPackage>("get_context_package", { packageId });
+}
+
+/**
+ * Delete a context package.
+ */
+export async function deleteContextPackage(
+  packageId: string
+): Promise<{ success: boolean }> {
+  return invoke("delete_context_package", { packageId });
+}
+
+/**
+ * Append content to an existing context package.
+ */
+export async function appendContextPackage(
+  packageId: string,
+  req: ContextPackageAppendRequest
+): Promise<SavedContextPackage> {
+  return invoke<SavedContextPackage>("append_context_package", { packageId, request: req });
 }
