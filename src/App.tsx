@@ -5,7 +5,9 @@ import { AppShell } from "@/components/layout/AppShell";
 import { CreateRepositoryIndexModal } from "@/components/repositories/CreateRepositoryIndexModal";
 import Dashboard from "@/pages/Dashboard";
 import Repositories from "@/pages/Repositories";
+import KnowledgeExplorer from "@/pages/KnowledgeExplorer";
 import ContextBuilder from "@/pages/ContextBuilder";
+import ContextPackages from "@/pages/ContextPackages";
 import Memory from "@/pages/Memory";
 import Benchmarks from "@/pages/Benchmarks";
 import Settings from "@/pages/Settings";
@@ -21,7 +23,9 @@ function App() {
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/repositories" element={<Repositories />} />
+            <Route path="/knowledge/:repoId" element={<KnowledgeExplorer />} />
             <Route path="/context-builder" element={<ContextBuilder />} />
+            <Route path="/packages" element={<ContextPackages />} />
             <Route path="/memory" element={<Memory />} />
             <Route path="/benchmarks" element={<Benchmarks />} />
             <Route path="/settings" element={<Settings />} />
