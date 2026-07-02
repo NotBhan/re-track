@@ -23,12 +23,17 @@ from app.api.commands import (
     get_repository_summaries,
     run_benchmark,
     initialize_backend,
+    list_repositories,
+    create_repository,
+    scan_repository,
+    delete_repository,
 )
 from app.api.schemas import (
     ErrorResponse,
     ForgetDatasetRequest,
     GenerateContextRequest,
     IndexRepositoryRequest,
+    RepositoryCreateRequest,
 )
 
 logger = logging.getLogger(__name__)
@@ -152,3 +157,42 @@ async def benchmarks_run_endpoint():
     if isinstance(result, ErrorResponse):
         raise HTTPException(status_code=500, detail=result.model_dump())
     return result.model_dump()
+
+
+# --- Repository Manager Routes ---
+
+
+@app.get("/repos")
+async def repos_list_endpoint():
+    """List all managed repositories."""
+    result = await list_repositories()
+    if isinstance(result, ErrorResponse):
+        raise HTTPException(status_code=500, detail=result.model_dump())
+    return result.model_dump()
+
+
+@app.post("/repos")
+async def repos_create_endpoint(request: RepositoryCreateRequest):
+    """Create (import) a new repository."""
+    result = await create_repository(request)
+    if isinstance(result, ErrorResponse):
+        raise HTTPException(status_code=400, detail=result.model_dump())
+    return result.model_dump()
+
+
+@app.post("/repos/{repo_id}/scan")
+async def repos_scan_endpoint(repo_id: str):
+    """Scan a repository for languages, frameworks, and file stats."""
+    result = await scan_repository(repo_id)
+    if isinstance(result, ErrorResponse):
+        raise HTTPException(status_code=400, detail=result.model_dump())
+    return result.model_dump()
+
+
+@app.delete("/repos/{repo_id}")
+async def repos_delete_endpoint(repo_id: str):
+    """Delete a managed repository."""
+    result = await delete_repository(repo_id)
+    if isinstance(result, ErrorResponse):
+        raise HTTPException(status_code=400, detail=result.model_dump())
+    return result

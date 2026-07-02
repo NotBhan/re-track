@@ -182,8 +182,8 @@ class RepositorySummaryInfo(BaseModel):
     )
 
 
-class RepositoryListResponse(BaseModel):
-    """Response listing all indexed repositories."""
+class IndexedRepositoryListResponse(BaseModel):
+    """Response listing all indexed repositories (summary store)."""
 
     success: bool = Field(description="Whether the query succeeded")
     repositories: list[RepositorySummaryInfo] = Field(
@@ -255,3 +255,56 @@ class BenchmarkSuiteResponse(BaseModel):
     avg_tokens: float = Field(default=0.0, description="Average token count")
     pass_rate: float = Field(default=0.0, description="Pass rate percentage")
     total_questions: int = Field(default=0, description="Total questions tested")
+
+
+# --- Repository Manager Schemas ---
+
+
+class RepositoryCreateRequest(BaseModel):
+    """Request to create (import) a new repository."""
+
+    source_type: str = Field(..., description="github | local")
+    source_url: Optional[str] = Field(None, description="GitHub URL")
+    local_path: Optional[str] = Field(None, description="Local path")
+    name: Optional[str] = Field(None, description="Display name")
+
+
+class RepositoryResponse(BaseModel):
+    """Response for a single managed repository."""
+
+    id: str = Field(description="Unique repository identifier")
+    name: str = Field(description="Repository name")
+    source_type: str = Field(description="github | local")
+    source_url: Optional[str] = Field(default=None, description="GitHub URL")
+    local_path: str = Field(description="Local filesystem path")
+    branch: str = Field(description="Git branch")
+    commit_hash: Optional[str] = Field(default=None, description="Latest commit hash")
+    status: str = Field(description="registered | scanning | indexing | indexed | error")
+    languages: list[str] = Field(default_factory=list, description="Detected languages")
+    frameworks: list[str] = Field(default_factory=list, description="Detected frameworks")
+    file_count: int = Field(default=0, description="Number of source files")
+    size_bytes: int = Field(default=0, description="Total size in bytes")
+    indexed_at: Optional[str] = Field(default=None, description="ISO 8601 indexing timestamp")
+    error_message: Optional[str] = Field(default=None, description="Error if status is error")
+
+
+class RepositoryListResponse(BaseModel):
+    """Response listing all managed repositories."""
+
+    success: bool = Field(description="Whether the query succeeded")
+    repositories: list[RepositoryResponse] = Field(
+        default_factory=list, description="List of managed repositories"
+    )
+    total_count: int = Field(default=0, description="Total number of repositories")
+
+
+class ScanResultResponse(BaseModel):
+    """Response from a repository scan operation."""
+
+    success: bool = Field(description="Whether the scan succeeded")
+    languages: list[str] = Field(default_factory=list, description="Detected languages")
+    frameworks: list[str] = Field(default_factory=list, description="Detected frameworks")
+    file_count: int = Field(default=0, description="Number of source files")
+    size_bytes: int = Field(default=0, description="Total size in bytes")
+    ignored_dirs: list[str] = Field(default_factory=list, description="Directories skipped")
+    estimated_index_time_ms: float = Field(default=0.0, description="Estimated indexing time")

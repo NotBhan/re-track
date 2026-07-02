@@ -29,19 +29,25 @@ from app.api.schemas import (
     ForgetDatasetRequest,
     GenerateContextRequest,
     HealthResponse,
+    IndexedRepositoryListResponse,
     IndexRepositoryRequest,
     IndexRepositoryResponse,
     MemoryStatsResponse,
     RepoArchInfo,
     RepoComponentInfo,
+    RepositoryCreateRequest,
     RepositoryListResponse,
+    RepositoryResponse,
     RepositorySummaryInfo,
+    ScanResultResponse,
 )
 from app.config.settings import Settings, get_settings
 from app.models.errors import AndesContextError, CogneeServiceError
+from app.models.repository import Repository
 from app.services.context_service import ContextService
 from app.services.cognee_service import CogneeService
 from app.services.indexing_service import IndexingService
+from app.services.repository_manager import RepositoryManager
 from app.services.repository_summary import RepositorySummaryGenerator
 
 logger = logging.getLogger(__name__)
@@ -78,6 +84,7 @@ _cognee_service: Optional[CogneeService] = None
 _indexing_service: Optional[IndexingService] = None
 _context_service: Optional[ContextService] = None
 _settings: Optional[Settings] = None
+_manager = RepositoryManager()
 
 
 def _ensure_services() -> None:
@@ -532,7 +539,7 @@ async def get_repository_summaries() -> RepositoryListResponse | ErrorResponse:
             for r in repos_data
         ]
 
-        response = RepositoryListResponse(
+        response = IndexedRepositoryListResponse(
             success=True,
             repositories=repositories,
             total_count=len(repositories),
@@ -722,4 +729,166 @@ async def run_benchmark() -> BenchmarkSuiteResponse | ErrorResponse:
         return ErrorResponse(
             error=type(e).__name__,
             message=f"Benchmark failed: {e}",
+        )
+
+
+# --- Repository Manager Commands ---
+
+
+def _repo_to_response(repo: Repository) -> RepositoryResponse:
+    """Convert a Repository dataclass to a Pydantic response model."""
+    return RepositoryResponse(
+        id=repo.id,
+        name=repo.name,
+        source_type=repo.source_type,
+        source_url=repo.source_url,
+        local_path=repo.local_path,
+        branch=repo.branch,
+        commit_hash=repo.commit_hash,
+        status=repo.status,
+        languages=repo.languages,
+        frameworks=repo.frameworks,
+        file_count=repo.file_count,
+        size_bytes=repo.size_bytes,
+        indexed_at=repo.indexed_at,
+        error_message=repo.error_message,
+    )
+
+
+async def list_repositories() -> RepositoryListResponse | ErrorResponse:
+    """List all managed repositories."""
+    start = time.monotonic()
+    logger.info("command: list_repositories()")
+
+    try:
+        repos = _manager.list_repositories()
+        response = RepositoryListResponse(
+            success=True,
+            repositories=[_repo_to_response(r) for r in repos],
+            total_count=len(repos),
+        )
+        elapsed = time.monotonic() - start
+        logger.info(
+            "command: list_repositories() complete | count=%d | %.2fs",
+            len(repos),
+            elapsed,
+        )
+        return response
+
+    except Exception as e:
+        elapsed = time.monotonic() - start
+        logger.error("command: list_repositories() failed | %.2fs | %s", elapsed, e)
+        return ErrorResponse(
+            error=type(e).__name__,
+            message=f"Failed to list repositories: {e}",
+        )
+
+
+async def create_repository(
+    request: RepositoryCreateRequest,
+) -> RepositoryResponse | ErrorResponse:
+    """Import a new repository from GitHub or a local path."""
+    start = time.monotonic()
+    logger.info(
+        "command: create_repository() | source_type=%s | url=%s | path=%s",
+        request.source_type,
+        request.source_url,
+        request.local_path,
+    )
+
+    try:
+        repo = _manager.import_repository(
+            source_type=request.source_type,
+            source_url=request.source_url,
+            local_path=request.local_path,
+        )
+        response = _repo_to_response(repo)
+        elapsed = time.monotonic() - start
+        logger.info(
+            "command: create_repository() complete | id=%s | %.2fs",
+            repo.id,
+            elapsed,
+        )
+        return response
+
+    except (ValueError, KeyError) as e:
+        elapsed = time.monotonic() - start
+        logger.error("command: create_repository() validation error | %.2fs | %s", elapsed, e)
+        return ErrorResponse(
+            error=type(e).__name__,
+            message=str(e),
+        )
+    except Exception as e:
+        elapsed = time.monotonic() - start
+        logger.error("command: create_repository() failed | %.2fs | %s", elapsed, e)
+        return ErrorResponse(
+            error=type(e).__name__,
+            message=f"Failed to create repository: {e}",
+        )
+
+
+async def scan_repository(repo_id: str) -> ScanResultResponse | ErrorResponse:
+    """Scan a repository for languages, frameworks, and file statistics."""
+    start = time.monotonic()
+    logger.info("command: scan_repository() | repo_id=%s", repo_id)
+
+    try:
+        result = _manager.scan_repository(repo_id)
+        response = ScanResultResponse(
+            success=True,
+            languages=result.languages,
+            frameworks=result.frameworks,
+            file_count=result.file_count,
+            size_bytes=result.size_bytes,
+            ignored_dirs=result.ignored_dirs,
+            estimated_index_time_ms=float(result.estimated_index_time_ms),
+        )
+        elapsed = time.monotonic() - start
+        logger.info(
+            "command: scan_repository() complete | files=%d | %.2fs",
+            result.file_count,
+            elapsed,
+        )
+        return response
+
+    except (KeyError, FileNotFoundError) as e:
+        elapsed = time.monotonic() - start
+        logger.error("command: scan_repository() error | %.2fs | %s", elapsed, e)
+        return ErrorResponse(
+            error=type(e).__name__,
+            message=str(e),
+        )
+    except Exception as e:
+        elapsed = time.monotonic() - start
+        logger.error("command: scan_repository() failed | %.2fs | %s", elapsed, e)
+        return ErrorResponse(
+            error=type(e).__name__,
+            message=f"Scan failed: {e}",
+        )
+
+
+async def delete_repository(repo_id: str) -> dict | ErrorResponse:
+    """Delete a managed repository."""
+    start = time.monotonic()
+    logger.info("command: delete_repository() | repo_id=%s", repo_id)
+
+    try:
+        _manager.delete_repository(repo_id)
+        elapsed = time.monotonic() - start
+        logger.info("command: delete_repository() complete | %.2fs", elapsed)
+        return {"success": True, "message": f"Repository {repo_id} deleted"}
+
+    except KeyError as e:
+        elapsed = time.monotonic() - start
+        logger.error("command: delete_repository() error | %.2fs | %s", elapsed, e)
+        return ErrorResponse(
+            error=type(e).__name__,
+            message=str(e),
+        )
+    except Exception as e:
+        elapsed = time.monotonic() - start
+        logger.error("command: delete_repository() failed | %.2fs | %s", elapsed, e)
+        return ErrorResponse(
+            error=type(e).__name__,
+            message=f"Failed to delete repository: {e}",
         )
