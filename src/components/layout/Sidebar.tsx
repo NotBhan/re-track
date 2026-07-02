@@ -25,7 +25,11 @@ const navItems = [
   { to: "/settings", icon: Settings, label: "Settings" },
 ];
 
-export function Sidebar() {
+interface SidebarProps {
+  onNewIndex?: () => void;
+}
+
+export function Sidebar({ onNewIndex }: SidebarProps) {
   const { backendOnline, ollamaRunning, cogneeIdle } = useHealthStore();
 
   return (
@@ -46,7 +50,10 @@ export function Sidebar() {
       </div>
 
       {/* New Index CTA */}
-      <button className="mb-6 w-full bg-primary hover:bg-primary-fixed text-on-primary py-2 px-4 rounded-lg text-[12px] leading-[16px] tracking-[0.02em] font-medium flex items-center justify-center gap-2 transition-all active:scale-[0.99] shadow-[0_0_10px_rgba(173,198,255,0.2)]">
+      <button
+        onClick={onNewIndex}
+        className="mb-6 w-full bg-primary hover:bg-primary-fixed text-on-primary py-2 px-4 rounded-lg text-[12px] leading-[16px] tracking-[0.02em] font-medium flex items-center justify-center gap-2 transition-all active:scale-[0.99] shadow-[0_0_10px_rgba(173,198,255,0.2)]"
+      >
         <Plus className="w-[18px] h-[18px]" />
         New Index
       </button>
