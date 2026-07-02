@@ -346,6 +346,28 @@ export async function deleteRepository(repoId: string): Promise<{ success: boole
   return invoke("delete_repository", { repoId });
 }
 
+// --- Indexing Progress ---
+
+export interface IndexingProgress {
+  status: string;
+  stage: string;
+  processed_files: number;
+  total_files: number;
+  elapsed_ms: number;
+  languages: string[];
+  frameworks: string[];
+  error: string | null;
+  file_count: number;
+  size_bytes: number;
+}
+
+/**
+ * Get indexing progress for a repository.
+ */
+export async function getRepositoryProgress(repoId: string): Promise<IndexingProgress> {
+  return invoke<IndexingProgress>("get_repository_progress", { repoId });
+}
+
 // --- Context Package management ---
 
 /**

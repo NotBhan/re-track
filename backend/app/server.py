@@ -32,6 +32,7 @@ from app.api.commands import (
     get_context_package,
     delete_context_package,
     append_context_package,
+    get_repository_progress,
 )
 from app.api.schemas import (
     ContextPackageAppendRequest,
@@ -194,6 +195,15 @@ async def repos_scan_endpoint(repo_id: str):
     if isinstance(result, ErrorResponse):
         raise HTTPException(status_code=400, detail=result.model_dump())
     return result.model_dump()
+
+
+@app.get("/repos/{repo_id}/progress")
+async def repos_progress_endpoint(repo_id: str):
+    """Get indexing progress for a repository."""
+    result = await get_repository_progress(repo_id)
+    if isinstance(result, ErrorResponse):
+        raise HTTPException(status_code=400, detail=result.model_dump())
+    return result
 
 
 @app.delete("/repos/{repo_id}")

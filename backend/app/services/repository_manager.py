@@ -424,6 +424,34 @@ class RepositoryManager:
 
         return sorted(set(deps))
 
+    # ── Progress ───────────────────────────────────────────────────
+
+    def get_indexing_progress(self, repo_id: str) -> dict[str, Any]:
+        repo = self.get_repository(repo_id)
+        return {
+            "status": repo.status,
+            "stage": self._get_stage_label(repo.status),
+            "processed_files": repo.file_count,
+            "total_files": repo.file_count,
+            "elapsed_ms": 0,
+            "languages": repo.languages,
+            "frameworks": repo.frameworks,
+            "error": repo.error_message,
+            "file_count": repo.file_count,
+            "size_bytes": repo.size_bytes,
+        }
+
+    @staticmethod
+    def _get_stage_label(status: str) -> str:
+        labels = {
+            "registered": "Ready to index",
+            "scanning": "Scanning files...",
+            "indexing": "Building knowledge graph...",
+            "indexed": "Completed",
+            "error": "Error occurred",
+        }
+        return labels.get(status, "Unknown")
+
     # ── Helpers ───────────────────────────────────────────────────
 
     @staticmethod

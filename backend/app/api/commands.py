@@ -874,6 +874,37 @@ async def scan_repository(repo_id: str) -> ScanResultResponse | ErrorResponse:
         )
 
 
+async def get_repository_progress(repo_id: str) -> dict | ErrorResponse:
+    """Get indexing progress for a repository."""
+    start = time.monotonic()
+    logger.info("command: get_repository_progress() | repo_id=%s", repo_id)
+
+    try:
+        progress = _manager.get_indexing_progress(repo_id)
+        elapsed = time.monotonic() - start
+        logger.info(
+            "command: get_repository_progress() complete | status=%s | %.2fs",
+            progress["status"],
+            elapsed,
+        )
+        return progress
+
+    except KeyError as e:
+        elapsed = time.monotonic() - start
+        logger.error("command: get_repository_progress() error | %.2fs | %s", elapsed, e)
+        return ErrorResponse(
+            error=type(e).__name__,
+            message=str(e),
+        )
+    except Exception as e:
+        elapsed = time.monotonic() - start
+        logger.error("command: get_repository_progress() failed | %.2fs | %s", elapsed, e)
+        return ErrorResponse(
+            error=type(e).__name__,
+            message=f"Failed to get progress: {e}",
+        )
+
+
 async def delete_repository(repo_id: str) -> dict | ErrorResponse:
     """Delete a managed repository."""
     start = time.monotonic()

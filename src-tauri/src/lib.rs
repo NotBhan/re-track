@@ -219,6 +219,11 @@ fn scan_repository(repo_id: String) -> Result<serde_json::Value, String> {
 }
 
 #[tauri::command]
+fn get_repository_progress(repo_id: String) -> Result<serde_json::Value, String> {
+    http_get(&format!("/repos/{}/progress", repo_id))
+}
+
+#[tauri::command]
 fn delete_repository(repo_id: String) -> Result<serde_json::Value, String> {
     http_delete(&format!("/repos/{}", repo_id))
 }
@@ -381,6 +386,7 @@ pub fn run() {
             list_repositories,
             create_repository,
             scan_repository,
+            get_repository_progress,
             delete_repository,
             list_context_packages,
             save_context_package,
