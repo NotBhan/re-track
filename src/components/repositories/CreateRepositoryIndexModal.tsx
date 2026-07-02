@@ -373,11 +373,10 @@ export function CreateRepositoryIndexModal({
         ) : (
           /* Scan Results */
           <div className="space-y-5">
-            {isIndexing && (
+            {isIndexing && createdRepoId && (
               <IndexProgress
                 repositoryName={repoName}
-                status="indexing"
-                error={error}
+                repoId={createdRepoId}
               />
             )}
             {!isIndexing && (

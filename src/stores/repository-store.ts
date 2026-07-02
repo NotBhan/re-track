@@ -1,11 +1,13 @@
 import { create } from "zustand";
 import type { Repository, ScanResult } from "@/types/repository";
+import type { IndexingProgress } from "@/lib/api";
 import {
   listRepositories,
   createRepository,
   scanRepository,
   indexRepository,
   deleteRepository,
+  getRepositoryProgress,
 } from "@/lib/api";
 
 interface RepositoryStore {
@@ -21,6 +23,9 @@ interface RepositoryStore {
 
   lastScan: ScanResult | null;
 
+  progress: IndexingProgress | null;
+  pollInterval: ReturnType<typeof setInterval> | null;
+
   fetchRepositories: () => Promise<void>;
   createAndScan: (req: {
     source_type: string;
@@ -29,6 +34,8 @@ interface RepositoryStore {
     name?: string;
   }) => Promise<Repository>;
   indexRepo: (repoId: string) => Promise<void>;
+  pollProgress: (repoId: string) => void;
+  clearPoll: () => void;
   removeRepo: (repoId: string) => Promise<void>;
   select: (id: string | null) => void;
   setSearchQuery: (q: string) => void;
@@ -48,6 +55,9 @@ export const useRepositoryStore = create<RepositoryStore>((set, get) => ({
   error: null,
 
   lastScan: null,
+
+  progress: null,
+  pollInterval: null,
 
   fetchRepositories: async () => {
     set({ loading: true });
@@ -98,14 +108,39 @@ export const useRepositoryStore = create<RepositoryStore>((set, get) => ({
         dataset_name: repo.name,
       });
 
-      set({ indexing: false });
-      await get().fetchRepositories();
+      get().pollProgress(repoId);
     } catch (err) {
       set({
         indexing: false,
         error: err instanceof Error ? err.message : "Failed to index repository",
       });
     }
+  },
+
+  pollProgress: (repoId: string) => {
+    const existing = get().pollInterval;
+    if (existing) clearInterval(existing);
+
+    const interval = setInterval(async () => {
+      try {
+        const progress = await getRepositoryProgress(repoId);
+        set({ progress });
+        if (progress.status === "indexed" || progress.status === "error") {
+          clearInterval(interval);
+          set({ pollInterval: null, indexing: false });
+          await get().fetchRepositories();
+        }
+      } catch {
+        // Ignore polling errors
+      }
+    }, 2000);
+    set({ pollInterval: interval });
+  },
+
+  clearPoll: () => {
+    const { pollInterval } = get();
+    if (pollInterval) clearInterval(pollInterval);
+    set({ pollInterval: null, progress: null });
   },
 
   removeRepo: async (repoId: string) => {
