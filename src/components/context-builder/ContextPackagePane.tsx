@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { FileText, Copy, Check, Download, Layers, Clock, Cpu } from "lucide-react";
+import { FileText, Copy, Check, Download, Layers } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -33,52 +33,52 @@ export function ContextPackagePane({ agentResponse, loading }: ContextPackagePan
   };
 
   return (
-    <div className="w-full lg:w-[460px] h-full flex flex-col bg-card rounded-lg border border-border/80 shadow-xs overflow-hidden shrink-0">
+    <div className="w-full lg:w-[480px] h-full flex flex-col bg-card rounded-md border border-border shadow-xs overflow-hidden shrink-0">
       {/* Header */}
-      <div className="p-3.5 border-b border-border/80 bg-card flex items-center justify-between">
-        <div className="flex items-center gap-2.5">
-          <div className="w-6 h-6 rounded-md bg-secondary flex items-center justify-center text-foreground">
-            <FileText className="w-3.5 h-3.5 text-primary" />
+      <div className="p-4 border-b border-border bg-card flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="w-7 h-7 rounded bg-secondary flex items-center justify-center text-foreground border border-border">
+            <FileText className="w-4 h-4 text-foreground" />
           </div>
           <div>
-            <span className="text-xs font-bold text-foreground uppercase tracking-wider font-mono">
+            <span className="text-xs font-semibold text-foreground uppercase tracking-wider font-mono">
               Context Package
             </span>
-            <p className="text-[11px] text-muted-foreground">Markdown Delivery Ready</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Structured Agent Output</p>
           </div>
         </div>
 
         {agentResponse && (
-          <Badge variant="secondary" className="text-xs font-mono px-2 py-0.5">
+          <Badge variant="outline" className="text-xs font-mono px-2 py-0.5 border-border bg-secondary text-muted-foreground">
             {agentResponse.generation_time_ms}ms
           </Badge>
         )}
       </div>
 
       {/* Action Toolbar */}
-      <div className="p-3 border-b border-border/80 flex items-center justify-between bg-secondary/30">
+      <div className="p-3.5 border-b border-border flex items-center justify-between bg-black/40">
         <div className="flex items-center gap-2 text-xs font-mono text-muted-foreground">
-          <Layers className="w-3.5 h-3.5 text-primary" />
+          <Layers className="w-3.5 h-3.5 text-foreground" />
           <span>
-            <strong className="text-foreground">
+            <strong className="text-white">
               {agentResponse?.estimated_tokens.toLocaleString() || 0}
             </strong>{" "}
             est. tokens
           </span>
         </div>
 
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-2">
           <Button
             variant="outline"
             size="sm"
             onClick={handleCopy}
             disabled={!agentResponse}
-            className="h-8 px-2.5 text-xs gap-1.5 font-medium border-border/80 hover:bg-secondary"
+            className="h-8 px-3 text-xs gap-1.5 font-medium border-border bg-black text-foreground hover:bg-secondary rounded-md"
           >
             {copied ? (
               <>
-                <Check className="w-3.5 h-3.5 text-emerald-500" />
-                <span className="text-emerald-500">Copied</span>
+                <Check className="w-3.5 h-3.5 text-emerald-400" />
+                <span className="text-emerald-400">Copied</span>
               </>
             ) : (
               <>
@@ -92,7 +92,7 @@ export function ContextPackagePane({ agentResponse, loading }: ContextPackagePan
             size="sm"
             onClick={handleDownload}
             disabled={!agentResponse}
-            className="h-8 px-2.5 text-xs gap-1.5 font-medium border-border/80 hover:bg-secondary"
+            className="h-8 px-3 text-xs gap-1.5 font-medium border-border bg-black text-foreground hover:bg-secondary rounded-md"
           >
             <Download className="w-3.5 h-3.5" />
             <span>Save .md</span>
@@ -100,47 +100,31 @@ export function ContextPackagePane({ agentResponse, loading }: ContextPackagePan
         </div>
       </div>
 
-      {/* Package Content Viewer */}
-      <ScrollArea className="flex-1 p-4 bg-background">
+      {/* Content Area */}
+      <ScrollArea className="flex-1 p-4 bg-black">
         {loading ? (
-          <div className="h-full flex flex-col items-center justify-center p-12 text-center gap-3">
-            <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+          <div className="h-64 flex flex-col items-center justify-center gap-3 text-center">
+            <span className="text-2xl animate-spin text-muted-foreground">⚙</span>
             <p className="text-xs font-mono text-muted-foreground">
-              Synthesizing context package & AST graph...
+              Synthesizing structured Markdown package...
             </p>
           </div>
-        ) : agentResponse ? (
-          <pre className="text-xs font-mono text-foreground whitespace-pre-wrap leading-relaxed select-text font-normal">
+        ) : agentResponse?.context_markdown ? (
+          <pre className="text-xs font-mono text-neutral-300 whitespace-pre-wrap break-words leading-relaxed font-normal select-text selection:bg-neutral-800">
             {agentResponse.context_markdown}
           </pre>
         ) : (
-          <div className="h-full flex flex-col items-center justify-center p-12 text-center text-muted-foreground gap-3 font-mono text-xs">
-            <div className="w-10 h-10 rounded-full bg-secondary/60 flex items-center justify-center">
-              <Cpu className="w-5 h-5 text-muted-foreground" />
+          <div className="h-64 flex flex-col items-center justify-center gap-2 text-center p-6">
+            <div className="w-10 h-10 rounded bg-secondary flex items-center justify-center mb-2 border border-border">
+              <FileText className="w-5 h-5 text-muted-foreground" />
             </div>
-            <div>
-              <span className="font-semibold text-foreground block text-sm">No context package generated</span>
-              <span className="text-xs text-muted-foreground mt-1 block">
-                Execute an intercept to synthesize structured markdown
-              </span>
-            </div>
+            <h4 className="text-xs font-semibold text-foreground">No context package generated yet</h4>
+            <p className="text-xs text-muted-foreground max-w-xs leading-normal">
+              Enter a task instruction in the prompt interceptor and click synthesize to assemble context.
+            </p>
           </div>
         )}
       </ScrollArea>
-
-      {/* Footer Metadata */}
-      {agentResponse && (
-        <div className="p-3 border-t border-border/80 bg-card text-xs font-mono flex items-center justify-between text-muted-foreground">
-          <div className="flex items-center gap-1.5">
-            <Clock className="w-3.5 h-3.5 text-primary" />
-            <span>Generated in {(agentResponse.generation_time_ms / 1000).toFixed(2)}s</span>
-          </div>
-          <span className="text-emerald-500 font-semibold flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-            Ready for Agent
-          </span>
-        </div>
-      )}
     </div>
   );
 }

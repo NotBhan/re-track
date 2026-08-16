@@ -7,7 +7,7 @@ import {
   BarChart3,
   Settings,
   Plus,
-  Sparkles,
+  Layers,
 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
@@ -32,40 +32,40 @@ export function Sidebar({ onNewIndex }: SidebarProps) {
   const { backendOnline } = useHealthStore();
 
   return (
-    <aside className="w-[240px] h-screen fixed left-0 top-0 bg-card/90 backdrop-blur-md border-r border-border/80 flex flex-col py-4 px-3 z-20">
+    <aside className="w-[240px] h-screen fixed left-0 top-0 bg-black border-r border-border flex flex-col py-5 px-3 z-20">
       {/* Brand Header */}
-      <div className="flex items-center gap-3 mb-5 px-2">
-        <div className="w-8 h-8 rounded-lg bg-primary text-primary-foreground flex items-center justify-center shadow-xs">
-          <Sparkles className="w-4 h-4" />
+      <div className="flex items-center gap-3 mb-6 px-3">
+        <div className="w-8 h-8 rounded-md bg-white text-black flex items-center justify-center font-bold text-xs tracking-tighter">
+          <Layers className="w-4 h-4" />
         </div>
         <div className="flex flex-col">
-          <div className="flex items-center gap-1.5">
-            <h1 className="text-sm font-bold tracking-tight text-foreground">
+          <div className="flex items-center gap-2">
+            <h1 className="text-sm font-semibold tracking-tight text-foreground">
               RE:Track
             </h1>
-            <Badge variant="outline" className="text-[10px] font-mono px-1 py-0 h-4 border-border/70">
+            <Badge variant="outline" className="text-[10px] font-mono px-1.5 py-0 h-4 border-border text-muted-foreground">
               v0.1
             </Badge>
           </div>
-          <span className="text-[11px] text-muted-foreground font-mono">AI Context Hub</span>
+          <span className="text-[11px] text-muted-foreground font-mono">Context Hub</span>
         </div>
       </div>
 
-      {/* Index Repo Button */}
-      <div className="px-1 mb-4">
+      {/* Index Repo CTA */}
+      <div className="px-2 mb-4">
         <Button
           onClick={onNewIndex}
           variant="secondary"
           size="sm"
-          className="w-full justify-start gap-2 h-9 text-xs font-semibold shadow-xs border border-border/60 hover:bg-secondary/80"
+          className="w-full justify-start gap-2.5 h-9 text-xs font-medium bg-secondary text-foreground hover:bg-accent border border-border rounded-md"
         >
-          <Plus className="w-4 h-4 text-primary" />
+          <Plus className="w-4 h-4 text-foreground" />
           <span>Index Repository</span>
         </Button>
       </div>
 
       {/* Navigation Links */}
-      <ScrollArea className="flex-1 px-1">
+      <ScrollArea className="flex-1 px-2">
         <div className="flex flex-col gap-1">
           {navItems.map((item) => (
             <NavLink
@@ -74,10 +74,10 @@ export function Sidebar({ onNewIndex }: SidebarProps) {
               end={item.to === "/"}
               className={({ isActive }) =>
                 cn(
-                  "flex items-center gap-3 py-2 px-3 rounded-lg text-xs font-medium transition-all duration-150",
+                  "flex items-center gap-3 py-2 px-3 rounded-md text-xs transition-colors",
                   isActive
-                    ? "bg-primary/10 text-primary font-semibold border border-primary/30 shadow-xs"
-                    : "text-muted-foreground hover:text-foreground hover:bg-secondary/60"
+                    ? "bg-accent text-white font-medium border border-border/80"
+                    : "text-muted-foreground hover:text-foreground hover:bg-secondary/70"
                 )
               }
             >
@@ -89,12 +89,12 @@ export function Sidebar({ onNewIndex }: SidebarProps) {
       </ScrollArea>
 
       {/* Footer Engine Status */}
-      <div className="mt-auto pt-3 border-t border-border/70 px-2 flex items-center justify-between text-xs text-muted-foreground font-mono">
+      <div className="mt-auto pt-4 border-t border-border px-3 flex items-center justify-between text-xs text-muted-foreground font-mono">
         <span className="flex items-center gap-2">
-          <span className={`w-2 h-2 rounded-full ${backendOnline ? "bg-emerald-500 shadow-[0_0_6px_#10b981]" : "bg-red-500"}`} />
+          <span className={`w-1.5 h-1.5 rounded-full ${backendOnline ? "bg-emerald-500 shadow-[0_0_6px_#10b981]" : "bg-red-500"}`} />
           Engine Core
         </span>
-        <span className="font-semibold text-foreground">{backendOnline ? "Ready" : "Offline"}</span>
+        <span className="text-foreground">{backendOnline ? "Ready" : "Offline"}</span>
       </div>
     </aside>
   );

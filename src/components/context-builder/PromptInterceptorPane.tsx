@@ -32,56 +32,54 @@ export function PromptInterceptorPane({
   ];
 
   return (
-    <div className="flex-1 h-full flex flex-col bg-card rounded-lg border border-border/80 shadow-xs overflow-hidden">
+    <div className="flex-1 h-full flex flex-col bg-card rounded-md border border-border shadow-xs overflow-hidden">
       {/* Header */}
-      <div className="p-3.5 border-b border-border/80 bg-card flex items-center justify-between">
-        <div className="flex items-center gap-2.5">
-          <div className="w-6 h-6 rounded-md bg-secondary flex items-center justify-center text-foreground">
-            <Terminal className="w-3.5 h-3.5" />
+      <div className="p-4 border-b border-border bg-card flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="w-7 h-7 rounded bg-secondary flex items-center justify-center text-foreground border border-border">
+            <Terminal className="w-4 h-4" />
           </div>
           <div>
-            <span className="text-xs font-bold text-foreground uppercase tracking-wider font-mono">
-              Agent Prompt Interceptor
+            <span className="text-xs font-semibold text-foreground uppercase tracking-wider font-mono">
+              Prompt Interceptor
             </span>
-            <p className="text-[11px] text-muted-foreground">Live Context Interception & Synthesis</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Real-time Task Context Interception</p>
           </div>
         </div>
 
         {agentResponse?.intent_category && (
-          <Badge variant="outline" className="text-xs font-mono px-2.5 py-1 bg-secondary/30">
-            Intent: <strong className="ml-1 text-foreground">{agentResponse.intent_category}</strong>
+          <Badge variant="outline" className="text-xs font-mono px-2.5 py-1 bg-secondary border-border text-foreground">
+            Intent: <strong className="ml-1 text-white">{agentResponse.intent_category}</strong>
           </Badge>
         )}
       </div>
 
-      <div className="p-4 flex-1 flex flex-col gap-4 overflow-y-auto">
-        {/* Token Budget Gauge */}
-        <div className="p-3.5 rounded-lg bg-secondary/30 border border-border/70 space-y-2.5">
+      <div className="p-5 flex-1 flex flex-col gap-4 overflow-y-auto">
+        {/* Token Budget Allocation Card */}
+        <div className="p-4 rounded-md bg-secondary/50 border border-border space-y-3">
           <div className="flex items-center justify-between text-xs font-mono">
-            <div className="flex items-center gap-2 text-foreground font-semibold">
-              <Gauge className="w-4 h-4 text-primary" />
+            <div className="flex items-center gap-2 text-foreground font-medium">
+              <Gauge className="w-4 h-4 text-foreground" />
               <span>Token Budget Allocation</span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-foreground font-bold">
+              <span className="text-foreground font-medium">
                 {currentTokens.toLocaleString()} / {maxTokens.toLocaleString()} tokens
               </span>
-              <Badge variant="secondary" className="text-[10px] font-mono px-1.5 py-0 h-4">
+              <Badge variant="outline" className="text-xs font-mono px-2 py-0 border-border bg-black text-muted-foreground">
                 {tokenPercentage}%
               </Badge>
             </div>
           </div>
 
-          <div className="w-full h-2 bg-secondary rounded-full overflow-hidden">
+          <div className="w-full h-1.5 bg-black rounded-full overflow-hidden border border-border">
             <div
-              className={`h-full rounded-full transition-all duration-300 ${
-                tokenPercentage > 95 ? "bg-amber-500" : "bg-primary"
-              }`}
+              className="h-full bg-white transition-all duration-300"
               style={{ width: `${tokenPercentage}%` }}
             />
           </div>
 
-          <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-mono text-muted-foreground pt-1 border-t border-border/40">
+          <div className="flex flex-wrap items-center justify-between gap-3 text-xs font-mono text-muted-foreground pt-2 border-t border-border">
             <div className="flex items-center gap-2">
               <span>Target Budget:</span>
               <input
@@ -91,7 +89,7 @@ export function PromptInterceptorPane({
                 step={500}
                 value={maxTokens}
                 onChange={(e) => onMaxTokensChange(Number(e.target.value) || 8000)}
-                className="w-20 px-2 py-1 rounded-md bg-background border border-border/80 text-foreground text-xs font-mono focus:outline-none focus:ring-1 focus:ring-primary"
+                className="w-24 px-2.5 py-1 rounded bg-black border border-border text-foreground text-xs font-mono focus:outline-none focus:ring-1 focus:ring-white"
               />
               <span>tokens</span>
             </div>
@@ -101,10 +99,10 @@ export function PromptInterceptorPane({
                 <button
                   key={b}
                   onClick={() => onMaxTokensChange(b)}
-                  className={`px-2 py-1 rounded-md text-xs font-medium transition-colors ${
+                  className={`px-2 py-0.5 rounded text-[11px] font-mono border transition-colors ${
                     maxTokens === b
-                      ? "bg-primary text-primary-foreground font-semibold shadow-xs"
-                      : "bg-secondary/60 hover:bg-secondary text-muted-foreground hover:text-foreground border border-border/40"
+                      ? "bg-white text-black border-white font-medium"
+                      : "bg-black text-muted-foreground border-border hover:text-foreground hover:bg-secondary"
                   }`}
                 >
                   {b >= 1000 ? `${b / 1000}k` : b}
@@ -114,45 +112,42 @@ export function PromptInterceptorPane({
           </div>
         </div>
 
-        {/* Prompt Input Box */}
-        <div className="space-y-2 flex-1 flex flex-col">
-          <div className="flex items-center justify-between">
-            <label className="text-xs font-semibold text-foreground">
-              Developer Prompt / Agent Task
-            </label>
-            <span className="text-[11px] text-muted-foreground font-mono">
-              Interception active
-            </span>
+        {/* Developer Prompt Textarea */}
+        <div className="flex-1 flex flex-col gap-2 min-h-[160px]">
+          <div className="flex items-center justify-between text-xs font-mono text-muted-foreground">
+            <span className="font-semibold text-foreground uppercase tracking-wider">Intercepted Agent Request</span>
+            <span>Natural language task</span>
           </div>
 
           <textarea
             value={taskPrompt}
             onChange={(e) => onPromptChange(e.target.value)}
-            placeholder="Type developer task or intercepted coding agent prompt..."
-            rows={5}
-            className="w-full flex-1 p-3.5 text-xs font-mono bg-background border border-border/80 rounded-lg focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none text-foreground placeholder:text-muted-foreground/60 resize-none leading-relaxed"
+            placeholder="Type developer instruction or task prompt to synthesize context..."
+            className="w-full flex-1 min-h-[140px] p-3.5 rounded-md bg-black border border-border text-foreground text-sm font-sans resize-none focus:outline-none focus:ring-1 focus:ring-white leading-relaxed placeholder:text-muted-foreground/60"
           />
+        </div>
 
-          {/* Quick Presets */}
-          <div className="space-y-1.5 pt-1">
-            <span className="text-[11px] font-medium text-muted-foreground">Sample Interceptions:</span>
-            <div className="flex flex-col gap-1">
-              {samplePrompts.map((sp, i) => (
-                <button
-                  key={i}
-                  onClick={() => onPromptChange(sp)}
-                  className="text-left text-xs font-mono px-3 py-1.5 rounded-md bg-secondary/40 hover:bg-secondary/80 border border-border/40 text-muted-foreground hover:text-foreground transition-colors truncate"
-                >
-                  → {sp}
-                </button>
-              ))}
-            </div>
+        {/* Quick Sample Prompts */}
+        <div className="space-y-2">
+          <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">
+            Quick Scenarios:
+          </span>
+          <div className="flex flex-col gap-1.5">
+            {samplePrompts.map((p, idx) => (
+              <button
+                key={idx}
+                onClick={() => onPromptChange(p)}
+                className="text-left text-xs p-2.5 rounded bg-black/60 border border-border text-muted-foreground hover:text-foreground hover:bg-secondary hover:border-border/90 transition-colors line-clamp-1 font-sans"
+              >
+                "{p}"
+              </button>
+            ))}
           </div>
         </div>
 
         {/* Quantization Warning */}
         {agentResponse?.quantization_warning && (
-          <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center gap-2.5 text-xs font-mono text-amber-400">
+          <div className="p-3 rounded-md bg-amber-500/10 border border-amber-500/30 flex items-center gap-2.5 text-xs font-mono text-amber-500">
             <AlertTriangle className="w-4 h-4 shrink-0" />
             <span>{agentResponse.quantization_warning}</span>
           </div>

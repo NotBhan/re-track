@@ -12,14 +12,14 @@ interface StructuralTreePaneProps {
 }
 
 export function StructuralTreePane({
-  repositoryName = "andes-context",
+  repositoryName = "re-track",
   subfolders = [
-    { path: "backend/app/services", description: "Service layer & context logic (24 services)" },
-    { path: "backend/app/api", description: "API schemas, routes & commands (7 files)" },
+    { path: "backend/app/services", description: "Service layer & context synthesis (24 services)" },
+    { path: "backend/app/api", description: "FastAPI endpoints & command handlers (7 files)" },
     { path: "backend/app/models", description: "Domain models & Pydantic contracts (15 models)" },
     { path: "src/components/context-builder", description: "Context studio UI modules (3 components)" },
-    { path: "src/components/settings", description: "Model & engine configuration (5 components)" },
-    { path: "src/stores", description: "Zustand client state managers (6 stores)" },
+    { path: "src/components/settings", description: "Engine & model configuration (5 components)" },
+    { path: "src/stores", description: "Zustand reactive state managers (6 stores)" },
     { path: "src-tauri/src", description: "Rust native runtime & IPC bridge (2 files)" },
   ],
   onSelectSubfolder,
@@ -32,25 +32,25 @@ export function StructuralTreePane({
   );
 
   return (
-    <div className="w-full lg:w-[280px] h-full flex flex-col bg-card rounded-lg border border-border/80 shadow-xs overflow-hidden shrink-0">
+    <div className="w-full lg:w-[300px] h-full flex flex-col bg-card rounded-md border border-border shadow-xs overflow-hidden shrink-0">
       {/* Header */}
-      <div className="p-3.5 border-b border-border/80 bg-card flex items-center justify-between">
+      <div className="p-4 border-b border-border bg-card flex items-center justify-between">
         <div>
-          <span className="text-xs font-bold text-foreground uppercase tracking-wider font-mono">
+          <span className="text-xs font-semibold text-foreground uppercase tracking-wider font-mono">
             Repository Map
           </span>
-          <p className="text-[11px] text-muted-foreground">AST & Subfolder Outline</p>
+          <p className="text-xs text-muted-foreground mt-0.5">AST Structural Outline</p>
         </div>
-        <Badge variant="secondary" className="text-[11px] font-mono px-2 py-0.5">
+        <Badge variant="outline" className="text-xs font-mono px-2 py-0.5 border-border bg-secondary text-muted-foreground">
           Depth 2.5
         </Badge>
       </div>
 
       {/* Repo badge & Search */}
-      <div className="p-3 space-y-2 border-b border-border/80 bg-secondary/20">
-        <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-md bg-secondary/80 text-xs font-mono text-foreground border border-border/40">
-          <GitBranch className="w-3.5 h-3.5 text-primary shrink-0" />
-          <span className="truncate font-semibold">{repositoryName}</span>
+      <div className="p-3.5 space-y-2.5 border-b border-border bg-black/40">
+        <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-secondary text-xs font-mono text-foreground border border-border">
+          <GitBranch className="w-3.5 h-3.5 text-foreground shrink-0" />
+          <span className="truncate font-medium">{repositoryName}</span>
         </div>
 
         <div className="relative">
@@ -60,31 +60,31 @@ export function StructuralTreePane({
             placeholder="Search submodules..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="h-8 pl-8 text-xs font-mono bg-background border-border/80 rounded-md"
+            className="h-8 pl-8 text-xs font-mono bg-black border-border rounded-md focus-visible:ring-1 focus-visible:ring-white"
           />
         </div>
       </div>
 
       {/* Folder Tree */}
-      <ScrollArea className="flex-1 p-2">
-        <div className="space-y-1.5">
+      <ScrollArea className="flex-1 p-2.5">
+        <div className="space-y-1">
           {filteredFolders.map((sub) => {
             const isSelected = selectedPath === sub.path;
             return (
               <button
                 key={sub.path}
                 onClick={() => onSelectSubfolder?.(sub.path)}
-                className={`w-full text-left p-2.5 rounded-md transition-all text-xs font-mono border ${
+                className={`w-full text-left p-3 rounded-md transition-colors text-xs font-mono border ${
                   isSelected
-                    ? "bg-primary/10 border-primary/40 text-foreground shadow-xs"
-                    : "border-transparent text-muted-foreground hover:text-foreground hover:bg-secondary/60 hover:border-border/40"
+                    ? "bg-accent border-border text-white"
+                    : "border-transparent text-muted-foreground hover:text-foreground hover:bg-secondary/60"
                 }`}
               >
                 <div className="flex items-center gap-2 font-medium truncate">
-                  <Folder className={`w-4 h-4 shrink-0 ${isSelected ? "text-primary fill-primary/20" : "text-muted-foreground"}`} />
-                  <span className="truncate font-semibold">{sub.path}</span>
+                  <Folder className={`w-3.5 h-3.5 shrink-0 ${isSelected ? "text-white" : "text-muted-foreground"}`} />
+                  <span className="truncate font-medium">{sub.path}</span>
                 </div>
-                <p className="text-[11px] mt-1 text-muted-foreground font-sans line-clamp-1 leading-normal">
+                <p className="text-xs mt-1 text-muted-foreground font-sans line-clamp-1">
                   {sub.description}
                 </p>
               </button>
