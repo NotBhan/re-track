@@ -76,6 +76,28 @@ export interface ContextResponse {
   section_headings: string[];
 }
 
+export interface AgentContextRequest {
+  task_prompt: string;
+  repository_path: string;
+  dataset_name?: string;
+  max_tokens?: number;
+  include_structural_graph?: boolean;
+}
+
+export interface AgentContextResponse {
+  success: boolean;
+  context_markdown: string;
+  task_summary: string;
+  intent_category: string;
+  extracted_symbols: string[];
+  callers: string[];
+  callees: string[];
+  related_files: string[];
+  quantization_warning?: string | null;
+  estimated_tokens: number;
+  generation_time_ms: number;
+}
+
 export interface ForgetDatasetRequest {
   dataset?: string;
   dataset_id?: string;
@@ -265,6 +287,15 @@ export async function generateContext(
   request: GenerateContextRequest
 ): Promise<ContextResponse> {
   return invoke<ContextResponse>("generate_context", { request });
+}
+
+/**
+  * Generate an optimized context package for external AI coding agents via middleware.
+  */
+export async function getAgentContext(
+  request: AgentContextRequest
+): Promise<AgentContextResponse> {
+  return invoke<AgentContextResponse>("get_agent_context", { request });
 }
 
 /**

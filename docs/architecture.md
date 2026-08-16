@@ -32,11 +32,14 @@ Rather than directly exposing Cognee to the frontend, all interactions occur thr
 │                      Python Backend                           │
 ├───────────────────────────────────────────────────────────────┤
 │                                                               │
-│  WorkspaceService          (planned)                          │
-│  IndexingService           ✅ implemented                     │
+│  IndexingService           ✅ implemented (delta manifest)    │
+│  ManifestService           ✅ implemented (file hashes/mtime) │
 │  CogneeService             ✅ implemented                     │
 │  ContextService            ✅ implemented                     │
-│  SessionService            (planned)                          │
+│  CGCService                ✅ implemented (code graph)        │
+│  LLMProviderService        ✅ implemented (multi-provider)    │
+│  IntentParserService       ✅ implemented (hallucination guard│
+│  PackageBuilder            ✅ implemented                     │
 │                                                               │
 └──────────────────────────────┬────────────────────────────────┘
                                │

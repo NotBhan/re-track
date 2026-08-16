@@ -37,7 +37,11 @@ Milestone 5 — Evidence & Validation: **Completed**
 Production services implemented and verified:
 
 - CogneeService ✅
-- IndexingService ✅
+- IndexingService (incremental delta indexing) ✅
+- ManifestService (SHA256 file fingerprinting) ✅
+- LLMProviderService (OpenAI-compatible multi-provider & model health) ✅
+- CGCService (CodeGraphContext structural graph queries) ✅
+- IntentParserService (task intent & symbol extraction) ✅
 - ContextService (rewired to PackageBuilder) ✅
 - PackageBuilder ✅
 - BudgetManager ✅
@@ -48,8 +52,9 @@ Production services implemented and verified:
 
 API layer implemented and verified:
 
-- Commands (health, get_backend_status, index_repository, generate_context, forget_dataset) ✅
+- Commands (health, get_backend_status, index_repository, generate_context, get_agent_context, forget_dataset) ✅
 - Schemas (Pydantic request/response models with full metadata) ✅
+- REST Endpoints (/health, /status, /index, /context, /api/v1/context, /packages) ✅
 
 CLI implemented and verified:
 
@@ -61,8 +66,9 @@ Evaluation implemented and verified:
 - Benchmark framework (15 questions) ✅
 - Quality metrics ✅
 - Stats logging ✅
+- Unit tests suite (11/11 passing) ✅
 
-Next: Frontend Foundation
+Next: Frontend Foundation & Native IPC verification
 
 ---
 

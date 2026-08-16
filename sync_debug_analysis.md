@@ -121,3 +121,92 @@ command.stderr(Stdio::null());
 2. `curl http://127.0.0.1:8765/health` — confirm OK
 3. Apply lib.rs fixes
 4. `cargo tauri dev` — backend should spawn and become ready
+
+
+Good refinements. One critical point changed — need to clarify.
+
+**Question 10:**
+
+Earlier confirmed: agent calls RE:Track → gets Context Package → agent calls LLM itself.
+
+Now you said "forward requests with context to the LLM."
+
+Clear — RE:Track optimizes **input context only**, never touches LLM output. Middleware confirmed.
+
+**Question 11:**
+
+---
+
+## Complete Understanding Lock
+
+**Revised full picture:**
+
+**RE:Track role:** Context middleware. Receives agent's task prompt → returns optimized Context Package. Never touches LLM output.
+
+```
+Agent sends: { task_prompt, repo_path }
+                     ↓
+          RE:Track Backend API
+                     ↓
+         ┌─────── Index Check ──────────┐
+         │  timestamp vs repo mtime      │
+         │  changed files? → partial     │
+         │  re-index only those          │
+         └───────────────────────────────┘
+                     ↓
+         ┌────── Intent Parsing ─────────┐
+         │  phi4:mini (prefer Q6+, warn) │
+         │  • symbol extraction           │
+         │  • intent classification       │
+         │  • file relevance scoring      │
+         │  structured prompts only       │
+         │  (anti-hallucination guards)   │
+         └───────────────────────────────┘
+                     ↓
+         ┌────── Context Retrieval ──────┐
+         │  CGC graph → structural hits  │
+         │  Cognee recall → semantic hits│
+         │  merged, ranked               │
+         └───────────────────────────────┘
+                     ↓
+         ┌───── Context Compression ─────┐
+         │  only if prompt is vague      │
+         │  phi4:mini summarizes chunks  │
+         │  avoid hardware bottleneck    │
+         └───────────────────────────────┘
+                     ↓
+          Context Package (Markdown)
+                     ↓
+Agent feeds: { task_prompt + Context Package } → LLM (any provider)
+```
+
+**Key decisions captured:**
+
+| Decision | Value |
+|---|---|
+| Model selection | Use currently loaded model; prefer phi4:mini any variant; warn if Q6+ not found |
+| Model download | Never download without explicit user permission |
+| Storage priority | Context DB (LanceDB + Kuzu + CGC) takes VRAM/RAM priority over model |
+| Cold start skip | Timestamp check; partial re-index on changed files only |
+| Intent parsing | Symbol extraction + intent classification + file relevance scoring |
+| Compression trigger | Only when prompt is too vague; avoids unnecessary model load |
+| API format | OpenAI-compatible (works with Ollama, LM Studio, cloud, anything) |
+| LLM output | RE:Track never processes or modifies it |
+
+**Non-goals (confirmed):**
+- No model download automation
+- No LLM output processing
+- No cloud sync
+- No bundled inference server
+
+**Assumptions:**
+- Agent already knows the repo path and sends it with every request
+- "Currently loaded model" = detected via provider's running model API
+- Partial re-index tracks file hashes/mtimes in a local manifest
+- CGC index staleness tracked separately from Cognee index
+
+**Open questions before design:**
+1. Should RE:Track expose a **single enriched `/context` endpoint**, or multiple (one for package-only, one for intent-parsed)? 
+2. What API does the agent use to connect — custom REST, or should RE:Track mimic an OpenAI-compatible `/v1/context` path so agents need minimal config?
+
+> Does this accurately reflect your intent? Confirm and we move to design approaches.

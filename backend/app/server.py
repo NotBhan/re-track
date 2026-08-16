@@ -31,9 +31,10 @@ from app.api.commands import (
     list_context_packages,
     get_context_package,
     delete_context_package,
-    append_context_package,
+    get_agent_context,
     get_repository_progress,
 )
+from app.models.agent_context import AgentContextRequest
 from app.api.schemas import (
     ContextPackageAppendRequest,
     ContextPackageSaveRequest,
@@ -265,3 +266,20 @@ async def packages_append_endpoint(package_id: str, request: ContextPackageAppen
     if isinstance(result, ErrorResponse):
         raise HTTPException(status_code=500, detail=result.model_dump())
     return result.model_dump()
+
+
+# --- Agent Middleware Routes ---
+
+
+@app.post("/api/v1/context")
+async def agent_context_endpoint(request: AgentContextRequest):
+    """Generate an optimized context package for external AI coding agents.
+
+    Parses task intent and code symbols, merges CGC structural call graphs
+    with Cognee semantic memory, and applies adaptive budgeting for 8GB VRAM/RAM hardware.
+    """
+    result = await get_agent_context(request)
+    if isinstance(result, ErrorResponse):
+        raise HTTPException(status_code=500, detail=result.model_dump())
+    return result.model_dump()
+

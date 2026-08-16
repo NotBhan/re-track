@@ -140,9 +140,23 @@ fn index_repository(request: IndexRequest) -> Result<serde_json::Value, String> 
     http_post("/index", &request)
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+struct AgentContextReq {
+    task_prompt: String,
+    repository_path: String,
+    dataset_name: Option<String>,
+    max_tokens: Option<u32>,
+    include_structural_graph: Option<bool>,
+}
+
 #[tauri::command]
 fn generate_context(request: ContextRequest) -> Result<serde_json::Value, String> {
     http_post("/context", &request)
+}
+
+#[tauri::command]
+fn get_agent_context(request: AgentContextReq) -> Result<serde_json::Value, String> {
+    http_post("/api/v1/context", &request)
 }
 
 #[tauri::command]
@@ -447,6 +461,7 @@ pub fn run() {
             get_status,
             index_repository,
             generate_context,
+            get_agent_context,
             forget_dataset,
             list_datasets,
             get_repository_summaries,

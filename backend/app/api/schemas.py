@@ -23,6 +23,9 @@ class IndexRepositoryRequest(BaseModel):
     batch_size: int = Field(
         default=10, ge=1, le=100, description="Files per ingestion batch"
     )
+    force_reindex: bool = Field(
+        default=False, description="Force complete re-indexing bypassing manifest diff"
+    )
 
 
 class GenerateContextRequest(BaseModel):

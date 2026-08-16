@@ -20,6 +20,7 @@ from typing import Optional
 from app.models.errors import CogneeServiceError
 from app.models.responses import IndexingProgress
 from app.services.cognee_service import CogneeService
+from app.services.manifest_service import ManifestService, IndexDelta
 
 logger = logging.getLogger(__name__)
 
@@ -87,12 +88,14 @@ class IndexingService:
     def __init__(
         self,
         cognee_service: CogneeService,
+        manifest_service: Optional[ManifestService] = None,
         batch_size: int = DEFAULT_BATCH_SIZE,
         supported_extensions: Optional[frozenset[str]] = None,
         ignored_dirs: Optional[frozenset[str]] = None,
         ignored_patterns: Optional[frozenset[str]] = None,
     ) -> None:
         self._cognee = cognee_service
+        self._manifest_service = manifest_service or ManifestService()
         self._batch_size = batch_size
         self._supported = supported_extensions or SUPPORTED_EXTENSIONS
         self._ignored_dirs = ignored_dirs or IGNORED_DIRS
@@ -102,15 +105,17 @@ class IndexingService:
         self,
         repo_path: str | Path,
         dataset_name: str,
+        force_reindex: bool = False,
     ) -> IndexingProgress:
-        """Index a repository into Cognee memory.
+        """Index a repository into Cognee memory with incremental delta support.
 
-        Discovers files, filters by type, applies ignore rules,
-        batches them, and calls CogneeService.remember() for each batch.
+        Discovers files, computes delta against last manifest, filters by type,
+        applies ignore rules, batches new/modified files, and calls CogneeService.remember().
 
         Args:
             repo_path: Root directory of the repository.
             dataset_name: Logical memory namespace for Cognee.
+            force_reindex: If True, bypasses manifest diff and re-indexes all files.
 
         Returns:
             IndexingProgress with counts and failure details.
@@ -124,19 +129,55 @@ class IndexingService:
 
         all_files = self.discover_files(repo)
         filtered = self.filter_files(all_files, repo)
-        batches = self.batch_files(filtered)
+
+        if force_reindex:
+            target_files = filtered
+            existing_manifest = None
+            deleted_rel_paths: list[str] = []
+            logger.info("force_reindex=True | indexing all %d files", len(filtered))
+        else:
+            delta, existing_manifest = self._manifest_service.compute_delta(repo, filtered)
+            if not delta.has_changes and existing_manifest is not None:
+                logger.info(
+                    "Repository unchanged (0 modifications, %d files cached) | skipping indexing",
+                    len(filtered),
+                )
+                return IndexingProgress(
+                    total_files=len(filtered),
+                    processed_files=len(filtered),
+                    skipped_files=len(filtered),
+                    failed_files=0,
+                    current_batch=1,
+                    total_batches=1,
+                )
+
+            target_files = delta.added + delta.modified
+            deleted_rel_paths = delta.deleted
+            logger.info(
+                "Incremental scan | added=%d | modified=%d | deleted=%d | unchanged=%d",
+                len(delta.added),
+                len(delta.modified),
+                len(delta.deleted),
+                len(delta.unchanged),
+            )
+
+        batches = self.batch_files(target_files)
 
         progress = IndexingProgress(
             total_files=len(filtered),
             total_batches=len(batches),
+            skipped_files=len(filtered) - len(target_files),
         )
 
         logger.info(
-            "index_repository | path=%s | files=%d | batches=%d",
+            "index_repository | path=%s | total_files=%d | target_files=%d | batches=%d",
             repo,
             len(filtered),
+            len(target_files),
             len(batches),
         )
+
+        successfully_indexed: list[Path] = []
 
         for batch_idx, batch in enumerate(batches, 1):
             progress.current_batch = batch_idx
@@ -147,6 +188,7 @@ class IndexingService:
                     dataset_name=dataset_name,
                 )
                 progress.processed_files += len(batch)
+                successfully_indexed.extend(batch)
                 logger.info(
                     "batch %d/%d complete | files=%d",
                     batch_idx,
@@ -163,6 +205,16 @@ class IndexingService:
                     len(batch),
                     e,
                 )
+
+        # Update and save manifest if any files were processed or deleted
+        if successfully_indexed or deleted_rel_paths:
+            self._manifest_service.update_manifest(
+                repo_path=repo,
+                dataset_name=dataset_name,
+                indexed_files=successfully_indexed,
+                deleted_rel_paths=deleted_rel_paths,
+                existing_manifest=existing_manifest,
+            )
 
         logger.info("indexing complete | %s", progress.summary())
         return progress

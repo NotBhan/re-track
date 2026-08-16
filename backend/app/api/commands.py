@@ -46,13 +46,19 @@ from app.api.schemas import (
     ScanResultResponse,
 )
 from app.config.settings import Settings, get_settings
-from app.models.errors import AndesContextError, CogneeServiceError
-from app.models.repository import Repository
-from app.services.context_service import ContextService
-from app.services.context_package_repository import JsonContextPackageRepository
-from app.services.cognee_service import CogneeService
-from app.services.indexing_service import IndexingService
+from app.models.agent_context import AgentContextRequest, AgentContextResponse
 from app.models.context_package import SavedContextPackage
+from app.models.errors import AndesContextError, CogneeServiceError
+from app.models.provider import ProviderType
+from app.models.repository import Repository
+from app.services.cgc_service import CGCService
+from app.services.cognee_service import CogneeService
+from app.services.context_package_repository import JsonContextPackageRepository
+from app.services.context_service import ContextService
+from app.services.indexing_service import IndexingService
+from app.services.intent_parser import IntentParserService
+from app.services.llm_provider_service import LLMProviderService
+from app.services.manifest_service import ManifestService
 from app.services.repository_manager import RepositoryManager
 from app.services.repository_summary import RepositorySummaryGenerator
 
@@ -107,6 +113,12 @@ def _ensure_services() -> None:
         )
 
 
+_cgc_service: Optional[CGCService] = None
+_llm_provider: Optional[LLMProviderService] = None
+_intent_parser: Optional[IntentParserService] = None
+_manifest_service: Optional[ManifestService] = None
+
+
 async def initialize_backend(settings: Optional[Settings] = None) -> None:
     """Initialize all backend services.
 
@@ -114,12 +126,23 @@ async def initialize_backend(settings: Optional[Settings] = None) -> None:
         settings: Optional settings override. Uses default if None.
     """
     global _cognee_service, _indexing_service, _context_service, _settings
+    global _cgc_service, _llm_provider, _intent_parser, _manifest_service
 
+    from app.config.settings import Settings, get_settings
     _settings = settings or get_settings()
     _cognee_service = CogneeService(_settings)
     await _cognee_service.initialize()
 
-    _indexing_service = IndexingService(_cognee_service)
+    _manifest_service = ManifestService()
+    _cgc_service = CGCService()
+    _llm_provider = LLMProviderService(
+        provider_type=ProviderType.OLLAMA,
+        base_url=_settings.ollama.llm_endpoint,
+        default_model=_settings.ollama.llm_model,
+    )
+    _intent_parser = IntentParserService(_llm_provider)
+
+    _indexing_service = IndexingService(_cognee_service, manifest_service=_manifest_service)
     _context_service = ContextService(_cognee_service)
 
     logger.info("Backend services initialized")
@@ -279,6 +302,7 @@ async def index_repository(
         progress = await _indexing_service.index_repository(
             repo_path=repo_path,
             dataset_name=request.dataset_name,
+            force_reindex=request.force_reindex,
         )
 
         # Persist repository metadata after successful indexing
@@ -1128,4 +1152,76 @@ async def append_context_package(
         return ErrorResponse(
             error=type(e).__name__,
             message=f"Failed to append to context package: {e}",
+        )
+
+
+async def get_agent_context(
+    request: AgentContextRequest,
+) -> AgentContextResponse | ErrorResponse:
+    """Generate an optimized context package for an external coding agent.
+
+    Parses intent, retrieves structural code graphs via CGC, fetches semantic
+    memory via Cognee, and builds a compact Markdown Context Package.
+    """
+    start = time.monotonic()
+    logger.info("command: get_agent_context() | prompt=%s", request.task_prompt[:80])
+
+    try:
+        _ensure_services()
+        repo_path = Path(request.repository_path).resolve()
+        dataset_name = request.dataset_name or _get_repo_dataset_name(str(repo_path))
+
+        # 1. Parse prompt intent & symbols
+        intent = await _intent_parser.parse_intent(request.task_prompt)
+
+        # 2. Query structural code relationships via CGC
+        structural_res = None
+        if request.include_structural_graph and _cgc_service:
+            structural_res = await _cgc_service.query_structural_context(
+                repo_path=repo_path,
+                target_symbols=intent.extracted_symbols,
+            )
+
+        # 3. Retrieve semantic memory from Cognee
+        package = await _context_service.generate_context_package(
+            task=request.task_prompt,
+            datasets=[dataset_name],
+            top_k=15,
+        )
+
+        # 4. Check model quality / quantization warnings
+        quant_warning = None
+        if _llm_provider:
+            health_status = await _llm_provider.check_health()
+            quant_warning = health_status.quantization_warning
+
+        # 5. Merge structural graph into Markdown output
+        final_markdown = package.markdown
+        if structural_res and structural_res.symbols_found:
+            struct_md = structural_res.to_markdown()
+            if struct_md:
+                final_markdown += f"\n\n## Structural Code Relationships\n\n{struct_md}\n"
+
+        elapsed_ms = int((time.monotonic() - start) * 1000)
+
+        return AgentContextResponse(
+            success=True,
+            context_markdown=final_markdown,
+            task_summary=intent.task_summary,
+            intent_category=intent.category,
+            extracted_symbols=intent.extracted_symbols,
+            callers=structural_res.callers if structural_res else [],
+            callees=structural_res.callees if structural_res else [],
+            related_files=structural_res.related_files if structural_res else [],
+            quantization_warning=quant_warning,
+            estimated_tokens=len(final_markdown) // 4,
+            generation_time_ms=elapsed_ms,
+        )
+
+    except Exception as e:
+        elapsed = time.monotonic() - start
+        logger.error("command: get_agent_context() failed | %.2fs | %s", elapsed, e)
+        return ErrorResponse(
+            error=type(e).__name__,
+            message=f"Failed to generate agent context: {e}",
         )
