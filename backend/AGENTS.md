@@ -96,15 +96,24 @@ Use complete Python type hints.
 
 Verify backend behavior matches project documentation.
 
+Set up the virtualenv first:
+
+```bash
+cd backend/
+.venv/bin/python -m uvicorn app.server:app --host 127.0.0.1 --port 8765
+# or to create it fresh:
+# uv venv .venv --python 3.12 && .venv/bin/pip install -r requirements.txt
+```
+
 Run playground scripts to validate Cognee integration:
 
 ```bash
 cd backend/playground
-python3.13 setup.py
-python3.13 remember_demo.py
-python3.13 recall_demo.py
-python3.13 improve_demo.py
-python3.13 forget_demo.py
+.venv/bin/python setup.py
+.venv/bin/python remember_demo.py
+.venv/bin/python recall_demo.py
+.venv/bin/python improve_demo.py
+.venv/bin/python forget_demo.py
 ```
 
 ---

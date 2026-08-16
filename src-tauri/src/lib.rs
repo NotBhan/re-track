@@ -7,6 +7,7 @@
  */
 
 use serde::{Deserialize, Serialize};
+use std::fs;
 use std::process::{Child, Command, Stdio};
 use std::sync::Mutex;
 use std::time::Duration;
@@ -260,15 +261,74 @@ fn append_context_package(
 
 // --- Backend lifecycle management ---
 
+/// Resolve the backend directory relative to the running binary.
+///
+/// During `cargo tauri dev` the binary lives inside a Cargo target dir and
+/// CARGO_MANIFEST_DIR is set, so we prefer that. In a packaged app the binary
+/// lives next to a `backend/` sibling directory.
+fn resolve_backend_dir() -> std::path::PathBuf {
+    // 1. Build-time constant — set by Cargo, only available during `cargo run`/`cargo build`.
+    if let Ok(manifest) = std::env::var("CARGO_MANIFEST_DIR") {
+        let src_tauri = std::path::Path::new(&manifest);
+        // CARGO_MANIFEST_DIR points to src-tauri/; go up one level to project root.
+        if let Some(root) = src_tauri.parent() {
+            let candidate = root.join("backend");
+            if candidate.exists() {
+                return candidate;
+            }
+        }
+    }
+
+    // 2. Runtime fallback — resolve relative to the running binary.
+    if let Ok(exe) = std::env::current_exe() {
+        // Packaged layout: <app>/bin/<exe>  or  <app>/<exe>
+        // Walk up until we find a sibling `backend/` directory.
+        let mut dir = exe.as_path();
+        for _ in 0..5 {
+            if let Some(parent) = dir.parent() {
+                let candidate = parent.join("backend");
+                if candidate.exists() {
+                    return candidate;
+                }
+                dir = parent;
+            }
+        }
+    }
+
+    // 3. Last resort — assume CWD is the project root (works for manual dev runs).
+    std::path::PathBuf::from("backend")
+}
+
+/// Return the path to the Python executable to use.
+///
+/// Preference order:
+/// 1. Project-local virtualenv (.venv) inside backend_dir  ← always correct
+/// 2. System pythons tried in order: python3.13, python3, python
+fn resolve_python(backend_dir: &std::path::Path) -> Result<String, String> {
+    // Prefer the project venv — it has all required packages.
+    let venv_python = backend_dir.join(".venv/bin/python");
+    if venv_python.exists() {
+        return Ok(venv_python.to_string_lossy().to_string());
+    }
+
+    // Fallback: system Python (may not have packages, but better than nothing).
+    for cmd in &["python3.13", "python3", "python"] {
+        if Command::new(cmd)
+            .arg("--version")
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false)
+        {
+            return Ok(cmd.to_string());
+        }
+    }
+
+    Err("Python not found. Create a virtualenv at backend/.venv or install Python.".to_string())
+}
+
 fn start_backend() -> Result<Child, String> {
-    // Use the directory where Cargo.toml lives (src-tauri's parent)
-    let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| {
-        std::env::current_dir()
-            .map(|d| d.to_string_lossy().to_string())
-            .unwrap_or_default()
-    });
-    let project_root = std::path::Path::new(&manifest_dir).parent().unwrap_or(std::path::Path::new("."));
-    let backend_dir = project_root.join("backend");
+    let backend_dir = resolve_backend_dir();
+    let python = resolve_python(&backend_dir)?;
 
     // Required environment variables for Cognee
     let env_vars = [
@@ -283,40 +343,45 @@ fn start_backend() -> Result<Child, String> {
         ("GRAPH_DB_PROVIDER", "kuzu"),
     ];
 
-    // Try python3.13 first, then python3, then python
-    for cmd in &["python3.13", "python3", "python"] {
-        if Command::new(cmd)
-            .arg("--version")
-            .output()
-            .map(|o| o.status.success())
-            .unwrap_or(false)
-        {
-            let mut command = Command::new(cmd);
-            command
-                .args([
-                    "-m",
-                    "uvicorn",
-                    "app.server:app",
-                    "--host",
-                    "127.0.0.1",
-                    "--port",
-                    "8765",
-                ])
-                .current_dir(&backend_dir)
-                .stdout(Stdio::piped())
-                .stderr(Stdio::piped());
+    // Open a log file so backend stdout/stderr are visible and don't block.
+    // Piped stdio without a reader fills the OS pipe buffer and silently
+    // deadlocks the child process — avoid it.
+    let log_path = std::env::temp_dir().join("retrack-backend.log");
+    let log_file = fs::File::create(&log_path)
+        .map_err(|e| format!("Failed to create backend log {}: {}", log_path.display(), e))?;
+    let log_err = log_file
+        .try_clone()
+        .unwrap_or_else(|_| fs::File::create("/dev/null").unwrap());
 
-            // Set environment variables
-            for (key, value) in &env_vars {
-                command.env(key, value);
-            }
+    let mut command = Command::new(&python);
+    command
+        .args([
+            "-m",
+            "uvicorn",
+            "app.server:app",
+            "--host",
+            "127.0.0.1",
+            "--port",
+            "8765",
+        ])
+        .current_dir(&backend_dir)
+        .stdout(Stdio::from(log_file))
+        .stderr(Stdio::from(log_err));
 
-            return command
-                .spawn()
-                .map_err(|e| format!("Failed to start backend: {}", e));
-        }
+    for (key, value) in &env_vars {
+        command.env(key, value);
     }
-    Err("Python not found".to_string())
+
+    eprintln!(
+        "[RE:Track] Starting backend | python={} | dir={} | log={}",
+        python,
+        backend_dir.display(),
+        log_path.display()
+    );
+
+    command
+        .spawn()
+        .map_err(|e| format!("Failed to spawn backend process: {}", e))
 }
 
 fn wait_for_backend(max_attempts: u32) -> bool {
@@ -352,11 +417,16 @@ pub fn run() {
             // Start Python backend
             let mut child = start_backend().expect("Failed to start Python backend");
 
-            // Wait for backend to be ready
-            let ready = wait_for_backend(30);
+            // Wait for backend to be ready (cognee init can be slow on first run).
+            let ready = wait_for_backend(60);
             if !ready {
                 child.kill().ok();
-                panic!("Python backend did not become ready within 30 seconds");
+                let log = std::env::temp_dir().join("retrack-backend.log");
+                panic!(
+                    "Python backend did not become ready within 60 seconds. \
+                     Check logs: {}",
+                    log.display()
+                );
             }
 
             // Store process handle

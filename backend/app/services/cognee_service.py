@@ -17,10 +17,10 @@ import asyncio
 from typing import Any, Optional
 
 import cognee
-from cognee.modules.engine.models import CustomCognitiveEngineConfig
 
+from app.config.settings import Settings, get_settings
 from app.models.errors import CogneeServiceError
-from app.models.responses import RememberResult, RecallResult, SectionType
+from app.models.responses import RememberResult, RecallResult, RecallResponse, SectionType
 
 logger = logging.getLogger(__name__)
 
