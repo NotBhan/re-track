@@ -15,7 +15,7 @@ from app.models.responses import RecallResult
 from app.services.package_builder import PackageBuilder
 
 
-BENCHMARK_DIR = Path(__file__).resolve().parent.parent.parent / "benchmarks" / "andescontext"
+BENCHMARK_DIR = Path(__file__).resolve().parent.parent.parent / "benchmarks" / "retrack"
 
 
 def _load_expected(filename: str) -> dict:

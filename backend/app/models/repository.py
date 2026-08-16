@@ -19,7 +19,7 @@ class ScanResult:
 
 @dataclass
 class Repository:
-    """A registered repository managed by AndesContext."""
+    """A registered repository managed by RE:Track (RefinedEngine Track)."""
 
     id: str
     name: str

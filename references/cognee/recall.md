@@ -4,7 +4,7 @@
 
 `recall()` retrieves information from Cognee's memory system. Depending on the supplied parameters, Cognee automatically searches session memory, the permanent knowledge graph, vector memory, or a hybrid combination.
 
-For AndesContext, `recall()` is responsible for constructing the Context Package supplied to the coding LLM.
+For RE:Track, `recall()` is responsible for constructing the Context Package supplied to the coding LLM.
 
 ---
 
@@ -243,7 +243,7 @@ asyncio.run(
 
 ---
 
-# AndesContext Usage
+# RE:Track Usage
 
 `recall()` should be used whenever:
 
@@ -297,9 +297,9 @@ cognee/modules/search/
 
 ---
 
-# AndesContext Notes
+# RE:Track Notes
 
-For AndesContext, `recall()` is the primary mechanism for building a Context Package.
+For RE:Track, `recall()` is the primary mechanism for building a Context Package.
 
 The package should contain:
 

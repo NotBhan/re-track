@@ -1,4 +1,4 @@
-"""Async API commands for AndesContext.
+"""Async API commands for RE:Track (RefinedEngine Track).
 
 Thin command layer that validates input, delegates to services,
 and returns serializable responses. No business logic lives here.
@@ -62,7 +62,8 @@ logger = logging.getLogger(__name__)
 VERSION = "0.1.0"
 
 # Persistent store for indexed repository metadata
-_REPO_STORE_PATH = Path.home() / ".andes" / "indexed_repos.json"
+_REPO_STORE_PATH = Path.home() / ".retrack" / "indexed_repos.json"
+_LEGACY_REPO_STORE_PATH = Path.home() / ".andes" / "indexed_repos.json"
 
 
 # --- Repo metadata store ---
@@ -73,8 +74,13 @@ def _load_repo_store() -> dict:
     if _REPO_STORE_PATH.exists():
         try:
             return json.loads(_REPO_STORE_PATH.read_text())
-        except (json.JSONDecodeError, OSError):
-            return {"repositories": []}
+        except Exception:
+            return {}
+    if _LEGACY_REPO_STORE_PATH.exists():
+        try:
+            return json.loads(_LEGACY_REPO_STORE_PATH.read_text())
+        except Exception:
+            return {}
     return {"repositories": []}
 
 

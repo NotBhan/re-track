@@ -1,4 +1,4 @@
-# Manual Testing Guide — AndesContext Backend
+# Manual Testing Guide — RE:Track Backend
 
 ## Prerequisites
 
@@ -101,7 +101,7 @@ Expected output:
 ```
 [1/4] Initializing CogneeService...
 [2/4] Storing 10 items into dataset 'andes_playground'...
-  [1/10] AndesContext is a local-first AI memory system...
+  [1/10] RE:Track is a local-first AI memory system...
        -> OK (items_sent=1)
   ...
 [3/4] Verifying data was stored (basic recall)...
@@ -129,10 +129,10 @@ Expected output:
 [1/3] Initializing CogneeService...
 [2/3] Running recall queries...
 
-  Query 1: "What is AndesContext?"
+  Query 1: "What is RE:Track?"
   --------------------------------------------------
   Results: 3
-    [1] AndesContext is a local-first AI memory system...
+    [1] RE:Track is a local-first AI memory system...
     [2] The system uses Cognee as its persistent memory layer...
     [3] Repository indexing builds long-term project memory...
 
@@ -199,7 +199,7 @@ What this validates:
 
 ```bash
 cd backend
-python3.13 andescontext.py --help
+python3.13 retrack.py --help
 ```
 
 Expected: Shows all 5 commands (health, status, index, context, forget).
@@ -207,7 +207,7 @@ Expected: Shows all 5 commands (health, status, index, context, forget).
 ### Step 3.2 — Test health command
 
 ```bash
-python3.13 andescontext.py health
+python3.13 retrack.py health
 ```
 
 Expected: Table showing status, Ollama reachable, Cognee initialized, version.
@@ -215,7 +215,7 @@ Expected: Table showing status, Ollama reachable, Cognee initialized, version.
 ### Step 3.3 — Test status command
 
 ```bash
-python3.13 andescontext.py status
+python3.13 retrack.py status
 ```
 
 Expected: Table showing LLM model, embedding model, DB providers, storage paths.
@@ -224,13 +224,13 @@ Expected: Table showing LLM model, embedding model, DB providers, storage paths.
 
 ```bash
 # Index a real repository
-python3.13 andescontext.py index /path/to/your/project -d my-project
+python3.13 retrack.py index /path/to/your/project -d my-project
 
 # Test error: nonexistent path
-python3.13 andescontext.py index /nonexistent -d test
+python3.13 retrack.py index /nonexistent -d test
 
 # Test error: file instead of directory
-python3.13 andescontext.py index /etc/hostname -d test
+python3.13 retrack.py index /etc/hostname -d test
 ```
 
 Expected: Progress spinner, then results table with file counts.
@@ -239,10 +239,10 @@ Expected: Progress spinner, then results table with file counts.
 
 ```bash
 # Generate context (requires indexed data)
-python3.13 andescontext.py context -q "How does authentication work?" -d my-project
+python3.13 retrack.py context -q "How does authentication work?" -d my-project
 
 # Test error: empty query
-python3.13 andescontext.py context -q "  " -d test
+python3.13 retrack.py context -q "  " -d test
 ```
 
 Expected: Green panel with stats, then rendered markdown.
@@ -251,10 +251,10 @@ Expected: Green panel with stats, then rendered markdown.
 
 ```bash
 # Forget a dataset
-python3.13 andescontext.py forget -d old-data
+python3.13 retrack.py forget -d old-data
 
 # Test error: no identifier
-python3.13 andescontext.py forget
+python3.13 retrack.py forget
 ```
 
 Expected: Success message or error panel.
@@ -290,16 +290,16 @@ python3.13 forget_demo.py
 cd backend
 
 # 1. Check health via CLI
-python3.13 andescontext.py health
+python3.13 retrack.py health
 
 # 2. Index via CLI
-python3.13 andescontext.py index /path/to/project -d cli-test
+python3.13 retrack.py index /path/to/project -d cli-test
 
 # 3. Query via CLI
-python3.13 andescontext.py context -q "What is this project?" -d cli-test
+python3.13 retrack.py context -q "What is this project?" -d cli-test
 
 # 4. Clean up via CLI
-python3.13 andescontext.py forget -d cli-test
+python3.13 retrack.py forget -d cli-test
 ```
 
 ---

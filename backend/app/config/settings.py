@@ -1,5 +1,5 @@
 """
-Centralized configuration for AndesContext backend.
+Centralized configuration for RE:Track (RefinedEngine Track) backend.
 
 Loads environment variables, validates provider settings,
 and performs startup checks. Singleton via get_settings().

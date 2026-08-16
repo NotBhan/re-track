@@ -1,4 +1,4 @@
-"""Configuration package for AndesContext backend."""
+"""Configuration package for RE:Track (RefinedEngine Track) backend."""
 
 from app.config.settings import Settings, get_settings
 

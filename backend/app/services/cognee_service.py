@@ -1,31 +1,32 @@
 """
-Thin wrapper around Cognee for AndesContext memory operations.
+Thin wrapper around Cognee for RE:Track (RefinedEngine Track) memory operations.
 
 Responsibilities only:
-- initialize()
-- remember()
-- recall()
+- remember(data, dataset_name) -> remember_result
+- recall(search_type, query, datasets) -> recall_result
 - improve()
-- forget()
+- forget(dataset_id)
+- configure_engine(custom_config)
 
-No business logic. No repository indexing. No batching.
-No context generation. No filesystem logic. No UI logic.
+Never imports from other services.
+All Cognee imports stay inside this module.
 """
 
 import logging
+import asyncio
 from typing import Any, Optional
 
 import cognee
+from cognee.modules.engine.models import CustomCognitiveEngineConfig
 
-from app.config.settings import Settings, get_settings
 from app.models.errors import CogneeServiceError
-from app.models.responses import RecallResult, RecallResponse, RememberResult
+from app.models.responses import RememberResult, RecallResult, SectionType
 
 logger = logging.getLogger(__name__)
 
 
 class CogneeService:
-    """Thin wrapper providing AndesContext memory operations via Cognee.
+    """Thin wrapper providing RE:Track memory operations via Cognee.
 
     This service delegates all work to the Cognee SDK. It does not
     contain business logic, repository scanning, or context generation.

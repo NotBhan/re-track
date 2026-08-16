@@ -50,7 +50,7 @@ async def main():
     print("[2/4] Verifying data exists before forget()...")
     try:
         before = await service.recall(
-            query_text="What is AndesContext?",
+            query_text="What is RE:Track?",
             datasets=[DATASET_NAME],
             top_k=3,
         )
@@ -73,7 +73,7 @@ async def main():
     print("[4/4] Verifying data was removed...")
     try:
         after = await service.recall(
-            query_text="What is AndesContext?",
+            query_text="What is RE:Track?",
             datasets=[DATASET_NAME],
             top_k=3,
         )

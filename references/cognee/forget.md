@@ -6,7 +6,7 @@
 
 It allows applications to selectively delete knowledge from datasets, remove outdated information, or completely clear project memory.
 
-For AndesContext, `forget()` keeps the knowledge graph synchronized with the actual project by removing deleted files, obsolete documentation, or deprecated architectural decisions.
+For RE:Track, `forget()` keeps the knowledge graph synchronized with the actual project by removing deleted files, obsolete documentation, or deprecated architectural decisions.
 
 ---
 
@@ -158,7 +158,7 @@ await cognee.remember(
 
 ---
 
-# AndesContext Usage
+# RE:Track Usage
 
 `forget()` should be called when:
 
@@ -220,7 +220,7 @@ improve()
 
 ---
 
-# AndesContext Integration
+# RE:Track Integration
 
 Suggested triggers:
 
@@ -253,9 +253,9 @@ cognee/modules/storage/
 
 ---
 
-# AndesContext Notes
+# RE:Track Notes
 
 Unlike traditional vector stores, Cognee maintains multiple interconnected storage layers. Forgetting data should be treated as a synchronization operation rather than simply deleting embeddings.
 
-Whenever possible, AndesContext should perform targeted forgetting followed by selective re-ingestion instead of rebuilding the entire knowledge graph.
+Whenever possible, RE:Track should perform targeted forgetting followed by selective re-ingestion instead of rebuilding the entire knowledge graph.
 

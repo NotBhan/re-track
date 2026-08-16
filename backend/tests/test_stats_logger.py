@@ -40,8 +40,8 @@ class TestStatsLogger:
     def test_format_includes_key_fields(self):
         logger = StatsLogger()
         pkg = _make_package()
-        report = logger.format_stats(pkg, "AndesContext")
-        assert "Repository: AndesContext" in report
+        report = logger.format_stats(pkg, "RE:Track")
+        assert "Repository: RE:Track" in report
         assert "Task: Add Rust support" in report
         assert "Retrieved Memories: 43" in report
         assert "Unique Memories: 18" in report
@@ -50,27 +50,27 @@ class TestStatsLogger:
     def test_format_includes_sections(self):
         logger = StatsLogger()
         pkg = _make_package(sections=3)
-        report = logger.format_stats(pkg, "AndesContext")
+        report = logger.format_stats(pkg, "RE:Track")
         assert "Sections Generated:" in report
         assert "Section 0" in report
 
     def test_format_includes_ratio(self):
         logger = StatsLogger()
         pkg = _make_package()
-        report = logger.format_stats(pkg, "AndesContext")
+        report = logger.format_stats(pkg, "RE:Track")
         assert "Compression Ratio:" in report
 
     def test_format_includes_validation(self):
         logger = StatsLogger()
         pkg = _make_package()
-        report = logger.format_stats(pkg, "AndesContext")
+        report = logger.format_stats(pkg, "RE:Track")
         assert "Validation:" in report
         assert "PASS" in report
 
     def test_dup_rate_calculation(self):
         logger = StatsLogger()
         pkg = _make_package()
-        report = logger.format_stats(pkg, "AndesContext")
+        report = logger.format_stats(pkg, "RE:Track")
         # 43 retrieved, 18 unique → 25/43 = 58%
         assert "Duplicate Rate: 58%" in report
 
@@ -99,8 +99,8 @@ class TestStatsLogger:
         logger = StatsLogger()
         pkg = _make_package()
         path = str(tmp_path / "stats.txt")
-        logger.log_to_file(pkg, "AndesContext", path)
+        logger.log_to_file(pkg, "RE:Track", path)
         with open(path) as f:
             content = f.read()
-        assert "AndesContext" in content
+        assert "RE:Track" in content
         assert "Add Rust support" in content

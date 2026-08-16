@@ -1,4 +1,4 @@
-"""Backend API layer for AndesContext.
+"""Backend API layer for RE:Track (RefinedEngine Track).
 
 Exposes backend services through async commands for Tauri IPC.
 No business logic — all work delegates to existing services.

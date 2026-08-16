@@ -1,8 +1,8 @@
-# AndesContext Project Directive
+# RE:Track Project Directive
 
 ## Purpose
 
-This document defines the long-term direction of AndesContext.
+This document defines the long-term direction of RE:Track (RefinedEngine Track).
 
 Every architectural decision, implementation, and contribution must align with the principles described here.
 
@@ -14,7 +14,7 @@ If implementation details conflict with this document, this document takes prece
 
 Build the best local-first memory layer for AI-assisted software development.
 
-AndesContext should dramatically reduce the amount of project context developers must manually provide to AI coding assistants.
+RE:Track should dramatically reduce the amount of project context developers must manually provide to AI coding assistants.
 
 The system should continuously accumulate project knowledge and transform it into compact, relevant Context Packages.
 
@@ -30,16 +30,15 @@ Everything else exists to improve the quality of those packages.
 
 # Product Statement
 
-AndesContext is **not**:
+RE:Track is **not**:
 
-- an IDE
-- a code editor
-- a chatbot
-- a coding agent
-- a Git client
-- a project management tool
+- A chat interface
+- A coding agent
+- An IDE replacement
+- A simple search tool
+- A prompt builder
 
-AndesContext is a persistent software engineering memory system.
+RE:Track is a persistent software engineering memory system.
 
 ---
 

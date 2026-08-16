@@ -1,4 +1,4 @@
-"""Request and response schemas for AndesContext API commands.
+"""Request and response schemas for RE:Track (RefinedEngine Track) API commands.
 
 Serializable Pydantic models for Tauri IPC transport.
 """

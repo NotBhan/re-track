@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Defines how AndesContext integrates with Cognee as its persistent memory layer.
+Defines how RE:Track (RefinedEngine Track) integrates with Cognee as its persistent memory layer.
 
 This document reflects verified behavior from Cognee v1.2.2 validation via the playground.
 

@@ -1,6 +1,6 @@
 # Cognee Verified Implementation Notes
 
-Authoritative reference for Cognee v1.2.2 integration in AndesContext.
+Authoritative reference for Cognee v1.2.2 integration in RE:Track.
 
 Validated via `backend/playground/` and production `backend/app/services/` against local Ollama, LanceDB, Kuzu, SQLite.
 

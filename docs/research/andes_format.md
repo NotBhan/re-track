@@ -1,4 +1,4 @@
-# AndesFormat
+# RE:Track Format
 
 ## Status
 
@@ -8,9 +8,9 @@ Research Scope
 
 ## Vision
 
-AndesFormat investigates a token-efficient representation for software knowledge that is optimized for language models rather than human readers.
+RE:Track Format investigates a token-efficient representation for software knowledge that is optimized for language models rather than human readers.
 
-Unlike Markdown, AndesFormat focuses on structured semantic information while minimizing redundant natural language.
+Unlike Markdown, RE:Track Format focuses on structured semantic information while minimizing redundant natural language.
 
 ---
 
@@ -50,7 +50,7 @@ Exports
 
 Dependencies
 
-AndesFormat may represent
+RE:Track Format may represent
 
 Function name
 

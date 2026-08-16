@@ -2,11 +2,11 @@
 
 ## Purpose
 
-The Context Package is the primary output of AndesContext.
+The Context Package is the primary output of RE:Track (RefinedEngine Track).
 
-Rather than sending an entire repository to a language model, AndesContext retrieves, ranks, filters, and compresses relevant project knowledge into a structured document that can be consumed by AI coding assistants.
+Rather than sending an entire repository to a language model, RE:Track retrieves, ranks, filters, and compresses relevant project knowledge into a structured document that can be consumed by AI coding assistants.
 
-Every feature within AndesContext ultimately exists to improve the quality of the generated Context Package.
+Every feature within RE:Track ultimately exists to improve the quality of the generated Context Package.
 
 ---
 
@@ -273,7 +273,7 @@ This enables users to verify retrieved information.
 
 ---
 
-# AndesContext Responsibilities
+# RE:Track Responsibilities
 
 ContextService is responsible for generating Context Packages.
 
@@ -312,5 +312,5 @@ The package should reduce prompt size while preserving the information necessary
 
 The Context Package is the product.
 
-Everything else in AndesContext exists to improve its quality.
+Everything else in RE:Track exists to improve its quality.
 

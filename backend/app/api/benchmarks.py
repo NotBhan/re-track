@@ -1,4 +1,4 @@
-"""Benchmark runner for AndesContext.
+"""Benchmark runner for RE:Track (RefinedEngine Track).
 
 Executes real benchmark suites against the generate_context endpoint,
 measuring latency, token counts, and retrieval quality.

@@ -7,7 +7,7 @@ const mockActivities = [
     id: "1",
     type: "index" as const,
     message: "Indexed repository",
-    repoName: "andes-core",
+    repoName: "retrack-core",
     timestamp: "2 min ago",
     detail: "342 files processed",
   },

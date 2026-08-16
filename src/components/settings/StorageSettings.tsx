@@ -10,7 +10,7 @@ export function StorageSettings() {
           Storage &amp; Cache
         </h2>
         <p className="text-[14px] leading-[20px] text-on-surface-variant">
-          Manage where AndesContext stores local data.
+          Manage where RE:Track stores local data.
         </p>
       </div>
 
@@ -25,7 +25,7 @@ export function StorageSettings() {
             <input
               type="text"
               readOnly
-              defaultValue={status?.data_root ?? "~/.andes/data"}
+              defaultValue={status?.data_root ?? "~/.retrack/data"}
               className="w-full bg-surface-container h-10 px-3 rounded-md border border-outline-variant text-outline font-mono text-[13px] leading-[20px] cursor-not-allowed"
             />
             <button className="px-3 h-10 bg-surface-container hover:bg-surface-bright border border-outline-variant rounded-md text-on-surface transition-colors">

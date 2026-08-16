@@ -1,4 +1,4 @@
-"""Pytest configuration for AndesContext backend tests."""
+"""Pytest configuration for RE:Track backend tests."""
 
 import pytest
 

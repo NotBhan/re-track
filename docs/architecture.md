@@ -1,8 +1,8 @@
-# AndesContext Architecture
+# RE:Track Architecture
 
 ## Overview
 
-AndesContext is a local-first desktop application that provides persistent memory for AI-assisted software development.
+RE:Track (RefinedEngine Track) is a local-first desktop application that provides persistent memory for AI-assisted software development.
 
 The system separates user interaction, business logic, memory orchestration, and persistent storage into independent layers.
 
@@ -14,7 +14,7 @@ Rather than directly exposing Cognee to the frontend, all interactions occur thr
 
 ```
 ┌───────────────────────────────────────────────────────────────┐
-│                      AndesContext                             │
+│                      RE:Track (RefinedEngine)                 │
 ├───────────────────────────────────────────────────────────────┤
 │                     React + Tauri Frontend                    │
 │                                                               │
@@ -432,7 +432,7 @@ Models
 
 # Guiding Principle
 
-AndesContext is not an AI coding assistant.
+RE:Track is not an AI coding assistant.
 
 It is a persistent memory layer that enables AI coding assistants to understand software projects with significantly less context.
 

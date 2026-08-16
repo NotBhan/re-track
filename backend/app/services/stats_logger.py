@@ -1,4 +1,4 @@
-"""Package statistics logger for AndesContext.
+"""Package statistics logger for RE:Track (RefinedEngine Track).
 
 Formats and logs Context Package statistics for demo reporting
 and benchmark result recording.

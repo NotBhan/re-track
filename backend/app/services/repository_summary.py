@@ -1,4 +1,4 @@
-"""Repository Summary generator for AndesContext.
+"""Repository Summary generator for RE:Track (RefinedEngine Track).
 
 Analyzes indexed repository files to extract stable, global knowledge:
 project purpose, technology stack, directory structure, and key components.

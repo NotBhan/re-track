@@ -51,7 +51,7 @@ export function InputParameters({ repoPreselected = false }: InputParametersProp
 
   const handleClearSelection = () => {
     clearSelectedRepoId();
-    setSelectedRepo("andes-core-api");
+    setSelectedRepo("retrack-core-api");
   };
 
   return (
@@ -114,8 +114,8 @@ export function InputParameters({ repoPreselected = false }: InputParametersProp
                 ))}
                 {repositories.length === 0 && (
                   <>
-                    <option value="andes-core-api">andes-core-api</option>
-                    <option value="andes-web-client">andes-web-client</option>
+                    <option value="retrack-core-api">retrack-core-api</option>
+                    <option value="retrack-web-client">retrack-web-client</option>
                     <option value="infra-deployments">infra-deployments</option>
                   </>
                 )}

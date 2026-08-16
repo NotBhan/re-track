@@ -1,4 +1,4 @@
-"""Tests for the AndesContext CLI layer.
+"""Tests for the RE:Track CLI layer.
 
 Validates CLI commands delegate to API layer correctly.
 """

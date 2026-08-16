@@ -6,7 +6,7 @@ An ontology defines the types of entities and relationships that Cognee should e
 
 Instead of treating documents as generic text, an ontology gives semantic meaning to the extracted knowledge.
 
-For AndesContext, ontologies enable Cognee to understand software engineering concepts rather than simply indexing source code.
+For RE:Track, ontologies enable Cognee to understand software engineering concepts rather than simply indexing source code.
 
 ---
 
@@ -92,7 +92,7 @@ The resulting graph is significantly richer.
 
 ---
 
-# AndesContext Ontology
+# RE:Track Ontology
 
 Potential entity types:
 
@@ -225,7 +225,7 @@ await cognee.remember(
 
     data="./src",
 
-    dataset_name="andes_context",
+    dataset_name="re_track",
 
     custom_prompt="""
 Extract:
@@ -252,7 +252,7 @@ await cognee.remember(
 
     data="./docs",
 
-    dataset_name="andes_context",
+    dataset_name="re_track",
 
     custom_prompt="""
 Focus on:
@@ -275,7 +275,7 @@ await cognee.remember(
 
     data="./src",
 
-    dataset_name="andes_context",
+    dataset_name="re_track",
 
     custom_prompt="""
 Identify:
@@ -292,7 +292,7 @@ Identify:
 
 ---
 
-# AndesContext Workflow
+# RE:Track Workflow
 
 ```
 Repository
@@ -343,7 +343,7 @@ Context Package
 
 ---
 
-# Future AndesContext Ontology
+# Future RE:Track Ontology
 
 Possible future entity categories:
 
@@ -373,9 +373,9 @@ These higher-level concepts could produce significantly more useful Context Pack
 
 ---
 
-# AndesContext Design Notes
+# RE:Track Design Notes
 
-The ontology is one of the primary ways AndesContext can improve retrieval quality.
+The ontology is one of the primary ways RE:Track can improve retrieval quality.
 
 Instead of retrieving arbitrary chunks of text, Cognee can retrieve structured engineering knowledge such as:
 

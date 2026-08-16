@@ -43,10 +43,10 @@ export function Sidebar({ onNewIndex }: SidebarProps) {
         </div>
         <div>
           <h1 className="text-[20px] leading-[28px] font-medium tracking-tight text-on-surface">
-            AndesContext
+            RE:Track
           </h1>
           <p className="text-[12px] leading-[16px] tracking-[0.02em] font-medium text-on-surface-variant">
-            AI-Native Memory
+            RefinedEngine
           </p>
         </div>
       </div>

@@ -1,5 +1,5 @@
 """
-Context Package generator for AndesContext.
+Context Package generator for RE:Track (RefinedEngine Track).
 
 Transforms Cognee memory retrieval into structured Context Packages
 suitable for AI coding assistants.

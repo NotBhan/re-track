@@ -1,1 +1,1 @@
-"""AndesContext backend application."""
+"""RE:Track (RefinedEngine Track) backend application."""

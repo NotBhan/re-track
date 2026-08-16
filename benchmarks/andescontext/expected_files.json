@@ -49,7 +49,7 @@
   "Q5": {
     "question": "Where is the CLI entry point and how are commands registered?",
     "expected_files": [
-      "backend/andescontext.py",
+      "backend/retrack.py",
       "backend/app/cli/main.py"
     ],
     "critical_files": [

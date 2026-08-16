@@ -66,7 +66,7 @@ export default function Benchmarks() {
               Performance Benchmarks
             </h2>
             <p className="text-[16px] leading-[24px] text-on-surface-variant">
-              Real-time telemetry and comparative analysis for AndesContext
+              Real-time telemetry and comparative analysis for RE:Track (RefinedEngine Track)
               engine.
             </p>
           </div>

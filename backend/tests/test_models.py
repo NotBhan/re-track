@@ -112,7 +112,7 @@ class TestEntryPoint:
     """Tests for EntryPoint data model."""
 
     def test_construction(self):
-        ep = EntryPoint(name="cli", path="backend/andescontext.py", type="cli")
+        ep = EntryPoint(name="cli", path="backend/retrack.py", type="cli")
         assert ep.type == "cli"
         assert ep.name == "cli"
 

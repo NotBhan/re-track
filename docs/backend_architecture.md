@@ -1,8 +1,8 @@
-# AndesContext Architecture
+# RE:Track Architecture
 
 ```text
 ┌───────────────────────────────────────────────────────────────┐
-│                      AndesContext                             │
+│                      RE:Track (RefinedEngine)                 │
 ├───────────────────────────────────────────────────────────────┤
 │                     React + Tauri Frontend                    │
 │                                                               │

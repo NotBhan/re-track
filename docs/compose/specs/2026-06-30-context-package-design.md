@@ -1,14 +1,14 @@
-# AndesContext Context Package Specification
+# RE:Track Context Package Specification
 
-**Version**: 1.0
-**Date**: 2026-06-30
-**Status**: Design — Pre-Implementation
+## Status
+
+Target Architecture Specification
 
 ---
 
-## [S1] Overall Philosophy
+## 1. Executive Summary
 
-AndesContext generates two complementary artifacts from indexed repository memory:
+RE:Track generates two complementary artifacts from indexed repository memory:
 
 **Artifact A — Repository Summary**: A structured, cached knowledge model of global repository facts. Generated after indexing. Regenerated only on re-index. Contains stable information: project purpose, architecture, technologies, conventions, repository structure, key components.
 

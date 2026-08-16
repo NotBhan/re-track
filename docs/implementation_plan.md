@@ -1,8 +1,8 @@
-# AndesContext Implementation Plan
+# RE:Track Implementation Plan
 
 ## Purpose
 
-This document defines the implementation roadmap for AndesContext.
+This document defines the implementation roadmap for RE:Track (RefinedEngine Track).
 
 It translates the project vision and architecture into concrete development milestones.
 

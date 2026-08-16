@@ -1,4 +1,4 @@
-"""AndesContext CLI entry point.
+"""RE:Track (RefinedEngine Track) CLI entry point.
 
 Typer application exposing backend API commands to developers.
 All commands delegate to app.api.commands — no direct service calls.
@@ -24,8 +24,8 @@ from app.api.schemas import (
 )
 
 app = typer.Typer(
-    name="andescontext",
-    help="AndesContext — persistent memory for AI-assisted development.",
+    name="retrack",
+    help="RE:Track (RefinedEngine Track) — persistent memory for AI-assisted development.",
     no_args_is_help=True,
     rich_markup_mode="rich",
 )

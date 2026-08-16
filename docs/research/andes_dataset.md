@@ -1,4 +1,4 @@
-# AndesDataset
+# RE:Track Dataset
 
 ## Status
 
@@ -8,9 +8,9 @@ Future Research Scope
 
 ## Vision
 
-AndesDataset extends AndesContext from a repository understanding system into an automated software knowledge dataset generation pipeline.
+RE:Track Dataset extends RE:Track from a repository understanding system into an automated software knowledge dataset generation pipeline.
 
-Instead of collecting raw source code, AndesDataset extracts structured, validated knowledge from repositories that can be used for machine learning, retrieval systems, benchmarking, and software engineering research.
+Instead of collecting raw source code, RE:Track Dataset extracts structured, validated knowledge from repositories that can be used for machine learning, retrieval systems, benchmarking, and software engineering research.
 
 The objective is to generate high-quality datasets describing software systems rather than merely storing source files.
 
@@ -22,7 +22,7 @@ Current code datasets primarily contain source code.
 
 Large language models must infer architecture, relationships, design decisions, APIs, and dependencies directly from raw code.
 
-AndesDataset shifts this effort offline by extracting explicit software knowledge before training or indexing.
+RE:Track Dataset shifts this effort offline by extracting explicit software knowledge before training or indexing.
 
 ---
 
@@ -134,4 +134,4 @@ Common implementation strategies
 
 ## Long-Term Vision
 
-AndesDataset becomes a general-purpose software knowledge extraction pipeline capable of producing datasets suitable for training future software engineering language models.
+RE:Track Dataset becomes a general-purpose software knowledge extraction pipeline capable of producing datasets suitable for training future software engineering language models.

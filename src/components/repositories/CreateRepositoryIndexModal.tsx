@@ -177,7 +177,7 @@ export function CreateRepositoryIndexModal({
             Create Repository Index
           </DialogTitle>
           <DialogDescription className="text-on-surface-variant text-sm">
-            Add a repository to AndesContext and build its knowledge index
+            Add a repository to RE:Track (RefinedEngine Track) and build its knowledge index
           </DialogDescription>
         </DialogHeader>
 

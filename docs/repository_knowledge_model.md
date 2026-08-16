@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This document defines the long-term vision for how AndesContext represents software repositories as reusable knowledge.
+This document defines the long-term vision for how RE:Track (RefinedEngine Track) represents software repositories as reusable knowledge.
 
 The goal is to move beyond simple code indexing and retrieval toward a structured representation of software engineering knowledge that is portable, token-efficient, and model-agnostic.
 
@@ -20,7 +20,7 @@ This results in:
 - Redundant reasoning
 - Dependency on repository documentation quality
 
-AndesContext separates repository understanding from task execution.
+RE:Track separates repository understanding from task execution.
 
 Repository understanding becomes an offline process while task execution becomes lightweight knowledge retrieval.
 
@@ -241,7 +241,7 @@ Potential outputs:
 
 Knowledge should be partitionable.
 
-Rather than producing one monolithic repository representation, AndesContext should support feature-oriented bundles.
+Rather than producing one monolithic repository representation, RE:Track should support feature-oriented bundles.
 
 Examples:
 
@@ -374,7 +374,7 @@ Evaluate:
 
 # Long-term Vision
 
-AndesContext should become a general-purpose software knowledge engine.
+RE:Track should become a general-purpose software knowledge engine.
 
 Repository
 

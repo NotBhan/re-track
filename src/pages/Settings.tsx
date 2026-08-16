@@ -27,7 +27,7 @@ const tabComponents: Record<string, React.FC> = {
         About
       </h2>
       <p className="text-[14px] leading-[20px] text-on-surface-variant mb-4">
-        AndesContext v0.1.0
+        RE:Track (RefinedEngine Track) v0.1.0
       </p>
       <p className="text-[14px] leading-[20px] text-on-surface-variant">
         Local-first AI memory for software development. Transform repository

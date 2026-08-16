@@ -1,4 +1,4 @@
-"""Structured logging configuration for AndesContext backend."""
+"""Structured logging configuration for RE:Track (RefinedEngine Track) backend."""
 
 import logging
 import sys

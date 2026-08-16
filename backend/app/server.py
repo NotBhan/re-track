@@ -1,5 +1,5 @@
 """
-FastAPI HTTP server for AndesContext backend.
+FastAPI HTTP server for RE:Track (RefinedEngine Track) backend.
 
 Exposes backend commands as HTTP endpoints for Tauri IPC bridge.
 This is a thin transport layer — all business logic stays in commands.py.
@@ -50,18 +50,18 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Initialize backend on startup, cleanup on shutdown."""
-    logger.info("Starting AndesContext HTTP server")
+    logger.info("Starting RE:Track HTTP server")
     try:
         await initialize_backend()
         logger.info("Backend initialized successfully")
     except Exception as e:
         logger.error("Backend initialization failed: %s", e)
     yield
-    logger.info("Shutting down AndesContext HTTP server")
+    logger.info("Shutting down RE:Track HTTP server")
 
 
 app = FastAPI(
-    title="AndesContext API",
+    title="RE:Track API",
     version="0.1.0",
     lifespan=lifespan,
 )

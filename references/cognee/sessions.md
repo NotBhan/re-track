@@ -6,7 +6,7 @@ Sessions provide temporary, short-lived memory within Cognee.
 
 Unlike datasets, which store permanent project knowledge, sessions capture the current working context of a user or agent. Session memory can later be promoted into permanent memory through Cognee's improvement pipeline.
 
-For AndesContext, sessions represent the developer's active coding session.
+For RE:Track, sessions represent the developer's active coding session.
 
 ---
 
@@ -112,7 +112,7 @@ async def main():
 
     await cognee.remember(
         data="Refactoring authentication middleware.",
-        dataset_name="andes_context",
+        dataset_name="re_track",
         session_id="editor-session-001"
     )
 
@@ -137,7 +137,7 @@ results = await cognee.recall(
 ```python
 results = await cognee.recall(
     query_text="Explain the authentication flow.",
-    datasets=["andes_context"],
+    datasets=["re_track"],
     session_id="editor-session-001"
 )
 ```
@@ -199,11 +199,11 @@ Close Session
 
 ---
 
-# AndesContext Mapping
+# RE:Track Mapping
 
 Recommended mapping:
 
-| AndesContext | Cognee |
+| RE:Track | Cognee |
 |--------------|---------|
 | Repository | Dataset |
 | Workspace | Dataset |
@@ -276,7 +276,7 @@ Session Closed
 
 ---
 
-# AndesContext Usage
+# RE:Track Usage
 
 Sessions should be created when:
 
@@ -312,15 +312,15 @@ Sessions should end when:
 
 ---
 
-# AndesContext Design Notes
+# RE:Track Design Notes
 
-Sessions eliminate the need for AndesContext to implement its own temporary memory system.
+Sessions eliminate the need for RE:Track to implement its own temporary memory system.
 
 Instead:
 
 - Cognee manages temporary session memory.
 - Cognee promotes useful information through `improve()`.
-- AndesContext focuses on orchestration, Context Package generation, and developer experience.
+- RE:Track focuses on orchestration, Context Package generation, and developer experience.
 
 This significantly simplifies the architecture while leveraging Cognee's native capabilities.
 

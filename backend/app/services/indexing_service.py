@@ -1,5 +1,5 @@
 """
-Repository indexing pipeline for AndesContext.
+Repository indexing pipeline for RE:Track (RefinedEngine Track).
 
 Responsibilities only:
 - Discover repository files

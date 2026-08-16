@@ -1,5 +1,5 @@
 /**
- * Tauri IPC wrapper for AndesContext backend commands.
+ * Tauri IPC wrapper for RE:Track (RefinedEngine Track) backend commands.
  *
  * All backend communication goes through this module.
  * Handles JSON serialization/deserialization and error wrapping.

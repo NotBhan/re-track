@@ -35,7 +35,7 @@ const initialAdvanced: AdvancedOptions = {
 
 export const useContextStore = create<ContextStore>((set, get) => ({
   objective: "",
-  selectedRepo: "andes-core-api",
+  selectedRepo: "retrack-core-api",
   selectedRepoId: null,
   topK: 25,
   advancedOptions: initialAdvanced,

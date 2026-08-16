@@ -7,6 +7,7 @@ from app.models.errors import (
     CogneeServiceError,
     ModelNotFoundError,
     OllamaConnectionError,
+    RETrackError,
     TokenizerError,
 )
 from app.models.repository import Repository, ScanResult
@@ -29,6 +30,7 @@ __all__ = [
     "ModelNotFoundError",
     "OllamaConnectionError",
     "PackageSection",
+    "RETrackError",
     "RecallResult",
     "RecallResponse",
     "Repository",

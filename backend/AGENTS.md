@@ -1,6 +1,6 @@
 # Purpose
 
-Owns the backend services for AndesContext.
+Owns the backend services for RE:Track (RefinedEngine Track).
 
 Responsibilities include project indexing, Cognee integration, context retrieval, memory management, and Context Package generation.
 

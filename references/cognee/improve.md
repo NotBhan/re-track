@@ -6,7 +6,7 @@
 
 Unlike `remember()`, which stores new information, `improve()` analyzes previously stored knowledge and refines it by generating higher-quality relationships, summaries, and semantic organization.
 
-For AndesContext, `improve()` is responsible for continuously improving project memory without requiring the repository to be re-indexed.
+For RE:Track, `improve()` is responsible for continuously improving project memory without requiring the repository to be re-indexed.
 
 ---
 
@@ -152,7 +152,7 @@ Useful after indexing large repositories.
 
 ---
 
-# AndesContext Usage
+# RE:Track Usage
 
 `improve()` should be called:
 
@@ -208,9 +208,9 @@ Better Permanent Memory
 
 ---
 
-# AndesContext Integration
+# RE:Track Integration
 
-AndesContext should schedule `improve()` automatically.
+RE:Track should schedule `improve()` automatically.
 
 Suggested triggers:
 
@@ -243,11 +243,11 @@ cognee/modules/
 
 ---
 
-# AndesContext Notes
+# RE:Track Notes
 
-`improve()` is what makes AndesContext's memory evolve.
+`improve()` is what makes RE:Track's memory evolve.
 
-Rather than repeatedly ingesting the same information, AndesContext should periodically refine existing knowledge so future `recall()` operations produce cleaner, more relevant Context Packages.
+Rather than repeatedly ingesting the same information, RE:Track should periodically refine existing knowledge so future `recall()` operations produce cleaner, more relevant Context Packages.
 
 This operation is computationally heavier than `remember()` or `recall()` and is best treated as a background maintenance task.
 

@@ -43,7 +43,7 @@ from app.config.settings import get_settings
 from app.core.logging import setup_logging
 
 # ── Dataset name used across all playground scripts ──
-DATASET_NAME = "andes_playground"
+DATASET_NAME = "retrack_playground"
 
 # ── Module-level service instance ──
 _service: CogneeService | None = None

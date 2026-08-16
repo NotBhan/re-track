@@ -1,4 +1,4 @@
-"""Response models for AndesContext backend services."""
+"""Response models for RE:Track (RefinedEngine Track) backend services."""
 
 from dataclasses import dataclass, field
 from enum import Enum

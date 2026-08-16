@@ -2,9 +2,9 @@
 
 ## Purpose
 
-The Workspace Model defines how AndesContext represents software projects and maps them to Cognee's memory model.
+The Workspace Model defines how RE:Track (RefinedEngine Track) represents software projects and maps them to Cognee's memory model.
 
-A workspace is the primary organizational unit within AndesContext. Each workspace corresponds to exactly one software project and one Cognee dataset.
+A workspace is the primary organizational unit within RE:Track. Each workspace corresponds to exactly one software project and one Cognee dataset.
 
 The workspace model provides clear isolation between projects while allowing multiple repositories to be managed independently.
 
@@ -59,7 +59,7 @@ Workspace
 
 # Workspace
 
-A Workspace represents a software project managed by AndesContext.
+A Workspace represents a software project managed by RE:Track.
 
 A workspace owns:
 
@@ -111,7 +111,7 @@ LAIOS
 
 Dataset
 
-andes_laios
+retrack_laios
 ```
 
 Datasets isolate project memory and prevent cross-project contamination.
@@ -303,19 +303,13 @@ These settings apply only to the current workspace.
 
 # Multi-Workspace Support
 
-AndesContext supports multiple independent workspaces.
+RE:Track supports multiple independent workspaces.
 
 ```
-AndesContext
-
-├── Workspace A
-│      └── Dataset A
-│
-├── Workspace B
-│      └── Dataset B
-│
-└── Workspace C
-       └── Dataset C
+RE:Track
+├── Workspace: Project A (Dataset: project_a)
+├── Workspace: Project B (Dataset: project_b)
+└── Workspace: Project C (Dataset: project_c)
 ```
 
 Each workspace has isolated memory.

@@ -1,12 +1,12 @@
-# AndesContext Vision
+# RE:Track Vision
 
 ## Overview
 
-AndesContext is a local-first AI memory system for software development.
+RE:Track (RefinedEngine Track) is a local-first AI memory system for software development.
 
 Its purpose is to help AI coding assistants rapidly understand a software project by automatically building compact, high-quality Context Packages from long-term project memory.
 
-Rather than repeatedly scanning an entire repository or forcing developers to manually curate prompts, AndesContext continuously indexes project knowledge into Cognee and retrieves only the information required for the current task.
+Rather than repeatedly scanning an entire repository or forcing developers to manually curate prompts, RE:Track continuously indexes project knowledge into Cognee and retrieves only the information required for the current task.
 
 The system is designed primarily for local language models with limited context windows, while remaining compatible with cloud models.
 
@@ -34,9 +34,9 @@ This increases latency, token usage, and hallucinations.
 
 Enable AI coding assistants to understand software projects through persistent memory rather than repeated explanation.
 
-Instead of searching the repository every time, AndesContext builds an evolving knowledge base that can produce compact Context Packages tailored to each development task.
+Instead of searching the repository every time, RE:Track builds an evolving knowledge base that can produce compact Context Packages tailored to each development task.
 
-The developer should interact with the AI naturally while AndesContext supplies the required context automatically.
+The developer should interact with the AI naturally while RE:Track supplies the required context automatically.
 
 ---
 
@@ -180,9 +180,9 @@ The project succeeds if a developer can:
 
 # Long-Term Vision
 
-AndesContext aims to become a universal memory layer for AI-assisted software development.
+RE:Track aims to become a universal memory layer for AI-assisted software development.
 
-Rather than replacing existing coding assistants, AndesContext augments them with persistent project knowledge, enabling both local and cloud models to perform better with significantly less context.
+Rather than replacing existing coding assistants, RE:Track augments them with persistent project knowledge, enabling both local and cloud models to perform better with significantly less context.
 
 Its long-term objective is to provide software projects with durable memory that grows alongside the codebase and improves every future AI interaction.
 

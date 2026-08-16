@@ -1,4 +1,4 @@
-# AndesContext Benchmark Questions
+# RE:Track Benchmark Questions
 
 15 repository-specific questions covering architecture, implementation, and extension points.
 
@@ -27,7 +27,7 @@
 - Expected symbols: `SUPPORTED_EXTENSIONS`
 
 **Q5**: Where is the CLI entry point and how are commands registered?
-- Expected files: `backend/andescontext.py`, `backend/app/cli/main.py`
+- Expected files: `backend/retrack.py`, `backend/app/cli/main.py`
 - Expected symbols: `app` (Typer instance)
 
 **Q6**: Where are the Pydantic request/response schemas defined?

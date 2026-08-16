@@ -39,7 +39,7 @@
 
 ## Architectural Analysis (Subagent)
 
-**Primary problem solved**: AI coding assistants lose context every session. AndesContext builds persistent memory via remember→recall→improve→forget lifecycle, producing compact Context Packages instead of forcing full repo scans.
+**Primary problem solved**: AI coding assistants lose context every session. RE:Track builds persistent memory via remember→recall→improve→forget lifecycle, producing compact Context Packages instead of forcing full repo scans.
 
 **Key architectural decisions**:
 - Cognee chosen for hybrid retrieval (vector + graph + metadata) in one API

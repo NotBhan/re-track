@@ -14,7 +14,7 @@ export function LatencyChart() {
           <div className="flex items-center gap-2">
             <div className="w-3 h-0.5 bg-primary rounded-full" />
             <span className="text-[12px] leading-[16px] tracking-[0.02em] font-medium text-on-surface-variant">
-              AndesContext
+              RE:Track
             </span>
           </div>
           <div className="flex items-center gap-2">
@@ -61,7 +61,7 @@ export function LatencyChart() {
             strokeWidth="1.5"
           />
 
-          {/* AndesContext Line (primary) */}
+          {/* RE:Track Line (primary) */}
           <path
             className="drop-shadow-[0_4px_6px_rgba(173,198,255,0.2)]"
             d="M 0,70 Q 15,65 30,75 T 50,60 T 70,80 T 90,65 T 100,75"

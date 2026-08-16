@@ -31,7 +31,7 @@
 |---------|--------|--------|
 | `health` | PASS | Status: ok, Ollama reachable, Cognee initialized |
 | `status` | PASS | Full config table (models, DBs, storage paths) |
-| `context -q "What is AndesContext?" -d andes_playground` | PASS | ~132 tokens, 1 section |
+| `context -q "What is RE:Track?" -d andes_playground` | PASS | ~132 tokens, 1 section |
 | `forget -d andes_playground` | PASS | Deleted in ~6s |
 | `index /nonexistent` | PASS (error) | "Repository path does not exist" |
 | `context -q "  "` | PASS (error) | "Query must not be empty" |

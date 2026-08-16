@@ -10,11 +10,11 @@ Before any memory operations can be performed, Cognee must be configured with:
 - Graph Database
 - Storage Paths
 
-AndesContext uses a fully local configuration built around Ollama and Cognee's default local databases.
+RE:Track uses a fully local configuration built around Ollama and Cognee's default local databases.
 
 ---
 
-# AndesContext Default Stack
+# RE:Track Default Stack
 
 | Component | Provider |
 |----------|----------|
@@ -107,7 +107,7 @@ cognee.config.set_vector_db_provider("lancedb")
 cognee.config.set_graph_db_provider("kuzu")
 ```
 
-Environment variables remain the preferred configuration mechanism for AndesContext.
+Environment variables remain the preferred configuration mechanism for RE:Track.
 
 ---
 
@@ -149,9 +149,9 @@ If no configuration errors occur, Cognee is correctly initialized.
 
 ---
 
-# AndesContext Startup
+# RE:Track Startup
 
-Every AndesContext workspace should perform:
+Every RE:Track workspace should perform:
 
 ```
 Load .env
@@ -226,10 +226,10 @@ backend/
 # Best Practices
 
 - Use `.env` for all configuration.
-- One configuration per AndesContext installation.
+- One configuration per RE:Track installation.
 - Keep databases local by default.
 - Do not hardcode API keys.
-- Verify Ollama before starting AndesContext.
+- Verify Ollama before starting RE:Track.
 - Keep embedding and LLM providers consistent.
 
 ---
@@ -328,9 +328,9 @@ export CACHING=false
 
 ---
 
-# AndesContext Notes
+# RE:Track Notes
 
-AndesContext is designed to operate completely offline.
+RE:Track is designed to operate completely offline.
 
 The recommended deployment consists of:
 

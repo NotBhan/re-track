@@ -35,7 +35,7 @@ from setup import get_service, DATASET_NAME, run_async
 
 
 SAMPLE_DATA = [
-    "AndesContext is a local-first AI memory system for software development.",
+    "RE:Track is a local-first AI memory system for software development.",
     "The system uses Cognee as its persistent memory layer.",
     "Repository indexing builds long-term project memory.",
     "Context Packages are compact summaries sent to coding LLMs.",
@@ -78,7 +78,7 @@ async def main():
     print("[3/4] Verifying data was stored (basic recall)...")
     try:
         response = await service.recall(
-            query_text="What is AndesContext?",
+            query_text="What is RE:Track?",
             datasets=[DATASET_NAME],
             top_k=3,
         )

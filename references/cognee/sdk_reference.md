@@ -1,6 +1,6 @@
-# AndesContext Verified SDK Reference for Cognee
+# RE:Track Verified SDK Reference for Cognee
 
-This document provides a verified, implementation-oriented SDK reference for integrating **Cognee** into the **AndesContext** AI coding agent. It is strictly derived from the `topoteretes/cognee` repository structure and abstracts away large code blocks in favor of targeted execution flows, signatures, and integration notes.
+This document provides a verified, implementation-oriented SDK reference for integrating **Cognee** into the **RE:Track** AI coding agent. It is strictly derived from the `topoteretes/cognee` repository structure and abstracts away large code blocks in favor of targeted execution flows, signatures, and integration notes.
 
 ---
 
@@ -20,15 +20,15 @@ class Config:
 
 ```
 
-### AndesContext Integration
+### RE:Track Integration
 
-AndesContext operates locally. It must explicitly set local providers before invoking `remember` or `recall`.
+RE:Track operates locally. It must explicitly set local providers before invoking `remember` or `recall`.
 
 ```python
 import os
 from cognee.api.v1.config.config import config
 
-# AndesContext Local Init
+# RE:Track Local Init
 os.environ["LLM_PROVIDER"] = "ollama"
 os.environ["VECTOR_DB_PROVIDER"] = "lancedb" 
 os.environ["GRAPH_DB_PROVIDER"] = "kuzu"
@@ -73,7 +73,7 @@ async def remember(
 * **Tests:** `cognee/tests/unit/api/v1/test_public_memory_api.py`
 * **Example:** `examples/demos/remember_recall_improve_example.py`
 
-### AndesContext Integration
+### RE:Track Integration
 
 Call `remember` when the user adds files to the context window or when a workspace is indexed.
 
@@ -120,7 +120,7 @@ async def recall(
 * **Search Types Enum:** `cognee/modules/search/types/SearchType.py`
 * **Tests:** `cognee/tests/unit/api/v1/recall/test_recall_api.py`
 
-### AndesContext Integration
+### RE:Track Integration
 
 Used during the context-gathering phase of prompt execution. Use `SearchType.HYBRID` to fetch both semantically related code and structurally connected dependencies.
 
@@ -170,9 +170,9 @@ async def forget(
 * **Implementation:** `cognee/modules/data/methods/delete_dataset.py`
 * **Tests:** `cognee/tests/unit/api/v1/forget/test_forget_endpoint.py`
 
-### AndesContext Integration
+### RE:Track Integration
 
-Essential for maintaining sync with the file system. When a file is deleted or heavily refactored in the IDE, AndesContext must call `forget` on the specific file/dataset before re-ingesting it via `remember`.
+Essential for maintaining sync with the file system. When a file is deleted or heavily refactored in the IDE, RE:Track must call `forget` on the specific file/dataset before re-ingesting it via `remember`.
 
 **Note**: Verified against Cognee v1.2.2. The parameter is `dataset` (not `dataset_name`) and `data_id` (not `document_id`).
 
@@ -201,6 +201,6 @@ async def improve() -> None:
 * **Implementation Tasks:** `cognee/tasks/memify/global_context_index/summarize.py`
 * **Tests:** `cognee/tests/unit/api/v1/improve/test_improve_agent_context.py`
 
-### AndesContext Integration
+### RE:Track Integration
 
-This is a computationally expensive background task. AndesContext should schedule `improve()` to run asynchronously during idle time, specifically after a large bulk ingestion of an entire repository.
+This is a computationally expensive background task. RE:Track should schedule `improve()` to run asynchronously during idle time, specifically after a large bulk ingestion of an entire repository.

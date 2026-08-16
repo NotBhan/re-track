@@ -1,8 +1,8 @@
-# AndesContext Success Metrics
+# RE:Track Success Metrics
 
 ## Purpose
 
-This document defines the measurable outcomes that determine whether AndesContext successfully achieves its objectives.
+This document defines the measurable outcomes that determine whether RE:Track (RefinedEngine Track) successfully achieves its objectives.
 
 The project should be evaluated based on developer productivity and Context Package quality rather than the size of the underlying knowledge graph.
 
@@ -12,7 +12,7 @@ The project should be evaluated based on developer productivity and Context Pack
 
 The primary measure of success is:
 
-> Can AndesContext produce Context Packages that allow an AI coding assistant to understand a project with significantly less manual context?
+> Can RE:Track produce Context Packages that allow an AI coding assistant to understand a project with significantly less manual context?
 
 Every feature should ultimately improve this outcome.
 
@@ -54,7 +54,7 @@ The following have been verified through implementation and testing:
 ## Integration Tests Passing
 
 - Settings load correctly from environment
-- Error hierarchy works (AndesContextError base)
+- Error hierarchy works (RETrackError / base error)
 - Response models instantiate correctly
 - IndexingService discovers, filters, and batches files
 - ContextService categorizes, deduplicates, and generates Markdown
@@ -204,7 +204,7 @@ A successful hackathon demo should clearly demonstrate:
 4. Generate a Context Package. ✅ (ContextService.generate_context_package)
 5. Show how the package improves an AI coding assistant's understanding of the project. (planned)
 
-The audience should immediately understand that AndesContext reduces repeated repository exploration and improves AI-assisted software development.
+The audience should immediately understand that RE:Track reduces repeated repository exploration and improves AI-assisted software development.
 
 ---
 
@@ -223,4 +223,4 @@ Beyond the hackathon, success means:
 
 Success is measured by the usefulness of the generated Context Package.
 
-If developers spend less time rebuilding context and AI assistants produce more accurate, consistent results, AndesContext has achieved its purpose.
+If developers spend less time rebuilding context and AI assistants produce more accurate, consistent results, RE:Track has achieved its purpose.

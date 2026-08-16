@@ -1,7 +1,7 @@
 # Milestone 5 — Evidence & Validation Report
 
 **Date**: 2026-06-30
-**Repository**: AndesContext
+**Repository**: RE:Track
 **Status**: Complete
 
 ---
@@ -46,7 +46,7 @@
 
 ## Cognee Comparison (Mock Data)
 
-| Aspect | Raw Cognee | AndesContext Package |
+| Aspect | Raw Cognee | RE:Track Package |
 |--------|-----------|---------------------|
 | Retrieved Files | 1-2 | All relevant |
 | Retrieved Symbols | 0 | All expected |
@@ -93,4 +93,4 @@ Milestone 5 successfully establishes:
 4. **Statistics logging** — Formatted reports for demo and evaluation
 5. **Results documentation** — Structured reports under `backend/tests/RESULTS/`
 
-The pipeline produces measurable, testable evidence that AndesContext improves context generation over raw retrieval. All 236 existing tests pass, and 23 new validation tests pass.
+The pipeline produces measurable, testable evidence that RE:Track improves context generation over raw retrieval. All 236 existing tests pass, and 23 new validation tests pass.

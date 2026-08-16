@@ -9,12 +9,12 @@ PASS: forget
 
 Generated Markdown:
 # Task
-What is AndesContext?
+What is RE:Track?
 
 ---
 
 # Architecture Notes
-- AndesContext is a local-first artificial intelligence memory system.
+- RE:Track is a local-first artificial intelligence memory system.
 ```
 
 ---

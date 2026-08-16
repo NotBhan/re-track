@@ -24,7 +24,7 @@ export function BackendSettings() {
           Backend Configuration
         </h2>
         <p className="text-[14px] leading-[20px] text-on-surface-variant">
-          Manage connection details for the primary AndesContext orchestration
+          Manage connection details for the primary RE:Track (RefinedEngine Track) orchestration
           server.
         </p>
       </div>
@@ -79,7 +79,7 @@ export function BackendSettings() {
             <div className="md:w-2/3 relative">
               <input
                 type={showKey ? "text" : "password"}
-                defaultValue="sk-andes-local-dev-12345"
+                defaultValue="sk-retrack-local-dev-12345"
                 className="w-full bg-surface-container h-10 pl-3 pr-10 rounded-md border border-outline-variant focus:border-primary focus:ring-1 focus:ring-primary text-on-surface font-mono text-[13px] leading-[20px] transition-colors"
               />
               <button

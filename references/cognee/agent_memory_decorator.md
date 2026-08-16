@@ -6,7 +6,7 @@ The Agent Memory Decorator allows Cognee to automatically provide memory to an A
 
 Rather than manually retrieving memory before every request, the decorator intercepts agent execution and injects relevant context automatically.
 
-For AndesContext, this concept can reduce boilerplate and provide seamless memory augmentation for future agent integrations.
+For RE:Track, this concept can reduce boilerplate and provide seamless memory augmentation for future agent integrations.
 
 ---
 
@@ -116,7 +116,7 @@ Memory integration becomes transparent.
 
 ---
 
-# AndesContext Today
+# RE:Track Today
 
 Current architecture:
 
@@ -125,7 +125,7 @@ Developer
 
 ↓
 
-AndesContext Backend
+RE:Track Backend
 
 ↓
 
@@ -152,7 +152,7 @@ Everything is explicitly controlled.
 
 ---
 
-# Future AndesContext
+# Future RE:Track
 
 Potential architecture:
 
@@ -228,11 +228,11 @@ LLM writes code
 
 ---
 
-# AndesContext Integration
+# RE:Track Integration
 
 The MVP should **not** depend on the Agent Memory Decorator.
 
-Instead, AndesContext should continue to:
+Instead, RE:Track should continue to:
 
 - control retrieval explicitly,
 - build Context Packages,
@@ -261,7 +261,7 @@ This provides greater transparency and makes debugging easier during the hackath
 
 ---
 
-# Recommendation for AndesContext
+# Recommendation for RE:Track
 
 ### MVP
 
@@ -321,9 +321,9 @@ https://docs.cognee.ai/core-concepts/further-concepts/agent-memory-decorator
 
 ---
 
-# AndesContext Notes
+# RE:Track Notes
 
-Although Cognee supports automatic memory injection through decorators, AndesContext's primary value lies in generating deterministic, inspectable Context Packages.
+Although Cognee supports automatic memory injection through decorators, RE:Track's primary value lies in generating deterministic, inspectable Context Packages.
 
 Maintaining explicit control over retrieval ensures:
 

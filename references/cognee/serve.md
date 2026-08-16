@@ -6,7 +6,7 @@
 
 Rather than embedding Cognee directly into every application, a single Cognee service can manage memory while multiple clients connect to it.
 
-For AndesContext, this is a future scalability feature rather than an MVP requirement.
+For RE:Track, this is a future scalability feature rather than an MVP requirement.
 
 ---
 
@@ -26,7 +26,7 @@ For AndesContext, this is a future scalability feature rather than an MVP requir
     │             │             │
     ▼             ▼             ▼
 
-AndesContext   Claude Code    Other Agents
+RE:Track   Claude Code    Other Agents
 ```
 
 ---
@@ -79,7 +79,7 @@ through a network interface.
 
 ---
 
-# AndesContext Today
+# RE:Track Today
 
 Current MVP architecture:
 
@@ -110,7 +110,7 @@ Tauri
 
 ↓
 
-AndesContext Backend
+RE:Track Backend
 
 ↓
 
@@ -152,7 +152,7 @@ Developer
 
 ↓
 
-AndesContext
+RE:Track
 
 ↓
 
@@ -169,7 +169,7 @@ Memory
 
 ---
 
-# Potential AndesContext Features
+# Potential RE:Track Features
 
 A future version could support:
 
@@ -253,7 +253,7 @@ Codex
 
 ↓
 
-AndesContext
+RE:Track
 
 ↓
 
@@ -289,13 +289,13 @@ Many clients.
 
 ---
 
-# AndesContext Design Notes
+# RE:Track Design Notes
 
-The initial version of AndesContext should not depend on `serve()`.
+The initial version of RE:Track should not depend on `serve()`.
 
 Instead, embed Cognee directly into the local backend.
 
-If AndesContext later evolves into a platform supporting multiple IDEs, editors, or autonomous coding agents, `serve()` becomes the natural evolution point, allowing one centralized memory layer to support many independent clients.
+If RE:Track later evolves into a platform supporting multiple IDEs, editors, or autonomous coding agents, `serve()` becomes the natural evolution point, allowing one centralized memory layer to support many independent clients.
 
 ---
 

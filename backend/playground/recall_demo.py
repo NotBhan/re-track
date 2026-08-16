@@ -34,7 +34,7 @@ from setup import get_service, DATASET_NAME, run_async
 
 
 QUERIES = [
-    "What is AndesContext?",
+    "What is RE:Track?",
     "How does repository indexing work?",
     "What databases does the system use?",
     "What is a Context Package?",

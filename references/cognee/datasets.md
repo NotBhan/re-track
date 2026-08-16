@@ -6,7 +6,7 @@ Datasets are the primary logical boundary for memory in Cognee.
 
 A dataset groups related information into an isolated namespace so that memory from one project does not interfere with another.
 
-For AndesContext, every imported repository should correspond to its own dataset.
+For RE:Track, every imported repository should correspond to its own dataset.
 
 ---
 
@@ -71,11 +71,11 @@ Memory remains isolated.
 
 ---
 
-# AndesContext Mapping
+# RE:Track Mapping
 
 Recommended mapping:
 
-| AndesContext | Cognee |
+| RE:Track | Cognee |
 |--------------|---------|
 | Workspace | Dataset |
 | Repository | Dataset |
@@ -98,7 +98,7 @@ andes_<repository_name>
 Examples:
 
 ```
-andes_context
+re_track
 
 andes_laios
 
@@ -131,7 +131,7 @@ async def main():
 
     await cognee.remember(
         data="./README.md",
-        dataset_name="andes_context"
+        dataset_name="re_track"
     )
 
 asyncio.run(main())
@@ -144,7 +144,7 @@ asyncio.run(main())
 ```python
 results = await cognee.recall(
     query_text="How does authentication work?",
-    datasets=["andes_context"]
+    datasets=["re_track"]
 )
 ```
 
@@ -154,7 +154,7 @@ results = await cognee.recall(
 
 ```python
 await cognee.improve(
-    dataset_name="andes_context"
+    dataset_name="re_track"
 )
 ```
 
@@ -164,13 +164,13 @@ await cognee.improve(
 
 ```python
 await cognee.forget(
-    dataset_name="andes_context"
+    dataset_name="re_track"
 )
 ```
 
 ---
 
-# Typical AndesContext Workflow
+# Typical RE:Track Workflow
 
 ```
 Open Repository
@@ -265,9 +265,9 @@ Dataset Removed
 
 ---
 
-# AndesContext Design
+# RE:Track Design
 
-Every workspace opened inside AndesContext should automatically map to a dedicated Cognee dataset.
+Every workspace opened inside RE:Track should automatically map to a dedicated Cognee dataset.
 
 Future features may include:
 

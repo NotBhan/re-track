@@ -1,4 +1,4 @@
-# AndesBundle
+# RE:Track Bundle
 
 ## Status
 
@@ -8,7 +8,7 @@ Future Scope
 
 ## Vision
 
-AndesBundle enables repositories, frameworks, and libraries to be converted into portable offline knowledge bundles.
+RE:Track Bundle enables repositories, frameworks, and libraries to be converted into portable offline knowledge bundles.
 
 These bundles can be distributed, indexed, searched, and consumed by AI systems without requiring repeated internet access or repository analysis.
 

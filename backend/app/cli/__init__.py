@@ -1,4 +1,4 @@
-"""AndesContext CLI — command-line interface for the backend API layer."""
+"""RE:Track CLI — command-line interface for the backend API layer."""
 
 from app.cli.main import app
 

@@ -6,7 +6,7 @@
 
 Depending on whether a `session_id` is supplied, `remember()` stores information either in permanent memory or in temporary session memory.
 
-For AndesContext, `remember()` is responsible for indexing repositories, documentation, developer notes, and project knowledge.
+For RE:Track, `remember()` is responsible for indexing repositories, documentation, developer notes, and project knowledge.
 
 ---
 
@@ -140,7 +140,7 @@ data=["./README.md", "./docs/architecture.md"]
 
 Logical memory namespace.
 
-Every AndesContext workspace should use its own dataset.
+Every RE:Track workspace should use its own dataset.
 
 Example:
 
@@ -190,7 +190,7 @@ Advanced usage.
 
 Allows custom extraction instructions.
 
-Example ideas for AndesContext:
+Example ideas for RE:Track:
 
 - Extract architectural decisions
 - Extract coding conventions
@@ -322,7 +322,7 @@ Extract:
 
 ---
 
-# AndesContext Usage
+# RE:Track Usage
 
 `remember()` should be called when:
 
@@ -334,7 +334,7 @@ Extract:
 - A coding session begins.
 - New architectural decisions are recorded.
 
-During active development, AndesContext should prefer using `session_id` to store transient knowledge before allowing Cognee's self-improvement pipeline to synchronize important information into permanent memory.
+During active development, RE:Track should prefer using `session_id` to store transient knowledge before allowing Cognee's self-improvement pipeline to synchronize important information into permanent memory.
 
 ---
 
@@ -378,9 +378,9 @@ cognee/modules/
 
 ---
 
-# AndesContext Notes
+# RE:Track Notes
 
-Within AndesContext, `remember()` is responsible for building the project's long-term memory.
+Within RE:Track, `remember()` is responsible for building the project's long-term memory.
 
 Typical ingestion targets include:
 
@@ -394,5 +394,5 @@ Typical ingestion targets include:
 - Bug reports
 - Design discussions
 
-Rather than storing every file indiscriminately, AndesContext should ingest meaningful project artifacts and maintain a clean dataset for efficient retrieval by `recall()`.
+Rather than storing every file indiscriminately, RE:Track should ingest meaningful project artifacts and maintain a clean dataset for efficient retrieval by `recall()`.
 
