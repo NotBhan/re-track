@@ -190,6 +190,40 @@ class ConventionInfo:
 
 
 @dataclass(frozen=True)
+class CallNode:
+    """A node in the repository call graph — a function, method, or React component.
+
+    Attributes:
+        id: Unique identifier (e.g., 'booking.models.Booking.__init__').
+        label: Short display name (e.g., 'Booking.__init__').
+        file: Relative file path.
+        kind: 'function' | 'method' | 'class' | 'component' | 'module'.
+        line: Line number where defined.
+    """
+
+    id: str
+    label: str
+    file: str
+    kind: str
+    line: int = 0
+
+
+@dataclass(frozen=True)
+class CallEdge:
+    """A directed edge in the repository call graph.
+
+    Attributes:
+        source: Caller node id.
+        target: Callee node id.
+        kind: 'calls' | 'imports' | 'inherits' | 'renders'.
+    """
+
+    source: str
+    target: str
+    kind: str
+
+
+@dataclass(frozen=True)
 class RepositorySummary:
     """Structured knowledge model of global repository facts.
 
@@ -210,6 +244,8 @@ class RepositorySummary:
         public_apis: Public interfaces, endpoints, contracts.
         coding_conventions: Naming, formatting, patterns.
         domain_vocabulary: Repository-specific terminology.
+        call_graph_nodes: Nodes in the function/component call graph.
+        call_graph_edges: Directed edges in the call graph.
     """
 
     version: str
@@ -225,6 +261,8 @@ class RepositorySummary:
     public_apis: list[APIInfo]
     coding_conventions: ConventionInfo
     domain_vocabulary: dict[str, str]
+    call_graph_nodes: list[CallNode] = field(default_factory=list)
+    call_graph_edges: list[CallEdge] = field(default_factory=list)
 
 
 # =============================================================================

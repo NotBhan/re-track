@@ -11,9 +11,9 @@ export function AppShell({ children, onNewIndex }: AppShellProps) {
   useHealthPoll(10000);
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
+    <div className="flex h-screen w-screen overflow-hidden bg-black text-foreground">
       <Sidebar onNewIndex={onNewIndex} />
-      <div className="ml-[240px] flex-1 flex flex-col h-full overflow-hidden">
+      <div className="ml-[260px] flex-1 flex flex-col h-screen overflow-hidden">
         {children}
       </div>
     </div>

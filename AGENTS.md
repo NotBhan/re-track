@@ -65,10 +65,12 @@ After meaningful changes:
 2. docs/problem_statement.md
 3. docs/scope.md
 4. docs/architecture.md
-5. docs/memory_model.md
-6. docs/cognee_integration.md
-7. docs/development_plan.md
-8. docs/demo_plan.md
+5. docs/implementation_plan.md
+6. docs/repository_knowledge_model.md
+7. docs/memory_model.md
+8. docs/cognee_integration.md
+9. docs/development_plan.md
+10. docs/demo_plan.md
 
 ---
 
@@ -95,19 +97,22 @@ Before completing work:
 # Child DOX Index
 
 docs/
-Project documentation and design.
+  Project documentation and design. Authoritative source for vision, architecture,
+  implementation plan, repository knowledge model, and project contracts.
 
 backend/
-Python backend, Cognee integration and context engine.
+  Python backend: Cognee integration, call graph extraction, context engine,
+  repository summary generation, API layer.
 
 src/
-React frontend.
+  React frontend: Dashboard (Prompt Workbench + Repository AST Map),
+  CallGraphView interactive SVG, Memory, Benchmarks, Settings.
 
 src-tauri/
-Desktop runtime and native integration.
+  Desktop runtime and native Tauri integration.
 
 scripts/
-Development and automation scripts.
+  Development and automation scripts.
 
 examples/
-Example projects and demo datasets.
+  Example projects and demo datasets.

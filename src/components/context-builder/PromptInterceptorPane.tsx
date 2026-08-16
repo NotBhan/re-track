@@ -113,17 +113,17 @@ export function PromptInterceptorPane({
         </div>
 
         {/* Developer Prompt Textarea */}
-        <div className="flex-1 flex flex-col gap-2 min-h-[160px]">
+        <div className="flex-1 flex flex-col gap-2.5 min-h-[180px]">
           <div className="flex items-center justify-between text-xs font-mono text-muted-foreground">
-            <span className="font-semibold text-foreground uppercase tracking-wider">Intercepted Agent Request</span>
-            <span>Natural language task</span>
+            <span className="font-semibold text-foreground uppercase tracking-wider text-xs">Intercepted Agent Request</span>
+            <span className="text-xs font-mono">Natural language task</span>
           </div>
 
           <textarea
             value={taskPrompt}
             onChange={(e) => onPromptChange(e.target.value)}
             placeholder="Type developer instruction or task prompt to synthesize context..."
-            className="w-full flex-1 min-h-[140px] p-3.5 rounded-md bg-black border border-border text-foreground text-sm font-sans resize-none focus:outline-none focus:ring-1 focus:ring-white leading-relaxed placeholder:text-muted-foreground/60"
+            className="w-full flex-1 min-h-[160px] p-4 rounded-md bg-black border border-border text-foreground text-sm font-sans resize-none focus:outline-none focus:ring-1 focus:ring-white leading-relaxed placeholder:text-muted-foreground/60"
           />
         </div>
 
@@ -132,12 +132,12 @@ export function PromptInterceptorPane({
           <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">
             Quick Scenarios:
           </span>
-          <div className="flex flex-col gap-1.5">
+          <div className="flex flex-col gap-2">
             {samplePrompts.map((p, idx) => (
               <button
                 key={idx}
                 onClick={() => onPromptChange(p)}
-                className="text-left text-xs p-2.5 rounded bg-black/60 border border-border text-muted-foreground hover:text-foreground hover:bg-secondary hover:border-border/90 transition-colors line-clamp-1 font-sans"
+                className="text-left text-sm p-3 rounded-md bg-black/80 border border-border text-muted-foreground hover:text-foreground hover:bg-secondary hover:border-border/90 transition-colors line-clamp-1 font-sans"
               >
                 "{p}"
               </button>
@@ -158,17 +158,17 @@ export function PromptInterceptorPane({
           onClick={onExecuteContextPull}
           disabled={loading || !taskPrompt.trim()}
           size="lg"
-          className="w-full font-semibold text-xs h-10 gap-2 shadow-sm"
+          className="w-full h-12 text-sm font-semibold uppercase tracking-wider font-mono gap-2.5 bg-white text-black hover:bg-neutral-200 transition-colors shadow-sm rounded-md"
         >
           {loading ? (
             <>
-              <div className="w-4 h-4 border-2 border-primary-foreground border-t-transparent rounded-full animate-spin" />
+              <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin" />
               <span>Synthesizing Context Package...</span>
             </>
           ) : (
             <>
-              <Play className="w-4 h-4 fill-current" />
-              <span>Synthesize & Deliver Context Package</span>
+              <Play className="w-4 h-4 fill-black" />
+              <span>Synthesize Context Package</span>
             </>
           )}
         </Button>

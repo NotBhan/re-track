@@ -6,6 +6,8 @@ import {
   CheckCircle2,
   Clock,
   FileCode,
+  FolderSearch,
+  Sparkles,
 } from "lucide-react";
 import { IndexProgress } from "./IndexProgress";
 import {
@@ -34,7 +36,7 @@ export function CreateRepositoryIndexModal({
   const { createAndScan, indexRepo, scanning, indexing, lastScan, clearScan } =
     useRepositoryStore();
 
-  const [sourceType, setSourceType] = useState<"github" | "local">("github");
+  const [sourceType, setSourceType] = useState<"github" | "local">("local");
   const [githubUrl, setGithubUrl] = useState("");
   const [localPath, setLocalPath] = useState("");
   const [repoName, setRepoName] = useState("");
@@ -53,7 +55,7 @@ export function CreateRepositoryIndexModal({
   useEffect(() => {
     if (!open) {
       setIndexingStarted(false);
-      setSourceType("github");
+      setSourceType("local");
       setGithubUrl("");
       setLocalPath("");
       setRepoName("");
@@ -77,7 +79,7 @@ export function CreateRepositoryIndexModal({
         setRepoName(lastSegment);
       }
     }
-  }, [githubUrl, sourceType]);
+  }, [githubUrl, sourceType, repoName]);
 
   const handleBrowseFolder = async () => {
     try {
@@ -97,7 +99,7 @@ export function CreateRepositoryIndexModal({
     } catch {
       setValidationErrors((prev) => ({
         ...prev,
-        localPath: "Folder picker not available",
+        localPath: "Folder picker not available in browser mode",
       }));
     }
   };
@@ -114,7 +116,7 @@ export function CreateRepositoryIndexModal({
       }
     } else {
       if (!localPath.trim()) {
-        errors.localPath = "Local path is required";
+        errors.localPath = "Local path is required. Click Browse to select a folder.";
       }
     }
     if (!repoName.trim()) {
@@ -171,208 +173,186 @@ export function CreateRepositoryIndexModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[780px] bg-surface-container text-on-surface border-outline-variant">
-        <DialogHeader>
-          <DialogTitle className="text-on-surface text-xl font-semibold">
-            Create Repository Index
-          </DialogTitle>
-          <DialogDescription className="text-on-surface-variant text-sm">
-            Add a repository to RE:Track (RefinedEngine Track) and build its knowledge index
-          </DialogDescription>
+      <DialogContent className="sm:max-w-[620px] bg-[#0a0a0a] text-white border border-[#262626] p-7 shadow-2xl rounded-2xl">
+        <DialogHeader className="pb-4 border-b border-[#222222]">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-black border border-[#2a2a2a] flex items-center justify-center text-white">
+              <FolderSearch className="w-5 h-5" />
+            </div>
+            <div>
+              <DialogTitle className="text-lg font-bold text-white tracking-tight">
+                Index Repository
+              </DialogTitle>
+              <DialogDescription className="text-xs font-mono text-neutral-400 mt-0.5">
+                Parse AST trees, chunk definitions, and build semantic graph
+              </DialogDescription>
+            </div>
+          </div>
         </DialogHeader>
 
         {error && (
-          <div className="rounded-md bg-error/10 border border-error/30 px-4 py-3 text-sm text-error">
+          <div className="rounded-lg bg-red-950/40 border border-red-500/30 px-4 py-3 text-xs font-mono text-red-300">
             {error}
           </div>
         )}
 
         {!showScanResults ? (
-          <div className="space-y-5">
-            {/* Source Type Selection */}
+          <div className="space-y-5 py-2">
+            {/* High-Contrast Segmented Source Selector */}
             <div className="grid grid-cols-2 gap-3">
               <button
                 type="button"
-                onClick={() => setSourceType("github")}
-                className={`flex items-center gap-3 p-4 rounded-lg border-2 transition-all text-left ${
-                  sourceType === "github"
-                    ? "border-primary bg-primary/5"
-                    : "border-outline-variant bg-surface-container-lowest hover:border-outline"
+                onClick={() => setSourceType("local")}
+                className={`flex items-center gap-3.5 p-3.5 rounded-xl border text-left transition-all ${
+                  sourceType === "local"
+                    ? "border-white bg-[#141414] text-white shadow-sm"
+                    : "border-[#222222] bg-black text-neutral-400 hover:border-[#383838] hover:text-white"
                 }`}
               >
                 <div
-                  className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                    sourceType === "github"
-                      ? "bg-primary/10"
-                      : "bg-surface-container-high"
+                  className={`w-9 h-9 rounded-lg flex items-center justify-center ${
+                    sourceType === "local"
+                      ? "bg-white text-black font-bold"
+                      : "bg-[#141414] text-neutral-400"
                   }`}
                 >
-                  <GitBranch
-                    className={`w-5 h-5 ${
-                      sourceType === "github"
-                        ? "text-primary"
-                        : "text-on-surface-variant"
-                    }`}
-                  />
+                  <FolderOpen className="w-4 h-4" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-on-surface">
-                    GitHub Repository
-                  </p>
-                  <p className="text-xs text-on-surface-variant">
-                    Clone from URL
-                  </p>
+                  <p className="text-xs font-bold text-white">Local Directory</p>
+                  <p className="text-[11px] text-neutral-400 font-mono">Browse disk</p>
                 </div>
               </button>
 
               <button
                 type="button"
-                onClick={() => setSourceType("local")}
-                className={`flex items-center gap-3 p-4 rounded-lg border-2 transition-all text-left ${
-                  sourceType === "local"
-                    ? "border-primary bg-primary/5"
-                    : "border-outline-variant bg-surface-container-lowest hover:border-outline"
+                onClick={() => setSourceType("github")}
+                className={`flex items-center gap-3.5 p-3.5 rounded-xl border text-left transition-all ${
+                  sourceType === "github"
+                    ? "border-white bg-[#141414] text-white shadow-sm"
+                    : "border-[#222222] bg-black text-neutral-400 hover:border-[#383838] hover:text-white"
                 }`}
               >
                 <div
-                  className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                    sourceType === "local"
-                      ? "bg-primary/10"
-                      : "bg-surface-container-high"
+                  className={`w-9 h-9 rounded-lg flex items-center justify-center ${
+                    sourceType === "github"
+                      ? "bg-white text-black font-bold"
+                      : "bg-[#141414] text-neutral-400"
                   }`}
                 >
-                  <FolderOpen
-                    className={`w-5 h-5 ${
-                      sourceType === "local"
-                        ? "text-primary"
-                        : "text-on-surface-variant"
-                    }`}
-                  />
+                  <GitBranch className="w-4 h-4" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-on-surface">
-                    Local Repository
-                  </p>
-                  <p className="text-xs text-on-surface-variant">
-                    Browse local folder
-                  </p>
+                  <p className="text-xs font-bold text-white">Git Remote</p>
+                  <p className="text-[11px] text-neutral-400 font-mono">Clone via URL</p>
                 </div>
               </button>
             </div>
 
-            {/* GitHub URL */}
-            {sourceType === "github" && (
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium text-on-surface">
-                  Repository URL
-                </label>
-                <Input
-                  placeholder="https://github.com/user/repo"
-                  value={githubUrl}
-                  onChange={(e) => setGithubUrl(e.target.value)}
-                  className={`bg-surface-container-lowest border-outline-variant text-on-surface placeholder:text-on-surface-variant/50 ${
-                    validationErrors.githubUrl
-                      ? "border-error focus-visible:ring-error/50"
-                      : ""
-                  }`}
-                />
-                {validationErrors.githubUrl && (
-                  <p className="text-xs text-error">{validationErrors.githubUrl}</p>
-                )}
-              </div>
-            )}
-
-            {/* Local Path */}
+            {/* Local Path Picker */}
             {sourceType === "local" && (
               <div className="space-y-1.5">
-                <label className="text-sm font-medium text-on-surface">
+                <label className="text-xs font-mono font-semibold text-neutral-300 uppercase tracking-wider">
                   Folder Path
                 </label>
                 <div className="flex gap-2">
                   <Input
-                    placeholder="/path/to/repository"
+                    placeholder="/home/user/my-project"
                     value={localPath}
-                    readOnly
-                    className={`bg-surface-container-lowest border-outline-variant text-on-surface placeholder:text-on-surface-variant/50 ${
-                      validationErrors.localPath
-                        ? "border-error focus-visible:ring-error/50"
-                        : ""
+                    onChange={(e) => setLocalPath(e.target.value)}
+                    className={`h-10 text-xs font-mono bg-black border-[#262626] text-white placeholder:text-neutral-600 rounded-lg focus-visible:ring-1 focus-visible:ring-white ${
+                      validationErrors.localPath ? "border-red-500/80" : ""
                     }`}
                   />
                   <Button
                     type="button"
-                    variant="outline"
                     onClick={handleBrowseFolder}
-                    className="shrink-0 border-outline-variant text-on-surface hover:bg-surface-container-high"
+                    className="shrink-0 h-10 px-4 text-xs font-mono font-bold bg-white text-black hover:bg-neutral-200 rounded-lg shadow-sm"
                   >
-                    Browse
+                    Browse...
                   </Button>
                 </div>
                 {validationErrors.localPath && (
-                  <p className="text-xs text-error">{validationErrors.localPath}</p>
+                  <p className="text-xs text-red-400 font-mono mt-1">{validationErrors.localPath}</p>
                 )}
               </div>
             )}
 
-            {/* Repository Name */}
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium text-on-surface">
-                Repository Name
-              </label>
-              <Input
-                placeholder="my-repository"
-                value={repoName}
-                onChange={(e) => setRepoName(e.target.value)}
-                className={`bg-surface-container-lowest border-outline-variant text-on-surface placeholder:text-on-surface-variant/50 ${
-                  validationErrors.repoName
-                    ? "border-error focus-visible:ring-error/50"
-                    : ""
-                }`}
-              />
-              {validationErrors.repoName && (
-                <p className="text-xs text-error">{validationErrors.repoName}</p>
-              )}
+            {/* GitHub URL */}
+            {sourceType === "github" && (
+              <div className="space-y-1.5">
+                <label className="text-xs font-mono font-semibold text-neutral-300 uppercase tracking-wider">
+                  Repository URL
+                </label>
+                <Input
+                  placeholder="https://github.com/organization/repository"
+                  value={githubUrl}
+                  onChange={(e) => setGithubUrl(e.target.value)}
+                  className={`h-10 text-xs font-mono bg-black border-[#262626] text-white placeholder:text-neutral-600 rounded-lg focus-visible:ring-1 focus-visible:ring-white ${
+                    validationErrors.githubUrl ? "border-red-500/80" : ""
+                  }`}
+                />
+                {validationErrors.githubUrl && (
+                  <p className="text-xs text-red-400 font-mono mt-1">{validationErrors.githubUrl}</p>
+                )}
+              </div>
+            )}
+
+            {/* Repository Name & Dataset Name Grid */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <label className="text-xs font-mono font-semibold text-neutral-300 uppercase tracking-wider">
+                  Repository Name
+                </label>
+                <Input
+                  placeholder="re-track"
+                  value={repoName}
+                  onChange={(e) => setRepoName(e.target.value)}
+                  className={`h-10 text-xs font-mono bg-black border-[#262626] text-white placeholder:text-neutral-600 rounded-lg focus-visible:ring-1 focus-visible:ring-white ${
+                    validationErrors.repoName ? "border-red-500/80" : ""
+                  }`}
+                />
+                {validationErrors.repoName && (
+                  <p className="text-xs text-red-400 font-mono mt-1">{validationErrors.repoName}</p>
+                )}
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-mono font-semibold text-neutral-400 uppercase tracking-wider">
+                  Dataset Tag <span className="text-neutral-500 font-normal">(optional)</span>
+                </label>
+                <Input
+                  placeholder="defaults to repo name"
+                  value={datasetName}
+                  onChange={(e) => setDatasetName(e.target.value)}
+                  className="h-10 text-xs font-mono bg-black border-[#262626] text-white placeholder:text-neutral-600 rounded-lg focus-visible:ring-1 focus-visible:ring-white"
+                />
+              </div>
             </div>
 
-            {/* Dataset Name */}
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium text-on-surface">
-                Dataset Name{" "}
-                <span className="text-on-surface-variant font-normal">
-                  (optional)
-                </span>
-              </label>
-              <Input
-                placeholder="defaults to repository name"
-                value={datasetName}
-                onChange={(e) => setDatasetName(e.target.value)}
-                className="bg-surface-container-lowest border-outline-variant text-on-surface placeholder:text-on-surface-variant/50"
-              />
-            </div>
-
-            {/* Checkboxes */}
-            <div className="flex gap-6">
-              <label className="flex items-center gap-2 cursor-pointer">
+            {/* Checkboxes in clean dark card */}
+            <div className="p-3.5 rounded-lg bg-black border border-[#222222] flex gap-6">
+              <label className="flex items-center gap-2.5 cursor-pointer text-xs font-mono text-neutral-300">
                 <Checkbox
                   checked={cloneIfMissing}
-                  onCheckedChange={(checked) =>
-                    setCloneIfMissing(checked === true)
-                  }
+                  onCheckedChange={(checked) => setCloneIfMissing(checked === true)}
+                  className="border-[#444444] data-[state=checked]:bg-white data-[state=checked]:text-black"
                 />
-                <span className="text-sm text-on-surface">Clone if not local</span>
+                <span>Clone if not local</span>
               </label>
-              <label className="flex items-center gap-2 cursor-pointer">
+              <label className="flex items-center gap-2.5 cursor-pointer text-xs font-mono text-neutral-300">
                 <Checkbox
                   checked={keepSynced}
                   onCheckedChange={(checked) => setKeepSynced(checked === true)}
+                  className="border-[#444444] data-[state=checked]:bg-white data-[state=checked]:text-black"
                 />
-                <span className="text-sm text-on-surface">Keep synchronized</span>
+                <span>Auto-sync file changes</span>
               </label>
             </div>
           </div>
         ) : (
           /* Scan Results */
-          <div className="space-y-5">
+          <div className="space-y-5 py-2">
             {isIndexing && createdRepoId && (
               <IndexProgress
                 repositoryName={repoName}
@@ -381,13 +361,12 @@ export function CreateRepositoryIndexModal({
             )}
             {!isIndexing && (
               <>
-                {/* Languages and Frameworks cards */}
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="rounded-lg bg-surface-container-lowest border border-outline-variant p-4">
-                    <div className="flex items-center gap-2 mb-3">
-                      <FileCode className="w-4 h-4 text-primary" />
-                      <span className="text-sm font-medium text-on-surface">
-                        Languages
+                  <div className="rounded-xl bg-black border border-[#262626] p-4 space-y-2">
+                    <div className="flex items-center gap-2 mb-2">
+                      <FileCode className="w-4 h-4 text-white" />
+                      <span className="text-xs font-mono font-semibold text-neutral-300 uppercase tracking-wider">
+                        Detected Languages
                       </span>
                     </div>
                     <div className="flex flex-wrap gap-1.5">
@@ -396,23 +375,23 @@ export function CreateRepositoryIndexModal({
                           <Badge
                             key={lang}
                             variant="secondary"
-                            className="bg-primary/10 text-primary border-primary/20"
+                            className="bg-[#141414] text-white border border-[#2a2a2a] text-xs font-mono"
                           >
                             {lang}
                           </Badge>
                         ))
                       ) : (
-                        <span className="text-xs text-on-surface-variant">
-                          No languages detected
+                        <span className="text-xs font-mono text-neutral-500">
+                          None detected
                         </span>
                       )}
                     </div>
                   </div>
 
-                  <div className="rounded-lg bg-surface-container-lowest border border-outline-variant p-4">
-                    <div className="flex items-center gap-2 mb-3">
-                      <CheckCircle2 className="w-4 h-4 text-primary" />
-                      <span className="text-sm font-medium text-on-surface">
+                  <div className="rounded-xl bg-black border border-[#262626] p-4 space-y-2">
+                    <div className="flex items-center gap-2 mb-2">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                      <span className="text-xs font-mono font-semibold text-neutral-300 uppercase tracking-wider">
                         Frameworks
                       </span>
                     </div>
@@ -422,32 +401,33 @@ export function CreateRepositoryIndexModal({
                           <Badge
                             key={fw}
                             variant="secondary"
-                            className="bg-secondary/10 text-secondary border-secondary/20"
+                            className="bg-[#141414] text-neutral-200 border border-[#2a2a2a] text-xs font-mono"
                           >
                             {fw}
                           </Badge>
                         ))
                       ) : (
-                        <span className="text-xs text-on-surface-variant">
-                          No frameworks detected
+                        <span className="text-xs font-mono text-neutral-500">
+                          None detected
                         </span>
                       )}
                     </div>
                   </div>
                 </div>
 
-                <div className="flex gap-6 text-sm text-on-surface-variant">
-                  <div className="flex items-center gap-1.5">
-                    <FileCode className="w-4 h-4" />
-                    <span>
-                      {lastScan!.file_count.toLocaleString()} files
+                <div className="p-3.5 rounded-lg bg-black border border-[#222222] flex justify-between text-xs font-mono text-neutral-400">
+                  <div className="flex items-center gap-2">
+                    <FileCode className="w-4 h-4 text-white" />
+                    <span className="text-white font-bold">
+                      {lastScan!.file_count.toLocaleString()}
                     </span>
+                    <span>files scanned</span>
                   </div>
-                  <div className="flex items-center gap-1.5">
-                    <Clock className="w-4 h-4" />
-                    <span>
-                      ~{Math.ceil(lastScan!.estimated_index_time_ms / 1000)}s estimated
-                      indexing time
+                  <div className="flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-white" />
+                    <span>Est. index time:</span>
+                    <span className="text-white font-bold">
+                      ~{Math.ceil(lastScan!.estimated_index_time_ms / 1000)}s
                     </span>
                   </div>
                 </div>
@@ -456,12 +436,12 @@ export function CreateRepositoryIndexModal({
           </div>
         )}
 
-        <DialogFooter>
+        <DialogFooter className="pt-4 border-t border-[#222222] flex items-center justify-between">
           <Button
             type="button"
             variant="ghost"
             onClick={() => onOpenChange(false)}
-            className="text-on-surface-variant hover:text-on-surface"
+            className="text-xs font-mono text-neutral-400 hover:text-white hover:bg-[#141414]"
           >
             Cancel
           </Button>
@@ -470,15 +450,18 @@ export function CreateRepositoryIndexModal({
               type="button"
               onClick={handleIndexNow}
               disabled={submitting || isIndexing}
-              className="bg-primary text-on-primary hover:bg-primary/90"
+              className="h-10 px-5 text-xs font-mono font-bold uppercase tracking-wider bg-white text-black hover:bg-neutral-200 rounded-lg shadow-sm"
             >
               {isIndexing ? (
                 <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Indexing...
+                  <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                  Indexing AST...
                 </>
               ) : (
-                "Index Now"
+                <>
+                  <Sparkles className="w-4 h-4 mr-2" />
+                  Index Now
+                </>
               )}
             </Button>
           ) : (
@@ -486,20 +469,20 @@ export function CreateRepositoryIndexModal({
               type="button"
               onClick={handleSubmit}
               disabled={submitting || isScanning}
-              className="bg-primary text-on-primary hover:bg-primary/90"
+              className="h-10 px-5 text-xs font-mono font-bold uppercase tracking-wider bg-white text-black hover:bg-neutral-200 rounded-lg shadow-sm"
             >
               {isScanning ? (
                 <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Scanning...
+                  <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                  Scanning Files...
                 </>
               ) : submitting ? (
                 <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <Loader2 className="w-4 h-4 animate-spin mr-2" />
                   Creating...
                 </>
               ) : (
-                "Create Index"
+                "Scan & Index"
               )}
             </Button>
           )}

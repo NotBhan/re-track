@@ -2,7 +2,7 @@
 
 Owns the backend services for RE:Track (RefinedEngine Track).
 
-Responsibilities include project indexing, Cognee integration, context retrieval, memory management, and Context Package generation.
+Responsibilities include repository indexing, Cognee integration, call graph extraction, context retrieval, memory management, and Context Package generation.
 
 ---
 
@@ -11,16 +11,19 @@ Responsibilities include project indexing, Cognee integration, context retrieval
 Owns:
 
 - CogneeService
-- IndexingService
+- IndexingService (delta + .gitignore-aware filtering)
 - ContextService
 - PackageBuilder
 - BudgetManager
 - MarkdownRenderer
 - RepositorySummaryGenerator
+  - `_build_repo_map` — directory structure grouping
+  - `_extract_components` — Python AST + React/TS regex
+  - `_build_call_graph` — `ast.Call` traversal + TS import chain
 - Pipeline stages (Deduplicator, Ranker, Compressor, Categorizer, ReferenceResolver)
 - StatsLogger
 - Configuration
-- Data Models
+- Data Models (`CallNode`, `CallEdge`, `RepositorySummary`, `ComponentInfo`, etc.)
 - Error Handling
 - Logging
 
@@ -30,14 +33,15 @@ Owns:
 
 Milestone 1 — Backend Foundation: **Completed**
 Milestone 2 — API Layer: **Completed**
-Milestone 3 — Package Generation: **Completed**
-Milestone 4 — Integration: **Completed**
-Milestone 5 — Evidence & Validation: **Completed**
+Milestone 3 — Frontend Foundation: **Completed**
+Milestone 4 — Repository Knowledge Layer: **Completed**
+Milestone 5 — Call Graph: **Completed**
+Milestone 6 — Polish: **In Progress**
 
 Production services implemented and verified:
 
 - CogneeService ✅
-- IndexingService (incremental delta indexing) ✅
+- IndexingService (incremental delta indexing + .gitignore filtering) ✅
 - ManifestService (SHA256 file fingerprinting) ✅
 - LLMProviderService (OpenAI-compatible multi-provider & model health) ✅
 - CGCService (CodeGraphContext structural graph queries) ✅
@@ -46,41 +50,35 @@ Production services implemented and verified:
 - PackageBuilder ✅
 - BudgetManager ✅
 - MarkdownRenderer ✅
-- RepositorySummaryGenerator ✅
+- RepositorySummaryGenerator (Depth-2.5 + call graph) ✅
+- CallGraphExtractor (embedded in RepositorySummaryGenerator) ✅
 - Pipeline stages (dedup, rank, compress, categorize, references) ✅
 - StatsLogger ✅
 
 API layer implemented and verified:
 
-- Commands (health, get_backend_status, index_repository, generate_context, get_agent_context, forget_dataset) ✅
+- Commands: health, get_backend_status, index_repository, generate_context, get_agent_context, forget_dataset, get_repository_summaries, _persist_repo_metadata ✅
 - Schemas (Pydantic request/response models with full metadata) ✅
 - REST Endpoints (/health, /status, /index, /context, /api/v1/context, /packages) ✅
 
-CLI implemented and verified:
+Call graph persistence:
+- `call_graph_nodes` and `call_graph_edges` serialized to repo metadata store in `_persist_repo_metadata` ✅
 
-- CLI commands (health, status, index, context, forget) ✅
-- Rich terminal formatting (tables, panels, spinners, markdown) ✅
-
-Evaluation implemented and verified:
-
-- Benchmark framework (15 questions) ✅
-- Quality metrics ✅
-- Stats logging ✅
-- Unit tests suite (11/11 passing) ✅
-
-Next: Frontend Foundation & Native IPC verification
+Tests: 284+ tests passing ✅
 
 ---
 
 # Local Contracts
 
-Backend should remain independent from frontend implementation.
+Backend must remain independent from frontend implementation.
 
 Business logic belongs here.
 
 All Cognee interactions must go through CogneeService.
 
 Never call `cognee.*` directly outside CogneeService.
+
+Call graph extraction must stay inside `RepositorySummaryGenerator._build_call_graph`. Do not scatter AST parsing elsewhere.
 
 ---
 
@@ -96,30 +94,22 @@ Use structured logging (no print statements).
 
 Use complete Python type hints.
 
+When adding new node/edge kinds to the call graph, update both `responses.py` (the dataclass) and `CallGraphView.tsx` (legend + render logic).
+
 ---
 
 # Verification
 
-Verify backend behavior matches project documentation.
-
-Set up the virtualenv first:
-
 ```bash
 cd backend/
-.venv/bin/python -m uvicorn app.server:app --host 127.0.0.1 --port 8765
-# or to create it fresh:
-# uv venv .venv --python 3.12 && .venv/bin/pip install -r requirements.txt
+source .venv/bin/activate
+pytest tests/ -q                    # Must pass all 284+ tests
 ```
 
-Run playground scripts to validate Cognee integration:
+Run backend server:
 
 ```bash
-cd backend/playground
-.venv/bin/python setup.py
-.venv/bin/python remember_demo.py
-.venv/bin/python recall_demo.py
-.venv/bin/python improve_demo.py
-.venv/bin/python forget_demo.py
+.venv/bin/python -m uvicorn app.server:app --host 127.0.0.1 --port 8765
 ```
 
 ---
@@ -127,28 +117,33 @@ cd backend/playground
 # Child DOX Index
 
 app/
-Production backend: config, core, models, services, utils, api.
+  Production backend: config, core, models, services, utils, api.
 
 app/config/
-Environment loading, provider configuration, Cognee config setup.
+  Environment loading, provider configuration, Cognee config setup.
 
 app/core/
-Structured logging.
+  Structured logging.
 
 app/models/
-Data models (RememberResult, RecallResult, ContextPackage, RepositorySummary, PackageMetadata, IndexingProgress) and error hierarchy.
+  Data models: RememberResult, RecallResult, ContextPackage, RepositorySummary,
+  PackageMetadata, IndexingProgress, CallNode, CallEdge, DirectoryEntry,
+  ComponentInfo, and error hierarchy.
 
 app/services/
-CogneeService, IndexingService, ContextService, PackageBuilder, BudgetManager, MarkdownRenderer, RepositorySummaryGenerator, StatsLogger.
+  CogneeService, IndexingService, ContextService, PackageBuilder, BudgetManager,
+  MarkdownRenderer, RepositorySummaryGenerator (includes call graph extractor),
+  StatsLogger.
 
 app/services/pipeline/
-Pipeline stages: Deduplicator, Ranker, Compressor, Categorizer, ReferenceResolver.
+  Pipeline stages: Deduplicator, Ranker, Compressor, Categorizer, ReferenceResolver.
 
 app/api/
-API layer: async commands exposing services, Pydantic request/response schemas with full metadata.
+  API layer: async commands exposing services, Pydantic request/response schemas,
+  repo metadata persistence with call graph data.
 
 app/cli/
-CLI layer: Typer application exposing API commands to developers. Rich terminal formatting.
+  CLI layer: Typer application exposing API commands to developers. Rich formatting.
 
 playground/
-Validation scripts for Cognee integration.
+  Validation scripts for Cognee integration.

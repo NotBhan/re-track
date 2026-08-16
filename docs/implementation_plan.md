@@ -73,113 +73,130 @@ Expose backend services through a command API for Tauri IPC.
 ### Deliverables
 
 - Command API layer (`backend/app/api/`)
-- 5 async commands: health, get_backend_status, index_repository, generate_context, forget_dataset
-- Pydantic request/response schemas (8 models)
-- Structured error responses (ErrorResponse)
-- Request validation (path existence, empty inputs)
+- Async commands: health, get_backend_status, index_repository, generate_context, forget_dataset, get_repository_summaries
+- Pydantic request/response schemas
+- Structured error responses
+- Request validation
 - Execution time logging
-- Comprehensive test suite
+- Comprehensive test suite (284+ tests passing)
 
 Status: **Completed**
 
 ---
 
-# Milestone 3 — Frontend Foundation
+# Milestone 3 — Frontend Foundation ✅
 
 ## Goal
 
 Expose the backend through a desktop interface.
 
-### Pages
+### Pages Delivered
 
-- Projects
-- Context Builder
-- Memory Viewer
-- Sessions
+- Dashboard (Prompt Workbench + Repository AST Map)
+- Memory viewer
+- Benchmarks
 - Settings
 
 ### Deliverables
 
-- Functional UI
+- Functional Tauri + React + Vite application
+- Vercel Geist monochrome aesthetic
 - Backend integration via Tauri IPC
+- Repository store with indexed repo list
+- Health/status telemetry in Settings
+- Live hardware monitoring (RAM, CPU, GPU VRAM)
 
-Status:
-
-- [ ] Not Started
-
----
-
-# Milestone 4 — Session Memory
-
-## Goal
-
-Support active coding sessions.
-
-### Tasks
-
-- Session creation
-- Session lifecycle
-- Working memory
-- Session cleanup
-
-### Deliverables
-
-- SessionService
-
-Status:
-
-- [ ] Not Started
+Status: **Completed**
 
 ---
 
-# Milestone 5 — Polish
+# Milestone 4 — Repository Knowledge Layer ✅
 
 ## Goal
 
-Prepare for demonstration.
+Build the Depth-2.5 structural map and call graph extraction.
 
 ### Tasks
 
-- Performance improvements
-- Error handling refinements
-- Documentation updates
-- Bug fixes
-- Demo preparation
+- `.gitignore`-aware dynamic file filtering
+- Depth-2.5 directory map (root → subfolders → AST symbols)
+- Python AST class/function extraction
+- React/Vite/Next/Vue component detection
+- Repository name dropdown for fast switching
+- Fixed card layout stability on selection change
 
 ### Deliverables
 
-- Stable application
-- Demo-ready build
+- `RepositorySummaryGenerator._build_repo_map` — framework-aware grouping
+- `RepositorySummaryGenerator._extract_components` — Python AST + React regex
+- Gitignore integration in `IndexingService.scan_repository`
+- Repository AST Map tab in Dashboard
+- Dynamic "N AST & Directory Entries" count badge
 
-Status:
+Status: **Completed**
 
-- [ ] Not Started
+---
+
+# Milestone 5 — Call Graph ✅
+
+## Goal
+
+Extract real function/class/component dependency graphs and render them interactively.
+
+### Tasks
+
+- Add `CallNode`, `CallEdge` dataclasses to `responses.py`
+- Implement `_build_call_graph` in `RepositorySummaryGenerator`
+  - Python: `ast.ClassDef`, `ast.FunctionDef`, `ast.AsyncFunctionDef`, `ast.Call` visitor
+  - React/TS: export component regex, relative import edges, JSX renders edges
+- Persist `call_graph_nodes` + `call_graph_edges` in repo metadata store
+- Add `CallGraphNode`, `CallGraphEdge` types to `src/types/repository.ts`
+- Build `CallGraphView.tsx` — pure React + SVG force-directed graph
+  - Spring simulation (repulsion + link springs + centering + damping at 60 fps)
+  - Node shapes: square=class, diamond=component, circle=function/method
+  - Edge styles: solid=calls, dashed=imports, thick=inherits, dotted=renders
+  - Drag nodes, scroll-to-zoom, pan, tooltip, legend
+- Directory List / Call Graph sub-tab toggle in Repository AST Map
+
+### Deliverables
+
+- Backend call graph extraction (Python + React/TS)
+- `CallGraphView.tsx` — interactive force-directed SVG component
+- Repository AST Map now has two sub-views: Directory List and Call Graph
+- Zero external graph library dependencies
+
+Status: **Completed**
+
+---
+
+# Milestone 6 — Polish (In Progress)
+
+## Goal
+
+Prepare for demonstration and production use.
+
+### Remaining Tasks
+
+- [ ] Redesign Memory, Benchmarks, Settings pages in Geist style
+- [ ] Add persistent node positions (localStorage) in CallGraphView
+- [ ] Export call graph as PNG/SVG
+- [ ] Session memory (SessionService)
+- [ ] Performance improvements for large graphs (>80 nodes: pagination or cluster view)
+
+Status: **In Progress**
 
 ---
 
 # Development Order
 
 ```
-Backend Foundation ✅
-
-↓
-
-API Layer (Backend Commands)
-
-↓
-
-Frontend Foundation
-
-↓
-
-Session Memory
-
-↓
-
-Polish
+Backend Foundation         ✅
+API Layer                  ✅
+Frontend Foundation        ✅
+Repository Knowledge       ✅
+Call Graph                 ✅
+Polish                     In Progress
 ```
-
-No milestone should begin until the previous milestone is functional.
 
 ---
 
@@ -192,6 +209,28 @@ A milestone is considered complete when:
 - Documentation is updated.
 - AGENTS.md has been checked.
 - No known critical issues remain.
+
+---
+
+# Current Status
+
+Current Milestone: **Milestone 6 — Polish**
+
+Completed services:
+
+- CogneeService ✅
+- IndexingService (delta + .gitignore filtering) ✅
+- ContextService ✅
+- PackageBuilder ✅
+- BudgetManager ✅
+- MarkdownRenderer ✅
+- RepositorySummaryGenerator (Depth-2.5 + call graph) ✅
+- CallGraphExtractor (embedded, Python AST + React/TS) ✅
+- Pipeline stages (dedup, rank, compress, categorize, references) ✅
+- StatsLogger ✅
+- API layer (commands + schemas) ✅
+- React frontend (Dashboard, Memory, Benchmarks, Settings) ✅
+- CallGraphView (interactive force-directed SVG) ✅
 
 ---
 

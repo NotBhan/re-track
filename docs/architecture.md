@@ -224,19 +224,47 @@ Implementation: `backend/app/services/renderer.py`
 
 ## RepositorySummaryGenerator ✅
 
-Generates stable project knowledge from indexed files.
+Generates stable project knowledge from indexed files after indexing completes.
 
 Responsibilities:
 
-- extract technology stack from file extensions
-- build repository directory map
+- apply `.gitignore` patterns dynamically to filter scanned files
+- extract technology stack from file extensions and config files
+- build repository directory map (framework-aware grouping)
 - infer architecture from structure
-- extract key components
-- infer project purpose from README
+- extract key components via Python `ast` module and React/TS regex
+- extract call graph nodes and edges (`_build_call_graph`)
+  - Python: `ast.ClassDef`, `ast.FunctionDef`, `ast.AsyncFunctionDef`, `ast.Call` visitor
+  - React/TS: exported component regex, relative import edges, JSX renders edges
+- infer project purpose from README or framework heuristics
+
+Output models: `RepositorySummary`, `CallNode`, `CallEdge`
 
 Implementation: `backend/app/services/repository_summary.py`
 
 ---
+
+## CallGraphExtractor (embedded in RepositorySummaryGenerator) ✅
+
+Builds a directed call graph from Python AST and React/TypeScript source files.
+
+| Node kind | Source | Shape in UI |
+|-----------|--------|-------------|
+| `class`   | Python `ast.ClassDef` | Square |
+| `function`| Python `ast.FunctionDef` at module level | Circle |
+| `method`  | Python `ast.FunctionDef` inside class | Circle |
+| `component` | React/TS exported uppercase identifier | Diamond |
+
+| Edge kind | Source | Style in UI |
+|-----------|--------|-------------|
+| `calls`   | `ast.Call` callee name | Solid |
+| `inherits`| `ast.ClassDef.bases` | Thick solid |
+| `imports` | TS `import ... from './path'` | Dashed |
+| `renders` | JSX `<ComponentName` usage | Dotted |
+
+Capacity: 80 nodes / 200 edges. Migrations and `__pycache__` excluded.
+
+Persisted in repo metadata store via `commands._persist_repo_metadata`.
 
 ## Pipeline Stages ✅
 
@@ -338,7 +366,8 @@ backend/app/
     models/
         __init__.py
         errors.py            # Exception hierarchy
-        responses.py         # Data models (ContextPackage, RepositorySummary, PackageMetadata, etc.)
+        responses.py         # Data models: ContextPackage, RepositorySummary, PackageMetadata,
+                             #   CallNode, CallEdge, DirectoryEntry, ComponentInfo, etc.
     services/
         __init__.py
         cognee_service.py    # Thin Cognee wrapper
@@ -347,7 +376,8 @@ backend/app/
         package_builder.py   # Pipeline orchestrator
         budget_manager.py    # Token budget enforcement
         renderer.py          # Markdown rendering
-        repository_summary.py # Repository Summary generator
+        repository_summary.py # RepositorySummaryGenerator: directory map, AST components,
+                              #   call graph extraction (_build_call_graph)
         stats_logger.py      # Package statistics logging
         pipeline/
             __init__.py
@@ -357,9 +387,11 @@ backend/app/
             categorization.py # Rule-based categorization stage
             references.py    # Reference resolution stage
     api/
-        __init__.py          # ✅ implemented — API command exports
-        commands.py          # ✅ implemented — Async commands (health, index, context, forget)
-        schemas.py           # ✅ implemented — Pydantic request/response models
+        __init__.py          # API command exports
+        commands.py          # Async commands: health, index, context, forget,
+                             #   get_repository_summaries, _persist_repo_metadata
+                             #   Persists call_graph_nodes + call_graph_edges in repo metadata store
+        schemas.py           # Pydantic request/response models
     utils/
         __init__.py
 ```
@@ -395,9 +427,13 @@ The MVP intentionally excludes:
 - Distributed memory
 - Plugin architecture
 - Autonomous coding agents
-- Graph visualization
 
-These features may be explored after the hackathon but are outside the initial scope.
+Features now **included** that were originally deferred:
+
+- Interactive call graph visualization (`src/components/repositories/CallGraphView.tsx`)
+- Real AST call edge extraction (`_build_call_graph` in `repository_summary.py`)
+- `.gitignore`-aware dynamic file filtering
+- React/Vite/Next component detection and graph nodes
 
 ---
 

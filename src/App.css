@@ -46,7 +46,7 @@ html {
   color-scheme: dark;
   background-color: var(--color-background);
   color: var(--color-foreground);
-  font-size: 15px; /* Comfortable standard reading scale */
+  font-size: 16.5px; /* Prominent, comfortable 100% zoom reading scale */
 }
 
 body {

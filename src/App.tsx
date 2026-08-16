@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppShell } from "@/components/layout/AppShell";
 import { CreateRepositoryIndexModal } from "@/components/repositories/CreateRepositoryIndexModal";
+import { Toaster } from "@/components/ui/toast";
 import Dashboard from "@/pages/Dashboard";
 import Repositories from "@/pages/Repositories";
 import KnowledgeExplorer from "@/pages/KnowledgeExplorer";
@@ -21,8 +22,8 @@ function App() {
       <TooltipProvider>
         <AppShell onNewIndex={() => setCreateModalOpen(true)}>
           <Routes>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/repositories" element={<Repositories />} />
+            <Route path="/" element={<Repositories />} />
+            <Route path="/studio" element={<Dashboard />} />
             <Route path="/knowledge/:repoId" element={<KnowledgeExplorer />} />
             <Route path="/context-builder" element={<ContextBuilder />} />
             <Route path="/packages" element={<ContextPackages />} />
@@ -35,6 +36,7 @@ function App() {
           open={createModalOpen}
           onOpenChange={setCreateModalOpen}
         />
+        <Toaster />
       </TooltipProvider>
     </BrowserRouter>
   );

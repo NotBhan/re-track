@@ -1,7 +1,9 @@
 """Async API command handlers for RE:Track."""
 
+import asyncio
 import json
 import logging
+import os
 import time
 from pathlib import Path
 from typing import Optional
@@ -93,6 +95,10 @@ _context_service: Optional[ContextService] = None
 _settings: Optional[Settings] = None
 _manager = RepositoryManager()
 
+# Concurrency locks for critical asynchronous tasks
+_indexing_lock = asyncio.Lock()
+_context_gen_lock = asyncio.Lock()
+
 
 def _ensure_services() -> None:
     """Raise if any service is not initialized."""
@@ -122,12 +128,24 @@ async def initialize_backend(settings: Optional[Settings] = None) -> None:
     _cognee_service = CogneeService(_settings)
     await _cognee_service.initialize()
 
-    _manifest_service = ManifestService()
-    _cgc_service = CGCService()
+    # Determine provider endpoint and type from environment/settings
+    llm_endpoint = os.environ.get("LLM_ENDPOINT", _settings.ollama.llm_endpoint)
+    llm_model = os.environ.get("LLM_MODEL", _settings.ollama.llm_model)
+    llm_api_key = os.environ.get("LLM_API_KEY", "lm-studio")
+    provider_str = os.environ.get("LLM_PROVIDER", "lmstudio").lower()
+
+    if "lm" in provider_str or "studio" in provider_str:
+        p_type = ProviderType.LM_STUDIO
+    elif "openai" in provider_str:
+        p_type = ProviderType.OPENAI_COMPATIBLE
+    else:
+        p_type = ProviderType.OLLAMA
+
     _llm_provider = LLMProviderService(
-        provider_type=ProviderType.OLLAMA,
-        base_url=_settings.ollama.llm_endpoint,
-        default_model=_settings.ollama.llm_model,
+        provider_type=p_type,
+        base_url=llm_endpoint,
+        api_key=llm_api_key,
+        default_model=llm_model,
     )
     _intent_parser = IntentParserService(_llm_provider)
 
@@ -170,21 +188,40 @@ async def health() -> HealthResponse | ErrorResponse:
         vram_used = 0.0
         gpu_name = None
 
+        # 1. Try Linux sysfs DRM mem_info (AMD Radeon / Intel / generic DRM drivers)
         try:
-            import subprocess
-            out = subprocess.check_output(
-                ["nvidia-smi", "--query-gpu=name,memory.total,memory.used", "--format=csv,noheader,nounits"],
-                stderr=subprocess.DEVNULL,
-                timeout=1,
-            ).decode().strip()
-            if out:
-                parts = [p.strip() for p in out.split(",")]
-                if len(parts) >= 3:
-                    gpu_name = parts[0]
-                    vram_total = round(float(parts[1]) / 1024.0, 1)
-                    vram_used = round(float(parts[2]) / 1024.0, 1)
+            from pathlib import Path
+            for card in sorted(Path("/sys/class/drm").glob("card*")):
+                vram_tot_f = card / "device" / "mem_info_vram_total"
+                vram_used_f = card / "device" / "mem_info_vram_used"
+                if vram_tot_f.exists() and vram_used_f.exists():
+                    tot = int(vram_tot_f.read_text().strip()) / (1024 ** 3)
+                    used = int(vram_used_f.read_text().strip()) / (1024 ** 3)
+                    # Pick dedicated GPU if available
+                    if tot > vram_total:
+                        vram_total = round(tot, 1)
+                        vram_used = round(used, 1)
+                        gpu_name = "AMD Radeon GPU"
         except Exception:
             pass
+
+        # 2. Try NVIDIA SMI if sysfs didn't find dedicated VRAM
+        if vram_total == 0.0:
+            try:
+                import subprocess
+                out = subprocess.check_output(
+                    ["nvidia-smi", "--query-gpu=name,memory.total,memory.used", "--format=csv,noheader,nounits"],
+                    stderr=subprocess.DEVNULL,
+                    timeout=1,
+                ).decode().strip()
+                if out:
+                    parts = [p.strip() for p in out.split(",")]
+                    if len(parts) >= 3:
+                        gpu_name = parts[0]
+                        vram_total = round(float(parts[1]) / 1024.0, 1)
+                        vram_used = round(float(parts[2]) / 1024.0, 1)
+            except Exception:
+                pass
 
         response = HealthResponse(
             status=status,
@@ -320,41 +357,97 @@ async def index_repository(
     try:
         _ensure_services()
 
-        repo_path = Path(request.repository_path).resolve()
-        if not repo_path.exists():
-            raise ValueError(f"Repository path does not exist: {request.repository_path}")
-        if not repo_path.is_dir():
-            raise ValueError(f"Path is not a directory: {request.repository_path}")
+        if _indexing_lock.locked():
+            logger.warning("command: index_repository() rejected | indexing already in progress")
+            return ErrorResponse(
+                error="ConcurrencyError",
+                message="An indexing job is already in progress. Please wait for it to complete.",
+            )
 
-        progress = await _indexing_service.index_repository(
-            repo_path=repo_path,
-            dataset_name=request.dataset_name,
-            force_reindex=request.force_reindex,
-        )
+        async with _indexing_lock:
+            repo_path = Path(request.repository_path).resolve()
+            if not repo_path.exists():
+                raise ValueError(f"Repository path does not exist: {request.repository_path}")
+            if not repo_path.is_dir():
+                raise ValueError(f"Path is not a directory: {request.repository_path}")
 
-        # Persist repository metadata after successful indexing
-        if progress.failed_files == 0:
-            _persist_repo_metadata(repo_path, progress.processed_files)
+            # Find matching repository id if any
+            matching_repo_id = None
+            for r in _manager.list_repositories():
+                if str(Path(r.local_path).resolve()) == str(repo_path):
+                    matching_repo_id = r.id
+                    break
 
-        response = IndexRepositoryResponse(
-            success=progress.failed_files == 0,
-            repository_path=str(repo_path),
-            dataset_name=request.dataset_name,
-            total_files=progress.total_files,
-            processed_files=progress.processed_files,
-            failed_files=progress.failed_files,
-            total_batches=progress.total_batches,
-            failed_paths=progress.failed_paths,
-            summary=progress.summary(),
-        )
+            if matching_repo_id:
+                _manager.set_indexing_progress(matching_repo_id, {
+                    "status": "indexing",
+                    "stage": "Synthesizing vector embeddings & knowledge graph...",
+                    "processed_files": 0,
+                    "total_files": 0,
+                    "elapsed_ms": 0,
+                    "languages": [],
+                    "frameworks": [],
+                    "error": None,
+                    "file_count": 0,
+                    "size_bytes": 0,
+                })
 
-        elapsed = time.monotonic() - start
-        logger.info(
-            "command: index_repository() complete | files=%d | %.2fs",
-            progress.processed_files,
-            elapsed,
-        )
-        return response
+            progress = await _indexing_service.index_repository(
+                repo_path=repo_path,
+                dataset_name=request.dataset_name,
+                force_reindex=request.force_reindex,
+            )
+
+            # Persist repository metadata after successful indexing
+            if progress.failed_files == 0:
+                _persist_repo_metadata(repo_path, progress.processed_files)
+                if matching_repo_id:
+                    _manager.set_indexing_progress(matching_repo_id, {
+                        "status": "indexed",
+                        "stage": "Indexing Completed",
+                        "processed_files": progress.processed_files,
+                        "total_files": progress.total_files,
+                        "elapsed_ms": int((time.monotonic() - start) * 1000),
+                        "languages": [],
+                        "frameworks": [],
+                        "error": None,
+                        "file_count": progress.total_files,
+                        "size_bytes": 0,
+                        "indexed_at": datetime.now(timezone.utc).isoformat(),
+                    })
+            elif matching_repo_id:
+                _manager.set_indexing_progress(matching_repo_id, {
+                    "status": "error",
+                    "stage": "Indexing Failed",
+                    "processed_files": progress.processed_files,
+                    "total_files": progress.total_files,
+                    "elapsed_ms": int((time.monotonic() - start) * 1000),
+                    "languages": [],
+                    "frameworks": [],
+                    "error": "Failed files during indexing",
+                    "file_count": progress.total_files,
+                    "size_bytes": 0,
+                })
+
+            response = IndexRepositoryResponse(
+                success=progress.failed_files == 0,
+                repository_path=str(repo_path),
+                dataset_name=request.dataset_name,
+                total_files=progress.total_files,
+                processed_files=progress.processed_files,
+                failed_files=progress.failed_files,
+                total_batches=progress.total_batches,
+                failed_paths=progress.failed_paths,
+                summary=progress.summary(),
+            )
+
+            elapsed = time.monotonic() - start
+            logger.info(
+                "command: index_repository() complete | files=%d | %.2fs",
+                progress.processed_files,
+                elapsed,
+            )
+            return response
 
     except ValueError as e:
         elapsed = time.monotonic() - start
@@ -553,12 +646,21 @@ def _persist_repo_metadata(repo_path: Path, file_count: int) -> None:
             "name": repo_path.name,
             "path": str(repo_path),
             "languages": summary.technology_stack.languages,
+            "frameworks": summary.technology_stack.frameworks,
             "file_count": file_count,
             "memory_size": f"{len(indexed_files)} files",
             "last_indexed": summary.generated_at,
             "purpose": summary.project_purpose,
             "architecture": [a.model_dump() for a in architecture] if architecture else None,
             "components": [c.model_dump() for c in components] if components else None,
+            "call_graph_nodes": [
+                {"id": n.id, "label": n.label, "file": n.file, "kind": n.kind, "line": n.line}
+                for n in summary.call_graph_nodes
+            ],
+            "call_graph_edges": [
+                {"source": e.source, "target": e.target, "kind": e.kind}
+                for e in summary.call_graph_edges
+            ],
         }
 
         store = _load_repo_store()
@@ -1195,65 +1297,121 @@ async def get_agent_context(
 
     try:
         _ensure_services()
-        repo_path = Path(request.repository_path).resolve()
-        dataset_name = request.dataset_name or _get_repo_dataset_name(str(repo_path))
 
-        # 1. Parse prompt intent & symbols
-        intent = await _intent_parser.parse_intent(request.task_prompt)
-
-        # 2. Query structural code relationships via CGC
-        structural_res = None
-        if request.include_structural_graph and _cgc_service:
-            structural_res = await _cgc_service.query_structural_context(
-                repo_path=repo_path,
-                target_symbols=intent.extracted_symbols,
+        if _context_gen_lock.locked():
+            logger.warning("command: get_agent_context() rejected | synthesis already in progress")
+            return ErrorResponse(
+                error="ConcurrencyError",
+                message="Context synthesis is already running for a task. Please wait a moment.",
             )
 
-        # 3. Retrieve semantic memory from Cognee with repository summary context
-        generator = RepositorySummaryGenerator()
-        raw_files = _indexing_service.discover_files(repo_path)
-        indexed_files = _indexing_service.filter_files(raw_files, repo_path)
-        repo_summary = generator.generate(repo_path, indexed_files)
+        async with _context_gen_lock:
+            repo_path = Path(request.repository_path).resolve()
+            dataset_name = request.dataset_name or repo_path.name
 
-        ctx_svc = ContextService(
-            cognee_service=_cognee_service,
-            repository_summary=repo_summary,
-            target_tokens=request.max_tokens or 8000,
-        )
-        package = await ctx_svc.generate_context_package(
-            task=request.task_prompt,
-            datasets=[dataset_name],
-            top_k=15,
-        )
+            # 1. Parse prompt intent & symbols
+            intent = await _intent_parser.parse_intent(request.task_prompt)
 
-        # 4. Check model quality / quantization warnings
-        quant_warning = None
-        if _llm_provider:
-            health_status = await _llm_provider.check_health()
-            quant_warning = health_status.quantization_warning
+            # 2. Query structural code relationships via CGC
+            structural_res = None
+            if request.include_structural_graph and _cgc_service:
+                structural_res = await _cgc_service.query_structural_context(
+                    repo_path=repo_path,
+                    target_symbols=intent.extracted_symbols,
+                )
 
-        # 5. Merge structural graph into Markdown output
-        final_markdown = package.markdown
-        if structural_res and structural_res.symbols_found:
-            struct_md = structural_res.to_markdown()
-            if struct_md:
-                final_markdown += f"\n\n## Structural Code Relationships\n\n{struct_md}\n"
+            # 3. Retrieve semantic memory from Cognee with repository summary context
+            generator = RepositorySummaryGenerator()
+            raw_files = _indexing_service.discover_files(repo_path)
+            indexed_files = _indexing_service.filter_files(raw_files, repo_path)
+            repo_summary = generator.generate(repo_path, indexed_files)
 
-        elapsed_ms = int((time.monotonic() - start) * 1000)
+            ctx_svc = ContextService(
+                cognee_service=_cognee_service,
+                repository_summary=repo_summary,
+                target_tokens=request.max_tokens or 8000,
+            )
+            package = await ctx_svc.generate_context_package(
+                task=request.task_prompt,
+                datasets=[dataset_name],
+                top_k=15,
+            )
 
-        return AgentContextResponse(
-            success=True,
-            context_markdown=final_markdown,
-            task_summary=intent.task_summary,
-            intent_category=intent.category,
-            extracted_symbols=intent.extracted_symbols,
-            callers=structural_res.callers if structural_res else [],
-            callees=structural_res.callees if structural_res else [],
-            related_files=structural_res.related_files if structural_res else [],
-            quantization_warning=quant_warning,
-            estimated_tokens=len(final_markdown) // 4,
-            generation_time_ms=elapsed_ms,
-        )
+            # 4. Perform direct AST & symbol relevance search across repository files
+            relevant_snippets = []
+            search_terms = list(set(
+                [w for w in request.task_prompt.split() if len(w) > 3 and w.lower() not in ("where", "what", "find", "how", "with", "from", "this", "that")]
+                + intent.extracted_symbols
+                + intent.relevant_file_hints
+            ))
+
+            matched_files = set()
+            for term in search_terms[:8]:
+                term_lower = term.lower()
+                for fpath in indexed_files:
+                    try:
+                        rel = str(fpath.relative_to(repo_path))
+                        # Match filename or content
+                        if term_lower in rel.lower():
+                            matched_files.add((rel, fpath))
+                        else:
+                            content = fpath.read_text(errors="replace")
+                            if term_lower in content.lower():
+                                matched_files.add((rel, fpath))
+                    except Exception:
+                        pass
+
+            # Extract focused code snippets for matched files
+            for rel_path, full_path in list(matched_files)[:5]:
+                try:
+                    text = full_path.read_text(errors="replace")
+                    lines = text.splitlines()
+                    # Find snippet around matches
+                    matching_indices = [
+                        i for i, line in enumerate(lines)
+                        if any(t.lower() in line.lower() for t in search_terms)
+                    ]
+                    if matching_indices:
+                        first_idx = max(0, matching_indices[0] - 4)
+                        last_idx = min(len(lines), matching_indices[0] + 25)
+                        snippet = "\n".join(lines[first_idx:last_idx])
+                        relevant_snippets.append(
+                            f"### `{rel_path}` (Lines {first_idx+1}-{last_idx})\n```\n{snippet}\n```"
+                        )
+                except Exception:
+                    pass
+
+            # 5. Check model quality / quantization warnings
+            quant_warning = None
+            if _llm_provider:
+                health_status = await _llm_provider.check_health()
+                quant_warning = health_status.quantization_warning
+
+            # 6. Merge snippets and structural graph into Markdown output
+            final_markdown = package.markdown
+            if relevant_snippets:
+                final_markdown += "\n\n---\n\n# Relevant Code Snippets & Target Implementations\n\n" + "\n\n".join(relevant_snippets)
+
+            if structural_res and structural_res.symbols_found:
+                struct_md = structural_res.to_markdown()
+                if struct_md:
+                    final_markdown += f"\n\n---\n\n# Structural Code Relationships\n\n{struct_md}\n"
+
+            elapsed_ms = int((time.monotonic() - start) * 1000)
+
+            return AgentContextResponse(
+                success=True,
+                context_markdown=final_markdown,
+                task_summary=intent.task_summary,
+                intent_category=intent.category,
+                extracted_symbols=intent.extracted_symbols,
+                callers=structural_res.callers if structural_res else [],
+                callees=structural_res.callees if structural_res else [],
+                related_files=structural_res.related_files if structural_res else [],
+                quantization_warning=quant_warning,
+                estimated_tokens=len(final_markdown) // 4,
+                generation_time_ms=elapsed_ms,
+            )
 
     except Exception as e:
         elapsed = time.monotonic() - start

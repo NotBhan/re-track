@@ -61,12 +61,12 @@ EXTENSION_LANGUAGE_MAP: dict[str, str] = {
 }
 
 FRAMEWORK_MARKERS: dict[str, str] = {
+    "manage.py": "Django",
+    "wsgi.py": "Django",
+    "asgi.py": "Django",
     "package.json": "Node.js",
     "Cargo.toml": "Rust",
     "go.mod": "Go",
-    "requirements.txt": "Python",
-    "setup.py": "Python",
-    "pyproject.toml": "Python",
     "pom.xml": "Java",
     "build.gradle": "Java/Kotlin",
     "Gemfile": "Ruby",
@@ -78,6 +78,10 @@ FRAMEWORK_MARKERS: dict[str, str] = {
     "pubspec.yaml": "Dart",
     "Makefile": "C/C++",
     "tsconfig.json": "TypeScript",
+    "vite.config.ts": "Vite",
+    "vite.config.js": "Vite",
+    "next.config.js": "Next.js",
+    "next.config.mjs": "Next.js",
 }
 
 
@@ -89,6 +93,7 @@ class RepositoryManager:
             store_path = Path.home() / ".andes" / "repositories.json"
         self._store_path = Path(store_path)
         self._repositories: dict[str, dict[str, Any]] = {}
+        self._active_progress: dict[str, dict[str, Any]] = {}
         self._load()
 
     # ── Persistence ───────────────────────────────────────────────
@@ -232,6 +237,21 @@ class RepositoryManager:
         else:
             raise ValueError(f"Unknown source type: {source_type}")
 
+        # Check for existing duplicate repository (same resolved local path or GitHub URL)
+        for existing_id, existing_data in self._repositories.items():
+            same_path = existing_data.get("local_path") == local_path_resolved
+            same_url = source_url and existing_data.get("source_url") == source_url
+            if same_path or same_url:
+                # Return existing repository with updated name/metadata
+                if name and name != existing_data.get("name"):
+                    existing_data["name"] = name
+                if branch:
+                    existing_data["branch"] = branch
+                if commit_hash:
+                    existing_data["commit_hash"] = commit_hash
+                self._save()
+                return self._dict_to_repo(existing_data)
+
         repo_id = uuid.uuid4().hex[:12]
         repo = Repository(
             id=repo_id,
@@ -275,10 +295,33 @@ class RepositoryManager:
         top_level_dirs: set[str] = set()
         top_level_with_code: dict[str, bool] = {}
 
+        # Parse .gitignore if present in repository root
+        gitignore_patterns: set[str] = set()
+        gi_file = Path(repo.local_path) / ".gitignore"
+        if gi_file.exists():
+            try:
+                for line in gi_file.read_text(errors="ignore").splitlines():
+                    line = line.strip()
+                    if line and not line.startswith("#"):
+                        pattern = line.rstrip("/").lstrip("/")
+                        if pattern:
+                            gitignore_patterns.add(pattern)
+            except Exception:
+                pass
+
         for root, dirs, files in Path(repo.local_path).walk():
-            dirs[:] = [d for d in dirs if d not in IGNORED_DIRS]
+            dirs[:] = [
+                d for d in dirs
+                if d not in IGNORED_DIRS
+                and not d.startswith(".agents")
+                and not d.startswith("__")
+                and d not in gitignore_patterns
+            ]
             for f in files:
                 p = Path(root) / f
+                rel_p = p.relative_to(repo.local_path)
+                if any(pat in str(rel_p) or pat == f for pat in gitignore_patterns):
+                    continue
                 try:
                     size_bytes += p.stat().st_size
                 except OSError:
@@ -321,6 +364,19 @@ class RepositoryManager:
 
         # Dependencies: parse known manifest files
         dependencies = self._extract_dependencies(repo.local_path)
+        dep_lower = {d.lower() for d in dependencies}
+        if "django" in dep_lower:
+            frameworks.add("Django")
+        if "fastapi" in dep_lower:
+            frameworks.add("FastAPI")
+        if "flask" in dep_lower:
+            frameworks.add("Flask")
+        if "react" in dep_lower:
+            frameworks.add("React")
+        if "next" in dep_lower:
+            frameworks.add("Next.js")
+        if "tauri" in dep_lower or (Path(repo.local_path) / "src-tauri").is_dir():
+            frameworks.add("Tauri")
 
         estimated_index_time = file_count * ESTIMATED_INDEX_TIME_MS_PER_FILE
 
@@ -426,12 +482,26 @@ class RepositoryManager:
 
     # ── Progress ───────────────────────────────────────────────────
 
+    def set_indexing_progress(self, repo_id: str, progress: dict[str, Any]) -> None:
+        self._active_progress[repo_id] = progress
+        if repo_id in self._repositories:
+            if "status" in progress:
+                self._repositories[repo_id]["status"] = progress["status"]
+            if "indexed_at" in progress:
+                self._repositories[repo_id]["indexed_at"] = progress["indexed_at"]
+            if "error" in progress and progress["error"]:
+                self._repositories[repo_id]["error_message"] = progress["error"]
+            self._save()
+
     def get_indexing_progress(self, repo_id: str) -> dict[str, Any]:
+        if repo_id in self._active_progress:
+            return self._active_progress[repo_id]
+
         repo = self.get_repository(repo_id)
         return {
             "status": repo.status,
             "stage": self._get_stage_label(repo.status),
-            "processed_files": repo.file_count,
+            "processed_files": repo.file_count if repo.status == "indexed" else 0,
             "total_files": repo.file_count,
             "elapsed_ms": 0,
             "languages": repo.languages,
@@ -445,12 +515,12 @@ class RepositoryManager:
     def _get_stage_label(status: str) -> str:
         labels = {
             "registered": "Ready to index",
-            "scanning": "Scanning files...",
-            "indexing": "Building knowledge graph...",
-            "indexed": "Completed",
-            "error": "Error occurred",
+            "scanning": "Scanning AST files...",
+            "indexing": "Synthesizing vector embeddings...",
+            "indexed": "Indexing Completed",
+            "error": "Indexing Failed",
         }
-        return labels.get(status, "Unknown")
+        return labels.get(status, "Ready to index")
 
     # ── Helpers ───────────────────────────────────────────────────
 

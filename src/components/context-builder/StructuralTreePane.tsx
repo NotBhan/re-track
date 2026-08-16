@@ -32,7 +32,7 @@ export function StructuralTreePane({
   );
 
   return (
-    <div className="w-full lg:w-[300px] h-full flex flex-col bg-card rounded-md border border-border shadow-xs overflow-hidden shrink-0">
+    <div className="w-full lg:w-[320px] h-full flex flex-col bg-card rounded-md border border-border shadow-xs overflow-hidden shrink-0">
       {/* Header */}
       <div className="p-4 border-b border-border bg-card flex items-center justify-between">
         <div>
@@ -41,48 +41,48 @@ export function StructuralTreePane({
           </span>
           <p className="text-xs text-muted-foreground mt-0.5">AST Structural Outline</p>
         </div>
-        <Badge variant="outline" className="text-xs font-mono px-2 py-0.5 border-border bg-secondary text-muted-foreground">
+        <Badge variant="outline" className="text-xs font-mono px-2.5 py-0.5 border-border bg-secondary text-muted-foreground">
           Depth 2.5
         </Badge>
       </div>
 
       {/* Repo badge & Search */}
-      <div className="p-3.5 space-y-2.5 border-b border-border bg-black/40">
-        <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-secondary text-xs font-mono text-foreground border border-border">
-          <GitBranch className="w-3.5 h-3.5 text-foreground shrink-0" />
-          <span className="truncate font-medium">{repositoryName}</span>
+      <div className="p-4 space-y-3 border-b border-border bg-black/40">
+        <div className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-md bg-secondary text-xs font-mono text-foreground border border-border">
+          <GitBranch className="w-4 h-4 text-foreground shrink-0" />
+          <span className="truncate font-semibold text-sm">{repositoryName}</span>
         </div>
 
         <div className="relative">
-          <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <Input
             type="text"
             placeholder="Search submodules..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="h-8 pl-8 text-xs font-mono bg-black border-border rounded-md focus-visible:ring-1 focus-visible:ring-white"
+            className="h-9 pl-9 text-xs font-mono bg-black border-border rounded-md focus-visible:ring-1 focus-visible:ring-white"
           />
         </div>
       </div>
 
       {/* Folder Tree */}
-      <ScrollArea className="flex-1 p-2.5">
-        <div className="space-y-1">
+      <ScrollArea className="flex-1 p-3">
+        <div className="space-y-1.5">
           {filteredFolders.map((sub) => {
             const isSelected = selectedPath === sub.path;
             return (
               <button
                 key={sub.path}
                 onClick={() => onSelectSubfolder?.(sub.path)}
-                className={`w-full text-left p-3 rounded-md transition-colors text-xs font-mono border ${
+                className={`w-full text-left p-3.5 rounded-md transition-colors text-xs font-mono border ${
                   isSelected
-                    ? "bg-accent border-border text-white"
+                    ? "bg-accent border-border text-white shadow-xs"
                     : "border-transparent text-muted-foreground hover:text-foreground hover:bg-secondary/60"
                 }`}
               >
-                <div className="flex items-center gap-2 font-medium truncate">
-                  <Folder className={`w-3.5 h-3.5 shrink-0 ${isSelected ? "text-white" : "text-muted-foreground"}`} />
-                  <span className="truncate font-medium">{sub.path}</span>
+                <div className="flex items-center gap-2.5 font-medium truncate">
+                  <Folder className={`w-4 h-4 shrink-0 ${isSelected ? "text-white" : "text-muted-foreground"}`} />
+                  <span className="truncate font-semibold text-xs">{sub.path}</span>
                 </div>
                 <p className="text-xs mt-1 text-muted-foreground font-sans line-clamp-1">
                   {sub.description}

@@ -1,3 +1,17 @@
+export interface CallGraphNode {
+  id: string;
+  label: string;
+  file: string;
+  kind: "function" | "method" | "class" | "component" | "module";
+  line: number;
+}
+
+export interface CallGraphEdge {
+  source: string;
+  target: string;
+  kind: "calls" | "imports" | "inherits" | "renders";
+}
+
 export interface Repository {
   id: string;
   name: string;
@@ -19,6 +33,8 @@ export interface Repository {
   components: string[];
   dependencies: string[];
   metadata: Record<string, unknown>;
+  call_graph_nodes?: CallGraphNode[];
+  call_graph_edges?: CallGraphEdge[];
 }
 
 export interface ScanResult {

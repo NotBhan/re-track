@@ -17,22 +17,14 @@ export default function KnowledgeExplorer() {
 
   return (
     <>
-      <TopBar>
-        <div className="flex items-center gap-3">
+      <TopBar title={`RE:Track | Knowledge: ${repo ? repo.name : repoId}`}>
+        <div className="flex items-center gap-2">
           <button
-            onClick={() => navigate("/repositories")}
-            className="p-1.5 rounded-md hover:bg-surface-variant text-on-surface-variant hover:text-on-surface transition-colors"
+            onClick={() => navigate("/")}
+            className="p-1.5 rounded-lg border border-[#262626] bg-black text-neutral-400 hover:text-white hover:border-[#404040] transition-colors"
           >
-            <ArrowLeft className="w-5 h-5" />
+            <ArrowLeft className="w-4 h-4" />
           </button>
-          <div>
-            <h2 className="text-[16px] leading-[24px] font-semibold text-on-surface">
-              Knowledge Explorer
-            </h2>
-            <p className="text-[12px] text-on-surface-variant font-mono">
-              {repo ? repo.name : repoId}
-            </p>
-          </div>
         </div>
       </TopBar>
 

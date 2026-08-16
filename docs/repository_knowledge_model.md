@@ -2,9 +2,24 @@
 
 ## Purpose
 
-This document defines the long-term vision for how RE:Track (RefinedEngine Track) represents software repositories as reusable knowledge.
+This document defines how RE:Track (RefinedEngine Track) represents software repositories as reusable knowledge.
 
 The goal is to move beyond simple code indexing and retrieval toward a structured representation of software engineering knowledge that is portable, token-efficient, and model-agnostic.
+
+---
+
+## Implementation Status
+
+| Knowledge Domain | Status |
+|-----------------|--------|
+| Code Knowledge (classes, functions, methods) | ✅ Extracted via Python `ast` |
+| Structural Knowledge (folder hierarchy, dependency graph) | ✅ `_build_repo_map` + `.gitignore` filtering |
+| Call Graph | ✅ `_build_call_graph` — `ast.Call` + React/TS imports |
+| Architectural Knowledge (MVC, layered, etc.) | ✅ `_infer_architecture` heuristics |
+| Configuration Knowledge | ⬜ Planned |
+| Documentation Knowledge (README) | ✅ README purpose extraction |
+| Domain Knowledge | ⬜ Planned |
+| Relationship Knowledge (call graph edges) | ✅ `CallEdge` — calls, imports, inherits, renders |
 
 ---
 
@@ -137,29 +152,30 @@ Examples:
 
 # Knowledge Extraction Pipeline
 
+Currently implemented pipeline:
+
+```
 Repository
+  ↓
+IndexingService — .gitignore-aware file discovery
+  ↓
+RepositorySummaryGenerator
+  ├─ _build_repo_map        → DirectoryEntry[] (structural map)
+  ├─ _extract_components    → ComponentInfo[] (AST symbols)
+  └─ _build_call_graph      → CallNode[], CallEdge[] (call graph)
+  ↓
+RepositorySummary (persisted to repo metadata store)
+  ↓
+Frontend (Dashboard)
+  ├─ Directory List tab     → filterable symbol/folder list
+  └─ Call Graph tab         → interactive force-directed SVG
+```
 
-↓
+Future pipeline (planned):
 
-Parser
-
-↓
-
-AST
-
-↓
-
-Knowledge Graph
-
-↓
-
-Knowledge Distillation
-
-↓
-
-Repository Knowledge Base
-
----
+```
+Knowledge Distillation → Repository Knowledge Base → Portable Knowledge Representation
+```
 
 # Knowledge Distillation
 

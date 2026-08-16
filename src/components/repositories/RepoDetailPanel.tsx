@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   X,
@@ -12,9 +13,15 @@ import {
   Box,
   Package,
   FileText,
+  GitBranch,
+  Clock,
+  HardDrive,
 } from "lucide-react";
 import { useRepositoryStore } from "@/stores/repository-store";
-import { StatusDot } from "@/components/shared/StatusDot";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { ReindexModal } from "./ReindexModal";
 
 function formatBytes(bytes: number): string {
   if (bytes === 0) return "0 B";
@@ -24,27 +31,35 @@ function formatBytes(bytes: number): string {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
 }
 
-function Section({ icon: Icon, title, children }: { icon: React.ElementType; title: string; children: React.ReactNode }) {
+function Section({
+  icon: Icon,
+  title,
+  children,
+}: {
+  icon: React.ElementType;
+  title: string;
+  children: React.ReactNode;
+}) {
   return (
-    <section>
-      <h4 className="flex items-center gap-1.5 text-[12px] leading-[16px] tracking-[0.02em] font-medium text-on-surface-variant mb-2 uppercase tracking-wider">
-        <Icon className="w-3.5 h-3.5" />
-        {title}
+    <div className="flex flex-col gap-2.5">
+      <h4 className="flex items-center gap-2 text-xs font-mono font-semibold text-neutral-400 uppercase tracking-wider">
+        <Icon className="w-3.5 h-3.5 text-white" />
+        <span>{title}</span>
       </h4>
-      <div className="bg-surface-container-lowest p-3 rounded border border-outline-variant/50">
+      <div className="bg-black p-4 rounded-xl border border-[#222222]">
         {children}
       </div>
-    </section>
+    </div>
   );
 }
 
 function TagList({ items }: { items: string[] }) {
   return (
-    <div className="flex flex-wrap gap-1.5">
+    <div className="flex flex-wrap gap-2">
       {items.map((item) => (
         <span
           key={item}
-          className="text-[12px] leading-[16px] text-on-surface bg-surface-variant px-2 py-1 rounded"
+          className="text-xs font-mono text-neutral-200 bg-[#141414] border border-[#2a2a2a] px-2.5 py-1 rounded-lg"
         >
           {item}
         </span>
@@ -55,11 +70,11 @@ function TagList({ items }: { items: string[] }) {
 
 function FileList({ items }: { items: string[] }) {
   return (
-    <ul className="space-y-1">
+    <ul className="space-y-2 font-mono text-xs text-neutral-300">
       {items.map((item) => (
-        <li key={item} className="text-[13px] leading-[20px] font-mono text-on-surface-variant flex items-center gap-1.5">
-          <span className="w-1 h-1 rounded-full bg-primary flex-shrink-0" />
-          {item}
+        <li key={item} className="flex items-center gap-2 truncate">
+          <span className="w-1.5 h-1.5 rounded-full bg-neutral-500 shrink-0" />
+          <span className="truncate">{item}</span>
         </li>
       ))}
     </ul>
@@ -69,194 +84,214 @@ function FileList({ items }: { items: string[] }) {
 export function RepoDetailPanel() {
   const { selected, select, indexRepo, removeRepo } = useRepositoryStore();
   const navigate = useNavigate();
+  const [showReindexModal, setShowReindexModal] = useState(false);
 
   if (!selected) {
     return (
-      <aside className="w-[400px] flex-shrink-0 bg-surface-container rounded-xl border border-outline-variant flex items-center justify-center h-full">
-        <p className="text-on-surface-variant text-[14px] leading-[20px]">
-          Select a repository to view details
+      <aside className="w-full h-full bg-[#0a0a0a] rounded-xl border border-[#262626] flex flex-col items-center justify-center p-8 text-center shadow-2xl">
+        <div className="w-14 h-14 rounded-xl bg-black border border-[#262626] flex items-center justify-center mb-4 text-neutral-500">
+          <GitBranch className="w-7 h-7 text-neutral-400" />
+        </div>
+        <h4 className="text-base font-bold text-white tracking-tight">No Repository Selected</h4>
+        <p className="text-xs font-mono text-neutral-400 mt-2 max-w-xs leading-relaxed">
+          Select any workspace card from the catalog to inspect AST call graphs, file statistics, and synthesize context.
         </p>
       </aside>
     );
   }
 
-  const statusDot = selected.status === "indexed" ? "online" : selected.status === "error" ? "error" : "idle";
-  const statusLabel = {
-    indexed: "Indexed",
-    scanning: "Scanning",
-    indexing: "Indexing",
-    registered: "Registered",
-    error: "Error",
-  }[selected.status] ?? selected.status;
-
   return (
-    <aside className="w-[400px] flex-shrink-0 bg-surface-container rounded-xl flex flex-col overflow-hidden h-full">
+    <aside className="w-full h-full bg-[#0a0a0a] rounded-xl border border-[#262626] flex flex-col overflow-hidden shadow-2xl">
       {/* Header */}
-      <div className="p-5 border-b border-outline-variant bg-surface-container-low">
-        <div className="flex justify-between items-start mb-2">
-          <div className="flex-1 min-w-0">
-            <h3 className="text-[20px] leading-[28px] font-medium text-on-surface truncate">
-              {selected.name}
-            </h3>
-            <p className="font-mono text-[13px] leading-[20px] text-on-surface-variant mt-0.5 truncate">
+      <div className="p-6 border-b border-[#262626] bg-[#0c0c0c]">
+        <div className="flex justify-between items-start mb-3">
+          <div className="flex-1 min-w-0 pr-3">
+            <div className="flex items-center gap-2.5 mb-1.5">
+              <div className="w-8 h-8 rounded-lg bg-black border border-[#2a2a2a] flex items-center justify-center text-white shrink-0">
+                <GitBranch className="w-4 h-4 text-white" />
+              </div>
+              <h3 className="text-base font-bold text-white tracking-tight truncate">
+                {selected.name}
+              </h3>
+            </div>
+            <p className="font-mono text-xs text-neutral-400 truncate pl-0.5">
               {selected.local_path}
             </p>
           </div>
           <button
             onClick={() => select(null)}
-            className="text-on-surface-variant hover:text-on-surface ml-2 flex-shrink-0"
+            className="p-1.5 rounded-lg border border-transparent text-neutral-400 hover:text-white hover:border-[#262626] hover:bg-black transition-colors shrink-0"
           >
-            <X className="w-5 h-5" />
+            <X className="w-4 h-4" />
           </button>
         </div>
-        <div className="flex items-center gap-2 font-mono text-[13px] leading-[20px]">
-          <StatusDot status={statusDot} size="sm" />
-          <span className="text-on-surface-variant">{statusLabel}</span>
-          <span className="text-outline-variant">|</span>
-          <span className="text-on-surface-variant capitalize">{selected.source_type}</span>
+
+        <div className="flex items-center gap-2.5 font-mono text-xs pt-1">
+          <Badge
+            variant="outline"
+            className={`text-[10px] uppercase px-2.5 py-0.5 border ${
+              selected.status === "indexed"
+                ? "border-emerald-500/30 text-emerald-400 bg-emerald-500/10"
+                : selected.status === "error"
+                ? "border-red-500/30 text-red-400 bg-red-500/10"
+                : "border-[#333333] text-neutral-400 bg-black"
+            }`}
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-current mr-1.5" />
+            {selected.status}
+          </Badge>
+          <span className="text-neutral-600">|</span>
+          <span className="text-neutral-400 capitalize">{selected.source_type} repository</span>
         </div>
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto p-5 space-y-5">
-        {/* Summary */}
-        {selected.summary && (
-          <section>
-            <h4 className="text-[12px] leading-[16px] tracking-[0.02em] font-medium text-on-surface-variant mb-2 uppercase tracking-wider">
-              Summary
-            </h4>
-            <p className="text-[13px] leading-[20px] text-on-surface-variant">
-              {selected.summary}
-            </p>
-          </section>
-        )}
-
-        {/* Languages */}
-        {selected.languages.length > 0 && (
-          <Section icon={Code} title="Languages">
-            <TagList items={selected.languages} />
-          </Section>
-        )}
-
-        {/* Frameworks */}
-        {selected.frameworks.length > 0 && (
-          <Section icon={Layers} title="Frameworks">
-            <TagList items={selected.frameworks} />
-          </Section>
-        )}
-
-        {/* Architecture */}
-        {selected.architecture && (
-          <Section icon={ArrowRightLeft} title="Architecture">
-            <p className="text-[13px] leading-[20px] text-on-surface">
-              {selected.architecture}
-            </p>
-          </Section>
-        )}
-
-        {/* Entry Points */}
-        {selected.entry_points.length > 0 && (
-          <Section icon={FileText} title="Entry Points">
-            <FileList items={selected.entry_points} />
-          </Section>
-        )}
-
-        {/* Components */}
-        {selected.components.length > 0 && (
-          <Section icon={Box} title="Components">
-            <FileList items={selected.components} />
-          </Section>
-        )}
-
-        {/* Dependencies */}
-        {selected.dependencies.length > 0 && (
-          <Section icon={Package} title="Dependencies">
-            <TagList items={selected.dependencies} />
-          </Section>
-        )}
-
-        {/* File Statistics */}
-        <section>
-          <h4 className="flex items-center gap-1.5 text-[12px] leading-[16px] tracking-[0.02em] font-medium text-on-surface-variant mb-2 uppercase tracking-wider">
-            <FolderGit2 className="w-3.5 h-3.5" />
-            File Statistics
-          </h4>
-          <div className="bg-surface-container-lowest p-3 rounded border border-outline-variant/50 space-y-2">
-            <div className="flex justify-between">
-              <span className="text-[13px] leading-[20px] text-on-surface-variant">Files</span>
-              <span className="text-[13px] leading-[20px] text-on-surface">{selected.file_count.toLocaleString()}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-[13px] leading-[20px] text-on-surface-variant">Size</span>
-              <span className="text-[13px] leading-[20px] text-on-surface">{formatBytes(selected.size_bytes)}</span>
-            </div>
-            {selected.indexed_at && (
-              <div className="flex justify-between">
-                <span className="text-[13px] leading-[20px] text-on-surface-variant">Last Indexed</span>
-                <span className="text-[13px] leading-[20px] text-on-surface">
-                  {new Date(selected.indexed_at).toLocaleDateString()}
+      <ScrollArea className="flex-1 p-6">
+        <div className="flex flex-col gap-6">
+          {/* Quick KPI Stat Matrix */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="p-3.5 bg-black rounded-xl border border-[#222222] flex items-center gap-3">
+              <HardDrive className="w-4 h-4 text-neutral-400 shrink-0" />
+              <div className="min-w-0">
+                <span className="text-[10px] font-mono text-neutral-500 uppercase block">Size on Disk</span>
+                <span className="text-xs font-mono font-bold text-white truncate block">
+                  {formatBytes(selected.size_bytes)}
                 </span>
               </div>
-            )}
+            </div>
+
+            <div className="p-3.5 bg-black rounded-xl border border-[#222222] flex items-center gap-3">
+              <FolderGit2 className="w-4 h-4 text-neutral-400 shrink-0" />
+              <div className="min-w-0">
+                <span className="text-[10px] font-mono text-neutral-500 uppercase block">Indexed Files</span>
+                <span className="text-xs font-mono font-bold text-white truncate block">
+                  {selected.file_count.toLocaleString()}
+                </span>
+              </div>
+            </div>
           </div>
-        </section>
 
-        {/* Error */}
-        {selected.error_message && (
-          <section>
-            <h4 className="text-[12px] leading-[16px] tracking-[0.02em] font-medium text-on-surface-variant mb-2 uppercase tracking-wider">
-              Error
-            </h4>
-            <p className="text-[13px] leading-[20px] text-error bg-error-container p-3 rounded">
-              {selected.error_message}
-            </p>
-          </section>
-        )}
+          {/* Summary */}
+          {selected.summary && (
+            <div className="flex flex-col gap-2.5">
+              <h4 className="text-xs font-mono font-semibold text-neutral-400 uppercase tracking-wider">
+                Summary
+              </h4>
+              <p className="text-xs text-neutral-300 bg-black p-4 rounded-xl border border-[#222222] leading-relaxed font-sans">
+                {selected.summary}
+              </p>
+            </div>
+          )}
 
-        {/* Actions */}
-        <section className="pt-2">
-          <h4 className="text-[12px] leading-[16px] tracking-[0.02em] font-medium text-on-surface-variant mb-2 uppercase tracking-wider">
-            Actions
-          </h4>
-          <div className="space-y-2">
-            <button
-              onClick={() => navigate(`/knowledge/${selected.id}`)}
-              className="w-full flex items-center gap-2 bg-primary/10 hover:bg-primary/20 text-primary text-[13px] font-medium rounded-lg px-3 py-2 transition-colors"
-            >
-              <ExternalLink className="w-4 h-4" />
-              View Knowledge
-            </button>
-            <button
-              onClick={() => navigate(`/context-builder?repo=${selected.id}`)}
-              className="w-full flex items-center gap-2 bg-tertiary/10 hover:bg-tertiary/20 text-tertiary text-[13px] font-medium rounded-lg px-3 py-2 transition-colors"
+          {/* Languages */}
+          {selected.languages.length > 0 && (
+            <Section icon={Code} title="Languages">
+              <TagList items={selected.languages} />
+            </Section>
+          )}
+
+          {/* Frameworks */}
+          {selected.frameworks.length > 0 && (
+            <Section icon={Layers} title="Frameworks">
+              <TagList items={selected.frameworks} />
+            </Section>
+          )}
+
+          {/* Architecture */}
+          {selected.architecture && (
+            <Section icon={ArrowRightLeft} title="Architecture">
+              <p className="text-xs font-sans text-neutral-300 leading-relaxed">
+                {selected.architecture}
+              </p>
+            </Section>
+          )}
+
+          {/* Entry Points */}
+          {selected.entry_points.length > 0 && (
+            <Section icon={FileText} title="Entry Points">
+              <FileList items={selected.entry_points} />
+            </Section>
+          )}
+
+          {/* Components */}
+          {selected.components.length > 0 && (
+            <Section icon={Box} title="Components">
+              <FileList items={selected.components} />
+            </Section>
+          )}
+
+          {/* Dependencies */}
+          {selected.dependencies.length > 0 && (
+            <Section icon={Package} title="Dependencies">
+              <TagList items={selected.dependencies} />
+            </Section>
+          )}
+
+          {/* Last indexed timestamp */}
+          {selected.indexed_at && (
+            <div className="flex items-center gap-2 text-xs font-mono text-neutral-500 pt-1">
+              <Clock className="w-3.5 h-3.5" />
+              <span>Last indexed {new Date(selected.indexed_at).toLocaleDateString()}</span>
+            </div>
+          )}
+
+          {/* Action Controls */}
+          <div className="pt-2 flex flex-col gap-3">
+            <Button
+              onClick={() => navigate(`/studio?repo=${selected.id}`)}
+              className="w-full h-11 text-xs font-bold uppercase tracking-wider font-mono gap-2 bg-white text-black hover:bg-neutral-200 shadow-md rounded-xl"
             >
               <Sparkles className="w-4 h-4" />
-              Generate Context
-            </button>
-            <div className="flex gap-2">
-              <button
-                onClick={() => indexRepo(selected.id)}
-                className="flex-1 flex items-center justify-center gap-1.5 bg-surface-variant hover:bg-surface-bright text-on-surface text-[12px] font-medium rounded-lg px-3 py-2 transition-colors"
+              <span>Launch Context Studio</span>
+            </Button>
+
+            <Button
+              variant="outline"
+              onClick={() => navigate(`/knowledge/${selected.id}`)}
+              className="w-full h-10 text-xs font-medium gap-2 border-[#262626] bg-black text-neutral-300 hover:text-white hover:bg-[#1a1a1a] rounded-xl"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+              <span>Explore Knowledge Graph</span>
+            </Button>
+
+            <div className="flex gap-2.5 pt-1">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  indexRepo(selected.id);
+                  setShowReindexModal(true);
+                }}
+                className="flex-1 h-9 text-xs font-mono border-[#262626] bg-black text-neutral-300 hover:text-white rounded-xl"
               >
-                <RefreshCw className="w-3.5 h-3.5" />
+                <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
                 Re-index
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
                 onClick={() => {
                   if (confirm("Delete this repository?")) {
                     removeRepo(selected.id);
                     select(null);
                   }
                 }}
-                className="flex-1 flex items-center justify-center gap-1.5 bg-error/10 hover:bg-error/20 text-error text-[12px] font-medium rounded-lg px-3 py-2 transition-colors"
+                className="flex-1 h-9 text-xs font-mono bg-red-600/20 text-red-400 hover:bg-red-600 hover:text-white border border-red-600/30 rounded-xl"
               >
-                <Trash2 className="w-3.5 h-3.5" />
+                <Trash2 className="w-3.5 h-3.5 mr-1.5" />
                 Delete
-              </button>
+              </Button>
             </div>
           </div>
-        </section>
-      </div>
+        </div>
+
+        {/* Live Re-index Progress Modal */}
+        <ReindexModal
+          repoId={selected.id}
+          open={showReindexModal}
+          onOpenChange={setShowReindexModal}
+        />
+      </ScrollArea>
     </aside>
   );
 }

@@ -33,11 +33,11 @@ export function ContextPackagePane({ agentResponse, loading }: ContextPackagePan
   };
 
   return (
-    <div className="w-full lg:w-[480px] h-full flex flex-col bg-card rounded-md border border-border shadow-xs overflow-hidden shrink-0">
+    <div className="w-full lg:w-[520px] h-full flex flex-col bg-card rounded-md border border-border shadow-xs overflow-hidden shrink-0">
       {/* Header */}
       <div className="p-4 border-b border-border bg-card flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-7 h-7 rounded bg-secondary flex items-center justify-center text-foreground border border-border">
+          <div className="w-8 h-8 rounded bg-secondary flex items-center justify-center text-foreground border border-border">
             <FileText className="w-4 h-4 text-foreground" />
           </div>
           <div>
@@ -49,40 +49,40 @@ export function ContextPackagePane({ agentResponse, loading }: ContextPackagePan
         </div>
 
         {agentResponse && (
-          <Badge variant="outline" className="text-xs font-mono px-2 py-0.5 border-border bg-secondary text-muted-foreground">
+          <Badge variant="outline" className="text-xs font-mono px-2.5 py-0.5 border-border bg-secondary text-muted-foreground">
             {agentResponse.generation_time_ms}ms
           </Badge>
         )}
       </div>
 
       {/* Action Toolbar */}
-      <div className="p-3.5 border-b border-border flex items-center justify-between bg-black/40">
+      <div className="p-4 border-b border-border flex items-center justify-between bg-black/40">
         <div className="flex items-center gap-2 text-xs font-mono text-muted-foreground">
-          <Layers className="w-3.5 h-3.5 text-foreground" />
+          <Layers className="w-4 h-4 text-foreground" />
           <span>
-            <strong className="text-white">
+            <strong className="text-white text-sm font-semibold">
               {agentResponse?.estimated_tokens.toLocaleString() || 0}
             </strong>{" "}
             est. tokens
           </span>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2.5">
           <Button
             variant="outline"
             size="sm"
             onClick={handleCopy}
             disabled={!agentResponse}
-            className="h-8 px-3 text-xs gap-1.5 font-medium border-border bg-black text-foreground hover:bg-secondary rounded-md"
+            className="h-9 px-3.5 text-xs gap-2 font-medium border-border bg-black text-foreground hover:bg-secondary rounded-md"
           >
             {copied ? (
               <>
-                <Check className="w-3.5 h-3.5 text-emerald-400" />
-                <span className="text-emerald-400">Copied</span>
+                <Check className="w-4 h-4 text-emerald-400" />
+                <span className="text-emerald-400 font-semibold">Copied</span>
               </>
             ) : (
               <>
-                <Copy className="w-3.5 h-3.5" />
+                <Copy className="w-4 h-4" />
                 <span>Copy Markdown</span>
               </>
             )}
@@ -92,9 +92,9 @@ export function ContextPackagePane({ agentResponse, loading }: ContextPackagePan
             size="sm"
             onClick={handleDownload}
             disabled={!agentResponse}
-            className="h-8 px-3 text-xs gap-1.5 font-medium border-border bg-black text-foreground hover:bg-secondary rounded-md"
+            className="h-9 px-3.5 text-xs gap-2 font-medium border-border bg-black text-foreground hover:bg-secondary rounded-md"
           >
-            <Download className="w-3.5 h-3.5" />
+            <Download className="w-4 h-4" />
             <span>Save .md</span>
           </Button>
         </div>

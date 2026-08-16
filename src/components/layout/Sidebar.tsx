@@ -1,4 +1,5 @@
 import { NavLink } from "react-router-dom";
+import { useState } from "react";
 import {
   LayoutDashboard,
   FolderOpen,
@@ -8,16 +9,18 @@ import {
   Settings,
   Plus,
   Layers,
+  HardDrive,
+  Cpu,
+  Activity,
+  RefreshCw,
 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { useHealthStore } from "@/stores/health-store";
 import { cn } from "@/lib/utils";
 
 const navItems = [
-  { to: "/", icon: LayoutDashboard, label: "Context Studio" },
-  { to: "/repositories", icon: FolderOpen, label: "Repositories" },
+  { to: "/", icon: FolderOpen, label: "Repositories" },
+  { to: "/studio", icon: LayoutDashboard, label: "Context Studio" },
   { to: "/packages", icon: FileText, label: "Context Packages" },
   { to: "/memory", icon: Brain, label: "Memory Graph" },
   { to: "/benchmarks", icon: BarChart3, label: "Benchmarks" },
@@ -29,44 +32,59 @@ interface SidebarProps {
 }
 
 export function Sidebar({ onNewIndex }: SidebarProps) {
-  const { backendOnline } = useHealthStore();
+  const { health, backendOnline, fetchDashboardStats, pollHealth } = useHealthStore();
+  const [refreshing, setRefreshing] = useState(false);
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await Promise.all([fetchDashboardStats(), pollHealth()]);
+    setTimeout(() => setRefreshing(false), 500);
+  };
+
+  const ramUsed = health?.ram_used_gb ?? 0;
+  const ramTotal = health?.ram_total_gb ?? 16;
+  const vramUsed = health?.vram_used_gb ?? 0;
+  const vramTotal = health?.vram_total_gb ?? 0;
+  const cpuPct = health?.cpu_percent ?? 0;
 
   return (
-    <aside className="w-[240px] h-screen fixed left-0 top-0 bg-black border-r border-border flex flex-col py-5 px-3 z-20">
+    <aside className="w-[260px] h-screen fixed left-0 top-0 bg-black border-r border-[#222222] flex flex-col z-20 select-none">
       {/* Brand Header */}
-      <div className="flex items-center gap-3 mb-6 px-3">
-        <div className="w-8 h-8 rounded-md bg-white text-black flex items-center justify-center font-bold text-xs tracking-tighter">
-          <Layers className="w-4 h-4" />
-        </div>
-        <div className="flex flex-col">
-          <div className="flex items-center gap-2">
-            <h1 className="text-sm font-semibold tracking-tight text-foreground">
-              RE:Track
-            </h1>
-            <Badge variant="outline" className="text-[10px] font-mono px-1.5 py-0 h-4 border-border text-muted-foreground">
-              v0.1
-            </Badge>
+      <div className="p-5 pb-4 border-b border-[#1c1c1c] flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg bg-white text-black flex items-center justify-center font-bold text-sm tracking-tighter shadow-md">
+            <Layers className="w-4 h-4" />
           </div>
-          <span className="text-[11px] text-muted-foreground font-mono">Context Hub</span>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-bold text-white tracking-tight">
+                RE:Track
+              </span>
+              <span className="text-[10px] font-mono font-medium px-1.5 py-0.5 rounded bg-[#1f1f1f] text-neutral-400 border border-[#2f2f2f]">
+                v0.1
+              </span>
+            </div>
+            <span className="text-[11px] font-mono text-neutral-400 block">
+              Context Engine
+            </span>
+          </div>
         </div>
       </div>
 
-      {/* Index Repo CTA */}
-      <div className="px-2 mb-4">
-        <Button
+      {/* Primary Action Button */}
+      <div className="p-3.5 pb-2">
+        <button
           onClick={onNewIndex}
-          variant="secondary"
-          size="sm"
-          className="w-full justify-start gap-2.5 h-9 text-xs font-medium bg-secondary text-foreground hover:bg-accent border border-border rounded-md"
+          className="w-full h-10 rounded-lg bg-white text-black font-semibold text-xs flex items-center justify-center gap-2 hover:bg-neutral-200 transition-colors shadow-sm font-mono tracking-tight"
         >
-          <Plus className="w-4 h-4 text-foreground" />
+          <Plus className="w-4 h-4 text-black stroke-[2.5]" />
           <span>Index Repository</span>
-        </Button>
+        </button>
       </div>
 
       {/* Navigation Links */}
-      <ScrollArea className="flex-1 px-2">
-        <div className="flex flex-col gap-1">
+      <ScrollArea className="flex-1 px-3 py-2">
+        <div className="space-y-1">
           {navItems.map((item) => (
             <NavLink
               key={item.to}
@@ -74,27 +92,89 @@ export function Sidebar({ onNewIndex }: SidebarProps) {
               end={item.to === "/"}
               className={({ isActive }) =>
                 cn(
-                  "flex items-center gap-3 py-2 px-3 rounded-md text-xs transition-colors",
+                  "flex items-center justify-between px-3 py-2.5 rounded-lg text-xs font-medium group select-none",
                   isActive
-                    ? "bg-accent text-white font-medium border border-border/80"
-                    : "text-muted-foreground hover:text-foreground hover:bg-secondary/70"
+                    ? "bg-[#141414] text-white font-semibold border border-[#2a2a2a]"
+                    : "text-neutral-400 hover:text-white hover:bg-[#0f0f0f] border border-transparent"
                 )
               }
             >
-              <item.icon className="w-4 h-4" />
-              <span>{item.label}</span>
+              {({ isActive }) => (
+                <>
+                  <div className="flex items-center gap-3">
+                    <item.icon className={cn("w-4 h-4 transition-colors", isActive ? "text-white" : "text-neutral-400 group-hover:text-white")} />
+                    <span>{item.label}</span>
+                  </div>
+                  {isActive && (
+                    <span className="w-1.5 h-1.5 rounded-full bg-white shadow-[0_0_6px_#ffffff]" />
+                  )}
+                </>
+              )}
             </NavLink>
           ))}
         </div>
       </ScrollArea>
 
-      {/* Footer Engine Status */}
-      <div className="mt-auto pt-4 border-t border-border px-3 flex items-center justify-between text-xs text-muted-foreground font-mono">
-        <span className="flex items-center gap-2">
-          <span className={`w-1.5 h-1.5 rounded-full ${backendOnline ? "bg-emerald-500 shadow-[0_0_6px_#10b981]" : "bg-red-500"}`} />
-          Engine Core
-        </span>
-        <span className="text-foreground">{backendOnline ? "Ready" : "Offline"}</span>
+      {/* Telemetry Hardware Deck */}
+      <div className="p-4 border-t border-[#1c1c1c] bg-[#080808] space-y-3">
+        {/* Core Online Pill Header */}
+        <div className="flex items-center justify-between text-xs font-mono">
+          <div className="flex items-center gap-2">
+            <span className={cn(
+              "w-2 h-2 rounded-full",
+              backendOnline ? "bg-emerald-400 shadow-[0_0_8px_#34d399]" : "bg-red-500"
+            )} />
+            <span className="text-white font-semibold text-[11px]">
+              Engine Core
+            </span>
+          </div>
+
+          <button
+            onClick={handleRefresh}
+            className="text-neutral-400 hover:text-white p-1 rounded-md hover:bg-[#1f1f1f] transition-colors"
+            title="Refresh hardware metrics"
+          >
+            <RefreshCw className={cn("w-3 h-3", refreshing && "animate-spin text-white")} />
+          </button>
+        </div>
+
+        {/* Compact Telemetry Grid */}
+        <div className="space-y-1.5 font-mono text-[11px]">
+          {/* RAM & CPU Row */}
+          <div className="grid grid-cols-2 gap-1.5">
+            <div className="p-2 rounded-lg bg-[#0e0e0e] border border-[#222222] flex flex-col gap-0.5">
+              <div className="flex items-center gap-1.5 text-neutral-400 text-[10px]">
+                <HardDrive className="w-3 h-3 text-neutral-300" />
+                <span>RAM</span>
+              </div>
+              <div className="text-white font-bold">
+                {ramUsed > 0 ? ramUsed.toFixed(1) : "--"}{" "}
+                <span className="text-neutral-400 font-normal text-[10px]">/ {ramTotal.toFixed(0)}G</span>
+              </div>
+            </div>
+
+            <div className="p-2 rounded-lg bg-[#0e0e0e] border border-[#222222] flex flex-col gap-0.5">
+              <div className="flex items-center gap-1.5 text-neutral-400 text-[10px]">
+                <Activity className="w-3 h-3 text-neutral-300" />
+                <span>CPU</span>
+              </div>
+              <div className="text-white font-bold">
+                {cpuPct > 0 ? `${cpuPct}%` : "Idle"}
+              </div>
+            </div>
+          </div>
+
+          {/* VRAM / Model Pill */}
+          <div className="p-2 rounded-lg bg-[#0e0e0e] border border-[#222222] flex items-center justify-between">
+            <div className="flex items-center gap-1.5 text-neutral-400 text-[10px]">
+              <Cpu className="w-3 h-3 text-neutral-300" />
+              <span>VRAM (GPU)</span>
+            </div>
+            <div className="text-white font-bold">
+              {vramTotal > 0 ? `${vramUsed.toFixed(1)} / ${vramTotal.toFixed(0)}G` : "-- / -- GB"}
+            </div>
+          </div>
+        </div>
       </div>
     </aside>
   );

@@ -3,9 +3,8 @@ import { TopBar } from "@/components/layout/TopBar";
 import { RepoCard } from "@/components/repositories/RepoCard";
 import { RepoDetailPanel } from "@/components/repositories/RepoDetailPanel";
 import { useRepositoryStore } from "@/stores/repository-store";
-import { Search, FolderOpen, Loader2, Plus, SlidersHorizontal } from "lucide-react";
+import { Search, FolderOpen, Loader2, GitBranch } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
 export default function Repositories() {
@@ -30,69 +29,75 @@ export default function Repositories() {
   );
 
   return (
-    <div className="flex-1 flex flex-col h-screen overflow-hidden bg-background">
-      <TopBar title="RE:Track | Repositories">
-        <div className="relative w-72 max-w-full hidden md:block">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+    <div className="flex-1 flex flex-col h-full overflow-hidden bg-black text-foreground">
+      <TopBar title="RE:Track | Workspaces & Repositories">
+        <div className="relative w-80 max-w-full hidden md:block">
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
           <Input
             type="text"
-            placeholder="Filter by name or path..."
+            placeholder="Search workspaces by name or path..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="h-8 pl-9 text-xs font-mono bg-background border-border/80"
+            className="h-9 pl-10 text-xs font-mono bg-[#0a0a0a] border-[#262626] rounded-lg text-white placeholder:text-neutral-500 focus-visible:ring-1 focus-visible:ring-white"
           />
         </div>
       </TopBar>
 
-      <main className="flex-1 flex flex-col lg:flex-row overflow-hidden p-5 gap-5">
-        {/* Repo Grid */}
-        <div className="flex-1 flex flex-col overflow-hidden">
-          <div className="flex justify-between items-center mb-4">
-            <div className="flex items-center gap-2.5">
-              <h2 className="text-base font-bold text-foreground tracking-tight">
-                Indexed Workspaces
-              </h2>
-              <Badge variant="secondary" className="text-xs font-mono">
-                {filtered.length} total
+      <main className="flex-1 flex flex-col lg:flex-row overflow-hidden p-6 gap-6 max-w-[1700px] w-full mx-auto">
+        {/* Repo Catalog Grid */}
+        <div className="flex-1 flex flex-col overflow-hidden bg-[#0a0a0a] rounded-xl border border-[#262626] p-6 shadow-2xl">
+          {/* Deck Header */}
+          <div className="flex justify-between items-center mb-6 pb-4 border-b border-[#262626]">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-black border border-[#262626] flex items-center justify-center text-white">
+                <GitBranch className="w-4 h-4 text-white" />
+              </div>
+              <div>
+                <h2 className="text-base font-bold text-white tracking-tight">
+                  Active Codebases
+                </h2>
+                <p className="text-xs font-mono text-neutral-400">
+                  AST Knowledge & Semantic Embeddings
+                </p>
+              </div>
+              <Badge variant="outline" className="text-xs font-mono border-[#2a2a2a] bg-black text-neutral-300 ml-2">
+                {filtered.length} Indexed
               </Badge>
             </div>
 
-            <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs">
-                <SlidersHorizontal className="w-3.5 h-3.5" />
-                <span>Filter</span>
-              </Button>
-              <Button size="sm" className="h-8 gap-1.5 text-xs font-semibold">
-                <Plus className="w-4 h-4" />
-                <span>Add Repo</span>
-              </Button>
+            <div className="flex items-center gap-2.5">
+              <span className="text-xs font-mono text-neutral-400 hidden sm:inline">
+                Indexed Local Catalogs
+              </span>
             </div>
           </div>
 
           {loading ? (
             <div className="flex-1 flex flex-col items-center justify-center p-12 text-center gap-3">
-              <Loader2 className="w-7 h-7 text-primary animate-spin" />
-              <p className="text-muted-foreground text-xs font-mono">
+              <Loader2 className="w-8 h-8 text-white animate-spin" />
+              <p className="text-neutral-400 text-xs font-mono">
                 Loading repository catalog...
               </p>
             </div>
           ) : filtered.length === 0 ? (
-            <div className="flex-1 flex flex-col items-center justify-center p-12 text-center gap-3 bg-card/40 rounded-xl border border-border/70">
-              <div className="w-12 h-12 rounded-full bg-secondary flex items-center justify-center">
-                <FolderOpen className="w-6 h-6 text-muted-foreground" />
+            <div className="flex-1 flex flex-col items-center justify-center p-12 text-center gap-3 bg-black rounded-xl border border-[#262626]">
+              <div className="w-12 h-12 rounded-xl bg-[#141414] border border-[#262626] flex items-center justify-center text-neutral-500">
+                <FolderOpen className="w-6 h-6 text-neutral-400" />
               </div>
               <div>
-                <h3 className="text-sm font-semibold text-foreground">
-                  {searchQuery ? "No matching repositories" : "No repositories indexed"}
+                <h3 className="text-sm font-semibold text-white">
+                  {searchQuery ? "No matching repositories found" : "No repositories indexed yet"}
                 </h3>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {searchQuery ? "Try refining your search keyword" : "Import a local folder or git repository to begin"}
+                <p className="text-xs text-neutral-400 mt-1 max-w-sm">
+                  {searchQuery
+                    ? "Try refining your search keyword above."
+                    : "Click '+ Index Repository' in the sidebar to index a local directory."}
                 </p>
               </div>
             </div>
           ) : (
-            <div className="flex-1 overflow-y-auto pr-1">
-              <div className="grid grid-cols-1 xl:grid-cols-2 gap-3.5">
+            <div className="flex-1 overflow-y-auto pr-2">
+              <div className="grid grid-cols-1 2xl:grid-cols-2 gap-4">
                 {filtered.map((repo) => (
                   <RepoCard
                     key={repo.id}
@@ -106,8 +111,10 @@ export default function Repositories() {
           )}
         </div>
 
-        {/* Detail Panel */}
-        <RepoDetailPanel />
+        {/* Fixed width Detail Panel */}
+        <div className="w-full lg:w-[440px] xl:w-[460px] flex-shrink-0 flex flex-col h-full">
+          <RepoDetailPanel />
+        </div>
       </main>
     </div>
   );

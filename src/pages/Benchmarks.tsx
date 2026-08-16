@@ -58,7 +58,7 @@ export default function Benchmarks() {
     : [];
 
   return (
-    <div className="flex-1 flex flex-col h-screen overflow-hidden bg-background">
+    <div className="flex-1 flex flex-col h-full overflow-hidden bg-black text-foreground">
       <TopBar title="RE:Track | Benchmarks" />
 
       <main className="flex-1 overflow-y-auto p-6">
