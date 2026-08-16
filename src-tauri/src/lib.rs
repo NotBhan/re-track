@@ -379,6 +379,7 @@ fn start_backend() -> Result<Child, String> {
             "8765",
         ])
         .current_dir(&backend_dir)
+        .env("PYTHONPATH", &backend_dir)
         .stdout(Stdio::from(log_file))
         .stderr(Stdio::from(log_err));
 

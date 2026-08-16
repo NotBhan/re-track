@@ -1,15 +1,4 @@
-"""Async API commands for RE:Track (RefinedEngine Track).
-
-Thin command layer that validates input, delegates to services,
-and returns serializable responses. No business logic lives here.
-
-Every command:
-- Validates request parameters
-- Logs the request with timing
-- Delegates to the appropriate service
-- Returns a Pydantic response model
-- Catches and wraps errors in ErrorResponse
-"""
+"""Async API command handlers for RE:Track."""
 
 import json
 import logging
@@ -152,7 +141,7 @@ async def initialize_backend(settings: Optional[Settings] = None) -> None:
 
 
 async def health() -> HealthResponse | ErrorResponse:
-    """Check system health: Cognee, Ollama, and storage."""
+    """Check system health: Cognee, Ollama, and host hardware metrics."""
     start = time.monotonic()
     logger.info("command: health()")
 
@@ -162,14 +151,52 @@ async def health() -> HealthResponse | ErrorResponse:
 
         ollama_reachable = settings.ollama.check_connection()
         cognee_ok = cognee is not None and cognee.is_initialized
-
         status = "ok" if (ollama_reachable and cognee_ok) else "degraded"
+
+        # Hardware metrics (safe fallback if psutil/nvidia-smi unavailable)
+        ram_total = 16.0
+        ram_used = 0.0
+        cpu_pct = 0.0
+        try:
+            import psutil
+            vm = psutil.virtual_memory()
+            ram_total = round(vm.total / (1024 ** 3), 1)
+            ram_used = round(vm.used / (1024 ** 3), 1)
+            cpu_pct = round(psutil.cpu_percent(interval=0.0), 1)
+        except Exception:
+            pass
+
+        vram_total = 0.0
+        vram_used = 0.0
+        gpu_name = None
+
+        try:
+            import subprocess
+            out = subprocess.check_output(
+                ["nvidia-smi", "--query-gpu=name,memory.total,memory.used", "--format=csv,noheader,nounits"],
+                stderr=subprocess.DEVNULL,
+                timeout=1,
+            ).decode().strip()
+            if out:
+                parts = [p.strip() for p in out.split(",")]
+                if len(parts) >= 3:
+                    gpu_name = parts[0]
+                    vram_total = round(float(parts[1]) / 1024.0, 1)
+                    vram_used = round(float(parts[2]) / 1024.0, 1)
+        except Exception:
+            pass
 
         response = HealthResponse(
             status=status,
             ollama_reachable=ollama_reachable,
             cognee_initialized=cognee_ok,
             version=VERSION,
+            ram_total_gb=ram_total,
+            ram_used_gb=ram_used,
+            cpu_percent=cpu_pct,
+            gpu_name=gpu_name,
+            vram_total_gb=vram_total,
+            vram_used_gb=vram_used,
         )
 
         elapsed = time.monotonic() - start
@@ -1182,8 +1209,18 @@ async def get_agent_context(
                 target_symbols=intent.extracted_symbols,
             )
 
-        # 3. Retrieve semantic memory from Cognee
-        package = await _context_service.generate_context_package(
+        # 3. Retrieve semantic memory from Cognee with repository summary context
+        generator = RepositorySummaryGenerator()
+        raw_files = _indexing_service.discover_files(repo_path)
+        indexed_files = _indexing_service.filter_files(raw_files, repo_path)
+        repo_summary = generator.generate(repo_path, indexed_files)
+
+        ctx_svc = ContextService(
+            cognee_service=_cognee_service,
+            repository_summary=repo_summary,
+            target_tokens=request.max_tokens or 8000,
+        )
+        package = await ctx_svc.generate_context_package(
             task=request.task_prompt,
             datasets=[dataset_name],
             top_k=15,

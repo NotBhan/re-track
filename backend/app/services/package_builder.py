@@ -182,7 +182,7 @@ class PackageBuilder:
         return sections
 
     def _format_content(self, section_type: str, results: list[RecallResult]) -> str:
-        """Format results for a specific section type.
+        """Format results for a specific section type with reasoning tags stripped.
 
         Args:
             section_type: Section type identifier.
@@ -193,7 +193,20 @@ class PackageBuilder:
         """
         if section_type == "files":
             return self._format_files(results)
-        return "\n".join(f"- {r.text.strip()}" for r in results)
+
+        import re
+        cleaned_lines = []
+        for r in results:
+            text = r.text.strip()
+            # Strip <think>...</think> blocks from reasoning models
+            text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
+            if text:
+                # If text already has markdown bullets/headings, preserve indentation
+                if text.startswith(("-", "*", "#")):
+                    cleaned_lines.append(text)
+                else:
+                    cleaned_lines.append(f"- {text}")
+        return "\n\n".join(cleaned_lines) if any("\n" in l for l in cleaned_lines) else "\n".join(cleaned_lines)
 
     def _format_files(self, results: list[RecallResult]) -> str:
         """Format file results as a concise listing.

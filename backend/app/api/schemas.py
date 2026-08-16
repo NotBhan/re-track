@@ -64,6 +64,12 @@ class HealthResponse(BaseModel):
     ollama_reachable: bool = Field(description="Whether Ollama is reachable")
     cognee_initialized: bool = Field(description="Whether CogneeService is initialized")
     version: str = Field(default="0.1.0", description="Backend version")
+    ram_total_gb: float = Field(default=0.0, description="Total host RAM in GB")
+    ram_used_gb: float = Field(default=0.0, description="Used host RAM in GB")
+    cpu_percent: float = Field(default=0.0, description="Host CPU utilization percent")
+    gpu_name: Optional[str] = Field(default=None, description="GPU device model name")
+    vram_total_gb: float = Field(default=0.0, description="Total GPU VRAM in GB")
+    vram_used_gb: float = Field(default=0.0, description="Used GPU VRAM in GB")
 
 
 class BackendStatusResponse(BaseModel):

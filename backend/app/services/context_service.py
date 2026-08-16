@@ -1,18 +1,4 @@
-"""
-Context Package generator for RE:Track (RefinedEngine Track).
-
-Transforms Cognee memory retrieval into structured Context Packages
-suitable for AI coding assistants.
-
-Pipeline:
-    Developer Request
-        → CogneeService.recall()
-        → PackageBuilder (dedup → rank → compress → categorize → budget → render)
-        → ContextPackage
-
-No LLM calls. No prompt execution. No autonomous agents.
-Only memory retrieval and deterministic package generation.
-"""
+"""Context Package synthesis service for RE:Track."""
 
 import logging
 import time
@@ -25,11 +11,7 @@ logger = logging.getLogger(__name__)
 
 
 class ContextService:
-    """Generates structured Context Packages from Cognee memory.
-
-    Orchestrates memory retrieval via CogneeService and delegates
-    package assembly to PackageBuilder.
-    """
+    """Retrieves memories and delegates context package assembly."""
 
     def __init__(
         self,
@@ -73,16 +55,21 @@ class ContextService:
 
         # Measure recall time separately from package building
         recall_start = time.monotonic()
-        recall = await self._cognee.recall(
-            query_text=task,
-            datasets=datasets,
-            top_k=top_k,
-        )
+        try:
+            recall = await self._cognee.recall(
+                query_text=task,
+                datasets=datasets,
+                top_k=top_k,
+            )
+            recall_results = recall.results
+        except Exception as e:
+            logger.warning("Cognee recall fallback to local summary: %s", e)
+            recall_results = []
         retrieval_ms = int((time.monotonic() - recall_start) * 1000)
 
         package = self._builder.build(
             task=task,
-            results=recall.results,
+            results=recall_results,
             repository_summary=self._repository_summary,
             datasets=datasets,
             retrieval_time_ms=retrieval_ms,

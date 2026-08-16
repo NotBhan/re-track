@@ -3,9 +3,11 @@ import { TopBar } from "@/components/layout/TopBar";
 import { DatasetTable } from "@/components/memory/DatasetTable";
 import { MemoryStats } from "@/components/memory/MemoryStats";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
-import { Search, Bell, User, Plus, Loader2 } from "lucide-react";
+import { Search, Loader2 } from "lucide-react";
 import { useMemoryStore } from "@/stores/memory-store";
 import { forgetDataset as forgetDatasetApi } from "@/lib/api";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 
 export default function Memory() {
   const [forgetDataset, setForgetDataset] = useState<{
@@ -13,7 +15,7 @@ export default function Memory() {
     name: string;
   } | null>(null);
 
-  const { loading, fetchDatasets, fetchStats } = useMemoryStore();
+  const { loading, fetchDatasets, fetchStats, datasets } = useMemoryStore();
 
   useEffect(() => {
     fetchDatasets();
@@ -33,55 +35,53 @@ export default function Memory() {
   };
 
   return (
-    <>
-      <TopBar>
-        <h2 className="text-[16px] leading-[24px] font-semibold text-on-surface">
-          Memory Browser
-        </h2>
-        <div className="flex-1 flex justify-end">
-          <div className="relative group">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-on-surface-variant" />
-            <input
-              type="text"
-              placeholder="Search semantic space..."
-              className="bg-surface-container border border-outline-variant/30 text-on-surface text-[14px] leading-[20px] rounded-md pl-10 pr-4 py-1.5 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 w-64 transition-all placeholder:text-on-surface-variant/50"
-            />
-            <div className="absolute right-3 top-1/2 -translate-y-1/2 flex gap-1">
-              <kbd className="font-mono text-on-surface-variant/50 border border-outline-variant/30 rounded px-1.5 text-[10px]">
-                ⌘
-              </kbd>
-              <kbd className="font-mono text-on-surface-variant/50 border border-outline-variant/30 rounded px-1.5 text-[10px]">
-                K
-              </kbd>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 ml-4">
-            <button className="text-on-surface-variant hover:text-on-surface hover:bg-surface-variant rounded-full p-2 transition-all relative">
-              <Bell className="w-5 h-5" />
-              <span className="absolute top-2 right-2 w-2 h-2 bg-primary rounded-full border border-background" />
-            </button>
-            <button className="text-on-surface-variant hover:text-on-surface hover:bg-surface-variant rounded-full p-2 transition-all">
-              <User className="w-5 h-5" />
-            </button>
-            <button className="bg-primary text-white text-[12px] leading-[16px] tracking-[0.02em] font-medium px-4 py-2 rounded-md hover:bg-primary/90 transition-colors ml-2 shadow-[0_0_15px_rgba(59,130,246,0.2)]">
-              <Plus className="w-4 h-4 inline mr-1" />
-              New Index
-            </button>
-          </div>
+    <div className="flex-1 flex flex-col h-screen overflow-hidden bg-background">
+      <TopBar title="RE:Track | Memory Graph">
+        <div className="relative w-64 hidden md:block">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+          <Input
+            type="text"
+            placeholder="Search memory space..."
+            className="h-8 pl-8 text-xs font-mono bg-background border-border/80"
+          />
         </div>
       </TopBar>
 
-      <main className="flex-1 overflow-y-auto p-6">
-        <div className="max-w-[1440px] mx-auto flex gap-6 h-full flex-col xl:flex-row">
+      <main className="flex-1 overflow-y-auto p-5">
+        <div className="max-w-6xl mx-auto space-y-5">
+          {/* Header */}
+          <div className="flex items-center justify-between border-b border-border/80 pb-4">
+            <div>
+              <div className="flex items-center gap-2.5">
+                <h1 className="text-xl font-bold tracking-tight text-foreground">
+                  Cognee Semantic Memory Graph
+                </h1>
+                <Badge variant="secondary" className="text-xs font-mono">
+                  {datasets.length} datasets
+                </Badge>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                Vector embeddings, knowledge graphs, and persistent repository concepts.
+              </p>
+            </div>
+          </div>
+
           {loading ? (
-            <div className="flex-1 flex items-center justify-center">
+            <div className="flex flex-col items-center justify-center py-24 text-center gap-3">
               <Loader2 className="w-8 h-8 text-primary animate-spin" />
+              <p className="text-xs font-mono text-muted-foreground">
+                Connecting to Cognee graph store...
+              </p>
             </div>
           ) : (
-            <>
-              <DatasetTable onForget={setForgetDataset} />
-              <MemoryStats />
-            </>
+            <div className="flex flex-col lg:flex-row gap-5">
+              <div className="flex-1">
+                <DatasetTable onForget={setForgetDataset} />
+              </div>
+              <div className="w-full lg:w-80">
+                <MemoryStats />
+              </div>
+            </div>
           )}
         </div>
       </main>
@@ -96,6 +96,6 @@ export default function Memory() {
         variant="destructive"
         onConfirm={handleConfirmForget}
       />
-    </>
+    </div>
   );
 }

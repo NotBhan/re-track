@@ -3,7 +3,10 @@ import { TopBar } from "@/components/layout/TopBar";
 import { RepoCard } from "@/components/repositories/RepoCard";
 import { RepoDetailPanel } from "@/components/repositories/RepoDetailPanel";
 import { useRepositoryStore } from "@/stores/repository-store";
-import { Search, FolderOpen, Loader2 } from "lucide-react";
+import { Search, FolderOpen, Loader2, Plus, SlidersHorizontal } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 
 export default function Repositories() {
   const {
@@ -27,62 +30,78 @@ export default function Repositories() {
   );
 
   return (
-    <>
-      <TopBar>
-        <div className="relative w-96">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-on-surface-variant" />
-          <input
+    <div className="flex-1 flex flex-col h-screen overflow-hidden bg-background">
+      <TopBar title="RE:Track | Repositories">
+        <div className="relative w-72 max-w-full hidden md:block">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
             type="text"
-            placeholder="Search repositories..."
+            placeholder="Filter by name or path..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-transparent border-b border-transparent focus:border-primary border-t-0 border-x-0 outline-none text-on-surface text-[14px] leading-[20px] pl-10 py-2 transition-colors placeholder:text-on-surface-variant/50"
+            className="h-8 pl-9 text-xs font-mono bg-background border-border/80"
           />
         </div>
       </TopBar>
-      <main className="flex-1 flex overflow-hidden p-6 gap-6">
+
+      <main className="flex-1 flex flex-col lg:flex-row overflow-hidden p-5 gap-5">
         {/* Repo Grid */}
-        <div className="flex-1 overflow-y-auto pr-2">
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-[24px] leading-[32px] tracking-[-0.01em] font-semibold text-on-surface">
-              Active Repositories
-            </h2>
-            <div className="flex gap-2">
-              <button className="border border-outline-variant bg-transparent hover:bg-surface-variant text-on-surface text-[12px] leading-[16px] tracking-[0.02em] font-medium rounded px-3 py-1.5 transition-colors flex items-center gap-2">
-                Filter
-              </button>
-              <button className="border border-outline-variant bg-transparent hover:bg-surface-variant text-on-surface text-[12px] leading-[16px] tracking-[0.02em] font-medium rounded px-3 py-1.5 transition-colors flex items-center gap-2">
-                Sort
-              </button>
+        <div className="flex-1 flex flex-col overflow-hidden">
+          <div className="flex justify-between items-center mb-4">
+            <div className="flex items-center gap-2.5">
+              <h2 className="text-base font-bold text-foreground tracking-tight">
+                Indexed Workspaces
+              </h2>
+              <Badge variant="secondary" className="text-xs font-mono">
+                {filtered.length} total
+              </Badge>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs">
+                <SlidersHorizontal className="w-3.5 h-3.5" />
+                <span>Filter</span>
+              </Button>
+              <Button size="sm" className="h-8 gap-1.5 text-xs font-semibold">
+                <Plus className="w-4 h-4" />
+                <span>Add Repo</span>
+              </Button>
             </div>
           </div>
 
           {loading ? (
-            <div className="flex flex-col items-center justify-center py-20 gap-3">
-              <Loader2 className="w-8 h-8 text-primary animate-spin" />
-              <p className="text-on-surface-variant text-[14px]">
-                Loading repositories...
+            <div className="flex-1 flex flex-col items-center justify-center p-12 text-center gap-3">
+              <Loader2 className="w-7 h-7 text-primary animate-spin" />
+              <p className="text-muted-foreground text-xs font-mono">
+                Loading repository catalog...
               </p>
             </div>
           ) : filtered.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-20 gap-3">
-              <FolderOpen className="w-12 h-12 text-on-surface-variant/50" />
-              <p className="text-on-surface-variant text-[14px]">
-                {searchQuery
-                  ? "No repositories match your search"
-                  : "No repositories indexed yet"}
-              </p>
+            <div className="flex-1 flex flex-col items-center justify-center p-12 text-center gap-3 bg-card/40 rounded-xl border border-border/70">
+              <div className="w-12 h-12 rounded-full bg-secondary flex items-center justify-center">
+                <FolderOpen className="w-6 h-6 text-muted-foreground" />
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-foreground">
+                  {searchQuery ? "No matching repositories" : "No repositories indexed"}
+                </h3>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {searchQuery ? "Try refining your search keyword" : "Import a local folder or git repository to begin"}
+                </p>
+              </div>
             </div>
           ) : (
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
-              {filtered.map((repo) => (
-                <RepoCard
-                  key={repo.id}
-                  repo={repo}
-                  selected={repo.id === selectedId}
-                  onSelect={() => select(repo.id === selectedId ? null : repo.id)}
-                />
-              ))}
+            <div className="flex-1 overflow-y-auto pr-1">
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-3.5">
+                {filtered.map((repo) => (
+                  <RepoCard
+                    key={repo.id}
+                    repo={repo}
+                    selected={repo.id === selectedId}
+                    onSelect={() => select(repo.id === selectedId ? null : repo.id)}
+                  />
+                ))}
+              </div>
             </div>
           )}
         </div>
@@ -90,6 +109,6 @@ export default function Repositories() {
         {/* Detail Panel */}
         <RepoDetailPanel />
       </main>
-    </>
+    </div>
   );
 }

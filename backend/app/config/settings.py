@@ -92,7 +92,12 @@ class Settings(BaseSettings):
     storage: StorageConfig = Field(default_factory=StorageConfig)
     service: ServiceConfig = Field(default_factory=ServiceConfig)
 
-    model_config = {"env_prefix": "", "env_file": ".env", "env_file_encoding": "utf-8"}
+    model_config = {
+        "env_prefix": "",
+        "env_file": ".env",
+        "env_file_encoding": "utf-8",
+        "extra": "ignore",
+    }
 
     @model_validator(mode="after")
     def _apply_env_overrides(self) -> "Settings":
@@ -138,15 +143,22 @@ class Settings(BaseSettings):
 
     def apply_to_environment(self) -> None:
         """Write current settings into os.environ for Cognee compatibility."""
+        llm_endpoint = os.environ.get("LLM_ENDPOINT", self.ollama.llm_endpoint)
+        embedding_endpoint = os.environ.get("EMBEDDING_ENDPOINT", self.ollama.embedding_endpoint)
+        llm_provider = os.environ.get("LLM_PROVIDER", "ollama")
+        embedding_provider = os.environ.get("EMBEDDING_PROVIDER", "ollama")
+        llm_api_key = os.environ.get("LLM_API_KEY", "ollama")
+        embedding_api_key = os.environ.get("EMBEDDING_API_KEY", "ollama")
+
         env = {
-            "LLM_PROVIDER": "ollama",
+            "LLM_PROVIDER": llm_provider,
             "LLM_MODEL": self.ollama.llm_model,
-            "LLM_ENDPOINT": self.ollama.llm_endpoint,
-            "LLM_API_KEY": "ollama",
-            "EMBEDDING_PROVIDER": "ollama",
+            "LLM_ENDPOINT": llm_endpoint,
+            "LLM_API_KEY": llm_api_key,
+            "EMBEDDING_PROVIDER": embedding_provider,
             "EMBEDDING_MODEL": self.ollama.embedding_model,
-            "EMBEDDING_ENDPOINT": self.ollama.embedding_endpoint,
-            "EMBEDDING_API_KEY": "ollama",
+            "EMBEDDING_ENDPOINT": embedding_endpoint,
+            "EMBEDDING_API_KEY": embedding_api_key,
             "EMBEDDING_DIMENSIONS": str(self.ollama.embedding_dimensions),
             "HUGGINGFACE_TOKENIZER": self.ollama.hf_tokenizer,
             "VECTOR_DB_PROVIDER": self.storage.vector_db,
@@ -162,24 +174,38 @@ class Settings(BaseSettings):
             os.environ[key] = value
 
     def configure_cognee(self) -> None:
-        """Configure Cognee's internal config object.
-
-        Cognee does not read from os.environ — it uses its own config
-        singleton. This method sets both env vars and Cognee's config.
-        """
+        """Configure Cognee's internal config object."""
         import cognee
+        import litellm
+
+        litellm.drop_params = True
 
         self.apply_to_environment()
 
-        cognee.config.set_llm_provider("ollama")
-        cognee.config.set_llm_model(self.ollama.llm_model)
-        cognee.config.set_llm_api_key("ollama")
-        cognee.config.set_llm_endpoint(self.ollama.llm_endpoint)
+        llm_provider = os.environ.get("LLM_PROVIDER", "ollama")
+        embedding_provider = os.environ.get("EMBEDDING_PROVIDER", "ollama")
+        llm_endpoint = os.environ.get("LLM_ENDPOINT", self.ollama.llm_endpoint)
+        embedding_endpoint = os.environ.get("EMBEDDING_ENDPOINT", self.ollama.embedding_endpoint)
+        llm_api_key = os.environ.get("LLM_API_KEY", "ollama")
+        embedding_api_key = os.environ.get("EMBEDDING_API_KEY", "ollama")
 
-        cognee.config.set_embedding_provider("ollama")
-        cognee.config.set_embedding_model(self.ollama.embedding_model)
-        cognee.config.set_embedding_api_key("ollama")
-        cognee.config.set_embedding_endpoint(self.ollama.embedding_endpoint)
+        llm_model = self.ollama.llm_model
+        if llm_provider == "openai" and not (llm_model.startswith("openai/") or llm_model.startswith("lm_studio/")):
+            llm_model = f"openai/{llm_model}"
+
+        cognee.config.set_llm_provider(llm_provider)
+        cognee.config.set_llm_model(llm_model)
+        cognee.config.set_llm_api_key(llm_api_key)
+        cognee.config.set_llm_endpoint(llm_endpoint)
+
+        embedding_model = self.ollama.embedding_model
+        if embedding_provider == "openai" and not (embedding_model.startswith("openai/") or embedding_model.startswith("lm_studio/")):
+            embedding_model = f"openai/{embedding_model}"
+
+        cognee.config.set_embedding_provider(embedding_provider)
+        cognee.config.set_embedding_model(embedding_model)
+        cognee.config.set_embedding_api_key(embedding_api_key)
+        cognee.config.set_embedding_endpoint(embedding_endpoint)
         cognee.config.set_embedding_dimensions(self.ollama.embedding_dimensions)
 
         cognee.config.set_vector_db_provider(self.storage.vector_db)

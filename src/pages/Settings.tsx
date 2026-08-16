@@ -5,6 +5,7 @@ import { CogneeSettings } from "@/components/settings/CogneeSettings";
 import { OllamaSettings } from "@/components/settings/OllamaSettings";
 import { StorageSettings } from "@/components/settings/StorageSettings";
 import { useSettingsStore } from "@/stores/settings-store";
+import { Badge } from "@/components/ui/badge";
 
 const tabComponents: Record<string, React.FC> = {
   backend: BackendSettings,
@@ -12,26 +13,28 @@ const tabComponents: Record<string, React.FC> = {
   ollama: OllamaSettings,
   storage: StorageSettings,
   theme: () => (
-    <div>
-      <h2 className="text-[24px] leading-[32px] tracking-[-0.01em] font-semibold text-on-surface mb-2">
-        Theme
+    <div className="space-y-2">
+      <h2 className="text-base font-bold text-foreground">
+        Appearance & Theme
       </h2>
-      <p className="text-[14px] leading-[20px] text-on-surface-variant">
-        Theme settings coming soon. The application currently uses dark mode.
+      <p className="text-xs text-muted-foreground">
+        The application is optimized for standard high-contrast dark mode.
       </p>
     </div>
   ),
   about: () => (
-    <div>
-      <h2 className="text-[24px] leading-[32px] tracking-[-0.01em] font-semibold text-on-surface mb-2">
-        About
-      </h2>
-      <p className="text-[14px] leading-[20px] text-on-surface-variant mb-4">
-        RE:Track (RefinedEngine Track) v0.1.0
-      </p>
-      <p className="text-[14px] leading-[20px] text-on-surface-variant">
-        Local-first AI memory for software development. Transform repository
-        knowledge into structured context for coding assistants.
+    <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <h2 className="text-base font-bold text-foreground">
+          About RE:Track
+        </h2>
+        <Badge variant="secondary" className="text-xs font-mono">
+          v0.1.0
+        </Badge>
+      </div>
+      <p className="text-xs text-muted-foreground leading-relaxed">
+        High-Performance local-first AI context engine for software engineering agents.
+        Transforms repository graphs and semantic memories into token-budgeted Markdown packages.
       </p>
     </div>
   ),
@@ -42,16 +45,16 @@ export default function Settings() {
   const ActiveContent = tabComponents[activeTab] || BackendSettings;
 
   return (
-    <>
-      <TopBar />
-      <main className="flex-1 flex bg-background h-full overflow-hidden">
+    <div className="flex-1 flex flex-col h-screen overflow-hidden bg-background">
+      <TopBar title="RE:Track | Settings & Engine Models" />
+      <main className="flex-1 flex bg-background overflow-hidden">
         <SettingsNav />
-        <div className="flex-1 h-full overflow-y-auto p-8 lg:p-12">
-          <div className="max-w-3xl mx-auto">
+        <div className="flex-1 h-full overflow-y-auto p-6 lg:p-8">
+          <div className="max-w-3xl">
             <ActiveContent />
           </div>
         </div>
       </main>
-    </>
+    </div>
   );
 }

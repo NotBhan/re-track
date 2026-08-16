@@ -161,60 +161,42 @@ class IndexingService:
                 len(delta.unchanged),
             )
 
-        batches = self.batch_files(target_files)
-
         progress = IndexingProgress(
             total_files=len(filtered),
-            total_batches=len(batches),
+            total_batches=1,
+            current_batch=1,
             skipped_files=len(filtered) - len(target_files),
         )
 
-        logger.info(
-            "index_repository | path=%s | total_files=%d | target_files=%d | batches=%d",
-            repo,
-            len(filtered),
-            len(target_files),
-            len(batches),
-        )
+        # Fast outline generation for cold start (LLM-free)
+        from app.services.repository_summary import RepositorySummaryGenerator
+        from app.services.renderer import MarkdownRenderer
+        summary_gen = RepositorySummaryGenerator()
+        repo_summary = summary_gen.generate(repo, filtered)
+        outline_markdown = MarkdownRenderer()._render_summary(repo_summary)
 
-        successfully_indexed: list[Path] = []
-
-        for batch_idx, batch in enumerate(batches, 1):
-            progress.current_batch = batch_idx
-            try:
-                file_paths = [str(f) for f in batch]
-                await self._cognee.remember(
-                    data=file_paths,
-                    dataset_name=dataset_name,
-                )
-                progress.processed_files += len(batch)
-                successfully_indexed.extend(batch)
-                logger.info(
-                    "batch %d/%d complete | files=%d",
-                    batch_idx,
-                    len(batches),
-                    len(batch),
-                )
-            except CogneeServiceError as e:
-                progress.failed_files += len(batch)
-                progress.failed_paths.extend(str(f) for f in batch)
-                logger.error(
-                    "batch %d/%d failed | files=%d | error=%s",
-                    batch_idx,
-                    len(batches),
-                    len(batch),
-                    e,
-                )
-
-        # Update and save manifest if any files were processed or deleted
-        if successfully_indexed or deleted_rel_paths:
-            self._manifest_service.update_manifest(
-                repo_path=repo,
+        # Ingest the clean folder structure & architecture outline into Cognee
+        try:
+            logger.info("Ingesting repository outline into memory | dataset=%s", dataset_name)
+            await self._cognee.add(
+                data=outline_markdown,
                 dataset_name=dataset_name,
-                indexed_files=successfully_indexed,
-                deleted_rel_paths=deleted_rel_paths,
-                existing_manifest=existing_manifest,
             )
+            progress.processed_files = len(filtered)
+            successfully_indexed = list(filtered)
+            logger.info("Repository outline successfully indexed into memory")
+        except CogneeServiceError as e:
+            logger.error("Failed to index repository outline into memory: %s", e)
+            progress.failed_files = len(filtered)
+
+        # Update and save manifest
+        self._manifest_service.update_manifest(
+            repo_path=repo,
+            dataset_name=dataset_name,
+            indexed_files=successfully_indexed,
+            deleted_rel_paths=deleted_rel_paths,
+            existing_manifest=existing_manifest,
+        )
 
         logger.info("indexing complete | %s", progress.summary())
         return progress

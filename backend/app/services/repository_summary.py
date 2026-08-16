@@ -123,13 +123,20 @@ class RepositorySummaryGenerator:
         )
 
     def _build_repo_map(self, files: list[Path]) -> list[DirectoryEntry]:
-        """Build a map of top-level directories."""
+        """Build a map of top-level and depth-2/3 subfolder directories."""
         dirs: dict[str, list[str]] = {}
         for f in files:
             parts = f.parts
             if len(parts) > 1:
-                top_dir = parts[0]
-                dirs.setdefault(top_dir, []).append(str(f))
+                # Top level directory
+                dirs.setdefault(parts[0], []).append(str(f))
+                # Depth 2-3 subfolder grouping if nested
+                if len(parts) >= 3:
+                    sub_key = "/".join(parts[:3])
+                    dirs.setdefault(sub_key, []).append(str(f))
+                elif len(parts) == 2:
+                    sub_key = "/".join(parts[:2])
+                    dirs.setdefault(sub_key, []).append(str(f))
             else:
                 dirs.setdefault(".", []).append(str(f))
 
@@ -140,51 +147,69 @@ class RepositorySummaryGenerator:
         return entries
 
     def _describe_directory(self, name: str, files: list[str]) -> str:
-        """Generate a one-line description for a directory."""
+        """Generate an overview description for a directory or subfolder."""
         exts = set()
         for f in files:
             p = Path(f)
             if p.suffix:
                 exts.add(p.suffix.lower())
 
+        # Standard known folder descriptions
         if name in ("tests", "test"):
-            return "Test suite"
+            return f"Test suite ({len(files)} test files)"
         if name == "docs":
-            return "Documentation"
+            return f"Documentation ({len(files)} docs)"
         if name == "scripts":
-            return "Development scripts"
+            return f"Development scripts ({len(files)} files)"
         if name == ".github":
-            return "CI/CD configuration"
+            return "CI/CD workflows and actions"
+        if "backend/app/services" in name:
+            return f"Service layer & business logic ({len(files)} services)"
+        if "backend/app/api" in name:
+            return f"API schemas, routers & benchmark commands ({len(files)} files)"
+        if "backend/app/models" in name:
+            return f"Domain models & Pydantic contracts ({len(files)} models)"
+        if "src/components" in name:
+            return f"React UI component modules ({len(files)} components)"
+        if "src/stores" in name:
+            return f"Zustand client state stores ({len(files)} stores)"
+        if "src/pages" in name:
+            return f"Application views & routing pages ({len(files)} pages)"
+
         if ".py" in exts:
             return f"Python module ({len(files)} files)"
         if ".ts" in exts or ".tsx" in exts:
             return f"TypeScript module ({len(files)} files)"
-        return f"Source directory ({len(files)} files)"
+        if ".rs" in exts:
+            return f"Rust native runtime ({len(files)} files)"
+        return f"Source module ({len(files)} files)"
 
     def _infer_architecture(self, repo_map: list[DirectoryEntry]) -> ArchitectureInfo:
         """Infer architecture from directory structure."""
         dir_names = {e.path for e in repo_map}
         layers = []
-        if "backend" in dir_names or "server" in dir_names:
+        if "backend" in dir_names or "server" in dir_names or any(d.startswith("backend/") for d in dir_names):
             layers.append("Backend")
-        if "frontend" in dir_names or "src" in dir_names:
+        if "frontend" in dir_names or "src" in dir_names or any(d.startswith("src/") for d in dir_names):
             layers.append("Frontend")
-        if "tests" in dir_names:
+        if "src-tauri" in dir_names or any(d.startswith("src-tauri/") for d in dir_names):
+            layers.append("Tauri Desktop Runtime")
+        if "tests" in dir_names or any(d.startswith("backend/tests") for d in dir_names):
             layers.append("Tests")
 
         return ArchitectureInfo(
             pattern="layered" if len(layers) > 1 else "monolith",
             layers=layers,
-            boundaries=[],
+            boundaries=[d for d in dir_names if "/" in d][:8],
             major_flows=[],
         )
 
     def _extract_components(self, files: list[Path]) -> list[ComponentInfo]:
         """Extract key components from file structure."""
         components = []
-        service_files = [f for f in files if "service" in f.name.lower()]
-        for sf in service_files[:10]:
-            name = sf.stem.replace("_", " ").title()
+        service_files = [f for f in files if "service" in f.name.lower() or "store" in f.name.lower()]
+        for sf in service_files[:12]:
+            name = sf.stem.replace("_", " ").replace("-", " ").title()
             components.append(ComponentInfo(
                 name=name,
                 responsibilities=f"Defined in {sf}",
@@ -201,10 +226,10 @@ class RepositorySummaryGenerator:
                 lines = content.strip().split("\n")
                 for line in lines:
                     line = line.strip()
-                    if line and not line.startswith("#") and not line.startswith("---"):
+                    if line and not line.startswith("#") and not line.startswith("---") and not line.startswith("!"):
                         return line[:200]
             except Exception:
                 pass
 
-        dir_names = [e.path for e in repo_map]
+        dir_names = [e.path for e in repo_map if "/" not in e.path]
         return f"Software project with directories: {', '.join(dir_names[:5])}"

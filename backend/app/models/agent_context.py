@@ -15,7 +15,7 @@ class AgentContextRequest(BaseModel):
         default=None, description="Optional logical memory dataset name"
     )
     max_tokens: int = Field(
-        default=2500, ge=200, le=8000, description="Target token budget for context package"
+        default=8000, ge=100, description="Target token budget for context package (default: 8000)"
     )
     include_structural_graph: bool = Field(
         default=True, description="Whether to include CGC call graph and dependency trees"

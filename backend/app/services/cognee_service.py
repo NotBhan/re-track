@@ -66,6 +66,41 @@ class CogneeService:
             logger.error("CogneeService initialization failed: %s", e)
             raise CogneeServiceError(f"Initialization failed: {e}") from e
 
+    async def add(
+        self,
+        data: Any,
+        dataset_name: str = "default",
+        **kwargs: Any,
+    ) -> RememberResult:
+        """Add data to memory without LLM graph extraction.
+
+        Args:
+            data: Content to ingest (str, list of str, file paths, etc.).
+            dataset_name: Logical memory namespace.
+            **kwargs: Additional arguments passed to cognee.add().
+
+        Returns:
+            RememberResult with dataset name and item count.
+
+        Raises:
+            CogneeServiceError: If ingestion fails.
+        """
+        self._ensure_initialized()
+        try:
+            items = len(data) if isinstance(data, list) else 1
+            logger.info("add() | dataset=%s | items=%d", dataset_name, items)
+            result = await cognee.add(
+                data=data, dataset_name=dataset_name, **kwargs
+            )
+            return RememberResult(
+                dataset_name=dataset_name,
+                items_sent=items,
+                raw_result=result,
+            )
+        except Exception as e:
+            logger.error("add() failed: %s", e)
+            raise CogneeServiceError(f"add() failed: {e}") from e
+
     async def remember(
         self,
         data: Any,

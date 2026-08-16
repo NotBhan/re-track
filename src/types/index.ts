@@ -7,6 +7,12 @@ export interface HealthResponse {
   ollama_reachable: boolean;
   cognee_initialized: boolean;
   version: string;
+  ram_total_gb?: number;
+  ram_used_gb?: number;
+  cpu_percent?: number;
+  gpu_name?: string | null;
+  vram_total_gb?: number;
+  vram_used_gb?: number;
 }
 
 export interface BackendStatusResponse {
