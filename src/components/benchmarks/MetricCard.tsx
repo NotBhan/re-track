@@ -1,5 +1,5 @@
 import { TrendingUp, TrendingDown, Minus } from "lucide-react";
-import type { BenchmarkMetric } from "@/types";
+import type { BenchmarkMetric } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 interface MetricCardProps {

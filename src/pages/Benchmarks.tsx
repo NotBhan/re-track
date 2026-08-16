@@ -6,7 +6,7 @@ import { LatencyChart } from "@/components/benchmarks/LatencyChart";
 import { ThroughputChart } from "@/components/benchmarks/ThroughputChart";
 import { runBenchmark } from "@/lib/api";
 import type { BenchmarkSuiteResponse } from "@/lib/api";
-import type { BenchmarkMetric } from "@/types";
+import type { BenchmarkMetric } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 

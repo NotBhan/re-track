@@ -16,6 +16,12 @@ export interface HealthResponse {
   ollama_reachable: boolean;
   cognee_initialized: boolean;
   version: string;
+  ram_total_gb?: number;
+  ram_used_gb?: number;
+  cpu_percent?: number;
+  gpu_name?: string | null;
+  vram_total_gb?: number;
+  vram_used_gb?: number;
 }
 
 export interface BackendStatusResponse {
@@ -443,4 +449,20 @@ export async function appendContextPackage(
   req: ContextPackageAppendRequest
 ): Promise<SavedContextPackage> {
   return invoke<SavedContextPackage>("append_context_package", { packageId, request: req });
+}
+
+// --- UI domain types (previously in src/types/index.ts) ---
+
+export interface BenchmarkMetric {
+  label: string;
+  value: string;
+  unit?: string;
+  trend?: string;
+  trendDirection?: "up" | "down" | "stable";
+}
+
+export interface AdvancedOptions {
+  dedup: boolean;
+  resolveRefs: boolean;
+  aggressiveCompress: boolean;
 }

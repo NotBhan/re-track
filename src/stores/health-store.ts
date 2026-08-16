@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { HealthResponse, BackendStatusResponse } from "@/types";
+import type { HealthResponse, BackendStatusResponse } from "@/lib/api";
 import { getDashboardStats, type DashboardStats } from "@/lib/api";
 
 interface HealthStore {

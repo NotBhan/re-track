@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { ContextResponse, AdvancedOptions } from "@/types";
+import type { ContextResponse, AdvancedOptions } from "@/lib/api";
 
 import { generateContext } from "@/lib/api";
 import { useRepositoryStore } from "@/stores/repository-store";
