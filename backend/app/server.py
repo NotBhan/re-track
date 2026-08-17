@@ -10,6 +10,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 
 from app.api.commands import (
     health,
@@ -23,6 +24,7 @@ from app.api.commands import (
     get_repository_summaries,
     run_benchmark,
     initialize_backend,
+    update_provider,
     list_repositories,
     create_repository,
     scan_repository,
@@ -283,3 +285,25 @@ async def agent_context_endpoint(request: AgentContextRequest):
         raise HTTPException(status_code=500, detail=result.model_dump())
     return result.model_dump()
 
+# --- Provider Management ---
+
+
+class UpdateProviderRequest(BaseModel):
+    provider: str
+    base_url: str
+    model: str
+    api_key: str = "local"
+
+
+@app.post("/provider/update")
+async def provider_update_endpoint(request: UpdateProviderRequest):
+    """Hot-reload the active LLM inference provider without restarting."""
+    result = await update_provider(
+        provider=request.provider,
+        base_url=request.base_url,
+        model=request.model,
+        api_key=request.api_key,
+    )
+    if isinstance(result, ErrorResponse):
+        raise HTTPException(status_code=500, detail=result.model_dump())
+    return result

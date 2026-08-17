@@ -33,7 +33,7 @@ export function CreateRepositoryIndexModal({
   open,
   onOpenChange,
 }: CreateRepositoryIndexModalProps) {
-  const { createAndScan, indexRepo, scanning, indexing, lastScan, clearScan } =
+  const { createAndScan, indexRepo, scanning, indexing, lastScan, clearScan, progress } =
     useRepositoryStore();
 
   const [sourceType, setSourceType] = useState<"github" | "local">("local");
@@ -49,12 +49,10 @@ export function CreateRepositoryIndexModal({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [createdRepoId, setCreatedRepoId] = useState<string | null>(null);
-  const [indexingStarted, setIndexingStarted] = useState(false);
 
   // Reset state when modal closes
   useEffect(() => {
     if (!open) {
-      setIndexingStarted(false);
       setSourceType("local");
       setGithubUrl("");
       setLocalPath("");
@@ -149,23 +147,14 @@ export function CreateRepositoryIndexModal({
   const handleIndexNow = async () => {
     if (!createdRepoId) return;
     setSubmitting(true);
-    setIndexingStarted(true);
     try {
       await indexRepo(createdRepoId);
     } catch {
-      // error is set by store
+      // error is handled and displayed by store
     } finally {
       setSubmitting(false);
     }
   };
-
-  // Auto-close modal 1s after indexing completes
-  useEffect(() => {
-    if (indexingStarted && !indexing && !error) {
-      const timer = setTimeout(() => onOpenChange(false), 1000);
-      return () => clearTimeout(timer);
-    }
-  }, [indexingStarted, indexing, error, onOpenChange]);
 
   const isScanning = scanning;
   const isIndexing = indexing;
@@ -427,7 +416,7 @@ export function CreateRepositoryIndexModal({
                     <Clock className="w-4 h-4 text-white" />
                     <span>Est. index time:</span>
                     <span className="text-white font-bold">
-                      ~{Math.ceil(lastScan!.estimated_index_time_ms / 1000)}s
+                      ~{Math.ceil((lastScan!.estimated_index_time_ms ?? (lastScan!.file_count || 1) * 60) / 1000)}s
                     </span>
                   </div>
                 </div>
@@ -446,24 +435,35 @@ export function CreateRepositoryIndexModal({
             Cancel
           </Button>
           {showScanResults ? (
-            <Button
-              type="button"
-              onClick={handleIndexNow}
-              disabled={submitting || isIndexing}
-              className="h-10 px-5 text-xs font-mono font-bold uppercase tracking-wider bg-white text-black hover:bg-neutral-200 rounded-lg shadow-sm"
-            >
-              {isIndexing ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                  Indexing AST...
-                </>
-              ) : (
-                <>
-                  <Sparkles className="w-4 h-4 mr-2" />
-                  Index Now
-                </>
-              )}
-            </Button>
+            progress?.status === "indexed" ? (
+              <Button
+                type="button"
+                onClick={() => onOpenChange(false)}
+                className="h-10 px-5 text-xs font-mono font-bold uppercase tracking-wider bg-white text-black hover:bg-neutral-200 rounded-lg shadow-sm"
+              >
+                <CheckCircle2 className="w-4 h-4 mr-2 text-emerald-600" />
+                Done
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                onClick={handleIndexNow}
+                disabled={submitting || isIndexing}
+                className="h-10 px-5 text-xs font-mono font-bold uppercase tracking-wider bg-white text-black hover:bg-neutral-200 rounded-lg shadow-sm"
+              >
+                {isIndexing ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                    Indexing AST...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-4 h-4 mr-2" />
+                    Index Now
+                  </>
+                )}
+              </Button>
+            )
           ) : (
             <Button
               type="button"

@@ -2,14 +2,14 @@
  * Tauri bridge — thin Rust layer that:
  * 1. Launches the Python backend on startup
  * 2. Waits until healthy
- * 3. Proxies Tauri commands to Python HTTP endpoints
+ * 3. Proxies Tauri commands to Python HTTP endpoints asynchronously
  * 4. Shuts down the backend on exit
  */
 
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::process::{Child, Command, Stdio};
-use std::sync::Mutex;
+use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 use tauri::Manager;
 
@@ -19,186 +19,218 @@ struct BackendProcess(Mutex<Option<Child>>);
 /// Base URL for the Python HTTP server
 const BACKEND_URL: &str = "http://127.0.0.1:8765";
 
+static HTTP_CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
+
+fn get_http_client() -> &'static reqwest::Client {
+    HTTP_CLIENT.get_or_init(|| {
+        reqwest::Client::builder()
+            .pool_max_idle_per_host(10)
+            .build()
+            .unwrap_or_else(|_| reqwest::Client::new())
+    })
+}
+
 // --- Request types (used for JSON serialization) ---
 
 #[derive(Serialize, Deserialize, Debug)]
 struct IndexRequest {
     repository_path: String,
     dataset_name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     batch_size: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    force_reindex: Option<bool>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 struct ContextRequest {
     task: String,
     datasets: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     top_k: Option<u32>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 struct ForgetRequest {
+    #[serde(skip_serializing_if = "Option::is_none")]
     dataset: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     dataset_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     data_id: Option<String>,
 }
 
 // --- Helper: HTTP client ---
 
-fn http_post<T: Serialize>(path: &str, body: &T) -> Result<serde_json::Value, String> {
+/// Extract a human-readable message from a FastAPI error body.
+fn extract_error(body: &serde_json::Value) -> String {
+    match body.get("detail") {
+        Some(serde_json::Value::Object(obj)) => obj
+            .get("message")
+            .and_then(|m| m.as_str())
+            .unwrap_or("Unknown error")
+            .to_string(),
+        Some(serde_json::Value::Array(arr)) => arr
+            .first()
+            .and_then(|e| e.get("msg"))
+            .and_then(|m| m.as_str())
+            .map(|s| format!("Validation error: {}", s))
+            .unwrap_or_else(|| "Validation error".to_string()),
+        Some(serde_json::Value::String(s)) => s.clone(),
+        _ => body.to_string(),
+    }
+}
+
+async fn http_post<T: Serialize>(path: &str, body: &T) -> Result<serde_json::Value, String> {
     let url = format!("{}{}", BACKEND_URL, path);
-    let client = reqwest::blocking::Client::new();
+    let client = get_http_client();
     let resp = client
         .post(&url)
         .json(body)
-        .timeout(Duration::from_secs(300)) // 5 min for indexing
+        .timeout(Duration::from_secs(300)) // 5 min for indexing/LLM synthesis
         .send()
+        .await
         .map_err(|e| format!("HTTP request failed: {}", e))?;
 
     let status = resp.status();
     let body: serde_json::Value = resp
         .json()
+        .await
         .map_err(|e| format!("Failed to parse response: {}", e))?;
 
     if status.is_success() {
         Ok(body)
     } else {
-        Err(body
-            .get("detail")
-            .and_then(|d| d.get("message"))
-            .and_then(|m| m.as_str())
-            .unwrap_or("Unknown error")
-            .to_string())
+        Err(extract_error(&body))
     }
 }
 
-fn http_get(path: &str) -> Result<serde_json::Value, String> {
+async fn http_get(path: &str) -> Result<serde_json::Value, String> {
     let url = format!("{}{}", BACKEND_URL, path);
-    let client = reqwest::blocking::Client::new();
+    let client = get_http_client();
     let resp = client
         .get(&url)
         .timeout(Duration::from_secs(30))
         .send()
+        .await
         .map_err(|e| format!("HTTP request failed: {}", e))?;
 
     let status = resp.status();
     let body: serde_json::Value = resp
         .json()
+        .await
         .map_err(|e| format!("Failed to parse response: {}", e))?;
 
     if status.is_success() {
         Ok(body)
     } else {
-        Err(body
-            .get("detail")
-            .and_then(|d| d.get("message"))
-            .and_then(|m| m.as_str())
-            .unwrap_or("Unknown error")
-            .to_string())
+        Err(extract_error(&body))
     }
 }
 
-fn http_delete(path: &str) -> Result<serde_json::Value, String> {
+async fn http_delete(path: &str) -> Result<serde_json::Value, String> {
     let url = format!("{}{}", BACKEND_URL, path);
-    let client = reqwest::blocking::Client::new();
+    let client = get_http_client();
     let resp = client
         .delete(&url)
         .timeout(Duration::from_secs(30))
         .send()
+        .await
         .map_err(|e| format!("HTTP request failed: {}", e))?;
 
     let status = resp.status();
     let body: serde_json::Value = resp
         .json()
+        .await
         .map_err(|e| format!("Failed to parse response: {}", e))?;
 
     if status.is_success() {
         Ok(body)
     } else {
-        Err(body
-            .get("detail")
-            .and_then(|d| d.get("message"))
-            .and_then(|m| m.as_str())
-            .unwrap_or("Unknown error")
-            .to_string())
+        Err(extract_error(&body))
     }
 }
 
 // --- Tauri commands ---
 
 #[tauri::command]
-fn health() -> Result<serde_json::Value, String> {
-    http_get("/health")
+async fn health() -> Result<serde_json::Value, String> {
+    http_get("/health").await
 }
 
 #[tauri::command]
-fn get_status() -> Result<serde_json::Value, String> {
-    http_get("/status")
+async fn get_status() -> Result<serde_json::Value, String> {
+    http_get("/status").await
 }
 
 #[tauri::command]
-fn index_repository(request: IndexRequest) -> Result<serde_json::Value, String> {
-    http_post("/index", &request)
+async fn index_repository(request: IndexRequest) -> Result<serde_json::Value, String> {
+    http_post("/index", &request).await
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 struct AgentContextReq {
     task_prompt: String,
     repository_path: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     dataset_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     max_tokens: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     include_structural_graph: Option<bool>,
 }
 
 #[tauri::command]
-fn generate_context(request: ContextRequest) -> Result<serde_json::Value, String> {
-    http_post("/context", &request)
+async fn generate_context(request: ContextRequest) -> Result<serde_json::Value, String> {
+    http_post("/context", &request).await
 }
 
 #[tauri::command]
-fn get_agent_context(request: AgentContextReq) -> Result<serde_json::Value, String> {
-    http_post("/api/v1/context", &request)
+async fn get_agent_context(request: AgentContextReq) -> Result<serde_json::Value, String> {
+    http_post("/api/v1/context", &request).await
 }
 
 #[tauri::command]
-fn forget_dataset(request: ForgetRequest) -> Result<serde_json::Value, String> {
-    http_post("/forget", &request)
+async fn forget_dataset(request: ForgetRequest) -> Result<serde_json::Value, String> {
+    http_post("/forget", &request).await
 }
 
 #[tauri::command]
-fn list_datasets() -> Result<serde_json::Value, String> {
-    http_get("/datasets")
+async fn list_datasets() -> Result<serde_json::Value, String> {
+    http_get("/datasets").await
 }
 
 #[tauri::command]
-fn get_repository_summaries() -> Result<serde_json::Value, String> {
-    http_get("/repositories")
+async fn get_repository_summaries() -> Result<serde_json::Value, String> {
+    http_get("/repositories").await
 }
 
 #[tauri::command]
-fn get_dashboard_stats() -> Result<serde_json::Value, String> {
-    http_get("/dashboard/stats")
+async fn get_dashboard_stats() -> Result<serde_json::Value, String> {
+    http_get("/dashboard/stats").await
 }
 
 #[tauri::command]
-fn get_memory_stats() -> Result<serde_json::Value, String> {
-    http_get("/memory/stats")
+async fn get_memory_stats() -> Result<serde_json::Value, String> {
+    http_get("/memory/stats").await
 }
 
 #[tauri::command]
-fn run_benchmark() -> Result<serde_json::Value, String> {
-    // POST with empty body — benchmarks can be slow, reuse 300s timeout
+async fn run_benchmark() -> Result<serde_json::Value, String> {
     let url = format!("{}/benchmarks/run", BACKEND_URL);
-    let client = reqwest::blocking::Client::new();
+    let client = get_http_client();
     let resp = client
         .post(&url)
         .json(&serde_json::json!({}))
         .timeout(Duration::from_secs(300))
         .send()
+        .await
         .map_err(|e| format!("HTTP request failed: {}", e))?;
 
     let status = resp.status();
     let body: serde_json::Value = resp
         .json()
+        .await
         .map_err(|e| format!("Failed to parse response: {}", e))?;
 
     if status.is_success() {
@@ -216,75 +248,74 @@ fn run_benchmark() -> Result<serde_json::Value, String> {
 // --- Repository commands ---
 
 #[tauri::command]
-fn list_repositories() -> Result<serde_json::Value, String> {
-    http_get("/repos")
+async fn update_provider(request: serde_json::Value) -> Result<serde_json::Value, String> {
+    http_post("/provider/update", &request).await
 }
 
 #[tauri::command]
-fn create_repository(request: serde_json::Value) -> Result<serde_json::Value, String> {
-    http_post("/repos", &request)
+async fn list_repositories() -> Result<serde_json::Value, String> {
+    http_get("/repos").await
 }
 
 #[tauri::command]
-fn scan_repository(repo_id: String) -> Result<serde_json::Value, String> {
+async fn create_repository(request: serde_json::Value) -> Result<serde_json::Value, String> {
+    http_post("/repos", &request).await
+}
+
+#[tauri::command]
+async fn scan_repository(repo_id: String) -> Result<serde_json::Value, String> {
     http_post(
         &format!("/repos/{}/scan", repo_id),
         &serde_json::json!({}),
     )
+    .await
 }
 
 #[tauri::command]
-fn get_repository_progress(repo_id: String) -> Result<serde_json::Value, String> {
-    http_get(&format!("/repos/{}/progress", repo_id))
+async fn get_repository_progress(repo_id: String) -> Result<serde_json::Value, String> {
+    http_get(&format!("/repos/{}/progress", repo_id)).await
 }
 
 #[tauri::command]
-fn delete_repository(repo_id: String) -> Result<serde_json::Value, String> {
-    http_delete(&format!("/repos/{}", repo_id))
+async fn delete_repository(repo_id: String) -> Result<serde_json::Value, String> {
+    http_delete(&format!("/repos/{}", repo_id)).await
 }
 
 // --- Context Package commands ---
 
 #[tauri::command]
-fn list_context_packages() -> Result<serde_json::Value, String> {
-    http_get("/packages")
+async fn list_context_packages() -> Result<serde_json::Value, String> {
+    http_get("/packages").await
 }
 
 #[tauri::command]
-fn save_context_package(request: serde_json::Value) -> Result<serde_json::Value, String> {
-    http_post("/packages", &request)
+async fn save_context_package(request: serde_json::Value) -> Result<serde_json::Value, String> {
+    http_post("/packages", &request).await
 }
 
 #[tauri::command]
-fn get_context_package(package_id: String) -> Result<serde_json::Value, String> {
-    http_get(&format!("/packages/{}", package_id))
+async fn get_context_package(package_id: String) -> Result<serde_json::Value, String> {
+    http_get(&format!("/packages/{}", package_id)).await
 }
 
 #[tauri::command]
-fn delete_context_package(package_id: String) -> Result<serde_json::Value, String> {
-    http_delete(&format!("/packages/{}", package_id))
+async fn delete_context_package(package_id: String) -> Result<serde_json::Value, String> {
+    http_delete(&format!("/packages/{}", package_id)).await
 }
 
 #[tauri::command]
-fn append_context_package(
+async fn append_context_package(
     package_id: String,
     request: serde_json::Value,
 ) -> Result<serde_json::Value, String> {
-    http_post(&format!("/packages/{}/append", package_id), &request)
+    http_post(&format!("/packages/{}/append", package_id), &request).await
 }
 
 // --- Backend lifecycle management ---
 
-/// Resolve the backend directory relative to the running binary.
-///
-/// During `cargo tauri dev` the binary lives inside a Cargo target dir and
-/// CARGO_MANIFEST_DIR is set, so we prefer that. In a packaged app the binary
-/// lives next to a `backend/` sibling directory.
 fn resolve_backend_dir() -> std::path::PathBuf {
-    // 1. Build-time constant — set by Cargo, only available during `cargo run`/`cargo build`.
     if let Ok(manifest) = std::env::var("CARGO_MANIFEST_DIR") {
         let src_tauri = std::path::Path::new(&manifest);
-        // CARGO_MANIFEST_DIR points to src-tauri/; go up one level to project root.
         if let Some(root) = src_tauri.parent() {
             let candidate = root.join("backend");
             if candidate.exists() {
@@ -293,10 +324,7 @@ fn resolve_backend_dir() -> std::path::PathBuf {
         }
     }
 
-    // 2. Runtime fallback — resolve relative to the running binary.
     if let Ok(exe) = std::env::current_exe() {
-        // Packaged layout: <app>/bin/<exe>  or  <app>/<exe>
-        // Walk up until we find a sibling `backend/` directory.
         let mut dir = exe.as_path();
         for _ in 0..5 {
             if let Some(parent) = dir.parent() {
@@ -309,23 +337,15 @@ fn resolve_backend_dir() -> std::path::PathBuf {
         }
     }
 
-    // 3. Last resort — assume CWD is the project root (works for manual dev runs).
     std::path::PathBuf::from("backend")
 }
 
-/// Return the path to the Python executable to use.
-///
-/// Preference order:
-/// 1. Project-local virtualenv (.venv) inside backend_dir  ← always correct
-/// 2. System pythons tried in order: python3.13, python3, python
 fn resolve_python(backend_dir: &std::path::Path) -> Result<String, String> {
-    // Prefer the project venv — it has all required packages.
     let venv_python = backend_dir.join(".venv/bin/python");
     if venv_python.exists() {
         return Ok(venv_python.to_string_lossy().to_string());
     }
 
-    // Fallback: system Python (may not have packages, but better than nothing).
     for cmd in &["python3.13", "python3", "python"] {
         if Command::new(cmd)
             .arg("--version")
@@ -344,7 +364,6 @@ fn start_backend() -> Result<Child, String> {
     let backend_dir = resolve_backend_dir();
     let python = resolve_python(&backend_dir)?;
 
-    // Required environment variables for Cognee
     let env_vars = [
         ("HUGGINGFACE_TOKENIZER", "nomic-ai/nomic-embed-text-v1"),
         ("COGNEE_SKIP_CONNECTION_TEST", "true"),
@@ -357,9 +376,6 @@ fn start_backend() -> Result<Child, String> {
         ("GRAPH_DB_PROVIDER", "kuzu"),
     ];
 
-    // Open a log file so backend stdout/stderr are visible and don't block.
-    // Piped stdio without a reader fills the OS pipe buffer and silently
-    // deadlocks the child process — avoid it.
     let log_path = std::env::temp_dir().join("retrack-backend.log");
     let log_file = fs::File::create(&log_path)
         .map_err(|e| format!("Failed to create backend log {}: {}", log_path.display(), e))?;
@@ -429,10 +445,8 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .manage(BackendProcess(Mutex::new(None)))
         .setup(|app| {
-            // Start Python backend
             let mut child = start_backend().expect("Failed to start Python backend");
 
-            // Wait for backend to be ready (cognee init can be slow on first run).
             let ready = wait_for_backend(60);
             if !ready {
                 child.kill().ok();
@@ -444,7 +458,6 @@ pub fn run() {
                 );
             }
 
-            // Store process handle
             let state = app.state::<BackendProcess>();
             *state.0.lock().unwrap() = Some(child);
 
@@ -479,6 +492,7 @@ pub fn run() {
             get_context_package,
             delete_context_package,
             append_context_package,
+            update_provider,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

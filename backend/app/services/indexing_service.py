@@ -2,20 +2,17 @@
 Repository indexing pipeline for RE:Track (RefinedEngine Track).
 
 Responsibilities only:
-- Discover repository files
-- Apply ignore rules
+- Discover repository files with directory pruning
+- Apply ignore rules (.gitignore, IGNORED_DIRS)
 - Filter supported file types
 - Batch ingestion
 - Report indexing progress
 - Call CogneeService.remember()
-
-No Context Package generation. No workspace management.
-No filesystem watching. No incremental indexing.
 """
 
 import logging
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
 from app.models.errors import CogneeServiceError
 from app.models.responses import IndexingProgress
@@ -36,6 +33,16 @@ SUPPORTED_EXTENSIONS: frozenset[str] = frozenset(
         ".yaml",
         ".yml",
         ".toml",
+        ".rs",
+        ".go",
+        ".java",
+        ".c",
+        ".cpp",
+        ".h",
+        ".cs",
+        ".html",
+        ".css",
+        ".sql",
     }
 )
 
@@ -52,6 +59,14 @@ IGNORED_DIRS: frozenset[str] = frozenset(
         ".cognee_data",
         ".cognee_system",
         "target",
+        ".cache",
+        ".next",
+        ".nuxt",
+        ".output",
+        ".turbo",
+        ".idea",
+        ".vscode",
+        "tmp",
     }
 )
 
@@ -106,6 +121,7 @@ class IndexingService:
         repo_path: str | Path,
         dataset_name: str,
         force_reindex: bool = False,
+        progress_callback: Optional[Callable[[str, int, int], None]] = None,
     ) -> IndexingProgress:
         """Index a repository into Cognee memory with incremental delta support.
 
@@ -116,6 +132,7 @@ class IndexingService:
             repo_path: Root directory of the repository.
             dataset_name: Logical memory namespace for Cognee.
             force_reindex: If True, bypasses manifest diff and re-indexes all files.
+            progress_callback: Optional callback receiving (stage_name, current_step, total_steps).
 
         Returns:
             IndexingProgress with counts and failure details.
@@ -126,6 +143,9 @@ class IndexingService:
         repo = Path(repo_path).resolve()
         if not repo.is_dir():
             raise CogneeServiceError(f"Repository path is not a directory: {repo}")
+
+        if progress_callback:
+            progress_callback("Scanning & discovering repository files...", 1, 5)
 
         all_files = self.discover_files(repo)
         filtered = self.filter_files(all_files, repo)
@@ -142,6 +162,8 @@ class IndexingService:
                     "Repository unchanged (0 modifications, %d files cached) | skipping indexing",
                     len(filtered),
                 )
+                if progress_callback:
+                    progress_callback("Indexing Completed", 5, 5)
                 return IndexingProgress(
                     total_files=len(filtered),
                     processed_files=len(filtered),
@@ -168,13 +190,24 @@ class IndexingService:
             skipped_files=len(filtered) - len(target_files),
         )
 
+        if progress_callback:
+            progress_callback("Extracting AST call graphs and symbols...", 2, 5)
+
         # Fast outline generation for cold start (LLM-free)
         from app.services.repository_summary import RepositorySummaryGenerator
         from app.services.renderer import MarkdownRenderer
         summary_gen = RepositorySummaryGenerator()
         repo_summary = summary_gen.generate(repo, filtered)
+
+        if progress_callback:
+            progress_callback("Generating repository architecture outline...", 3, 5)
+
         outline_markdown = MarkdownRenderer()._render_summary(repo_summary)
 
+        if progress_callback:
+            progress_callback("Ingesting knowledge into Cognee memory graph...", 4, 5)
+
+        successfully_indexed: list[Path] = []
         # Ingest the clean folder structure & architecture outline into Cognee
         try:
             logger.info("Ingesting repository outline into memory | dataset=%s", dataset_name)
@@ -198,11 +231,14 @@ class IndexingService:
             existing_manifest=existing_manifest,
         )
 
+        if progress_callback:
+            progress_callback("Indexing Completed", 5, 5)
+
         logger.info("indexing complete | %s", progress.summary())
         return progress
 
     def discover_files(self, root: Path) -> list[Path]:
-        """Recursively discover all files under root.
+        """Recursively discover all files under root with aggressive directory pruning.
 
         Args:
             root: Directory to scan.
@@ -211,9 +247,37 @@ class IndexingService:
             List of file paths found.
         """
         files: list[Path] = []
-        for path in root.rglob("*"):
-            if path.is_file():
-                files.append(path)
+        gitignore_patterns: set[str] = set()
+        gi_file = root / ".gitignore"
+        if gi_file.exists():
+            try:
+                for line in gi_file.read_text(errors="ignore").splitlines():
+                    line = line.strip()
+                    if line and not line.startswith("#"):
+                        pattern = line.rstrip("/").lstrip("/")
+                        if pattern:
+                            gitignore_patterns.add(pattern)
+            except Exception:
+                pass
+
+        for cur_root, dirs, filenames in Path(root).walk():
+            # In-place directory pruning: do not traverse into ignored directories
+            dirs[:] = [
+                d for d in dirs
+                if d not in self._ignored_dirs
+                and not d.startswith(".agents")
+                and not d.startswith("__")
+                and d not in gitignore_patterns
+                and not any(pat == d or pat.rstrip("/") == d for pat in gitignore_patterns)
+            ]
+
+            for f in filenames:
+                p = Path(cur_root) / f
+                rel_p = str(p.relative_to(root)) if p.is_relative_to(root) else f
+                if any(pat in rel_p or pat == f for pat in gitignore_patterns):
+                    continue
+                files.append(p)
+
         return files
 
     def filter_files(

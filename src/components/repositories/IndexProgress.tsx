@@ -60,25 +60,25 @@ export function IndexProgress({ repositoryName, repoId }: IndexProgressProps) {
     <div className="space-y-3">
       <div className="flex items-center gap-2">
         {progress?.status === "indexed" ? (
-          <CheckCircle2 className="w-4 h-4 text-secondary" />
+          <CheckCircle2 className="w-4 h-4 text-emerald-400" />
         ) : progress?.status === "error" ? (
-          <AlertCircle className="w-4 h-4 text-error" />
+          <AlertCircle className="w-4 h-4 text-red-400" />
         ) : (
-          <Loader2 className="w-4 h-4 animate-spin text-primary" />
+          <Loader2 className="w-4 h-4 animate-spin text-white" />
         )}
-        <span className="text-sm font-medium text-on-surface">
+        <span className="text-sm font-bold font-mono text-white">
           {progress?.status === "indexed"
             ? `Completed indexing ${repositoryName}`
             : `Indexing ${repositoryName}`}
         </span>
       </div>
 
-      <div className="rounded-lg bg-surface-container-lowest border border-outline-variant p-4 space-y-3">
+      <div className="rounded-xl bg-black border border-[#262626] p-4 space-y-3 font-mono">
         {/* Stage */}
         <div className="flex items-center justify-between">
-          <span className="text-sm text-on-surface-variant">{stageLabel}</span>
+          <span className="text-xs text-neutral-300">{stageLabel}</span>
           {progress && progress.status !== "indexed" && progress.status !== "error" && (
-            <span className="text-xs text-on-surface-variant/60">
+            <span className="text-xs text-neutral-500">
               {formatElapsed(elapsed)}
             </span>
           )}
@@ -86,9 +86,9 @@ export function IndexProgress({ repositoryName, repoId }: IndexProgressProps) {
 
         {/* Progress bar */}
         {progress && progress.total_files > 0 && progress.status !== "indexed" && (
-          <div className="w-full bg-surface-container-high rounded-full h-1.5">
+          <div className="w-full bg-[#141414] border border-[#262626] rounded-full h-1.5 overflow-hidden">
             <div
-              className="bg-primary h-1.5 rounded-full transition-all duration-300"
+              className="bg-white h-1.5 rounded-full transition-all duration-300"
               style={{
                 width: `${Math.min(100, (progress.processed_files / progress.total_files) * 100)}%`,
               }}
@@ -98,7 +98,7 @@ export function IndexProgress({ repositoryName, repoId }: IndexProgressProps) {
 
         {/* Stats */}
         {progress && (
-          <div className="flex flex-wrap gap-3 text-xs text-on-surface-variant">
+          <div className="flex flex-wrap gap-3 text-xs text-neutral-400">
             {progress.file_count > 0 && (
               <span>{progress.file_count} files</span>
             )}
@@ -106,7 +106,7 @@ export function IndexProgress({ repositoryName, repoId }: IndexProgressProps) {
               <span>{formatBytes(progress.size_bytes)}</span>
             )}
             {progress.total_files > 0 && (
-              <span>
+              <span className="text-white font-semibold">
                 {progress.processed_files}/{progress.total_files} processed
               </span>
             )}
@@ -115,11 +115,11 @@ export function IndexProgress({ repositoryName, repoId }: IndexProgressProps) {
 
         {/* Language/framework badges */}
         {progress && (progress.languages.length > 0 || progress.frameworks.length > 0) && (
-          <div className="flex flex-wrap gap-1.5">
+          <div className="flex flex-wrap gap-1.5 pt-1">
             {progress.languages.map((lang) => (
               <span
                 key={lang}
-                className="inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary"
+                className="inline-flex items-center rounded-md bg-[#141414] border border-[#262626] px-2 py-0.5 text-[10px] text-neutral-300 font-mono"
               >
                 {lang}
               </span>
@@ -127,7 +127,7 @@ export function IndexProgress({ repositoryName, repoId }: IndexProgressProps) {
             {progress.frameworks.map((fw) => (
               <span
                 key={fw}
-                className="inline-flex items-center rounded-full bg-secondary/10 px-2 py-0.5 text-xs text-secondary"
+                className="inline-flex items-center rounded-md bg-[#141414] border border-[#262626] px-2 py-0.5 text-[10px] text-neutral-300 font-mono"
               >
                 {fw}
               </span>
@@ -138,7 +138,7 @@ export function IndexProgress({ repositoryName, repoId }: IndexProgressProps) {
 
       {/* Error */}
       {progress?.status === "error" && progress.error && (
-        <div className="rounded-md bg-error/10 border border-error/30 px-4 py-3 text-sm text-error">
+        <div className="rounded-lg bg-red-950/40 border border-red-500/30 px-4 py-3 text-xs font-mono text-red-300">
           {progress.error}
         </div>
       )}

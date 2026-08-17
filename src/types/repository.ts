@@ -3,7 +3,7 @@ export interface CallGraphNode {
   label: string;
   file: string;
   kind: "function" | "method" | "class" | "component" | "module";
-  line: number;
+  line?: number;
 }
 
 export interface CallGraphEdge {
@@ -38,11 +38,12 @@ export interface Repository {
 }
 
 export interface ScanResult {
-  success: boolean;
+  repository_id: string;
+  file_count: number;
   languages: string[];
   frameworks: string[];
-  file_count: number;
-  size_bytes: number;
-  ignored_dirs: string[];
-  estimated_index_time_ms: number;
+  entry_points: string[];
+  summary: string;
+  components: string[];
+  estimated_index_time_ms?: number;
 }

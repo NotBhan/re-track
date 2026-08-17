@@ -7,24 +7,26 @@ import {
   Trash2,
   Grid3X3,
   List,
-  SortAsc,
 } from "lucide-react";
 import { useMemoryStore } from "@/stores/memory-store";
+import { useRepositoryStore } from "@/stores/repository-store";
 import { cn } from "@/lib/utils";
+import { Badge } from "@/components/ui/badge";
 
 interface DatasetTableProps {
   onForget: (dataset: { id: string; name: string }) => void;
 }
 
 const filterOptions = [
-  { key: "all" as const, label: "All", color: "bg-primary" },
-  { key: "vectors" as const, label: "Vectors", color: "bg-primary" },
-  { key: "graphs" as const, label: "Graphs", color: "bg-secondary" },
-  { key: "document" as const, label: "Document", color: "bg-outline" },
+  { key: "all" as const, label: "All Datasets" },
+  { key: "vectors" as const, label: "Vector Spaces" },
+  { key: "graphs" as const, label: "Knowledge Graphs" },
 ];
 
 function formatDate(dateString: string): string {
+  if (!dateString) return "N/A";
   const date = new Date(dateString);
+  if (isNaN(date.getTime())) return dateString;
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
   const diffMins = Math.floor(diffMs / 60000);
@@ -32,15 +34,14 @@ function formatDate(dateString: string): string {
   const diffDays = Math.floor(diffMs / 86400000);
 
   if (diffMins < 1) return "just now";
-  if (diffMins < 60) return `${diffMins} min${diffMins > 1 ? "s" : ""} ago`;
-  if (diffHours < 24)
-    return `${diffHours} hour${diffHours > 1 ? "s" : ""} ago`;
-  if (diffDays < 30) return `${diffDays} day${diffDays > 1 ? "s" : ""} ago`;
+  if (diffMins < 60) return `${diffMins}m ago`;
+  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffDays < 30) return `${diffDays}d ago`;
   return date.toLocaleDateString();
 }
 
 function formatBytes(bytes: number | null): string {
-  if (bytes === null) return "N/A";
+  if (bytes === null || bytes === undefined) return "N/A";
   if (bytes === 0) return "0 B";
   const k = 1024;
   const sizes = ["B", "KB", "MB", "GB", "TB"];
@@ -51,184 +52,206 @@ function formatBytes(bytes: number | null): string {
 export function DatasetTable({ onForget }: DatasetTableProps) {
   const { datasets, filterType, viewMode, setFilter, setViewMode, loading } =
     useMemoryStore();
+  const { repositories, indexRepo } = useRepositoryStore();
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
   const filtered =
     filterType === "all"
       ? datasets
       : datasets.filter((d) => {
-          const typeMap = {
-            vectors: "vector_db",
-            graphs: "graph",
-            document: "document",
-          };
-          return d.type === typeMap[filterType];
+          if (filterType === "vectors") return d.type === "vector_db" || d.type === "vectors";
+          if (filterType === "graphs") return d.type === "graph" || d.type === "knowledge_graph";
+          return true;
         });
 
   const isEmpty = !loading && datasets.length === 0;
 
   if (isEmpty) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center text-center py-12">
-        <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
-          <Database className="w-8 h-8 text-primary" />
+      <div className="flex-1 flex flex-col items-center justify-center text-center py-16 bg-[#0a0a0a] rounded-xl border border-[#262626] p-8">
+        <div className="w-14 h-14 rounded-xl bg-black border border-[#262626] flex items-center justify-center mb-4 text-neutral-400">
+          <Database className="w-6 h-6 text-white" />
         </div>
-        <h3 className="text-[16px] leading-[24px] font-semibold text-on-surface mb-2">
+        <h3 className="text-base font-bold text-white mb-1">
           No datasets indexed yet
         </h3>
-        <p className="text-[14px] leading-[20px] text-on-surface-variant">
-          Index a repository to get started
+        <p className="text-xs font-mono text-neutral-400 max-w-sm">
+          Index a repository to populate Cognee vector embeddings and AST graph topologies.
         </p>
       </div>
     );
   }
 
+  const handleExport = (datasetName: string) => {
+    const data = JSON.stringify({ dataset: datasetName, exported_at: new Date().toISOString() }, null, 2);
+    const blob = new Blob([data], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${datasetName}-memory-export.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleReindex = (datasetName: string) => {
+    const matching = repositories.find((r) => r.name === datasetName || r.id === datasetName);
+    if (matching) {
+      indexRepo(matching.id);
+    }
+  };
+
   return (
-    <div className="flex-1 flex flex-col min-w-0">
-      {/* Filters */}
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2">
-          <span className="text-[12px] leading-[16px] tracking-[0.02em] font-medium text-on-surface-variant mr-2">
-            Filters:
-          </span>
-          {filterOptions.map((f) => (
+    <div className="space-y-4">
+      {/* Controls Bar */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-1.5 bg-[#0a0a0a] p-1 rounded-lg border border-[#262626] overflow-x-auto">
+          {filterOptions.map((opt) => (
             <button
-              key={f.key}
-              onClick={() => setFilter(f.key)}
+              key={opt.key}
+              onClick={() => setFilter(opt.key)}
               className={cn(
-                "px-3 py-1 rounded-full text-[12px] leading-[16px] tracking-[0.02em] font-medium flex items-center gap-1.5 transition-colors",
-                filterType === f.key
-                  ? "bg-[#1E293B] border border-primary/30 text-primary"
-                  : "bg-surface-container border border-outline-variant/30 text-on-surface-variant hover:border-outline-variant"
+                "px-3 py-1 text-xs font-mono rounded-md transition-colors whitespace-nowrap cursor-pointer",
+                filterType === opt.key
+                  ? "bg-white text-black font-semibold shadow-xs"
+                  : "text-neutral-400 hover:text-white"
               )}
             >
-              <span className={cn("w-1.5 h-1.5 rounded-full", f.color)} />
-              {f.label}
+              {opt.label}
             </button>
           ))}
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setViewMode("grid")}
-            className={cn(
-              "p-1 rounded transition-colors",
-              viewMode === "grid"
-                ? "text-primary bg-primary/10"
-                : "text-on-surface-variant hover:text-on-surface"
-            )}
-          >
-            <Grid3X3 className="w-5 h-5" />
-          </button>
+
+        <div className="flex items-center gap-1.5 bg-[#0a0a0a] p-1 rounded-lg border border-[#262626]">
           <button
             onClick={() => setViewMode("list")}
             className={cn(
-              "p-1 rounded transition-colors",
+              "p-1.5 rounded-md transition-colors cursor-pointer",
               viewMode === "list"
-                ? "text-primary bg-primary/10"
-                : "text-on-surface-variant hover:text-on-surface"
+                ? "bg-[#262626] text-white"
+                : "text-neutral-400 hover:text-white"
             )}
+            title="List view"
           >
-            <List className="w-5 h-5" />
+            <List className="w-3.5 h-3.5" />
           </button>
-          <div className="w-px h-4 bg-outline-variant/50 mx-1" />
-          <button className="text-on-surface-variant hover:text-on-surface p-1 rounded transition-colors flex items-center gap-1 text-[12px] leading-[16px] tracking-[0.02em] font-medium">
-            <SortAsc className="w-4 h-4" />
-            Date Added
+          <button
+            onClick={() => setViewMode("grid")}
+            className={cn(
+              "p-1.5 rounded-md transition-colors cursor-pointer",
+              viewMode === "grid"
+                ? "bg-[#262626] text-white"
+                : "text-neutral-400 hover:text-white"
+            )}
+            title="Grid view"
+          >
+            <Grid3X3 className="w-3.5 h-3.5" />
           </button>
         </div>
       </div>
 
-      {/* Table */}
-      <div className="bg-surface-container border border-outline-variant rounded-lg overflow-hidden flex-1 flex flex-col">
-        {/* Header */}
-        <div className="grid grid-cols-[2fr_1fr_1fr_1.5fr_auto] gap-4 p-4 border-b border-outline-variant bg-surface-container/50">
-          <div className="text-[12px] leading-[16px] tracking-[0.02em] font-medium text-on-surface-variant uppercase">
-            Dataset / Source Repo
-          </div>
-          <div className="text-[12px] leading-[16px] tracking-[0.02em] font-medium text-on-surface-variant uppercase">
-            Type
-          </div>
-          <div className="text-[12px] leading-[16px] tracking-[0.02em] font-medium text-on-surface-variant uppercase text-right">
-            Size
-          </div>
-          <div className="text-[12px] leading-[16px] tracking-[0.02em] font-medium text-on-surface-variant uppercase">
-            Creation Date
-          </div>
-          <div className="w-8" />
-        </div>
+      {/* Table Container with Horizontal Scroll on Narrow Viewports */}
+      <div className="bg-[#0a0a0a] border border-[#262626] rounded-xl overflow-hidden shadow-2xl flex flex-col">
+        <div className="overflow-x-auto">
+          <div className="min-w-[620px]">
+            {/* Header */}
+            <div className="grid grid-cols-[2fr_1fr_1fr_1.5fr_auto] gap-4 p-4 border-b border-[#222222] bg-[#0c0c0c] text-[11px] font-mono font-semibold text-neutral-400 uppercase tracking-wider">
+              <div>Dataset / Workspace</div>
+              <div>Type</div>
+              <div className="text-right">Files / Size</div>
+              <div>Created</div>
+              <div className="w-8" />
+            </div>
 
-        {/* Rows */}
-        <div className="overflow-y-auto flex-1">
-          {filtered.map((dataset) => (
-            <div
-              key={dataset.id}
-              className="grid grid-cols-[2fr_1fr_1fr_1.5fr_auto] gap-4 p-4 border-b border-outline-variant/50 items-center hover:bg-surface-variant/20 transition-colors group cursor-pointer relative"
-            >
-              <div className="absolute left-0 top-0 bottom-0 w-1 bg-primary scale-y-0 group-hover:scale-y-100 transition-transform origin-left" />
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded bg-primary/10 border border-primary/20 flex items-center justify-center text-primary">
-                  <Database className="w-4 h-4" />
-                </div>
-                <div>
-                  <div className="text-[14px] leading-[20px] font-medium text-on-surface">
-                    {dataset.name}
-                  </div>
-                  <div className="font-mono text-on-surface-variant/70 text-[11px] mt-0.5">
-                    {dataset.source_path || "N/A"}
-                  </div>
-                </div>
-              </div>
-              <div>
-                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-bold bg-surface-variant text-on-surface-variant border border-outline-variant/30">
-                  <span className="w-1.5 h-1.5 rounded-full bg-primary" />
-                  {dataset.type}
-                </span>
-              </div>
-              <div className="font-mono text-[13px] leading-[20px] text-on-surface-variant text-right">
-                {formatBytes(dataset.size_bytes)}
-              </div>
-              <div className="text-[14px] leading-[20px] text-on-surface-variant flex items-center gap-2">
-                {formatDate(dataset.created_at)}
-              </div>
-              <div className="relative">
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setOpenMenuId(
-                      openMenuId === dataset.id ? null : dataset.id
-                    );
-                  }}
-                  className="p-1.5 text-on-surface-variant opacity-0 group-hover:opacity-100 transition-opacity hover:bg-surface-variant rounded"
+            {/* Rows */}
+            <div className="divide-y divide-[#1c1c1c]">
+              {filtered.map((dataset) => (
+                <div
+                  key={dataset.id}
+                  className="grid grid-cols-[2fr_1fr_1fr_1.5fr_auto] gap-4 p-4 items-center hover:bg-[#121212] transition-colors group relative"
                 >
-                  <MoreVertical className="w-4 h-4" />
-                </button>
-                {openMenuId === dataset.id && (
-                  <div className="absolute right-0 top-8 w-40 bg-surface-container-high border border-outline-variant/50 rounded-md shadow-[0_10px_25px_-5px_rgba(0,0,0,0.5)] py-1 z-20">
-                    <button className="w-full text-left px-3 py-1.5 text-[12px] leading-[16px] tracking-[0.02em] font-medium text-on-surface hover:bg-surface-variant flex items-center gap-2">
-                      <RefreshCw className="w-4 h-4" />
-                      Re-index
-                    </button>
-                    <button className="w-full text-left px-3 py-1.5 text-[12px] leading-[16px] tracking-[0.02em] font-medium text-on-surface hover:bg-surface-variant flex items-center gap-2">
-                      <Download className="w-4 h-4" />
-                      Export
-                    </button>
-                    <div className="h-px bg-outline-variant/30 my-1" />
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-8 h-8 rounded-lg bg-black border border-[#262626] flex items-center justify-center text-white shrink-0">
+                      <Database className="w-4 h-4" />
+                    </div>
+                    <div className="min-w-0 pr-2">
+                      <div className="text-xs font-bold text-white truncate font-mono">
+                        {dataset.name}
+                      </div>
+                      <div className="font-mono text-neutral-500 text-[11px] truncate mt-0.5">
+                        {dataset.source_path || `ID: ${dataset.id}`}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <Badge
+                      variant="outline"
+                      className="text-[10px] font-mono uppercase px-2 py-0.5 border-[#333333] bg-black text-neutral-300"
+                    >
+                      {dataset.type || "Vector DB"}
+                    </Badge>
+                  </div>
+
+                  <div className="font-mono text-xs text-neutral-300 text-right">
+                    {dataset.file_count ? `${dataset.file_count} files` : formatBytes(dataset.size_bytes)}
+                  </div>
+
+                  <div className="text-xs font-mono text-neutral-400">
+                    {formatDate(dataset.created_at)}
+                  </div>
+
+                  <div className="relative">
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        setOpenMenuId(null);
-                        onForget({ id: dataset.id, name: dataset.name });
+                        setOpenMenuId(openMenuId === dataset.id ? null : dataset.id);
                       }}
-                      className="w-full text-left px-3 py-1.5 text-[12px] leading-[16px] tracking-[0.02em] font-medium text-error hover:bg-error/10 flex items-center gap-2"
+                      className="p-1.5 text-neutral-400 hover:text-white rounded-lg border border-[#262626] bg-black hover:border-[#404040] transition-colors cursor-pointer"
                     >
-                      <Trash2 className="w-4 h-4" />
-                      Forget Dataset
+                      <MoreVertical className="w-3.5 h-3.5" />
                     </button>
+
+                    {openMenuId === dataset.id && (
+                      <div className="absolute right-0 top-9 w-44 bg-black border border-[#2e2e2e] rounded-xl shadow-2xl py-1.5 z-20 font-mono text-xs animate-in fade-in zoom-in-95 duration-100">
+                        <button
+                          onClick={() => {
+                            setOpenMenuId(null);
+                            handleReindex(dataset.name);
+                          }}
+                          className="w-full text-left px-3.5 py-2 text-neutral-300 hover:text-white hover:bg-[#1a1a1a] flex items-center gap-2 cursor-pointer"
+                        >
+                          <RefreshCw className="w-3.5 h-3.5" />
+                          <span>Re-index</span>
+                        </button>
+                        <button
+                          onClick={() => {
+                            setOpenMenuId(null);
+                            handleExport(dataset.name);
+                          }}
+                          className="w-full text-left px-3.5 py-2 text-neutral-300 hover:text-white hover:bg-[#1a1a1a] flex items-center gap-2 cursor-pointer"
+                        >
+                          <Download className="w-3.5 h-3.5" />
+                          <span>Export Metadata</span>
+                        </button>
+                        <div className="h-px bg-[#262626] my-1" />
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setOpenMenuId(null);
+                            onForget({ id: dataset.id, name: dataset.name });
+                          }}
+                          className="w-full text-left px-3.5 py-2 text-red-400 hover:bg-red-500/10 flex items-center gap-2 cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>Forget Dataset</span>
+                        </button>
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
+                </div>
+              ))}
             </div>
-          ))}
+          </div>
         </div>
       </div>
     </div>

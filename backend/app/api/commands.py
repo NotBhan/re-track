@@ -1,6 +1,7 @@
 """Async API command handlers for RE:Track."""
 
 import asyncio
+from datetime import datetime, timezone
 import json
 import logging
 import os
@@ -155,6 +156,77 @@ async def initialize_backend(settings: Optional[Settings] = None) -> None:
     logger.info("Backend services initialized")
 
 
+async def update_provider(
+    provider: str,
+    base_url: str,
+    model: str,
+    api_key: str = "local",
+) -> dict | ErrorResponse:
+    """Hot-reload the active LLM provider without restarting the backend.
+
+    Args:
+        provider: One of 'ollama', 'lmstudio', 'openai_compatible'.
+        base_url: Full base URL including /v1 suffix if needed.
+        model: Model identifier to use (e.g. 'phi4-mini:q6_k').
+        api_key: API key or sentinel string (e.g. 'lm-studio', 'ollama').
+    """
+    global _llm_provider, _intent_parser
+
+    start = time.monotonic()
+    logger.info("command: update_provider() | provider=%s url=%s model=%s", provider, base_url, model)
+
+    try:
+        provider_lower = provider.lower()
+        if "lm" in provider_lower or "studio" in provider_lower:
+            p_type = ProviderType.LM_STUDIO
+        elif "openai" in provider_lower:
+            p_type = ProviderType.OPENAI_COMPATIBLE
+        else:
+            p_type = ProviderType.OLLAMA
+
+        _llm_provider = LLMProviderService(
+            provider_type=p_type,
+            base_url=base_url.rstrip("/"),
+            api_key=api_key,
+            default_model=model,
+        )
+        _intent_parser = IntentParserService(_llm_provider)
+
+        # Synchronize Cognee's runtime config with the new provider & model
+        if _settings:
+            cog_provider = "openai" if p_type in (ProviderType.LM_STUDIO, ProviderType.OPENAI_COMPATIBLE) else "ollama"
+            os.environ["LLM_PROVIDER"] = cog_provider
+            os.environ["LLM_ENDPOINT"] = base_url.rstrip("/")
+            os.environ["LLM_MODEL"] = model
+            os.environ["LLM_API_KEY"] = api_key
+            try:
+                _settings.configure_cognee()
+            except Exception as cog_err:
+                logger.warning("Could not reconfigure Cognee runtime: %s", cog_err)
+
+        # Verify reachability immediately
+        provider_health = await _llm_provider.check_health()
+
+        elapsed = time.monotonic() - start
+        logger.info("command: update_provider() complete | reachable=%s | %.2fs", provider_health.is_reachable, elapsed)
+        return {
+            "success": True,
+            "provider": provider,
+            "base_url": base_url,
+            "model": provider_health.active_model or model,
+            "reachable": provider_health.is_reachable,
+            "loaded_models": [m.model_id for m in provider_health.loaded_models],
+        }
+
+    except Exception as e:
+        elapsed = time.monotonic() - start
+        logger.error("command: update_provider() failed | %.2fs | %s", elapsed, e)
+        return ErrorResponse(
+            error=type(e).__name__,
+            message=f"Provider update failed: {e}",
+        )
+
+
 # --- Commands ---
 
 
@@ -167,7 +239,14 @@ async def health() -> HealthResponse | ErrorResponse:
         settings = _settings or get_settings()
         cognee = _cognee_service
 
-        ollama_reachable = settings.ollama.check_connection()
+        # Use the active LLM provider to check reachability — this respects
+        # whichever provider (Ollama, LM Studio, etc.) was initialized at startup.
+        if _llm_provider is not None:
+            provider_health = await _llm_provider.check_health()
+            ollama_reachable = provider_health.is_reachable
+        else:
+            # Fallback: probe the configured Ollama socket if provider not ready yet.
+            ollama_reachable = settings.ollama.check_connection()
         cognee_ok = cognee is not None and cognee.is_initialized
         status = "ok" if (ollama_reachable and cognee_ok) else "degraded"
 
@@ -307,16 +386,32 @@ async def get_backend_status() -> BackendStatusResponse | ErrorResponse:
         settings = _settings or get_settings()
         cognee = _cognee_service
 
-        ollama_reachable = settings.ollama.check_connection()
+        # Use the active LLM provider for reachability and model info so that
+        # switching from Ollama to LM Studio is reflected here immediately.
+        if _llm_provider is not None:
+            provider_health = await _llm_provider.check_health()
+            ollama_reachable = provider_health.is_reachable
+            # Parse host/port from the provider's base_url
+            from urllib.parse import urlparse
+            parsed = urlparse(_llm_provider.base_url)
+            active_host = parsed.hostname or settings.ollama.host
+            active_port = parsed.port or settings.ollama.port
+            # Use the actual loaded model name when available, fall back to configured default.
+            active_llm_model = provider_health.active_model or _llm_provider.default_model
+        else:
+            ollama_reachable = settings.ollama.check_connection()
+            active_host = settings.ollama.host
+            active_port = settings.ollama.port
+            active_llm_model = settings.ollama.llm_model
         cognee_ok = cognee is not None and cognee.is_initialized
         status = "ok" if (ollama_reachable and cognee_ok) else "degraded"
 
         response = BackendStatusResponse(
             status=status,
             ollama_reachable=ollama_reachable,
-            ollama_host=settings.ollama.host,
-            ollama_port=settings.ollama.port,
-            llm_model=settings.ollama.llm_model,
+            ollama_host=active_host,
+            ollama_port=active_port,
+            llm_model=active_llm_model,
             embedding_model=settings.ollama.embedding_model,
             vector_db=settings.storage.vector_db,
             graph_db=settings.storage.graph_db,
@@ -372,30 +467,43 @@ async def index_repository(
                 raise ValueError(f"Path is not a directory: {request.repository_path}")
 
             # Find matching repository id if any
+            matching_repo = None
             matching_repo_id = None
             for r in _manager.list_repositories():
-                if str(Path(r.local_path).resolve()) == str(repo_path):
+                if (
+                    str(Path(r.local_path).resolve()) == str(repo_path)
+                    or r.id == request.dataset_name
+                    or r.name == request.dataset_name
+                    or Path(r.local_path).name == repo_path.name
+                ):
+                    matching_repo = r
                     matching_repo_id = r.id
                     break
 
-            if matching_repo_id:
-                _manager.set_indexing_progress(matching_repo_id, {
-                    "status": "indexing",
-                    "stage": "Synthesizing vector embeddings & knowledge graph...",
-                    "processed_files": 0,
-                    "total_files": 0,
-                    "elapsed_ms": 0,
-                    "languages": [],
-                    "frameworks": [],
-                    "error": None,
-                    "file_count": 0,
-                    "size_bytes": 0,
-                })
+            def on_progress(stage_name: str, step: int, total_steps: int):
+                if matching_repo_id:
+                    total_f = matching_repo.file_count or 1
+                    proc_f = int((step / total_steps) * total_f) if step < total_steps else total_f
+                    _manager.set_indexing_progress(matching_repo_id, {
+                        "status": "indexed" if step >= total_steps else "indexing",
+                        "stage": stage_name,
+                        "processed_files": proc_f,
+                        "total_files": total_f,
+                        "elapsed_ms": int((time.monotonic() - start) * 1000),
+                        "languages": matching_repo.languages if matching_repo else [],
+                        "frameworks": matching_repo.frameworks if matching_repo else [],
+                        "error": None,
+                        "file_count": total_f,
+                        "size_bytes": matching_repo.size_bytes if matching_repo else 0,
+                    })
+
+            on_progress("Scanning & discovering repository files...", 1, 5)
 
             progress = await _indexing_service.index_repository(
                 repo_path=repo_path,
                 dataset_name=request.dataset_name,
                 force_reindex=request.force_reindex,
+                progress_callback=on_progress,
             )
 
             # Persist repository metadata after successful indexing
@@ -408,11 +516,11 @@ async def index_repository(
                         "processed_files": progress.processed_files,
                         "total_files": progress.total_files,
                         "elapsed_ms": int((time.monotonic() - start) * 1000),
-                        "languages": [],
-                        "frameworks": [],
+                        "languages": matching_repo.languages if matching_repo else [],
+                        "frameworks": matching_repo.frameworks if matching_repo else [],
                         "error": None,
                         "file_count": progress.total_files,
-                        "size_bytes": 0,
+                        "size_bytes": matching_repo.size_bytes if matching_repo else 0,
                         "indexed_at": datetime.now(timezone.utc).isoformat(),
                     })
             elif matching_repo_id:
@@ -422,8 +530,8 @@ async def index_repository(
                     "processed_files": progress.processed_files,
                     "total_files": progress.total_files,
                     "elapsed_ms": int((time.monotonic() - start) * 1000),
-                    "languages": [],
-                    "frameworks": [],
+                    "languages": matching_repo.languages if matching_repo else [],
+                    "frameworks": matching_repo.frameworks if matching_repo else [],
                     "error": "Failed files during indexing",
                     "file_count": progress.total_files,
                     "size_bytes": 0,
@@ -608,11 +716,13 @@ def _persist_repo_metadata(repo_path: Path, file_count: int) -> None:
     """Persist repository metadata to the indexed repos store after indexing."""
     try:
         generator = RepositorySummaryGenerator()
-        # Collect indexed files by scanning the repo path
-        indexed_files = [
-            f for f in repo_path.rglob("*")
-            if f.is_file() and not f.name.startswith(".")
-        ]
+        if _indexing_service is not None:
+            indexed_files = _indexing_service.filter_files(_indexing_service.discover_files(repo_path), repo_path)
+        else:
+            indexed_files = [
+                f for f in repo_path.rglob("*")
+                if f.is_file() and not f.name.startswith(".")
+            ]
         summary = generator.generate(repo_path, indexed_files)
 
         repo_id = str(repo_path).replace("/", "_").replace("\\", "_").replace(":", "_")
@@ -675,6 +785,26 @@ def _persist_repo_metadata(repo_path: Path, file_count: int) -> None:
         store["repositories"] = repos
         _save_repo_store(store)
         logger.info("Persisted repo metadata for %s", repo_path)
+
+        # Update matching repository in manager
+        try:
+            for m_repo in _manager.list_repositories():
+                if str(Path(m_repo.local_path).resolve()) == str(repo_path.resolve()) or m_repo.id == repo_id:
+                    _manager.update_repository(
+                        m_repo.id,
+                        status="indexed",
+                        summary=summary.project_purpose or m_repo.summary,
+                        architecture=summary.architecture.pattern if summary.architecture else m_repo.architecture,
+                        components=[c.name for c in summary.key_components] if summary.key_components else m_repo.components,
+                        entry_points=[e.path for e in summary.entry_points] if summary.entry_points else m_repo.entry_points,
+                        metadata={
+                            **(m_repo.metadata or {}),
+                            "call_graph_nodes": entry["call_graph_nodes"],
+                            "call_graph_edges": entry["call_graph_edges"],
+                        },
+                    )
+        except Exception as sync_err:
+            logger.debug("Non-fatal: could not sync to manager: %s", sync_err)
     except Exception as e:
         logger.warning("Failed to persist repo metadata: %s", e)
 
@@ -901,7 +1031,38 @@ async def run_benchmark() -> BenchmarkSuiteResponse | ErrorResponse:
 
 
 def _repo_to_response(repo: Repository) -> RepositoryResponse:
-    """Convert a Repository dataclass to a Pydantic response model."""
+    """Convert a Repository dataclass to a Pydantic response model with full AST and metadata."""
+    call_graph_nodes = None
+    call_graph_edges = None
+    summary = repo.summary or ""
+    entry_points = repo.entry_points or []
+    architecture = repo.architecture or ""
+    components = repo.components or []
+    dependencies = repo.dependencies or []
+
+    # Check repo metadata
+    if repo.metadata:
+        if "call_graph_nodes" in repo.metadata:
+            call_graph_nodes = repo.metadata["call_graph_nodes"]
+        if "call_graph_edges" in repo.metadata:
+            call_graph_edges = repo.metadata["call_graph_edges"]
+
+    # Fallback to indexed repo store if not in repo.metadata
+    if not call_graph_nodes:
+        try:
+            store = _load_repo_store()
+            for r in store.get("repositories", []):
+                if r.get("path") == repo.local_path or r.get("name") == repo.name or r.get("id") == repo.id:
+                    if r.get("call_graph_nodes"):
+                        call_graph_nodes = r.get("call_graph_nodes")
+                    if r.get("call_graph_edges"):
+                        call_graph_edges = r.get("call_graph_edges")
+                    if not summary and r.get("purpose"):
+                        summary = r.get("purpose")
+                    break
+        except Exception:
+            pass
+
     return RepositoryResponse(
         id=repo.id,
         name=repo.name,
@@ -911,12 +1072,20 @@ def _repo_to_response(repo: Repository) -> RepositoryResponse:
         branch=repo.branch,
         commit_hash=repo.commit_hash,
         status=repo.status,
-        languages=repo.languages,
-        frameworks=repo.frameworks,
-        file_count=repo.file_count,
-        size_bytes=repo.size_bytes,
+        languages=repo.languages or [],
+        frameworks=repo.frameworks or [],
+        file_count=repo.file_count or 0,
+        size_bytes=repo.size_bytes or 0,
         indexed_at=repo.indexed_at,
         error_message=repo.error_message,
+        summary=summary,
+        entry_points=entry_points,
+        architecture=architecture,
+        components=components,
+        dependencies=dependencies,
+        metadata=repo.metadata or {},
+        call_graph_nodes=call_graph_nodes,
+        call_graph_edges=call_graph_edges,
     )
 
 
@@ -1346,18 +1515,21 @@ async def get_agent_context(
             ))
 
             matched_files = set()
-            for term in search_terms[:8]:
-                term_lower = term.lower()
+            term_lowers = [t.lower() for t in search_terms[:8]]
+            if term_lowers:
                 for fpath in indexed_files:
                     try:
                         rel = str(fpath.relative_to(repo_path))
-                        # Match filename or content
-                        if term_lower in rel.lower():
+                        rel_lower = rel.lower()
+                        # Match filename first (zero I/O)
+                        if any(t in rel_lower for t in term_lowers):
                             matched_files.add((rel, fpath))
-                        else:
-                            content = fpath.read_text(errors="replace")
-                            if term_lower in content.lower():
+                        elif fpath.stat().st_size < 256_000:
+                            content = fpath.read_text(errors="replace").lower()
+                            if any(t in content for t in term_lowers):
                                 matched_files.add((rel, fpath))
+                        if len(matched_files) >= 8:
+                            break
                     except Exception:
                         pass
 

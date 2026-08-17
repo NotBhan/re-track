@@ -13,7 +13,8 @@ from app.services.sources.local import LocalSource
 
 IGNORED_DIRS = frozenset({
     ".git", "node_modules", "dist", "build", "target",
-    "venv", "__pycache__", ".venv",
+    "venv", "__pycache__", ".venv", ".cache", ".next",
+    ".nuxt", ".output", "coverage", ".turbo", ".idea", ".vscode", "tmp",
 })
 
 ESTIMATED_INDEX_TIME_MS_PER_FILE = 100
@@ -316,11 +317,12 @@ class RepositoryManager:
                 and not d.startswith(".agents")
                 and not d.startswith("__")
                 and d not in gitignore_patterns
+                and not any(pat == d or pat.rstrip("/") == d for pat in gitignore_patterns)
             ]
             for f in files:
                 p = Path(root) / f
-                rel_p = p.relative_to(repo.local_path)
-                if any(pat in str(rel_p) or pat == f for pat in gitignore_patterns):
+                rel_p = str(p.relative_to(repo.local_path)) if p.is_relative_to(repo.local_path) else f
+                if any(pat in rel_p or pat == f for pat in gitignore_patterns):
                     continue
                 try:
                     size_bytes += p.stat().st_size
@@ -393,7 +395,9 @@ class RepositoryManager:
         d["frameworks"] = scan_result.frameworks
         d["file_count"] = scan_result.file_count
         d["size_bytes"] = scan_result.size_bytes
-        d["status"] = "scanning"
+        # Keep indexed status if already indexed, otherwise mark registered (ready)
+        current_status = d.get("status", "registered")
+        d["status"] = "indexed" if current_status == "indexed" else "registered"
         d["entry_points"] = entry_points
         d["architecture"] = architecture
         d["components"] = components

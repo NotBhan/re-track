@@ -1,104 +1,269 @@
+import { useEffect, useState } from "react";
+import { CheckCircle2, AlertCircle, Loader2, RefreshCw } from "lucide-react";
 import { useHealthStore } from "@/stores/health-store";
+import { updateProvider } from "@/lib/api";
+import type { UpdateProviderRequest } from "@/lib/api";
+
+const PROVIDER_DEFAULTS: Record<
+  UpdateProviderRequest["provider"],
+  { label: string; url: string; apiKey: string }
+> = {
+  ollama: {
+    label: "Ollama",
+    url: "http://127.0.0.1:11434/v1",
+    apiKey: "ollama",
+  },
+  lmstudio: {
+    label: "LM Studio",
+    url: "http://127.0.0.1:1234/v1",
+    apiKey: "lm-studio",
+  },
+  openai_compatible: {
+    label: "Custom OpenAI Compatible",
+    url: "http://127.0.0.1:8080/v1",
+    apiKey: "local",
+  },
+};
 
 export function OllamaSettings() {
-  const status = useHealthStore((s) => s.status);
+  const { status, ollamaRunning, pollHealth } = useHealthStore();
+
+  // Derive current provider from active status.
+  // Heuristic: LM Studio default port is 1234, Ollama is 11434.
+  const detectedProvider = (): UpdateProviderRequest["provider"] => {
+    if (!status) return "lmstudio";
+    const port = status.ollama_port;
+    if (port === 11434) return "ollama";
+    if (port === 1234) return "lmstudio";
+    return "openai_compatible";
+  };
+
+  const [provider, setProvider] =
+    useState<UpdateProviderRequest["provider"]>(detectedProvider);
+  const [baseUrl, setBaseUrl] = useState(
+    status
+      ? `http://${status.ollama_host}:${status.ollama_port}/v1`
+      : PROVIDER_DEFAULTS["lmstudio"].url
+  );
+  const [model, setModel] = useState(
+    status?.llm_model ?? "phi4-mini:q6_k"
+  );
+  const [apiKey, setApiKey] = useState(
+    PROVIDER_DEFAULTS[detectedProvider()].apiKey
+  );
+  const [loadedModels, setLoadedModels] = useState<string[]>([]);
+
+  const [saving, setSaving] = useState(false);
+  const [saveResult, setSaveResult] = useState<
+    { ok: boolean; message: string } | null
+  >(null);
+
+  // When provider dropdown changes, pre-fill URL and apiKey defaults.
+  const handleProviderChange = (p: UpdateProviderRequest["provider"]) => {
+    setProvider(p);
+    setBaseUrl(PROVIDER_DEFAULTS[p].url);
+    setApiKey(PROVIDER_DEFAULTS[p].apiKey);
+    setLoadedModels([]);
+    setSaveResult(null);
+  };
+
+  const handleApply = async () => {
+    setSaving(true);
+    setSaveResult(null);
+    try {
+      const result = await updateProvider({ provider, base_url: baseUrl, model, api_key: apiKey });
+      setLoadedModels(result.loaded_models ?? []);
+      // Auto-select first loaded model if current model isn't loaded
+      if (result.loaded_models?.length > 0 && !result.loaded_models.includes(model)) {
+        setModel(result.loaded_models[0]);
+      }
+      setSaveResult({
+        ok: result.reachable,
+        message: result.reachable
+          ? `Connected · ${result.loaded_models.length} model(s) loaded`
+          : "Provider unreachable — check URL and that the server is running",
+      });
+      // Refresh sidebar health status
+      await pollHealth();
+    } catch (err) {
+      setSaveResult({ ok: false, message: String(err) });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Refresh loaded model list on mount if backend is already up
+  useEffect(() => {
+    if (status && ollamaRunning) {
+      updateProvider({
+        provider: detectedProvider(),
+        base_url: `http://${status.ollama_host}:${status.ollama_port}/v1`,
+        model: status.llm_model,
+        api_key: apiKey,
+      }).then((r) => {
+        if (r.loaded_models?.length) setLoadedModels(r.loaded_models);
+      }).catch(() => {});
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const inputCls =
+    "w-full bg-[#0e0e0e] h-10 px-3 rounded-md border border-[#262626] focus:border-white focus:outline-none text-white font-mono text-[13px] transition-colors";
+  const rowCls =
+    "flex flex-col md:flex-row md:items-start gap-2 md:gap-8 border-b border-[#1c1c1c] pb-5";
+  const labelCls = "text-[12px] font-mono font-medium text-white block";
+  const subCls = "text-[11px] text-neutral-500 mt-0.5 block";
+
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <div>
-        <h2 className="text-[24px] leading-[32px] tracking-[-0.01em] font-semibold text-on-surface mb-2">
-          Inference & Provider Settings
+        <h2 className="text-[20px] font-bold text-white tracking-tight mb-1">
+          Inference &amp; Provider
         </h2>
-        <p className="text-[14px] leading-[20px] text-on-surface-variant">
-          Configure your local/remote inference engines (Ollama, LM Studio, OpenAI-compatible).
+        <p className="text-[13px] text-neutral-400">
+          Configure your local inference engine. Changes apply immediately — no restart needed.
         </p>
       </div>
 
-      <div className="bg-surface-container-lowest border border-outline-variant rounded-lg p-5 shadow-sm">
-        <div className="space-y-6">
-          {/* Provider Selection */}
-          <div className="flex flex-col md:flex-row md:items-start gap-2 md:gap-8 border-b border-outline-variant/50 pb-6">
-            <div className="md:w-1/3">
-              <label className="text-[12px] leading-[16px] tracking-[0.02em] font-medium text-on-surface block">
-                Inference Backend
-              </label>
-              <span className="text-[12px] leading-[16px] text-on-surface-variant/70 mt-1 block">
-                Select your local runner or OpenAI-compatible server.
-              </span>
-            </div>
-            <div className="md:w-2/3">
-              <select
-                defaultValue="ollama"
-                className="w-full bg-surface-container h-10 px-3 rounded-md border border-outline-variant focus:border-primary focus:ring-1 focus:ring-primary text-on-surface text-[14px] leading-[20px] transition-colors"
-              >
-                <option value="ollama">Ollama (Default: http://127.0.0.1:11434)</option>
-                <option value="lmstudio">LM Studio (http://127.0.0.1:1234/v1)</option>
-                <option value="openai_compatible">Custom OpenAI Compatible</option>
-              </select>
-            </div>
+      <div className="bg-[#0a0a0a] border border-[#262626] rounded-xl p-5 space-y-5">
+        {/* Provider dropdown */}
+        <div className={rowCls}>
+          <div className="md:w-1/3">
+            <label className={labelCls}>Inference Backend</label>
+            <span className={subCls}>Select your local runner.</span>
           </div>
-
-          {/* Endpoint */}
-          <div className="flex flex-col md:flex-row md:items-start gap-2 md:gap-8 border-b border-outline-variant/50 pb-6">
-            <div className="md:w-1/3">
-              <label className="text-[12px] leading-[16px] tracking-[0.02em] font-medium text-on-surface block">
-                Base URL / Endpoint
-              </label>
-            </div>
-            <div className="md:w-2/3">
-              <input
-                type="text"
-                defaultValue={
-                  status
-                    ? `http://${status.ollama_host}:${status.ollama_port}`
-                    : "http://127.0.0.1:11434"
-                }
-                className="w-full bg-surface-container h-10 px-3 rounded-md border border-outline-variant focus:border-primary focus:ring-1 focus:ring-primary text-on-surface font-mono text-[13px] leading-[20px] transition-colors"
-              />
-            </div>
-          </div>
-
-          {/* Model */}
-          <div className="flex flex-col md:flex-row md:items-start gap-2 md:gap-8 border-b border-outline-variant/50 pb-6">
-            <div className="md:w-1/3">
-              <label className="text-[12px] leading-[16px] tracking-[0.02em] font-medium text-on-surface block">
-                Active Reasoning Model
-              </label>
-              <span className="text-[12px] leading-[16px] text-outline text-xs mt-1 block">
-                Tuned for phi4:mini (Q6_K+ recommended for 8GB VRAM/RAM).
-              </span>
-            </div>
-            <div className="md:w-2/3 space-y-2">
-              <input
-                type="text"
-                defaultValue={status?.llm_model ?? "phi4-mini:q6_k"}
-                className="w-full bg-surface-container h-10 px-3 rounded-md border border-outline-variant focus:border-primary focus:ring-1 focus:ring-primary text-on-surface font-mono text-[13px] leading-[20px] transition-colors"
-              />
-              <p className="text-[11px] text-on-surface-variant/80">
-                RE:Track strictly runs loaded models without unapproved automatic downloads.
-              </p>
-            </div>
-          </div>
-
-          {/* Embedding Model */}
-          <div className="flex flex-col md:flex-row md:items-start gap-2 md:gap-8">
-            <div className="md:w-1/3">
-              <label className="text-[12px] leading-[16px] tracking-[0.02em] font-medium text-on-surface block">
-                Embedding Model
-              </label>
-              <span className="text-[14px] leading-[20px] text-outline text-xs mt-1 block">
-                Used for generating vector embeddings.
-              </span>
-            </div>
-            <div className="md:w-2/3">
-              <input
-                type="text"
-                readOnly
-                defaultValue={status?.embedding_model ?? "nomic-embed-text"}
-                className="w-full bg-surface-container h-10 px-3 rounded-md border border-outline-variant text-on-surface font-mono text-[13px] leading-[20px] cursor-not-allowed"
-              />
-            </div>
+          <div className="md:w-2/3">
+            <select
+              value={provider}
+              onChange={(e) =>
+                handleProviderChange(e.target.value as UpdateProviderRequest["provider"])
+              }
+              className={inputCls}
+            >
+              {(Object.keys(PROVIDER_DEFAULTS) as Array<UpdateProviderRequest["provider"]>).map(
+                (p) => (
+                  <option key={p} value={p}>
+                    {PROVIDER_DEFAULTS[p].label}
+                  </option>
+                )
+              )}
+            </select>
           </div>
         </div>
+
+        {/* Base URL */}
+        <div className={rowCls}>
+          <div className="md:w-1/3">
+            <label className={labelCls}>Base URL</label>
+            <span className={subCls}>Include /v1 suffix for OpenAI-compatible APIs.</span>
+          </div>
+          <div className="md:w-2/3">
+            <input
+              type="text"
+              value={baseUrl}
+              onChange={(e) => setBaseUrl(e.target.value)}
+              className={inputCls}
+            />
+          </div>
+        </div>
+
+        {/* Active Model */}
+        <div className={rowCls}>
+          <div className="md:w-1/3">
+            <label className={labelCls}>Active Model</label>
+            <span className={subCls}>
+              Tuned for phi4:mini (Q6_K+ recommended).
+            </span>
+          </div>
+          <div className="md:w-2/3 space-y-2">
+            {/* If we have a list of loaded models, show a select + text fallback */}
+            {loadedModels.length > 0 ? (
+              <select
+                value={model}
+                onChange={(e) => setModel(e.target.value)}
+                className={inputCls}
+              >
+                {loadedModels.map((m) => (
+                  <option key={m} value={m}>
+                    {m}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <input
+                type="text"
+                value={model}
+                onChange={(e) => setModel(e.target.value)}
+                placeholder="e.g. phi4-mini:q6_k"
+                className={inputCls}
+              />
+            )}
+            {loadedModels.length > 0 && (
+              <p className="text-[11px] text-neutral-500 font-mono">
+                {loadedModels.length} model(s) loaded in {PROVIDER_DEFAULTS[provider].label}
+              </p>
+            )}
+          </div>
+        </div>
+
+        {/* API Key */}
+        <div className="flex flex-col md:flex-row md:items-start gap-2 md:gap-8">
+          <div className="md:w-1/3">
+            <label className={labelCls}>API Key</label>
+            <span className={subCls}>
+              Use &ldquo;ollama&rdquo; or &ldquo;lm-studio&rdquo; for local servers.
+            </span>
+          </div>
+          <div className="md:w-2/3">
+            <input
+              type="text"
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
+              className={inputCls}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Footer: status + apply */}
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2 min-h-[24px]">
+          {saving && (
+            <>
+              <Loader2 className="w-4 h-4 text-neutral-400 animate-spin" />
+              <span className="text-[12px] font-mono text-neutral-400">Connecting…</span>
+            </>
+          )}
+          {!saving && saveResult && (
+            <>
+              {saveResult.ok ? (
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+              ) : (
+                <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
+              )}
+              <span
+                className={`text-[12px] font-mono ${
+                  saveResult.ok ? "text-emerald-400" : "text-red-400"
+                }`}
+              >
+                {saveResult.message}
+              </span>
+            </>
+          )}
+        </div>
+
+        <button
+          onClick={handleApply}
+          disabled={saving}
+          className="flex items-center gap-2 px-4 py-2 bg-white text-black text-[12px] font-semibold font-mono rounded-lg hover:bg-neutral-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {saving ? (
+            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+          ) : (
+            <RefreshCw className="w-3.5 h-3.5" />
+          )}
+          Apply &amp; Test
+        </button>
       </div>
     </div>
   );

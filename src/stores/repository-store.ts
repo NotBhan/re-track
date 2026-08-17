@@ -91,6 +91,7 @@ export const useRepositoryStore = create<RepositoryStore>((set, get) => ({
     } catch (err) {
       set({
         loading: false,
+        scanning: false,
         error: err instanceof Error ? err.message : "Failed to create repository",
       });
       throw err;
@@ -103,16 +104,86 @@ export const useRepositoryStore = create<RepositoryStore>((set, get) => ({
       const repo = get().repositories.find((r) => r.id === repoId);
       if (!repo) throw new Error("Repository not found");
 
-      await indexRepository({
-        repository_path: repo.local_path,
-        dataset_name: repo.name,
+      // Optimistically initialize progress so modal immediately shows active indexing
+      set({
+        progress: {
+          status: "indexing",
+          stage: "Scanning & discovering repository files...",
+          processed_files: 0,
+          total_files: repo.file_count || 1,
+          elapsed_ms: 0,
+          languages: repo.languages || [],
+          frameworks: repo.frameworks || [],
+          file_count: repo.file_count || 0,
+          size_bytes: repo.size_bytes || 0,
+          error: null,
+        },
       });
 
+      // Start polling immediately so the modal displays real-time progress transitions
       get().pollProgress(repoId);
-    } catch (err) {
+
+      const res = await indexRepository({
+        repository_path: repo.local_path,
+        dataset_name: repo.name,
+        force_reindex: true,
+      });
+
+      if (!res.success) {
+        throw new Error(res.summary || "Indexing failed");
+      }
+
+      // Explicitly mark progress as indexed and stop polling
+      const { pollInterval } = get();
+      if (pollInterval) clearInterval(pollInterval);
+
       set({
         indexing: false,
-        error: err instanceof Error ? err.message : "Failed to index repository",
+        pollInterval: null,
+        progress: {
+          status: "indexed",
+          stage: "Indexing Completed",
+          processed_files: res.processed_files || repo.file_count || 1,
+          total_files: res.total_files || repo.file_count || 1,
+          elapsed_ms: 0,
+          languages: repo.languages || [],
+          frameworks: repo.frameworks || [],
+          file_count: res.total_files || repo.file_count || 0,
+          size_bytes: repo.size_bytes || 0,
+          error: null,
+        },
+      });
+
+      await get().fetchRepositories();
+    } catch (err) {
+      const errMsg =
+        typeof err === "string"
+          ? err
+          : err instanceof Error
+          ? err.message
+          : typeof err === "object" && err !== null && "message" in err
+          ? String((err as any).message)
+          : "Failed to index repository";
+
+      const { pollInterval } = get();
+      if (pollInterval) clearInterval(pollInterval);
+
+      set({
+        indexing: false,
+        pollInterval: null,
+        error: errMsg,
+        progress: {
+          status: "error",
+          stage: "Indexing Failed",
+          processed_files: 0,
+          total_files: 1,
+          elapsed_ms: 0,
+          languages: [],
+          frameworks: [],
+          error: errMsg,
+          file_count: 0,
+          size_bytes: 0,
+        },
       });
     }
   },
@@ -121,26 +192,42 @@ export const useRepositoryStore = create<RepositoryStore>((set, get) => ({
     const existing = get().pollInterval;
     if (existing) clearInterval(existing);
 
+    // Initial poll immediately
+    getRepositoryProgress(repoId)
+      .then((progress) => {
+        set({ progress });
+        if (progress.status === "indexed" || progress.status === "error") {
+          set({ indexing: false });
+        }
+      })
+      .catch(() => {});
+
+    let pollCount = 0;
     const interval = setInterval(async () => {
+      pollCount++;
       try {
         const progress = await getRepositoryProgress(repoId);
         set({ progress });
-        if (progress.status === "indexed" || progress.status === "error") {
+        if (progress.status === "indexed" || progress.status === "error" || pollCount > 120) {
           clearInterval(interval);
           set({ pollInterval: null, indexing: false });
           await get().fetchRepositories();
         }
       } catch {
-        // Ignore polling errors
+        if (pollCount > 60) {
+          clearInterval(interval);
+          set({ pollInterval: null, indexing: false });
+        }
       }
-    }, 2000);
+    }, 400);
+
     set({ pollInterval: interval });
   },
 
   clearPoll: () => {
     const { pollInterval } = get();
     if (pollInterval) clearInterval(pollInterval);
-    set({ pollInterval: null, progress: null });
+    set({ pollInterval: null });
   },
 
   removeRepo: async (repoId: string) => {

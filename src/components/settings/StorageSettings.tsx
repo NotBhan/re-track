@@ -3,34 +3,57 @@ import { useHealthStore } from "@/stores/health-store";
 
 export function StorageSettings() {
   const status = useHealthStore((s) => s.status);
+
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <div>
-        <h2 className="text-[24px] leading-[32px] tracking-[-0.01em] font-semibold text-on-surface mb-2">
+        <h2 className="text-xl font-bold text-white tracking-tight mb-1">
           Storage &amp; Cache
         </h2>
-        <p className="text-[14px] leading-[20px] text-on-surface-variant">
-          Manage where RE:Track stores local data.
+        <p className="text-xs text-neutral-400">
+          Manage where RE:Track stores embeddings, graphs, and persistent metadata.
         </p>
       </div>
 
-      <div className="bg-surface-container-lowest border border-outline-variant rounded-lg p-5 shadow-sm">
+      <div className="bg-[#0a0a0a] border border-[#262626] rounded-xl p-5 space-y-5 shadow-2xl">
         <div className="flex flex-col md:flex-row md:items-start gap-2 md:gap-8">
           <div className="md:w-1/3">
-            <label className="text-[12px] leading-[16px] tracking-[0.02em] font-medium text-on-surface block">
-              Persistent Path
+            <label className="text-xs font-mono font-medium text-white block">
+              Data Root
             </label>
+            <span className="text-[11px] text-neutral-400 mt-0.5 block">
+              Storage root for LanceDB and Kùzu graphs.
+            </span>
           </div>
           <div className="md:w-2/3 flex gap-2">
             <input
               type="text"
               readOnly
               defaultValue={status?.data_root ?? "~/.retrack/data"}
-              className="w-full bg-surface-container h-10 px-3 rounded-md border border-outline-variant text-outline font-mono text-[13px] leading-[20px] cursor-not-allowed"
+              className="w-full bg-[#0e0e0e] h-10 px-3 rounded-lg border border-[#262626] text-neutral-400 font-mono text-xs cursor-default outline-none select-all"
             />
-            <button className="px-3 h-10 bg-surface-container hover:bg-surface-bright border border-outline-variant rounded-md text-on-surface transition-colors">
-              <FolderOpen className="w-5 h-5" />
-            </button>
+            <div className="p-2.5 h-10 bg-black border border-[#262626] rounded-lg text-neutral-400 flex items-center justify-center">
+              <FolderOpen className="w-4 h-4" />
+            </div>
+          </div>
+        </div>
+
+        <div className="flex flex-col md:flex-row md:items-start gap-2 md:gap-8 border-t border-[#1c1c1c] pt-5">
+          <div className="md:w-1/3">
+            <label className="text-xs font-mono font-medium text-white block">
+              System Root
+            </label>
+            <span className="text-[11px] text-neutral-400 mt-0.5 block">
+              Storage root for Cognee system caches and manifests.
+            </span>
+          </div>
+          <div className="md:w-2/3 flex gap-2">
+            <input
+              type="text"
+              readOnly
+              defaultValue={status?.system_root ?? "~/.retrack/system"}
+              className="w-full bg-[#0e0e0e] h-10 px-3 rounded-lg border border-[#262626] text-neutral-400 font-mono text-xs cursor-default outline-none select-all"
+            />
           </div>
         </div>
       </div>

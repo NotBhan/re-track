@@ -20,10 +20,10 @@ class IndexRepositoryRequest(BaseModel):
     dataset_name: str = Field(
         ..., min_length=1, description="Logical memory namespace for Cognee"
     )
-    batch_size: int = Field(
+    batch_size: Optional[int] = Field(
         default=10, ge=1, le=100, description="Files per ingestion batch"
     )
-    force_reindex: bool = Field(
+    force_reindex: Optional[bool] = Field(
         default=False, description="Force complete re-indexing bypassing manifest diff"
     )
 
@@ -35,9 +35,9 @@ class GenerateContextRequest(BaseModel):
         ..., min_length=1, description="Developer request or question"
     )
     datasets: list[str] = Field(
-        ..., description="Dataset names to search"
+        default_factory=list, description="Datasets to search"
     )
-    top_k: int = Field(default=20, ge=1, le=100, description="Maximum memories to retrieve")
+    top_k: Optional[int] = Field(default=20, ge=1, le=100, description="Maximum memories to retrieve")
 
 
 class ForgetDatasetRequest(BaseModel):
@@ -365,6 +365,8 @@ class RepositoryResponse(BaseModel):
     components: list[str] = Field(default_factory=list, description="Top-level code directories")
     dependencies: list[str] = Field(default_factory=list, description="External dependencies")
     metadata: dict = Field(default_factory=dict, description="Extensible metadata")
+    call_graph_nodes: Optional[list[dict]] = Field(default=None, description="Extracted call graph nodes")
+    call_graph_edges: Optional[list[dict]] = Field(default=None, description="Extracted call graph edges")
 
 
 class RepositoryListResponse(BaseModel):

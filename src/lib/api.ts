@@ -43,6 +43,7 @@ export interface IndexRepositoryRequest {
   repository_path: string;
   dataset_name: string;
   batch_size?: number;
+  force_reindex?: boolean;
 }
 
 export interface IndexRepositoryResponse {
@@ -275,6 +276,31 @@ export async function health(): Promise<HealthResponse> {
  */
 export async function getBackendStatus(): Promise<BackendStatusResponse> {
   return invoke<BackendStatusResponse>("get_status");
+}
+
+export interface UpdateProviderRequest {
+  provider: "ollama" | "lmstudio" | "openai_compatible";
+  base_url: string;
+  model: string;
+  api_key?: string;
+}
+
+export interface UpdateProviderResponse {
+  success: boolean;
+  provider: string;
+  base_url: string;
+  model: string;
+  reachable: boolean;
+  loaded_models: string[];
+}
+
+/**
+ * Hot-reload the active LLM inference provider without restarting the backend.
+ */
+export async function updateProvider(
+  request: UpdateProviderRequest
+): Promise<UpdateProviderResponse> {
+  return invoke<UpdateProviderResponse>("update_provider", { request });
 }
 
 /**

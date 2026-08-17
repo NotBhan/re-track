@@ -4,7 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppShell } from "@/components/layout/AppShell";
 import { CreateRepositoryIndexModal } from "@/components/repositories/CreateRepositoryIndexModal";
 import { Toaster } from "@/components/ui/toast";
-import Dashboard from "@/pages/Dashboard";
+import ContextStudio from "@/pages/ContextStudio";
 import Repositories from "@/pages/Repositories";
 import KnowledgeExplorer from "@/pages/KnowledgeExplorer";
 import ContextBuilder from "@/pages/ContextBuilder";
@@ -23,7 +23,7 @@ function App() {
         <AppShell onNewIndex={() => setCreateModalOpen(true)}>
           <Routes>
             <Route path="/" element={<Repositories />} />
-            <Route path="/studio" element={<Dashboard />} />
+            <Route path="/studio" element={<ContextStudio />} />
             <Route path="/knowledge/:repoId" element={<KnowledgeExplorer />} />
             <Route path="/context-builder" element={<ContextBuilder />} />
             <Route path="/packages" element={<ContextPackages />} />

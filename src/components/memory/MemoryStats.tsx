@@ -1,4 +1,4 @@
-import { Database } from "lucide-react";
+import { Database, Network, FileCode } from "lucide-react";
 import { useMemoryStore } from "@/stores/memory-store";
 
 export function MemoryStats() {
@@ -15,38 +15,41 @@ export function MemoryStats() {
   };
 
   return (
-    <div className="w-full xl:w-80 flex flex-col gap-6">
-      <div className="bg-surface-container border border-outline-variant rounded-lg p-5 relative overflow-hidden group">
-        {/* Ambient Glow */}
-        <div className="absolute -top-10 -right-10 w-32 h-32 bg-primary/10 rounded-full blur-3xl group-hover:bg-primary/20 transition-all duration-700" />
-
-        <h3 className="text-[12px] leading-[16px] tracking-[0.02em] font-medium text-on-surface-variant uppercase tracking-wider mb-4 flex items-center gap-2">
-          <Database className="w-4 h-4" />
-          Memory Topology
+    <div className="w-full flex flex-col gap-4">
+      <div className="bg-[#0a0a0a] border border-[#262626] rounded-xl p-5 shadow-2xl space-y-4">
+        <h3 className="text-xs font-mono font-semibold text-neutral-400 uppercase tracking-wider flex items-center gap-2">
+          <Database className="w-4 h-4 text-white" />
+          <span>Memory Topology</span>
         </h3>
+
         <div className="space-y-4">
-          <div>
-            <div className="font-mono text-on-surface-variant/70 text-[11px] mb-1">
-              Total Stored Data
+          <div className="p-3.5 bg-black rounded-lg border border-[#222222]">
+            <div className="font-mono text-neutral-500 text-[11px] uppercase tracking-wider mb-1 flex items-center gap-1.5">
+              <FileCode className="w-3.5 h-3.5 text-white" />
+              <span>Total Stored Memory</span>
             </div>
-            <div className="text-[32px] leading-[40px] tracking-[-0.02em] font-semibold text-on-surface flex items-baseline gap-1">
-              {stats?.total_size_display || "N/A"}
+            <div className="text-2xl font-bold text-white font-mono">
+              {stats?.total_size_display || "0 files"}
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-4 pt-3 border-t border-outline-variant/50">
-            <div>
-              <div className="font-mono text-on-surface-variant/70 text-[11px] mb-1">
-                Graph Nodes
+
+          <div className="grid grid-cols-2 gap-3 pt-1">
+            <div className="p-3 bg-black rounded-lg border border-[#222222]">
+              <div className="font-mono text-neutral-500 text-[10px] uppercase tracking-wider mb-1 flex items-center gap-1">
+                <Network className="w-3 h-3 text-neutral-400" />
+                <span>Graph Nodes</span>
               </div>
-              <div className="text-[20px] leading-[28px] font-semibold text-on-surface">
+              <div className="text-lg font-bold text-white font-mono">
                 {formatNumber(stats?.graph_nodes || 0)}
               </div>
             </div>
-            <div>
-              <div className="font-mono text-on-surface-variant/70 text-[11px] mb-1">
-                Graph Edges
+
+            <div className="p-3 bg-black rounded-lg border border-[#222222]">
+              <div className="font-mono text-neutral-500 text-[10px] uppercase tracking-wider mb-1 flex items-center gap-1">
+                <Network className="w-3 h-3 text-neutral-400" />
+                <span>Graph Edges</span>
               </div>
-              <div className="text-[20px] leading-[28px] font-semibold text-secondary">
+              <div className="text-lg font-bold text-white font-mono">
                 {formatNumber(stats?.graph_edges || 0)}
               </div>
             </div>

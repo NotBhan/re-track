@@ -87,18 +87,37 @@ npx tsc --noEmit       # Type check
 # Child DOX Index
 
 src/components/
-  Shared UI components and feature-level components.
+  Shared UI components, design tokens, and feature-level components.
 
 src/components/repositories/
-  CallGraphView.tsx — interactive force-directed call graph SVG.
+  RepositoryCard.tsx — Repository card view.
+  RepositoryDetailPanel.tsx — Right panel with repository summary, files, and actions.
+  CallGraphView.tsx — Interactive force-directed call graph SVG.
+  ReindexModal.tsx — Telemetry progress modal for repository indexing.
+
+src/components/context-builder/
+  ContextPipelineInputs.tsx — Parameter inputs for multi-stage context synthesis.
+  ContextPipelineVisualization.tsx — Visual pipeline stages & metrics.
+  ContextPackageOutputPanel.tsx — Formatted/Raw Context Package preview & actions.
+
+src/components/context-packages/
+  ContextPackageCard.tsx — Saved Context Package card with diff/copy/export tools.
 
 src/pages/
-  Dashboard.tsx — main workspace (Prompt Workbench + Repository AST Map).
-  Memory.tsx, Benchmarks.tsx, Settings.tsx.
+  ContextStudio.tsx — Main workspace (Prompt Workbench + Synthesis Modal + AST Map).
+  Repositories.tsx — Repository catalog & management.
+  KnowledgeExplorer.tsx — Structural AST and call graph inspection.
+  ContextBuilder.tsx — Multi-stage context pipeline studio.
+  ContextPackages.tsx — Saved Context Packages library & comparison.
+  Memory.tsx — Cognee dataset inspector.
+  Benchmarks.tsx — Latency & throughput analytics.
+  Settings.tsx — Backend, Ollama, Cognee, & Storage configuration.
 
 src/stores/
-  repository-store.ts — indexed repositories, active repo selection.
-  health-store.ts — backend health polling.
+  repository-store.ts — Indexed repositories, active selection, and reindexing telemetry.
+  context-store.ts — Multi-stage context pipeline state.
+  context-package-store.ts — Saved packages store with localStorage persistence.
+  health-store.ts — Backend, Ollama, and Cognee telemetry polling.
 
 src/types/
   repository.ts — Repository, CallGraphNode, CallGraphEdge, ScanResult.

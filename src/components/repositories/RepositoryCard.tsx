@@ -8,6 +8,7 @@ import {
   Trash2,
   GitBranch,
   ArrowUpRight,
+  Zap,
 } from "lucide-react";
 import { LanguageBadge } from "./LanguageBadge";
 import { cn } from "@/lib/utils";
@@ -15,8 +16,10 @@ import type { Repository } from "@/types/repository";
 import { useRepositoryStore } from "@/stores/repository-store";
 import { Badge } from "@/components/ui/badge";
 import { ReindexModal } from "./ReindexModal";
+import { QuickContextModal } from "./QuickContextModal";
+import { motion } from "motion/react";
 
-interface RepoCardProps {
+interface RepositoryCardProps {
   repo: Repository;
   selected: boolean;
   onSelect: () => void;
@@ -30,10 +33,11 @@ function formatBytes(bytes: number): string {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
 }
 
-export function RepoCard({ repo, selected, onSelect }: RepoCardProps) {
+export function RepositoryCard({ repo, selected, onSelect }: RepositoryCardProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [showReindexModal, setShowReindexModal] = useState(false);
+  const [showQuickContext, setShowQuickContext] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const { indexRepo, removeRepo } = useRepositoryStore();
@@ -50,24 +54,28 @@ export function RepoCard({ repo, selected, onSelect }: RepoCardProps) {
   }, [menuOpen]);
 
   return (
-    <div
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      whileHover={{ y: -2 }}
+      transition={{ duration: 0.2 }}
       onClick={onSelect}
       className={cn(
-        "rounded-xl p-6 transition-all cursor-pointer group relative bg-[#0a0a0a] border",
+        "rounded-xl p-5 sm:p-6 transition-all cursor-pointer group relative bg-[#0a0a0a] border",
         selected
-          ? "border-white shadow-[0_0_20px_rgba(255,255,255,0.06)] bg-[#0e0e0e]"
-          : "border-[#262626] hover:border-[#404040] hover:bg-[#0d0d0d]"
+          ? "border-white shadow-[0_0_24px_rgba(255,255,255,0.08)] bg-[#0d0d0d]"
+          : "border-[#262626] hover:border-[#404040] hover:bg-[#0c0c0c]"
       )}
     >
       {/* Header */}
       <div className="flex justify-between items-start mb-4">
         <div className="flex-1 min-w-0 pr-3">
-          <div className="flex items-center gap-2.5 mb-1.5">
+          <div className="flex items-center gap-2.5 mb-1.5 flex-wrap">
             <div className="w-8 h-8 rounded-lg bg-black border border-[#2a2a2a] flex items-center justify-center text-white shrink-0 shadow-sm">
               <GitBranch className="w-4 h-4 text-white" />
             </div>
-            <h3 className="text-base font-bold text-white tracking-tight truncate flex items-center gap-2">
-              <span>{repo.name}</span>
+            <h3 className="text-base font-bold text-white tracking-tight truncate">
+              {repo.name}
             </h3>
             <Badge
               variant="outline"
@@ -82,33 +90,55 @@ export function RepoCard({ repo, selected, onSelect }: RepoCardProps) {
             >
               {repo.status}
             </Badge>
+
+            {repo.architecture && (
+              <span className="text-[10px] font-mono text-neutral-400 border border-[#262626] px-1.5 py-0.5 rounded bg-black">
+                {repo.architecture}
+              </span>
+            )}
           </div>
 
-          <p className="font-mono text-xs text-neutral-400 truncate pl-1">
+          <p className="font-mono text-xs text-neutral-400 truncate pl-0.5">
             {repo.local_path}
           </p>
         </div>
 
-        {/* Action button & Overflow menu */}
-        <div className="flex items-center gap-2 shrink-0">
+        {/* Action buttons & Overflow menu */}
+        <div className="flex items-center gap-1.5 shrink-0">
+          {/* Quick Context Generator Trigger */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowQuickContext(true);
+            }}
+            title="Quick Context Package"
+            className="px-2.5 py-1.5 rounded-lg bg-[#1a1a1a] border border-[#333] text-white hover:bg-white hover:text-black transition-all flex items-center gap-1.5 text-xs font-mono font-medium shadow-sm cursor-pointer"
+          >
+            <Zap className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
+            <span className="hidden sm:inline">Context</span>
+          </button>
+
+          {/* Context Studio Button */}
           <button
             onClick={(e) => {
               e.stopPropagation();
               navigate(`/studio?repo=${repo.id}`);
             }}
-            className="px-3 py-1.5 rounded-lg bg-white text-black text-xs font-semibold hover:bg-neutral-200 transition-colors flex items-center gap-1.5 font-mono shadow-sm"
+            title="Open Context Studio"
+            className="px-3 py-1.5 rounded-lg bg-white text-black text-xs font-semibold hover:bg-neutral-200 transition-colors flex items-center gap-1 font-mono shadow-sm cursor-pointer"
           >
             <span>Studio</span>
             <ArrowUpRight className="w-3.5 h-3.5" />
           </button>
 
+          {/* More Actions Menu */}
           <div ref={menuRef} className="relative">
             <button
               onClick={(e) => {
                 e.stopPropagation();
                 setMenuOpen(!menuOpen);
               }}
-              className="p-1.5 rounded-lg border border-[#262626] bg-black text-neutral-400 hover:text-white hover:border-[#404040] transition-colors"
+              className="p-1.5 rounded-lg border border-[#262626] bg-black text-neutral-400 hover:text-white hover:border-[#404040] transition-colors cursor-pointer"
             >
               <MoreVertical className="w-4 h-4" />
             </button>
@@ -121,10 +151,21 @@ export function RepoCard({ repo, selected, onSelect }: RepoCardProps) {
                     setMenuOpen(false);
                     navigate(`/knowledge/${repo.id}`);
                   }}
-                  className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-xs text-neutral-300 hover:text-white hover:bg-[#1a1a1a] transition-colors"
+                  className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-xs text-neutral-300 hover:text-white hover:bg-[#1a1a1a] transition-colors cursor-pointer"
                 >
                   <ExternalLink className="w-3.5 h-3.5 text-neutral-400" />
-                  View Knowledge
+                  Explore Knowledge Graph
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setMenuOpen(false);
+                    setShowQuickContext(true);
+                  }}
+                  className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-xs text-neutral-300 hover:text-white hover:bg-[#1a1a1a] transition-colors cursor-pointer"
+                >
+                  <Zap className="w-3.5 h-3.5 text-amber-400" />
+                  Quick Context Package
                 </button>
                 <button
                   onClick={(e) => {
@@ -132,10 +173,10 @@ export function RepoCard({ repo, selected, onSelect }: RepoCardProps) {
                     setMenuOpen(false);
                     navigate(`/studio?repo=${repo.id}`);
                   }}
-                  className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-xs text-neutral-300 hover:text-white hover:bg-[#1a1a1a] transition-colors"
+                  className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-xs text-neutral-300 hover:text-white hover:bg-[#1a1a1a] transition-colors cursor-pointer"
                 >
                   <Sparkles className="w-3.5 h-3.5 text-neutral-400" />
-                  Launch Context Studio
+                  Launch Full Studio
                 </button>
                 <button
                   onClick={(e) => {
@@ -144,10 +185,10 @@ export function RepoCard({ repo, selected, onSelect }: RepoCardProps) {
                     indexRepo(repo.id);
                     setShowReindexModal(true);
                   }}
-                  className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-xs text-neutral-300 hover:text-white hover:bg-[#1a1a1a] transition-colors"
+                  className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-xs text-neutral-300 hover:text-white hover:bg-[#1a1a1a] transition-colors cursor-pointer"
                 >
                   <RefreshCw className="w-3.5 h-3.5 text-neutral-400" />
-                  Re-index
+                  Re-index Codebase
                 </button>
                 <div className="border-t border-[#262626] my-1" />
                 {confirmDelete ? (
@@ -161,7 +202,7 @@ export function RepoCard({ repo, selected, onSelect }: RepoCardProps) {
                           setMenuOpen(false);
                           setConfirmDelete(false);
                         }}
-                        className="flex-1 bg-red-600 text-white text-xs font-semibold rounded-md px-2 py-1.5 hover:bg-red-700 transition-colors"
+                        className="flex-1 bg-red-600 text-white text-xs font-semibold rounded-md px-2 py-1.5 hover:bg-red-700 transition-colors cursor-pointer"
                       >
                         Confirm
                       </button>
@@ -170,7 +211,7 @@ export function RepoCard({ repo, selected, onSelect }: RepoCardProps) {
                           e.stopPropagation();
                           setConfirmDelete(false);
                         }}
-                        className="flex-1 bg-[#222222] text-neutral-300 text-xs font-medium rounded-md px-2 py-1.5 hover:text-white transition-colors"
+                        className="flex-1 bg-[#222222] text-neutral-300 text-xs font-medium rounded-md px-2 py-1.5 hover:text-white transition-colors cursor-pointer"
                       >
                         Cancel
                       </button>
@@ -182,7 +223,7 @@ export function RepoCard({ repo, selected, onSelect }: RepoCardProps) {
                       e.stopPropagation();
                       setConfirmDelete(true);
                     }}
-                    className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-xs text-red-400 hover:bg-red-500/10 transition-colors"
+                    className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-xs text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                     Delete Repository
@@ -196,19 +237,21 @@ export function RepoCard({ repo, selected, onSelect }: RepoCardProps) {
 
       {/* Languages */}
       {repo.languages.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 mb-4 pl-1">
+        <div className="flex flex-wrap gap-1.5 mb-3.5 pl-0.5">
           {repo.languages.slice(0, 5).map((lang) => (
             <LanguageBadge key={lang} language={lang} />
           ))}
           {repo.languages.length > 5 && (
-            <span className="text-xs font-mono text-neutral-400 px-1 py-0.5">+{repo.languages.length - 5}</span>
+            <span className="text-xs font-mono text-neutral-400 px-1 py-0.5">
+              +{repo.languages.length - 5}
+            </span>
           )}
         </div>
       )}
 
       {/* Summary */}
       {repo.summary && (
-        <p className="text-xs text-neutral-300 line-clamp-2 mb-5 pl-1 leading-relaxed">
+        <p className="text-xs text-neutral-300 line-clamp-2 mb-4 pl-0.5 leading-relaxed font-sans">
           {repo.summary}
         </p>
       )}
@@ -241,12 +284,19 @@ export function RepoCard({ repo, selected, onSelect }: RepoCardProps) {
         </div>
       </div>
 
-      {/* Live Re-index Progress Modal */}
+      {/* Reindex Modal */}
       <ReindexModal
         repoId={repo.id}
         open={showReindexModal}
         onOpenChange={setShowReindexModal}
       />
-    </div>
+
+      {/* Quick Context Modal */}
+      <QuickContextModal
+        repo={repo}
+        open={showQuickContext}
+        onOpenChange={setShowQuickContext}
+      />
+    </motion.div>
   );
 }

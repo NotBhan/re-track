@@ -1,115 +1,133 @@
 import { useState } from "react";
-import { Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff, CheckCircle2, AlertCircle, RefreshCw } from "lucide-react";
 import { useHealthStore } from "@/stores/health-store";
 import { health } from "@/lib/api";
+import { Button } from "@/components/ui/button";
 
 export function BackendSettings() {
   const [showKey, setShowKey] = useState(false);
+  const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<"success" | "error" | null>(null);
   const status = useHealthStore((s) => s.status);
 
   const handleTestConnection = async () => {
+    setTesting(true);
+    setTestResult(null);
     try {
       await health();
       setTestResult("success");
     } catch {
       setTestResult("error");
+    } finally {
+      setTesting(false);
     }
   };
 
+  const inputCls =
+    "w-full bg-[#0e0e0e] h-10 px-3 rounded-lg border border-[#262626] focus:border-white focus:outline-none text-white font-mono text-xs transition-colors placeholder:text-neutral-600";
+  const rowCls =
+    "flex flex-col md:flex-row md:items-start gap-2 md:gap-8 border-b border-[#1c1c1c] pb-5";
+  const labelCls = "text-xs font-mono font-medium text-white block";
+  const subCls = "text-[11px] text-neutral-400 mt-0.5 block";
+
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <div>
-        <h2 className="text-[24px] leading-[32px] tracking-[-0.01em] font-semibold text-on-surface mb-2">
+        <h2 className="text-xl font-bold text-white tracking-tight mb-1">
           Backend Configuration
         </h2>
-        <p className="text-[14px] leading-[20px] text-on-surface-variant">
-          Manage connection details for the primary RE:Track (RefinedEngine Track) orchestration
-          server.
+        <p className="text-xs text-neutral-400">
+          Manage connection details for the primary RE:Track orchestration server.
         </p>
       </div>
 
-      <div className="bg-surface-container-lowest border border-outline-variant rounded-lg p-5 shadow-sm">
-        <div className="space-y-6">
-          {/* Host URL */}
-          <div className="flex flex-col md:flex-row md:items-start gap-2 md:gap-8 border-b border-outline-variant/50 pb-6">
-            <div className="md:w-1/3">
-              <label className="text-[12px] leading-[16px] tracking-[0.02em] font-medium text-on-surface block">
-                Host URL
-              </label>
-              <span className="text-[14px] leading-[20px] text-outline text-xs mt-1 block">
-                The address of your backend instance.
-              </span>
-            </div>
-            <div className="md:w-2/3">
-              <input
-                type="text"
-                defaultValue={status?.ollama_host ?? "http://127.0.0.1"}
-                className="w-full bg-surface-container h-10 px-3 rounded-md border border-outline-variant focus:border-primary focus:ring-1 focus:ring-primary text-on-surface font-mono text-[13px] leading-[20px] transition-colors placeholder-outline"
-              />
-            </div>
+      <div className="bg-[#0a0a0a] border border-[#262626] rounded-xl p-5 space-y-5 shadow-2xl">
+        {/* Host URL */}
+        <div className={rowCls}>
+          <div className="md:w-1/3">
+            <label className={labelCls}>Host URL</label>
+            <span className={subCls}>
+              The address of your local backend instance.
+            </span>
           </div>
-
-          {/* Port */}
-          <div className="flex flex-col md:flex-row md:items-start gap-2 md:gap-8 border-b border-outline-variant/50 pb-6">
-            <div className="md:w-1/3">
-              <label className="text-[12px] leading-[16px] tracking-[0.02em] font-medium text-on-surface block">
-                Port
-              </label>
-            </div>
-            <div className="md:w-2/3">
-              <input
-                type="number"
-                defaultValue={status?.ollama_port ?? 8000}
-                className="w-full max-w-[150px] bg-surface-container h-10 px-3 rounded-md border border-outline-variant focus:border-primary focus:ring-1 focus:ring-primary text-on-surface font-mono text-[13px] leading-[20px] transition-colors"
-              />
-            </div>
+          <div className="md:w-2/3">
+            <input
+              type="text"
+              defaultValue={status?.ollama_host ? `http://${status.ollama_host}` : "http://127.0.0.1"}
+              className={inputCls}
+            />
           </div>
+        </div>
 
-          {/* API Key */}
-          <div className="flex flex-col md:flex-row md:items-start gap-2 md:gap-8">
-            <div className="md:w-1/3">
-              <label className="text-[12px] leading-[16px] tracking-[0.02em] font-medium text-on-surface block">
-                API Key
-              </label>
-              <span className="text-[14px] leading-[20px] text-outline text-xs mt-1 block">
-                Required if authentication is enabled on the server.
-              </span>
-            </div>
-            <div className="md:w-2/3 relative">
-              <input
-                type={showKey ? "text" : "password"}
-                defaultValue="sk-retrack-local-dev-12345"
-                className="w-full bg-surface-container h-10 pl-3 pr-10 rounded-md border border-outline-variant focus:border-primary focus:ring-1 focus:ring-primary text-on-surface font-mono text-[13px] leading-[20px] transition-colors"
-              />
-              <button
-                onClick={() => setShowKey(!showKey)}
-                className="absolute right-3 top-2.5 text-outline hover:text-on-surface transition-colors"
-              >
-                {showKey ? (
-                  <EyeOff className="w-5 h-5" />
-                ) : (
-                  <Eye className="w-5 h-5" />
-                )}
-              </button>
-            </div>
+        {/* Port */}
+        <div className={rowCls}>
+          <div className="md:w-1/3">
+            <label className={labelCls}>Port</label>
+            <span className={subCls}>FastAPI server listen port (default 8765).</span>
+          </div>
+          <div className="md:w-2/3">
+            <input
+              type="number"
+              defaultValue={8765}
+              className={`${inputCls} max-w-[150px]`}
+            />
+          </div>
+        </div>
+
+        {/* API Key */}
+        <div className="flex flex-col md:flex-row md:items-start gap-2 md:gap-8">
+          <div className="md:w-1/3">
+            <label className={labelCls}>API Key</label>
+            <span className={subCls}>
+              Required if authentication is enabled on the server.
+            </span>
+          </div>
+          <div className="md:w-2/3 relative">
+            <input
+              type={showKey ? "text" : "password"}
+              defaultValue="sk-retrack-local-dev-12345"
+              className={`${inputCls} pr-10`}
+            />
+            <button
+              type="button"
+              onClick={() => setShowKey(!showKey)}
+              className="absolute right-3 top-2.5 text-neutral-400 hover:text-white transition-colors"
+            >
+              {showKey ? (
+                <EyeOff className="w-4 h-4" />
+              ) : (
+                <Eye className="w-4 h-4" />
+              )}
+            </button>
           </div>
         </div>
       </div>
 
-      <div className="flex justify-end items-center gap-3">
-        {testResult === "success" && (
-          <span className="text-[13px] text-green-600">Connection successful</span>
-        )}
-        {testResult === "error" && (
-          <span className="text-[13px] text-red-600">Connection failed</span>
-        )}
-        <button
+      <div className="flex justify-between items-center gap-3">
+        <div className="flex items-center gap-2">
+          {testResult === "success" && (
+            <div className="flex items-center gap-1.5 text-xs font-mono text-emerald-400">
+              <CheckCircle2 className="w-4 h-4" />
+              <span>Backend reachable & healthy</span>
+            </div>
+          )}
+          {testResult === "error" && (
+            <div className="flex items-center gap-1.5 text-xs font-mono text-red-400">
+              <AlertCircle className="w-4 h-4" />
+              <span>Backend unreachable</span>
+            </div>
+          )}
+        </div>
+
+        <Button
           onClick={handleTestConnection}
-          className="px-4 py-2 bg-primary/10 text-primary hover:bg-primary/20 border border-primary/20 rounded-md text-[12px] leading-[16px] tracking-[0.02em] font-medium transition-colors"
+          disabled={testing}
+          size="sm"
+          className="gap-2 h-9 text-xs font-mono font-semibold bg-white text-black hover:bg-neutral-200"
         >
-          Test Connection
-        </button>
+          <RefreshCw className={`w-3.5 h-3.5 ${testing ? "animate-spin" : ""}`} />
+          <span>{testing ? "Testing..." : "Test Connection"}</span>
+        </Button>
       </div>
     </div>
   );
