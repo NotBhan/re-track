@@ -127,7 +127,7 @@ Cap: 80 nodes / 200 edges. Migrations and `__pycache__` excluded automatically.
 
 ```bash
 # 1. Clone
-git clone https://github.com/NotBhan/andes-context.git
+git clone https://github.com/NotBhan/re-track.git
 cd re-track
 
 # 2. Backend
