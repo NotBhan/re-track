@@ -66,7 +66,6 @@ export function EvidenceProvenanceLayer({
     const rawMarkdown = agentResponse.context_markdown || "";
 
     // 1. Extract snippet file paths and line ranges from markdown headers
-    // e.g. "### `accounts/models.py` (Lines 1-30)" or "### accounts/models.py (Lines 1-30)"
     const snippetRegex = /###\s*`?([^\n`]+)`?\s*(?:\(Lines\s*(\d+-\d+)\))?/g;
     const parsedSnippets: { path: string; lineRange?: string }[] = [];
     let match;
@@ -80,7 +79,7 @@ export function EvidenceProvenanceLayer({
       }
     }
 
-    // 2. Data Models & Entities
+    // 2. Data Models & Schemas
     const modelSymbols = agentResponse.extracted_symbols.filter((s) => {
       const lower = s.toLowerCase();
       return (
@@ -98,7 +97,6 @@ export function EvidenceProvenanceLayer({
     });
 
     const modelItems: EvidenceItem[] = modelSymbols.slice(0, 6).map((sym) => {
-      // Find matching snippet or file
       const matchingFile = agentResponse.related_files.find((f) =>
         f.toLowerCase().includes(sym.toLowerCase()) || f.toLowerCase().includes("model")
       );
@@ -110,26 +108,26 @@ export function EvidenceProvenanceLayer({
         path: matchingFile || agentResponse.related_files[0],
         lineRange: matchingSnippet?.lineRange,
         kind: "model",
-        relevanceReason: sym.toLowerCase().includes("model") ? "Data Schema" : "Domain Entity",
+        relevanceReason: sym.toLowerCase().includes("model") ? "Schema" : "Domain Entity",
       };
     });
 
-    // 3. Handlers, Services & Middleware
+    // 3. Components, Services & Middleware
     const serviceSymbols = agentResponse.extracted_symbols.filter(
       (s) => !modelSymbols.includes(s)
     );
 
     const serviceItems: EvidenceItem[] = serviceSymbols.slice(0, 6).map((sym) => {
       const lower = sym.toLowerCase();
-      let reason = "Target Component";
+      let reason = "Target Symbol";
       if (lower.includes("auth") || lower.includes("oauth") || lower.includes("session")) {
-        reason = "Authentication & Sessions";
+        reason = "Auth & Session";
       } else if (lower.includes("client") || lower.includes("api") || lower.includes("notion")) {
-        reason = "API Client Operation";
+        reason = "API Client";
       } else if (lower.includes("middleware") || lower.includes("handler")) {
         reason = "Middleware & Routing";
       } else if (lower.includes("test")) {
-        reason = "Test Verification";
+        reason = "Verification";
       }
 
       const matchingFile = agentResponse.related_files.find((f) =>
@@ -147,35 +145,35 @@ export function EvidenceProvenanceLayer({
       };
     });
 
-    // 4. Structural Call Flow (Callers & Callees)
+    // 4. Structural Call Flow
     const callFlowItems: EvidenceItem[] = [
       ...agentResponse.callers.slice(0, 4).map((c) => ({
         id: `caller-${c}`,
         name: c,
         kind: "caller" as const,
-        relevanceReason: "Upstream Invocation (Caller)",
+        relevanceReason: "Caller (Upstream)",
       })),
       ...agentResponse.callees.slice(0, 4).map((c) => ({
         id: `callee-${c}`,
         name: c,
         kind: "callee" as const,
-        relevanceReason: "Downstream Invocation (Callee)",
+        relevanceReason: "Callee (Downstream)",
       })),
     ];
 
-    // 5. Matched Verified Files
+    // 5. Verified Source Files
     const fileItems: EvidenceItem[] = Array.from(
       new Set([...parsedSnippets.map((s) => s.path), ...agentResponse.related_files])
     )
       .slice(0, 8)
       .map((filePath) => {
         const snippet = parsedSnippets.find((s) => s.path === filePath);
-        let reason = "Matched Code File";
+        let reason = "Source Code";
         const lower = filePath.toLowerCase();
-        if (lower.includes("model")) reason = "Data Models & Schemas";
-        else if (lower.includes("auth") || lower.includes("session")) reason = "Auth & Session Logic";
+        if (lower.includes("model")) reason = "Data Schemas";
+        else if (lower.includes("auth") || lower.includes("session")) reason = "Auth Logic";
         else if (lower.includes("test")) reason = "Test Scenarios";
-        else if (lower.includes("notion") || lower.includes("api")) reason = "API Operations";
+        else if (lower.includes("api")) reason = "API Operations";
 
         return {
           id: `file-${filePath}`,
@@ -201,27 +199,27 @@ export function EvidenceProvenanceLayer({
     if (serviceItems.length > 0) {
       activeGroups.push({
         id: "services",
-        title: "Components & Middleware",
+        title: "Target Components & Handlers",
         icon: Layers,
         items: serviceItems,
-      });
-    }
-
-    if (callFlowItems.length > 0) {
-      activeGroups.push({
-        id: "callflow",
-        title: "Structural Call Flow",
-        icon: GitFork,
-        items: callFlowItems,
       });
     }
 
     if (fileItems.length > 0) {
       activeGroups.push({
         id: "files",
-        title: "Target Files & Code Citations",
+        title: "Source Files & Code Citations",
         icon: FileCode,
         items: fileItems,
+      });
+    }
+
+    if (callFlowItems.length > 0) {
+      activeGroups.push({
+        id: "callflow",
+        title: "Structural Call Invocations",
+        icon: GitFork,
+        items: callFlowItems,
       });
     }
 
@@ -254,45 +252,42 @@ export function EvidenceProvenanceLayer({
   return (
     <div
       className={cn(
-        "rounded-md bg-[#050505] border border-[#1a1a1a] p-3 space-y-2.5",
+        "rounded-lg bg-[#050505] border border-[#1a1a1a] p-3 space-y-2",
         className
       )}
     >
-      {/* Header Bar */}
+      {/* Provenance Header */}
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#141414] pb-2">
         <div className="flex items-center gap-1.5">
           <Workflow className="w-3.5 h-3.5 text-neutral-300" />
-          <span className="text-xs font-medium text-white tracking-tight">
-            What RE:Track Found
+          <span className="text-xs font-semibold text-white tracking-tight">
+            Evidence &amp; Source Provenance
           </span>
         </div>
 
-        {/* Evidence Count Badges */}
-        <div className="flex items-center gap-1 flex-wrap text-[11px] font-mono">
+        {/* Evidence Badges */}
+        <div className="flex items-center gap-1.5 flex-wrap text-xs font-mono">
           {totalSources > 0 && (
             <Badge
-              variant="success"
-              className="text-[10px] px-1.5 py-0"
+              variant="outline"
+              className="text-[10px] px-1.5 py-0 border-[#262626] text-neutral-300"
             >
-              {totalSources} {totalSources === 1 ? "source" : "sources"}
+              {totalSources} {totalSources === 1 ? "source file" : "source files"}
             </Badge>
           )}
           {totalSymbols > 0 && (
             <Badge
               variant="outline"
-              className="text-[10px] px-1.5 py-0"
+              className="text-[10px] px-1.5 py-0 border-[#262626] text-neutral-300"
             >
               {totalSymbols} {totalSymbols === 1 ? "symbol" : "symbols"}
             </Badge>
           )}
-          <span className="text-neutral-500 text-[10px]">
-            · {groups.length} {groups.length === 1 ? "group" : "groups"}
-          </span>
         </div>
       </div>
 
       {/* Collapsible Evidence Groups */}
-      <div className="space-y-1.5">
+      <div className="space-y-1">
         {groups.map((group) => {
           const isExpanded = expandedGroups[group.id] ?? true;
           const GroupIcon = group.icon;
@@ -300,13 +295,13 @@ export function EvidenceProvenanceLayer({
           return (
             <div
               key={group.id}
-              className="rounded border border-[#161616] bg-[#080808] overflow-hidden"
+              className="rounded-md border border-[#161616] bg-[#080808] overflow-hidden"
             >
               {/* Group Toggle Header */}
               <button
                 type="button"
                 onClick={() => toggleGroup(group.id)}
-                className="w-full px-2.5 py-1.5 flex items-center justify-between text-xs text-neutral-300 hover:text-white bg-[#0b0b0b] hover:bg-[#101010] transition-colors cursor-pointer"
+                className="w-full px-2.5 py-1.5 flex items-center justify-between text-xs text-neutral-300 hover:text-white bg-[#0a0a0a] hover:bg-[#101010] transition-colors cursor-pointer"
               >
                 <div className="flex items-center gap-1.5">
                   {isExpanded ? (
@@ -333,41 +328,46 @@ export function EvidenceProvenanceLayer({
                     animate={{ height: "auto", opacity: 1 }}
                     exit={{ height: 0, opacity: 0 }}
                     transition={{ duration: 0.1 }}
-                    className="divide-y divide-[#121212] px-2.5 py-1 bg-black"
+                    className="divide-y divide-[#121212] px-2.5 py-0.5 bg-black"
                   >
                     {group.items.map((item) => (
                       <div
                         key={item.id}
-                        className="py-1 flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-xs font-mono group"
+                        className="py-1 flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 text-xs font-mono group"
                       >
-                        {/* Name & Path */}
+                        {/* WHAT -> FROM -> WHERE Chain */}
                         <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                          {/* WHAT (Symbol / Entity Name) */}
                           <span className="font-semibold text-neutral-200 shrink-0">
                             {item.name}
                           </span>
 
+                          {/* FROM (Source Path) */}
                           {item.path && (
                             <span
                               className="text-[11px] text-neutral-500 truncate hover:text-neutral-300 transition-colors cursor-pointer"
-                              title={`Click to copy: ${item.path}`}
+                              title={`Click to copy path: ${item.path}`}
                               onClick={() => handleCopyPath(item.id, item.path!)}
                             >
                               {item.path}
                             </span>
                           )}
 
+                          {/* WHERE (Line citation) */}
                           {item.lineRange && (
                             <span className="text-[10px] text-emerald-400 bg-emerald-950/30 border border-emerald-500/20 px-1 rounded shrink-0">
                               {item.lineRange}
                             </span>
                           )}
 
+                          {/* Copy Path Action */}
                           {item.path && (
                             <button
                               type="button"
                               onClick={() => handleCopyPath(item.id, item.path!)}
-                              className="opacity-0 group-hover:opacity-100 text-neutral-500 hover:text-white transition-opacity shrink-0 cursor-pointer"
-                              title="Copy path"
+                              className="opacity-0 group-hover:opacity-100 text-neutral-500 hover:text-white transition-opacity shrink-0 cursor-pointer p-0.5"
+                              title="Copy file path"
+                              aria-label="Copy file path"
                             >
                               {copiedId === item.id ? (
                                 <Check className="w-3 h-3 text-emerald-400" />
@@ -378,9 +378,9 @@ export function EvidenceProvenanceLayer({
                           )}
                         </div>
 
-                        {/* Relevance Explanation Badge */}
+                        {/* Relevance Tag */}
                         <div className="shrink-0 flex items-center gap-1 self-start sm:self-auto">
-                          <span className="text-[10px] text-neutral-500 bg-[#0e0e0e] border border-[#1c1c1c] px-1.5 py-0.5 rounded">
+                          <span className="text-[10px] text-neutral-500 bg-[#0c0c0c] border border-[#1a1a1a] px-1.5 py-0.2 rounded">
                             {item.relevanceReason}
                           </span>
                         </div>

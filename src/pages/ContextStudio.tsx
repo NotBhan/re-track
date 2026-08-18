@@ -725,31 +725,47 @@ export default function ContextStudio() {
                 transition={{ duration: 0.2 }}
                 className="space-y-3"
               >
-                {/* Telemetry reduction metrics bar (Quiet & Flattened) */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-[#050505] border border-[#1a1a1a] rounded-md p-2.5 font-mono text-xs">
-                  <div>
-                    <span className="text-[10px] text-neutral-500 block">Context Tokens</span>
-                    <span className="font-medium text-neutral-200">
-                      ~{agentResponse.estimated_tokens.toLocaleString()}
-                    </span>
+                {/* Task -> Codebase -> Context Package Relationship Strip */}
+                <div className="bg-[#050505] border border-[#1a1a1a] rounded-lg p-3 space-y-2">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#141414] pb-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-[10px] uppercase font-mono tracking-wider text-neutral-500 shrink-0">
+                        Task Target
+                      </span>
+                      <span className="text-xs text-neutral-200 font-medium truncate">
+                        &ldquo;{agentResponse.task_summary || taskPrompt}&rdquo;
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0 text-xs font-mono text-neutral-400">
+                      <GitBranch className="w-3 h-3 text-neutral-300" />
+                      <span className="text-white font-medium">{activeRepo.name}</span>
+                    </div>
                   </div>
-                  <div>
-                    <span className="text-[10px] text-neutral-500 block">Raw Repo Size</span>
-                    <span className="text-neutral-500 line-through">
-                      ~{((activeRepo.file_count || 100) * 350).toLocaleString()}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-[10px] text-neutral-500 block">Generation Time</span>
-                    <span className="text-emerald-400 font-medium">
-                      {agentResponse.generation_time_ms ? `${agentResponse.generation_time_ms}ms` : "< 350ms"}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-[10px] text-neutral-500 block">Context Reduction</span>
-                    <span className="text-emerald-400 font-medium">
-                      ~92% Savings
-                    </span>
+
+                  {/* Compact Metadata Row */}
+                  <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-xs font-mono text-neutral-400">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-neutral-500">Context:</span>
+                      <span className="text-neutral-200 font-medium">
+                        ~{agentResponse.estimated_tokens.toLocaleString()} tokens
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-neutral-500">Latency:</span>
+                      <span className="text-emerald-400 font-medium">
+                        {agentResponse.generation_time_ms ? `${agentResponse.generation_time_ms}ms` : "< 350ms"}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-neutral-500">Reduction:</span>
+                      <span className="text-emerald-400 font-medium">~92%</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-neutral-500">Sources:</span>
+                      <span className="text-neutral-200 font-medium">
+                        {agentResponse.related_files.length} files
+                      </span>
+                    </div>
                   </div>
                 </div>
 

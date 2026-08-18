@@ -92,7 +92,7 @@ export function RepositoryCard({ repo, selected, onSelect }: RepositoryCardProps
             )}
           </div>
 
-          <p className="font-mono text-xs text-neutral-500 truncate">
+          <p className="font-mono text-xs text-neutral-500 truncate" title={repo.local_path}>
             {repo.local_path}
           </p>
         </div>

@@ -16,6 +16,7 @@ import { useContextPackageStore } from "@/stores/context-package-store";
 import type { SavedContextPackage } from "@/lib/api";
 import { toast } from "@/components/ui/toast";
 import { motion, AnimatePresence } from "motion/react";
+import { ProgressiveMarkdownReveal } from "@/components/dashboard/ProgressiveMarkdownReveal";
 
 function formatRelativeTime(dateStr: string): string {
   const now = Date.now();
@@ -189,9 +190,9 @@ export function ContextPackageCard({ pkg, onCompareSelect, isCompareSelected }: 
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: "auto" }}
             exit={{ opacity: 0, height: 0 }}
-            className="border-t border-[#1a1a1a] bg-[#050505] p-4 font-mono text-xs text-neutral-300 max-h-96 overflow-y-auto leading-relaxed whitespace-pre-wrap selection:bg-white selection:text-black"
+            className="border-t border-[#1a1a1a] bg-[#050505] p-3 max-h-96 overflow-y-auto"
           >
-            {pkg.markdown}
+            <ProgressiveMarkdownReveal markdown={pkg.markdown} className="bg-transparent border-0 p-0" />
           </motion.div>
         )}
       </AnimatePresence>

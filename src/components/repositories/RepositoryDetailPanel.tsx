@@ -28,56 +28,6 @@ function formatBytes(bytes: number): string {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
 }
 
-function Section({
-  icon: Icon,
-  title,
-  children,
-}: {
-  icon: React.ElementType;
-  title: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="flex flex-col gap-2">
-      <h4 className="flex items-center gap-1.5 text-xs font-medium text-neutral-300">
-        <Icon className="w-3.5 h-3.5 text-neutral-400" />
-        <span>{title}</span>
-      </h4>
-      <div className="bg-[#050505] p-3 rounded-lg border border-[#1a1a1a]">
-        {children}
-      </div>
-    </div>
-  );
-}
-
-function TagList({ items }: { items: string[] }) {
-  return (
-    <div className="flex flex-wrap gap-1">
-      {items.map((item) => (
-        <span
-          key={item}
-          className="text-xs font-mono text-neutral-300 bg-[#121212] border border-[#222222] px-2 py-0.5 rounded"
-        >
-          {item}
-        </span>
-      ))}
-    </div>
-  );
-}
-
-function FileList({ items }: { items: string[] }) {
-  return (
-    <ul className="space-y-1.5 font-mono text-xs text-neutral-300">
-      {items.map((item) => (
-        <li key={item} className="flex items-center gap-2 truncate">
-          <span className="w-1 h-1 rounded-full bg-neutral-500 shrink-0" />
-          <span className="truncate">{item}</span>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
 export function RepositoryDetailPanel() {
   const { selected, select, indexRepo, removeRepo } = useRepositoryStore();
   const navigate = useNavigate();
@@ -92,15 +42,11 @@ export function RepositoryDetailPanel() {
         </div>
         <h4 className="text-sm font-semibold text-white tracking-tight">No Repository Selected</h4>
         <p className="text-xs text-neutral-500 mt-1 max-w-xs leading-relaxed">
-          Select any workspace card from the catalog to inspect AST call graphs, file statistics, and synthesize context.
+          Select any workspace card from the catalog to inspect file statistics, architecture details, and synthesize context.
         </p>
       </aside>
     );
   }
-
-  const callNodesCount = Array.isArray(selected.metadata?.call_graph_nodes)
-    ? selected.metadata.call_graph_nodes.length
-    : 0;
 
   return (
     <aside className="w-full h-full bg-[#0a0a0a] rounded-lg border border-[#1e1e1e] flex flex-col overflow-hidden min-h-0">
@@ -124,13 +70,15 @@ export function RepositoryDetailPanel() {
               {selected.status}
             </Badge>
           </div>
-          <p className="font-mono text-xs text-neutral-500 truncate">
+          <p className="font-mono text-xs text-neutral-500 truncate" title={selected.local_path}>
             {selected.local_path}
           </p>
         </div>
 
         <button
           onClick={() => select(null)}
+          aria-label="Close detail panel"
+          title="Close detail panel"
           className="p-1 rounded-md text-neutral-400 hover:text-white hover:bg-[#141414] transition-colors shrink-0 cursor-pointer"
         >
           <X className="w-4 h-4" />
@@ -168,82 +116,122 @@ export function RepositoryDetailPanel() {
         </Button>
       </div>
 
-      {/* Scrollable Body */}
-      <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4">
-        {/* Purpose / Summary */}
+      {/* Scrollable Body with Clean Divided Sections */}
+      <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4 divide-y divide-[#141414] [&>*:not(:first-child)]:pt-4">
+        {/* Project Overview */}
         {selected.summary && (
-          <Section icon={FileText} title="Project Overview">
-            <p className="text-xs text-neutral-300 leading-relaxed font-sans">
+          <div>
+            <h4 className="flex items-center gap-1.5 text-xs font-semibold text-neutral-200 mb-1.5 tracking-tight">
+              <FileText className="w-3.5 h-3.5 text-neutral-400" />
+              <span>Project Overview</span>
+            </h4>
+            <p className="text-xs text-neutral-400 leading-relaxed font-sans">
               {selected.summary}
             </p>
-          </Section>
+          </div>
         )}
 
-        {/* Telemetry Stats Grid */}
-        <div className="grid grid-cols-2 gap-2 text-xs font-mono">
-          <div className="bg-[#050505] p-2.5 rounded-lg border border-[#1a1a1a]">
-            <span className="text-[10px] text-neutral-500 block mb-0.5">
-              Total Files
-            </span>
-            <span className="text-xs font-semibold text-white">
-              {selected.file_count.toLocaleString()}
-            </span>
-          </div>
-
-          <div className="bg-[#050505] p-2.5 rounded-lg border border-[#1a1a1a]">
-            <span className="text-[10px] text-neutral-500 block mb-0.5">
-              Total Size
-            </span>
-            <span className="text-xs font-semibold text-white">
-              {formatBytes(selected.size_bytes)}
-            </span>
-          </div>
-
-          <div className="bg-[#050505] p-2.5 rounded-lg border border-[#1a1a1a]">
-            <span className="text-[10px] text-neutral-500 block mb-0.5">
-              Architecture
-            </span>
-            <span className="text-xs font-semibold text-neutral-200 capitalize">
-              {selected.architecture || "Modular"}
-            </span>
-          </div>
-
-          <div className="bg-[#050505] p-2.5 rounded-lg border border-[#1a1a1a]">
-            <span className="text-[10px] text-neutral-500 block mb-0.5">
-              AST Call Nodes
-            </span>
-            <span className="text-xs font-semibold text-emerald-400">
-              {callNodesCount > 0 ? `${callNodesCount} nodes` : "Extracted"}
-            </span>
+        {/* Compact Key-Value Metadata Grid */}
+        <div>
+          <h4 className="text-xs font-semibold text-neutral-200 mb-2 tracking-tight">
+            Repository Metrics
+          </h4>
+          <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs font-mono">
+            <div className="flex items-center justify-between border-b border-[#141414] pb-1">
+              <span className="text-neutral-500">File Count</span>
+              <span className="text-neutral-200 font-medium">{selected.file_count.toLocaleString()}</span>
+            </div>
+            <div className="flex items-center justify-between border-b border-[#141414] pb-1">
+              <span className="text-neutral-500">Total Size</span>
+              <span className="text-neutral-200 font-medium">{formatBytes(selected.size_bytes)}</span>
+            </div>
+            <div className="flex items-center justify-between border-b border-[#141414] pb-1">
+              <span className="text-neutral-500">Status</span>
+              <span className="capitalize text-neutral-200 font-medium">{selected.status}</span>
+            </div>
+            <div className="flex items-center justify-between border-b border-[#141414] pb-1">
+              <span className="text-neutral-500">Source</span>
+              <span className="capitalize text-neutral-200 font-medium">{selected.source_type || "Local"}</span>
+            </div>
           </div>
         </div>
 
-        {/* Languages */}
+        {/* Languages Detected */}
         {selected.languages && selected.languages.length > 0 && (
-          <Section icon={Code} title="Languages Detected">
-            <TagList items={selected.languages} />
-          </Section>
+          <div>
+            <h4 className="flex items-center gap-1.5 text-xs font-semibold text-neutral-200 mb-2 tracking-tight">
+              <Code className="w-3.5 h-3.5 text-neutral-400" />
+              <span>Languages</span>
+            </h4>
+            <div className="flex flex-wrap gap-1">
+              {selected.languages.map((lang) => (
+                <span
+                  key={lang}
+                  className="text-[11px] font-mono text-neutral-300 bg-[#0c0c0c] border border-[#222222] px-2 py-0.5 rounded"
+                >
+                  {lang}
+                </span>
+              ))}
+            </div>
+          </div>
         )}
 
-        {/* Frameworks */}
+        {/* Frameworks & Libraries */}
         {selected.frameworks && selected.frameworks.length > 0 && (
-          <Section icon={Package} title="Frameworks &amp; Libraries">
-            <TagList items={selected.frameworks} />
-          </Section>
+          <div>
+            <h4 className="flex items-center gap-1.5 text-xs font-semibold text-neutral-200 mb-2 tracking-tight">
+              <Package className="w-3.5 h-3.5 text-neutral-400" />
+              <span>Frameworks &amp; Dependencies</span>
+            </h4>
+            <div className="flex flex-wrap gap-1">
+              {selected.frameworks.map((fw) => (
+                <span
+                  key={fw}
+                  className="text-[11px] font-mono text-neutral-300 bg-[#0c0c0c] border border-[#222222] px-2 py-0.5 rounded"
+                >
+                  {fw}
+                </span>
+              ))}
+            </div>
+          </div>
         )}
 
-        {/* Entry Points */}
+        {/* Discovered Entry Points */}
         {selected.entry_points && selected.entry_points.length > 0 && (
-          <Section icon={FolderGit2} title="Discovered Entry Points">
-            <FileList items={selected.entry_points} />
-          </Section>
+          <div>
+            <h4 className="flex items-center gap-1.5 text-xs font-semibold text-neutral-200 mb-2 tracking-tight">
+              <FolderGit2 className="w-3.5 h-3.5 text-neutral-400" />
+              <span>Entry Points</span>
+            </h4>
+            <ul className="space-y-1 font-mono text-xs text-neutral-300">
+              {selected.entry_points.map((ep) => (
+                <li key={ep} className="flex items-center gap-2 truncate" title={ep}>
+                  <span className="w-1 h-1 rounded-full bg-neutral-500 shrink-0" />
+                  <span className="truncate text-[11px] text-neutral-400">{ep}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
 
-        {/* Components */}
+        {/* Key Architectural Components */}
         {selected.components && selected.components.length > 0 && (
-          <Section icon={Layers} title="Key Architectural Components">
-            <TagList items={selected.components} />
-          </Section>
+          <div>
+            <h4 className="flex items-center gap-1.5 text-xs font-semibold text-neutral-200 mb-2 tracking-tight">
+              <Layers className="w-3.5 h-3.5 text-neutral-400" />
+              <span>Key Components</span>
+            </h4>
+            <div className="flex flex-wrap gap-1">
+              {selected.components.map((comp) => (
+                <span
+                  key={comp}
+                  className="text-[11px] font-mono text-neutral-300 bg-[#0c0c0c] border border-[#222222] px-2 py-0.5 rounded"
+                >
+                  {comp}
+                </span>
+              ))}
+            </div>
+          </div>
         )}
       </div>
 

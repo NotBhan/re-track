@@ -177,7 +177,10 @@ export function DatasetTable({ onForget }: DatasetTableProps) {
                       <div className="text-xs font-semibold text-white truncate">
                         {dataset.name}
                       </div>
-                      <div className="font-mono text-neutral-500 text-[10px] truncate">
+                      <div
+                        className="font-mono text-neutral-500 text-[10px] truncate"
+                        title={dataset.source_path || `ID: ${dataset.id}`}
+                      >
                         {dataset.source_path || `ID: ${dataset.id}`}
                       </div>
                     </div>
@@ -206,6 +209,8 @@ export function DatasetTable({ onForget }: DatasetTableProps) {
                         e.stopPropagation();
                         setOpenMenuId(openMenuId === dataset.id ? null : dataset.id);
                       }}
+                      title="Dataset options"
+                      aria-label="Dataset options"
                       className="p-1 text-neutral-400 hover:text-white rounded border border-[#222222] bg-[#0a0a0a] hover:border-[#333333] transition-colors cursor-pointer"
                     >
                       <MoreVertical className="w-3.5 h-3.5" />
