@@ -2,11 +2,11 @@ import { useEffect, useState } from "react";
 import { TopBar } from "@/components/layout/TopBar";
 import { RepositoryCard } from "@/components/repositories/RepositoryCard";
 import { RepositoryDetailPanel } from "@/components/repositories/RepositoryDetailPanel";
+import { RepositoryCardSkeleton } from "@/components/ui/skeleton-loaders";
 import { ProviderAlertBanner } from "@/components/shared/ProviderAlertBanner";
 import { useRepositoryStore } from "@/stores/repository-store";
 import {
   Search,
-  Loader2,
   GitBranch,
   LayoutGrid,
   Info,
@@ -145,12 +145,14 @@ export default function Repositories() {
             </div>
           </div>
 
-          {loading ? (
-            <div className="flex-1 flex flex-col items-center justify-center p-12 text-center gap-3">
-              <Loader2 className="w-8 h-8 text-white animate-spin" />
-              <p className="text-neutral-400 text-xs font-mono">
-                Loading repository catalog...
-              </p>
+          {loading && repositories.length === 0 ? (
+            <div className="flex-1 min-h-0 overflow-y-auto pr-1">
+              <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-2 gap-4">
+                <RepositoryCardSkeleton />
+                <RepositoryCardSkeleton />
+                <RepositoryCardSkeleton />
+                <RepositoryCardSkeleton />
+              </div>
             </div>
           ) : filtered.length === 0 ? (
             <motion.div

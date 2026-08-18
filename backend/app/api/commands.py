@@ -45,6 +45,7 @@ from app.models.provider import ProviderType
 from app.models.repository import Repository
 from app.services.cgc_service import CGCService
 from app.services.cognee_service import CogneeService
+from app.services.context_cache import context_cache
 from app.services.context_package_repository import JsonContextPackageRepository
 from app.services.context_service import ContextService
 from app.services.indexing_service import IndexingService
@@ -506,8 +507,9 @@ async def index_repository(
                 progress_callback=on_progress,
             )
 
-            # Persist repository metadata after successful indexing
+            # Persist repository metadata and invalidate cache after successful indexing
             if progress.failed_files == 0:
+                context_cache.invalidate_repo(str(repo_path))
                 _persist_repo_metadata(repo_path, progress.processed_files)
                 if matching_repo_id:
                     _manager.set_indexing_progress(matching_repo_id, {
@@ -1477,36 +1479,89 @@ async def get_agent_context(
         async with _context_gen_lock:
             repo_path = Path(request.repository_path).resolve()
             dataset_name = request.dataset_name or repo_path.name
+            target_tokens = request.max_tokens or 8000
 
-            # 1. Parse prompt intent & symbols
-            intent = await _intent_parser.parse_intent(request.task_prompt)
+            # 0. Check in-memory context synthesis cache (< 5ms hit)
+            manifest_hash = ""
+            manifest_file = repo_path / ".andes" / "manifest.json"
+            if manifest_file.exists():
+                try:
+                    manifest_hash = str(manifest_file.stat().st_mtime)
+                except Exception:
+                    pass
 
-            # 2. Query structural code relationships via CGC
-            structural_res = None
-            if request.include_structural_graph and _cgc_service:
-                structural_res = await _cgc_service.query_structural_context(
-                    repo_path=repo_path,
-                    target_symbols=intent.extracted_symbols,
+            cache_key = context_cache.make_key(
+                repo_path=str(repo_path),
+                manifest_hash=manifest_hash,
+                task_prompt=request.task_prompt,
+                max_tokens=target_tokens,
+            )
+            cached_resp = context_cache.get(cache_key)
+            if cached_resp is not None and isinstance(cached_resp, AgentContextResponse):
+                logger.info(
+                    "command: get_agent_context() [CACHE HIT] | prompt=%s | %.1fms",
+                    request.task_prompt[:50],
+                    (time.monotonic() - start) * 1000,
+                )
+                return cached_resp
+
+            # 1. Parallel Step: Parse intent + generate repo summary + check provider health
+            generator = RepositorySummaryGenerator()
+
+            async def _get_intent():
+                return await _intent_parser.parse_intent(request.task_prompt)
+
+            async def _get_repo_summary():
+                raw_files = _indexing_service.discover_files(repo_path)
+                indexed = _indexing_service.filter_files(raw_files, repo_path)
+                summary = generator.generate(repo_path, indexed)
+                return indexed, summary
+
+            async def _get_provider_health():
+                if _llm_provider:
+                    try:
+                        return await _llm_provider.check_health()
+                    except Exception:
+                        return None
+                return None
+
+            intent, (indexed_files, repo_summary), health_status = await asyncio.gather(
+                _get_intent(),
+                _get_repo_summary(),
+                _get_provider_health(),
+            )
+
+            # 2. Parallel Step: CGC Structural Query + Cognee Context Synthesis
+            async def _query_cgc():
+                if request.include_structural_graph and _cgc_service:
+                    try:
+                        return await _cgc_service.query_structural_context(
+                            repo_path=repo_path,
+                            target_symbols=intent.extracted_symbols,
+                        )
+                    except Exception as e:
+                        logger.warning("CGC query warning: %s", e)
+                        return None
+                return None
+
+            async def _generate_package():
+                ctx_svc = ContextService(
+                    cognee_service=_cognee_service,
+                    repository_summary=repo_summary,
+                    target_tokens=target_tokens,
+                )
+                return await ctx_svc.generate_context_package(
+                    task=request.task_prompt,
+                    datasets=[dataset_name],
+                    top_k=15,
                 )
 
-            # 3. Retrieve semantic memory from Cognee with repository summary context
-            generator = RepositorySummaryGenerator()
-            raw_files = _indexing_service.discover_files(repo_path)
-            indexed_files = _indexing_service.filter_files(raw_files, repo_path)
-            repo_summary = generator.generate(repo_path, indexed_files)
-
-            ctx_svc = ContextService(
-                cognee_service=_cognee_service,
-                repository_summary=repo_summary,
-                target_tokens=request.max_tokens or 8000,
-            )
-            package = await ctx_svc.generate_context_package(
-                task=request.task_prompt,
-                datasets=[dataset_name],
-                top_k=15,
+            structural_res, package = await asyncio.gather(
+                _query_cgc(),
+                _generate_package(),
             )
 
-            # 4. Perform direct AST & symbol relevance search across repository files
+            # 3. Perform direct AST & symbol relevance search across repository files
             relevant_snippets = []
             search_terms = list(set(
                 [w for w in request.task_prompt.split() if len(w) > 3 and w.lower() not in ("where", "what", "find", "how", "with", "from", "this", "that")]
@@ -1538,7 +1593,6 @@ async def get_agent_context(
                 try:
                     text = full_path.read_text(errors="replace")
                     lines = text.splitlines()
-                    # Find snippet around matches
                     matching_indices = [
                         i for i, line in enumerate(lines)
                         if any(t.lower() in line.lower() for t in search_terms)
@@ -1553,13 +1607,9 @@ async def get_agent_context(
                 except Exception:
                     pass
 
-            # 5. Check model quality / quantization warnings
-            quant_warning = None
-            if _llm_provider:
-                health_status = await _llm_provider.check_health()
-                quant_warning = health_status.quantization_warning
+            quant_warning = health_status.quantization_warning if health_status else None
 
-            # 6. Merge snippets and structural graph into Markdown output
+            # 4. Merge snippets and structural graph into Markdown output
             final_markdown = package.markdown
             if relevant_snippets:
                 final_markdown += "\n\n---\n\n# Relevant Code Snippets & Target Implementations\n\n" + "\n\n".join(relevant_snippets)
@@ -1571,7 +1621,7 @@ async def get_agent_context(
 
             elapsed_ms = int((time.monotonic() - start) * 1000)
 
-            return AgentContextResponse(
+            response = AgentContextResponse(
                 success=True,
                 context_markdown=final_markdown,
                 task_summary=intent.task_summary,
@@ -1584,6 +1634,10 @@ async def get_agent_context(
                 estimated_tokens=len(final_markdown) // 4,
                 generation_time_ms=elapsed_ms,
             )
+
+            # Store in high-speed synthesis cache
+            context_cache.set(cache_key, response, repo_path=str(repo_path))
+            return response
 
     except Exception as e:
         elapsed = time.monotonic() - start

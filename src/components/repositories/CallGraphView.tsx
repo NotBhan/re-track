@@ -512,7 +512,7 @@ export function CallGraphView({
                     {node.kind === "class"
                       ? "C"
                       : node.kind === "component"
-                      ? "⚛"
+                      ? "◇"
                       : node.kind === "method"
                       ? "m"
                       : "ƒ"}

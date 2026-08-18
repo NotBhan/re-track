@@ -27,6 +27,7 @@ import { Badge } from "@/components/ui/badge";
 import { CallGraphView } from "@/components/repositories/CallGraphView";
 import { SynthesisProgressBar } from "@/components/shared/SynthesisProgressBar";
 import { SynthesisModal } from "@/components/dashboard/SynthesisModal";
+import { ProgressiveMarkdownReveal } from "@/components/dashboard/ProgressiveMarkdownReveal";
 import type { CallGraphNode, CallGraphEdge } from "@/types/repository";
 import { motion } from "motion/react";
 import { cn } from "@/lib/utils";
@@ -697,10 +698,8 @@ export default function ContextStudio() {
                   </div>
                 </div>
 
-                {/* Markdown Display */}
-                <div className="bg-black rounded-xl border border-[#262626] p-5 font-mono text-xs text-neutral-300 leading-relaxed whitespace-pre-wrap selection:bg-white selection:text-black">
-                  {agentResponse.context_markdown}
-                </div>
+                {/* Markdown Display with Progressive Reveal Animation */}
+                <ProgressiveMarkdownReveal markdown={agentResponse.context_markdown} />
               </motion.div>
             ) : (
               <div className="h-full flex flex-col items-center justify-center p-12 text-center">

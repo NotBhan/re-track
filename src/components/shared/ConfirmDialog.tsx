@@ -6,7 +6,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { AlertTriangle } from "lucide-react";
+import { AlertCircle } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 interface ConfirmDialogProps {
   open: boolean;
@@ -31,44 +32,61 @@ export function ConfirmDialog({
   variant = "default",
   onConfirm,
 }: ConfirmDialogProps) {
+  const isDestructive = variant === "destructive";
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-surface-container border border-outline-variant shadow-[0_20px_50px_-12px_rgba(0,0,0,0.8)]">
-        <DialogHeader>
-          <div className="w-12 h-12 rounded-full bg-error/10 border border-error/20 flex items-center justify-center text-error mb-4">
-            <AlertTriangle className="w-6 h-6" />
+      <DialogContent className="bg-[#0a0a0a] border border-[#262626] text-white p-6 shadow-2xl rounded-2xl max-w-md">
+        <DialogHeader className="pb-2">
+          <div className="flex items-center gap-3 mb-2">
+            <div
+              className={`w-9 h-9 rounded-xl flex items-center justify-center border shrink-0 ${
+                isDestructive
+                  ? "bg-red-500/10 border-red-500/30 text-red-400"
+                  : "bg-black border-[#262626] text-white"
+              }`}
+            >
+              <AlertCircle className="w-4 h-4" />
+            </div>
+            <div>
+              <DialogTitle className="text-base font-bold text-white tracking-tight">
+                {title}
+              </DialogTitle>
+            </div>
           </div>
-          <DialogTitle className="text-[20px] leading-[28px] font-medium text-on-surface">
-            {title}
-          </DialogTitle>
-          <DialogDescription className="text-[14px] leading-[20px] text-on-surface-variant">
+          <DialogDescription className="text-xs font-mono text-neutral-400 leading-relaxed pt-1">
             {description}
           </DialogDescription>
         </DialogHeader>
 
         {warning && (
-          <p className="text-[13px] leading-[20px] text-on-surface-variant border-l-2 border-error/50 pl-3 py-1 bg-error/5 rounded-r">
+          <div className="rounded-xl border border-red-500/30 bg-red-950/20 p-3 text-xs font-mono text-red-300 my-2">
             {warning}
-          </p>
+          </div>
         )}
 
-        <DialogFooter className="gap-2">
-          <button
+        <DialogFooter className="gap-2 pt-3 border-t border-[#1f1f1f]">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
             onClick={() => onOpenChange(false)}
-            className="px-4 py-2 rounded-md text-[12px] leading-[16px] tracking-[0.02em] font-medium text-on-surface hover:bg-surface-variant border border-transparent transition-colors"
+            className="h-8 px-4 text-xs font-mono border-[#333] bg-black text-neutral-300 hover:text-white hover:bg-[#141414] cursor-pointer"
           >
             {cancelLabel}
-          </button>
-          <button
+          </Button>
+          <Button
+            type="button"
+            size="sm"
             onClick={onConfirm}
-            className={
-              variant === "destructive"
-                ? "px-4 py-2 rounded-md text-[12px] leading-[16px] tracking-[0.02em] font-medium bg-error text-white hover:bg-error/90 transition-colors shadow-[0_0_10px_rgba(255,180,171,0.2)]"
-                : "px-4 py-2 rounded-md text-[12px] leading-[16px] tracking-[0.02em] font-medium bg-primary text-on-primary hover:bg-primary-container transition-colors"
-            }
+            className={`h-8 px-4 text-xs font-mono font-bold cursor-pointer ${
+              isDestructive
+                ? "bg-red-600 text-white hover:bg-red-500 shadow-sm"
+                : "bg-white text-black hover:bg-neutral-200 shadow-sm"
+            }`}
           >
             {confirmLabel}
-          </button>
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

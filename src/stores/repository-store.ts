@@ -9,6 +9,7 @@ import {
   deleteRepository,
   getRepositoryProgress,
 } from "@/lib/api";
+import { queryCache } from "@/lib/query-cache";
 
 interface RepositoryStore {
   repositories: Repository[];
@@ -26,7 +27,7 @@ interface RepositoryStore {
   progress: IndexingProgress | null;
   pollInterval: ReturnType<typeof setInterval> | null;
 
-  fetchRepositories: () => Promise<void>;
+  fetchRepositories: (forceRefresh?: boolean) => Promise<void>;
   createAndScan: (req: {
     source_type: string;
     source_url?: string;
@@ -59,10 +60,23 @@ export const useRepositoryStore = create<RepositoryStore>((set, get) => ({
   progress: null,
   pollInterval: null,
 
-  fetchRepositories: async () => {
-    set({ loading: true });
+  fetchRepositories: async (forceRefresh = false) => {
+    // Only show loading spinner if we don't already have repositories cached
+    if (get().repositories.length === 0) {
+      set({ loading: true });
+    }
     try {
-      const response = await listRepositories();
+      const response = await queryCache.fetchWithCache(
+        "repositories",
+        listRepositories,
+        {
+          staleTimeMs: 15_000,
+          forceRefresh,
+          onBackgroundRevalidate: (fresh) => {
+            set({ repositories: fresh.repositories });
+          },
+        }
+      );
       set({ repositories: response.repositories, loading: false });
     } catch {
       set({ loading: false });

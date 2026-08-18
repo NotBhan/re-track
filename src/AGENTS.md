@@ -34,18 +34,18 @@ Milestone 6 — Polish: **In Progress**
 
 Implemented and verified:
 
-- Vercel Geist monochrome aesthetic (black canvas, `#262626` borders, `Geist Mono`) ✅
-- Repository dropdown in Dashboard for fast repo switching ✅
-- Repository AST Map with Directory List sub-view ✅
-- CallGraphView.tsx — interactive force-directed SVG, no external lib ✅
+- [x] Vercel Geist monochrome aesthetic (black canvas, `#262626` borders, `Geist Mono`)
+- [x] Repository dropdown in Dashboard for fast repo switching
+- [x] Repository AST Map with Directory List sub-view
+- [x] CallGraphView.tsx — interactive force-directed SVG, no external lib
   - Spring simulation at 60 fps
   - Drag nodes, scroll-to-zoom, click-drag pan
   - Node shapes by kind: square=class, diamond=component, circle=function/method
   - Edge styles: solid=calls, dashed=imports, thick=inherits, dotted=renders
   - Hover tooltip with label, kind, file, line number
   - Legend and Reset View button
-- Dynamic "N nodes · M edges" count badge ✅
-- `CallGraphNode` and `CallGraphEdge` types in `src/types/repository.ts` ✅
+- [x] Dynamic "N nodes · M edges" count badge
+- [x] `CallGraphNode` and `CallGraphEdge` types in `src/types/repository.ts`
 
 ---
 
