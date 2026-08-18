@@ -2,7 +2,7 @@
 
 Owns the React frontend for RE:Track (RefinedEngine Track).
 
-Responsible for user interaction, repository visualization, and call graph rendering.
+Responsible for user interaction, repository visualization, call graph exploration, context generation, and telemetry presentation.
 
 ---
 
@@ -10,75 +10,52 @@ Responsible for user interaction, repository visualization, and call graph rende
 
 Owns:
 
-- Dashboard (Prompt Workbench + Repository AST Map)
-  - Prompt Workbench — task input, agent context synthesis, Context Package viewer
-  - Repository AST Map — two sub-views:
-    - Directory List — filterable subfolder/symbol list
-    - Call Graph — interactive force-directed SVG visualization
-- Memory Viewer
-- Benchmarks
-- Settings
-- Repository store (Zustand, `src/stores/repository-store.ts`)
-- Health store (`src/stores/health-store.ts`)
-- Component library (`src/components/`)
-- Type definitions (`src/types/repository.ts` — includes `CallGraphNode`, `CallGraphEdge`)
+- Context Studio (`src/pages/ContextStudio.tsx`)
+  - Prompt Workbench — suggested prompt presets, live token counters, discrete latencies
+  - Evidence Provenance Layer — extracted symbols, intent parsing, caller/callee links
+  - Progressive Markdown Reveal — token-budgeted Context Package preview & export
+- Knowledge Explorer (`src/pages/KnowledgeExplorer.tsx`)
+  - 5-State AST Call Graph Topology View
+  - Directory & Module Map — framework-aware hierarchy
+  - Key Components & Entry Points
+- Repositories (`src/pages/Repositories.tsx`) — Catalog, indexing telemetry, and deletion
+- Memory (`src/pages/Memory.tsx`) — Multi-layer storage inspector (Ingested files, Vector Index, Knowledge Graph)
+- Benchmarks (`src/pages/Benchmarks.tsx`) — Deterministic token baseline evaluation, compression ratios, latency breakdown, immutable run metadata
+- Settings (`src/pages/Settings.tsx`) — AI provider configuration, storage, and system telemetry
+- State Stores (`src/stores/`) — `repository-store`, `context-package-store`, `memory-store`, `health-store`
+- Components (`src/components/`) — `CallGraphView`, `EvidenceProvenanceLayer`, `ProgressiveMarkdownReveal`, `SynthesisProgressBar`, `MemoryStats`
+- Type Definitions (`src/types/repository.ts`)
 
 ---
 
 # Current Status
 
-Milestone 3 — Frontend Foundation: **Completed**
-Milestone 4 — Repository Knowledge Layer (UI): **Completed**
-Milestone 5 — Call Graph Visualization: **Completed**
-Milestone 6 — Polish: **In Progress**
-
-Implemented and verified:
-
-- [x] Vercel Geist monochrome aesthetic (black canvas, `#262626` borders, `Geist Mono`)
-- [x] Repository dropdown in Dashboard for fast repo switching
-- [x] Repository AST Map with Directory List sub-view
-- [x] CallGraphView.tsx — interactive force-directed SVG, no external lib
-  - Spring simulation at 60 fps
-  - Drag nodes, scroll-to-zoom, click-drag pan
-  - Node shapes by kind: square=class, diamond=component, circle=function/method
-  - Edge styles: solid=calls, dashed=imports, thick=inherits, dotted=renders
-  - Hover tooltip with label, kind, file, line number
-  - Legend and Reset View button
-- [x] Dynamic "N nodes · M edges" count badge
-- [x] `CallGraphNode` and `CallGraphEdge` types in `src/types/repository.ts`
+- [x] **Visual Design System**: Vercel Geist monochrome dark palette, `#262626` hairline borders, `Geist Sans` & `Geist Mono` typography.
+- [x] **Product Interaction Quality**: Keyboard accessibility, active request cancellation, toast feedback, non-blocking telemetry.
+- [x] **Information Density & Workflow Clarity**: Task → Repository → Evidence → Context relationship strips, Symbol Inspector drawer, progressive synthesis progress bar.
+- [x] **Validation & Integrity (Truth Boundary)**:
+  - Strict 5-state AST call graph rendering (`not_analyzed`, `analyzing`, `analyzed`, `zero_edges`, `failed`).
+  - No synthetic fallback nodes or mock edges; node IDs are strictly authoritative.
+  - Connected path highlighting on hover/selection with inactive element dimming.
+  - Multi-tier memory topology separation (Ingested files vs Vector index vs Knowledge graph).
+  - Deterministic token reduction benchmarks against full source baseline.
 
 ---
 
 # Local Contracts
 
-Frontend must not contain backend business logic.
-
-Communicate with backend exclusively through Tauri IPC (`src/lib/api.ts`).
-
-All repository data types live in `src/types/repository.ts`.
-
-Design system: Vercel Geist aesthetic — `#000000` / `#0a0a0a` canvas, `#262626` borders, `Geist Mono` font, no gradients except subtle.
-
-When adding new call graph node/edge kinds, update both `src/types/repository.ts` and `CallGraphView.tsx` (legend + render logic + color maps).
-
----
-
-# Work Guidance
-
-Prefer reusable components in `src/components/`.
-
-Keep state localized where possible; use Zustand stores for shared state.
-
-Use Tailwind utility classes and design tokens — no inline style strings for colors.
-
-`CallGraphView.tsx` owns the simulation loop. Do not move simulation state into a global store; keep it local to the component.
+1. **Truth Boundary Invariant**: The frontend must never invent missing graph nodes/edges, infer graph status from empty arrays, substitute static benchmark scores, or reinterpret unextracted states with fake zeroes.
+2. **Backend Communication**: Communicate with backend exclusively through Tauri IPC (`src/lib/api.ts`).
+3. **Data Types**: All repository data types live in `src/types/repository.ts`.
+4. **State Management**: Keep local UI state inside components; use Zustand stores for cross-page persistence.
+5. **CallGraphView Ownership**: `CallGraphView.tsx` owns the spring-force simulation loop. Do not move simulation state into a global store.
 
 ---
 
 # Verification
 
 ```bash
-npm run build          # Must complete with 0 TypeScript errors
+npm run build          # Must complete with 0 TypeScript/Vite errors
 npx tsc --noEmit       # Type check
 ```
 
@@ -86,41 +63,11 @@ npx tsc --noEmit       # Type check
 
 # Child DOX Index
 
-src/components/
-  Shared UI components, design tokens, and feature-level components.
-
-src/components/repositories/
-  RepositoryCard.tsx — Repository card view.
-  RepositoryDetailPanel.tsx — Right panel with repository summary, files, and actions.
-  CallGraphView.tsx — Interactive force-directed call graph SVG.
-  ReindexModal.tsx — Telemetry progress modal for repository indexing.
-
-src/components/context-builder/
-  ContextPipelineInputs.tsx — Parameter inputs for multi-stage context synthesis.
-  ContextPipelineVisualization.tsx — Visual pipeline stages & metrics.
-  ContextPackageOutputPanel.tsx — Formatted/Raw Context Package preview & actions.
-
-src/components/context-packages/
-  ContextPackageCard.tsx — Saved Context Package card with diff/copy/export tools.
-
-src/pages/
-  ContextStudio.tsx — Main workspace (Prompt Workbench + Synthesis Modal + AST Map).
-  Repositories.tsx — Repository catalog & management.
-  KnowledgeExplorer.tsx — Structural AST and call graph inspection.
-  ContextBuilder.tsx — Multi-stage context pipeline studio.
-  ContextPackages.tsx — Saved Context Packages library & comparison.
-  Memory.tsx — Cognee dataset inspector.
-  Benchmarks.tsx — Latency & throughput analytics.
-  Settings.tsx — Backend, Ollama, Cognee, & Storage configuration.
-
-src/stores/
-  repository-store.ts — Indexed repositories, active selection, and reindexing telemetry.
-  context-store.ts — Multi-stage context pipeline state.
-  context-package-store.ts — Saved packages store with localStorage persistence.
-  health-store.ts — Backend, Ollama, and Cognee telemetry polling.
-
-src/types/
-  repository.ts — Repository, CallGraphNode, CallGraphEdge, ScanResult.
-
-src/lib/
-  api.ts — Tauri IPC wrapper for all backend commands.
+- `src/components/repositories/` — `CallGraphView.tsx`, `RepositoryCard.tsx`, `RepositoryDetailPanel.tsx`, `QuickContextModal.tsx`.
+- `src/components/context-builder/` — `EvidenceProvenanceLayer.tsx`, `ContextPipelineInputs.tsx`.
+- `src/components/dashboard/` — `ProgressiveMarkdownReveal.tsx`.
+- `src/components/memory/` — `MemoryStats.tsx`.
+- `src/components/benchmarks/` — `MetricCard.tsx`.
+- `src/components/shared/` — `SynthesisProgressBar.tsx`, `ProviderAlertBanner.tsx`.
+- `src/stores/` — Zustand stores for repositories, packages, memory, and health.
+- `src/pages/` — `ContextStudio.tsx`, `KnowledgeExplorer.tsx`, `Repositories.tsx`, `Memory.tsx`, `Benchmarks.tsx`, `Settings.tsx`.

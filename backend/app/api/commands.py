@@ -303,6 +303,22 @@ async def health() -> HealthResponse | ErrorResponse:
             except Exception:
                 pass
 
+        ram_pct = round((ram_used / ram_total) * 100, 1) if ram_total > 0 else 0.0
+        high_mem_pressure = ram_pct >= 90.0
+
+        gpu_presence = "None"
+        if gpu_name:
+            if "AMD" in gpu_name:
+                gpu_presence = "AMD"
+            elif "NVIDIA" in gpu_name or "GeForce" in gpu_name or "RTX" in gpu_name:
+                gpu_presence = "NVIDIA"
+            else:
+                gpu_presence = "Generic"
+
+        # Runtime execution device: only declare GPU if VRAM usage is strictly > 0
+        exec_device = "GPU" if vram_used > 0.2 else "CPU"
+        active_model = settings.ollama.llm_model if settings else None
+
         response = HealthResponse(
             status=status,
             ollama_reachable=ollama_reachable,
@@ -310,14 +326,19 @@ async def health() -> HealthResponse | ErrorResponse:
             version=VERSION,
             ram_total_gb=ram_total,
             ram_used_gb=ram_used,
+            ram_percent=ram_pct,
+            high_memory_pressure=high_mem_pressure,
             cpu_percent=cpu_pct,
+            gpu_presence=gpu_presence,
             gpu_name=gpu_name,
             vram_total_gb=vram_total,
             vram_used_gb=vram_used,
+            execution_device=exec_device,
+            active_model=active_model,
         )
 
         elapsed = time.monotonic() - start
-        logger.info("command: health() | status=%s | %.2fs", response.status, elapsed)
+        logger.info("command: health() | status=%s | device=%s | ram=%s%% | %.2fs", response.status, exec_device, ram_pct, elapsed)
         return response
 
     except Exception as e:
@@ -1047,28 +1068,39 @@ async def get_memory_stats() -> MemoryStatsResponse | ErrorResponse:
                 total_size_display = f"{total_files} files"
 
         # Get graph stats from CogneeService
-        graph_nodes = 0
-        graph_edges = 0
+        graph_nodes = None
+        graph_edges = None
+        knowledge_graph_status = "not_extracted"
+
         if _cognee_service and _cognee_service.is_initialized:
             try:
                 graph_stats = await _cognee_service.get_graph_stats()
-                graph_nodes = graph_stats.get("graph_nodes", 0)
-                graph_edges = graph_stats.get("graph_edges", 0)
+                raw_nodes = graph_stats.get("graph_nodes", 0)
+                raw_edges = graph_stats.get("graph_edges", 0)
+                if raw_nodes > 0:
+                    knowledge_graph_status = "extracted"
+                    graph_nodes = raw_nodes
+                    graph_edges = raw_edges
+                else:
+                    knowledge_graph_status = "not_extracted"
             except Exception as e:
                 logger.warning("Failed to get graph stats: %s", e)
+                knowledge_graph_status = "failed"
 
         response = MemoryStatsResponse(
             success=True,
             total_size_display=total_size_display,
+            dataset_count=dataset_count,
+            knowledge_graph_status=knowledge_graph_status,
             graph_nodes=graph_nodes,
             graph_edges=graph_edges,
-            dataset_count=dataset_count,
         )
 
         elapsed = time.monotonic() - start
         logger.info(
-            "command: get_memory_stats() complete | datasets=%d | nodes=%d | edges=%d | %.2fs",
+            "command: get_memory_stats() complete | datasets=%d | status=%s | nodes=%s | edges=%s | %.2fs",
             dataset_count,
+            knowledge_graph_status,
             graph_nodes,
             graph_edges,
             elapsed,
@@ -1093,34 +1125,14 @@ async def run_benchmark() -> BenchmarkSuiteResponse | ErrorResponse:
         from app.api.benchmarks import run_benchmark_suite
 
         _ensure_services()
-        suite = await run_benchmark_suite()
-
-        response = BenchmarkSuiteResponse(
-            success=True,
-            results=[
-                BenchmarkResultItem(
-                    question=r.question,
-                    latency_ms=r.latency_ms,
-                    token_count=r.token_count,
-                    section_count=r.section_count,
-                    retrieved_memories=r.retrieved_memories,
-                    compression_ratio=r.compression_ratio,
-                    quality_score=r.quality_score,
-                    passed=r.passed,
-                )
-                for r in suite.results
-            ],
-            avg_latency_ms=suite.avg_latency_ms,
-            avg_tokens=suite.avg_tokens,
-            pass_rate=suite.pass_rate,
-            total_questions=suite.total_questions,
-        )
+        response = await run_benchmark_suite()
 
         elapsed = time.monotonic() - start
         logger.info(
-            "command: run_benchmark() complete | questions=%d | pass_rate=%.1f%% | %.2fs",
-            suite.total_questions,
-            suite.pass_rate,
+            "command: run_benchmark() complete | questions=%d | compression=%.2fx | savings=%.1f%% | %.2fs",
+            response.total_questions,
+            response.avg_compression_ratio,
+            response.avg_token_savings_percent,
             elapsed,
         )
         return response
@@ -1141,6 +1153,8 @@ def _repo_to_response(repo: Repository) -> RepositoryResponse:
     """Convert a Repository dataclass to a Pydantic response model with full AST and metadata."""
     call_graph_nodes = None
     call_graph_edges = None
+    call_graph_status = "not_analyzed"
+    call_graph_error = None
     summary = repo.summary or ""
     entry_points = repo.entry_points or []
     architecture = repo.architecture or ""
@@ -1153,6 +1167,10 @@ def _repo_to_response(repo: Repository) -> RepositoryResponse:
             call_graph_nodes = repo.metadata["call_graph_nodes"]
         if "call_graph_edges" in repo.metadata:
             call_graph_edges = repo.metadata["call_graph_edges"]
+        if "call_graph_status" in repo.metadata:
+            call_graph_status = repo.metadata["call_graph_status"]
+        if "call_graph_error" in repo.metadata:
+            call_graph_error = repo.metadata["call_graph_error"]
 
     # Fallback to indexed repo store if not in repo.metadata
     if not call_graph_nodes:
@@ -1164,11 +1182,24 @@ def _repo_to_response(repo: Repository) -> RepositoryResponse:
                         call_graph_nodes = r.get("call_graph_nodes")
                     if r.get("call_graph_edges"):
                         call_graph_edges = r.get("call_graph_edges")
+                    if r.get("call_graph_status"):
+                        call_graph_status = r.get("call_graph_status")
+                    if r.get("call_graph_error"):
+                        call_graph_error = r.get("call_graph_error")
                     if not summary and r.get("purpose"):
                         summary = r.get("purpose")
                     break
         except Exception:
             pass
+
+    # Infer status if not explicitly recorded
+    if call_graph_status == "not_analyzed":
+        if call_graph_edges and len(call_graph_edges) > 0:
+            call_graph_status = "analyzed"
+        elif call_graph_nodes and len(call_graph_nodes) > 0:
+            call_graph_status = "zero_edges"
+        elif repo.status == "indexed":
+            call_graph_status = "zero_edges"
 
     return RepositoryResponse(
         id=repo.id,
@@ -1191,6 +1222,8 @@ def _repo_to_response(repo: Repository) -> RepositoryResponse:
         components=components,
         dependencies=dependencies,
         metadata=repo.metadata or {},
+        call_graph_status=call_graph_status,
+        call_graph_error=call_graph_error,
         call_graph_nodes=call_graph_nodes,
         call_graph_edges=call_graph_edges,
     )
@@ -1636,7 +1669,9 @@ async def get_agent_context(
                 _get_provider_health(),
             )
 
-            # 2. Parallel Step: CGC Structural Query + Cognee Context Synthesis
+            # 2. Parallel Step: CGC Structural Query + Cognee Context Synthesis (Retrieval Stage)
+            t_retrieval_start = time.perf_counter()
+
             async def _query_cgc():
                 if request.include_structural_graph and _cgc_service:
                     try:
@@ -1665,8 +1700,10 @@ async def get_agent_context(
                 _query_cgc(),
                 _generate_package(),
             )
+            retrieval_time_ms = int((time.perf_counter() - t_retrieval_start) * 1000)
 
-            # 3. Perform direct AST & symbol relevance search across repository files
+            # 3. Direct AST & symbol relevance search across repository files (Ranking Stage)
+            t_rank_start = time.perf_counter()
             relevant_snippets = []
             search_terms = list(set(
                 [w for w in request.task_prompt.split() if len(w) > 3 and w.lower() not in ("where", "what", "find", "how", "with", "from", "this", "that")]
@@ -1712,9 +1749,12 @@ async def get_agent_context(
                 except Exception:
                     pass
 
+            ranking_time_ms = int((time.perf_counter() - t_rank_start) * 1000)
+
+            # 4. Merge snippets and structural graph into Markdown output (Synthesis Stage)
+            t_synth_start = time.perf_counter()
             quant_warning = health_status.quantization_warning if health_status else None
 
-            # 4. Merge snippets and structural graph into Markdown output
             final_markdown = package.markdown
             if relevant_snippets:
                 final_markdown += "\n\n---\n\n# Relevant Code Snippets & Target Implementations\n\n" + "\n\n".join(relevant_snippets)
@@ -1724,6 +1764,7 @@ async def get_agent_context(
                 if struct_md:
                     final_markdown += f"\n\n---\n\n# Structural Code Relationships\n\n{struct_md}\n"
 
+            synthesis_time_ms = int((time.perf_counter() - t_synth_start) * 1000)
             elapsed_ms = int((time.monotonic() - start) * 1000)
 
             all_related = list(dict.fromkeys(
@@ -1742,6 +1783,10 @@ async def get_agent_context(
                 quantization_warning=quant_warning,
                 estimated_tokens=len(final_markdown) // 4,
                 generation_time_ms=elapsed_ms,
+                retrieval_time_ms=retrieval_time_ms,
+                ranking_time_ms=ranking_time_ms,
+                synthesis_time_ms=synthesis_time_ms,
+                total_time_ms=elapsed_ms,
             )
 
             # Store in high-speed synthesis cache

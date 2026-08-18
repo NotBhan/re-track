@@ -18,55 +18,36 @@ Every feature should ultimately improve this outcome.
 
 ---
 
-# Verified Achievements (Milestone 1)
+# Verified Achievements (v0.1 Release)
 
-The following have been verified through implementation and testing:
+The following have been verified through end-to-end implementation and automated test suites (294 backend tests + frontend TypeScript build):
 
-## End-to-End Cognee Lifecycle
+## Deterministic AST Call Graph Engine
+- 2-pass Python AST visitor + React/TS regex import scanner
+- Statically verified symbol table and import alias resolution
+- Graph edge invariant: `assert edge.source in node_ids and edge.target in node_ids`
+- 5 explicit graph lifecycle states: `not_analyzed`, `analyzing`, `analyzed`, `zero_edges`, `failed`
 
-- remember() successfully ingests text data into persistent memory
-- recall() retrieves relevant memories via hybrid search (vector + graph)
-- improve() enriches and refines stored knowledge
-- forget() cascade-deletes across vectors, graph, and metadata
+## Multi-Tier Memory Topology
+- Ingested source files tracking with dataset summaries
+- LanceDB vector embedding index status (`Ready / Active`)
+- Explicit Knowledge Graph entity tracking (`knowledge_graph_status`: `not_extracted`, `extracting`, `extracted`, `failed`)
 
-## Repository Indexing
+## Context Package Generation & Budgeting
+- Intent parser and symbol extraction
+- Multi-stage pipeline: Dedup → Rank → Compress → Categorize → References → Render
+- Line-boundary token compression and priority tier budgeting
+- Discrete latency decomposition: retrieval, ranking, synthesis, total
 
-- File discovery via recursive directory scan
-- Ignore rules for `.git/`, `node_modules/`, `__pycache__/`, etc.
-- Supported extensions: `.py`, `.ts`, `.tsx`, `.js`, `.jsx`, `.md`, `.json`, `.yaml`, `.yml`, `.toml`
-- Configurable batch size (default: 10 files per batch)
-- Progress reporting with total/processed/failed counts
+## Reproducible Benchmark Suite
+- Exact source code baseline tokenization against target repository
+- Deterministic compression ratios and prompt token savings calculations
+- Immutable execution metadata recording (Git SHA, active model, device, cache state)
 
-## Context Package Generation
-
-- Memory retrieval via CogneeService.recall()
-- Duplicate removal via normalized text comparison
-- Relevance ranking by score
-- Keyword-based categorization into sections:
-  - Relevant Files
-  - Relevant Knowledge
-  - Architecture Notes
-  - Existing APIs
-  - Coding Conventions
-  - Previous Decisions
-- Clean Markdown output with `# Task` and `# Section` headings
-
-## Integration Tests Passing
-
-- Settings load correctly from environment
-- Error hierarchy works (RETrackError / base error)
-- Response models instantiate correctly
-- IndexingService discovers, filters, and batches files
-- ContextService categorizes, deduplicates, and generates Markdown
-- Full pipeline: remember → recall → context package → forget
-
-## Production Backend Structure
-
-- Centralized configuration (`backend/app/config/settings.py`)
-- Cognee config singleton setup (not just env vars)
-- Structured logging (no print statements)
-- Complete Python type hints
-- Custom exception hierarchy
+## Test Coverage
+- 294 backend unit tests passing (`backend/tests/`)
+- AST integrity test suite (`backend/tests/test_ast_integrity.py`)
+- Frontend TypeScript type check (`tsc --noEmit`) and production bundle build (`vite build`) passing with 0 errors.
 
 ---
 

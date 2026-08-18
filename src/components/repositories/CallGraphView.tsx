@@ -101,13 +101,14 @@ export function CallGraphView({
   const [searchQuery, setSearchQuery] = useState("");
   const [activeNode, setActiveNode] = useState<CallGraphNode | null>(null);
 
-  // Filter nodes & edges
+  // Filter nodes
   const filteredNodes = useMemo(() => {
     return rawNodes.filter((node) => {
       const matchesKind = selectedKind === "all" || node.kind === selectedKind;
       const matchesSearch =
         !searchQuery ||
         node.label.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        node.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
         node.file.toLowerCase().includes(searchQuery.toLowerCase());
       return matchesKind && matchesSearch;
     });
@@ -115,13 +116,35 @@ export function CallGraphView({
 
   const activeNodeIds = useMemo(() => new Set(filteredNodes.map((n) => n.id)), [filteredNodes]);
 
+  // Authoritative edge resolution: map edge source & target to verified node IDs
   const filteredEdges = useMemo(() => {
-    return rawEdges.filter((edge) => {
+    const results: CallGraphEdge[] = [];
+    for (const edge of rawEdges) {
       const matchesKind = selectedEdgeKind === "all" || edge.kind === selectedEdgeKind;
-      const nodesExist = activeNodeIds.has(edge.source) && activeNodeIds.has(edge.target);
-      return matchesKind && nodesExist;
-    });
-  }, [rawEdges, selectedEdgeKind, activeNodeIds]);
+      if (!matchesKind) continue;
+
+      let sId: string | null = null;
+      if (activeNodeIds.has(edge.source)) {
+        sId = edge.source;
+      } else {
+        const matches = filteredNodes.filter((n) => n.label === edge.source);
+        if (matches.length === 1) sId = matches[0].id;
+      }
+
+      let tId: string | null = null;
+      if (activeNodeIds.has(edge.target)) {
+        tId = edge.target;
+      } else {
+        const matches = filteredNodes.filter((n) => n.label === edge.target);
+        if (matches.length === 1) tId = matches[0].id;
+      }
+
+      if (sId && tId && sId !== tId && activeNodeIds.has(sId) && activeNodeIds.has(tId)) {
+        results.push({ ...edge, source: sId, target: tId });
+      }
+    }
+    return results;
+  }, [rawEdges, selectedEdgeKind, activeNodeIds, filteredNodes]);
 
   const [simNodes, setSimNodes] = useState<SimNode[]>(() => initSim(filteredNodes, width, height));
   const [hovered, setHovered] = useState<string | null>(null);
@@ -179,19 +202,19 @@ export function CallGraphView({
       for (const e of filteredEdges) {
         const si = idxRef.current.get(e.source);
         const ti = idxRef.current.get(e.target);
-        if (si === undefined || ti === undefined) continue;
-        const sn = ns[si],
-          tn = ns[ti];
-        const dx = tn.x - sn.x;
-        const dy = tn.y - sn.y;
-        const dist = Math.hypot(dx, dy) || 1;
-        const force = (dist - LINK_DISTANCE) * 0.06 * alphaRef.current;
-        const fx = (dx / dist) * force;
-        const fy = (dy / dist) * force;
-        sn.vx += fx;
-        sn.vy += fy;
-        tn.vx -= fx;
-        tn.vy -= fy;
+        if (si !== undefined && ti !== undefined && si !== ti) {
+          const dx = ns[ti].x - ns[si].x;
+          const dy = ns[ti].y - ns[si].y;
+          const dist = Math.hypot(dx, dy) || 1;
+          const diff = dist - LINK_DISTANCE;
+          const force = diff * 0.08 * alphaRef.current;
+          const fx = (dx / dist) * force;
+          const fy = (dy / dist) * force;
+          ns[si].vx += fx;
+          ns[si].vy += fy;
+          ns[ti].vx -= fx;
+          ns[ti].vy -= fy;
+        }
       }
 
       for (const n of ns) {
@@ -199,25 +222,24 @@ export function CallGraphView({
         n.vy *= DAMPING;
         n.x += n.vx;
         n.y += n.vy;
-        n.x = Math.max(RADIUS, Math.min(width - RADIUS, n.x));
-        n.y = Math.max(RADIUS, Math.min(height - RADIUS, n.y));
+        n.x = Math.max(RADIUS + 10, Math.min(width - RADIUS - 10, n.x));
+        n.y = Math.max(RADIUS + 10, Math.min(height - RADIUS - 10, n.y));
       }
 
       nodesRef.current = ns;
       setSimNodes(ns);
-    }, 16);
+    }, 25);
 
     return () => clearInterval(id);
   }, [filteredEdges, width, height]);
 
-  // Drag interaction
+  // Drag handlers
   const handleNodeMouseDown = useCallback(
     (e: React.MouseEvent, node: SimNode) => {
       e.stopPropagation();
-      setDragging({ id: node.id, ox: e.clientX - node.x, oy: e.clientY - node.y });
-      alphaRef.current = 0.2;
+      setDragging({ id: node.id, ox: e.clientX - node.x * zoom - pan.x, oy: e.clientY - node.y * zoom - pan.y });
     },
-    []
+    [pan, zoom]
   );
 
   const handleNodeClick = useCallback(
@@ -278,16 +300,29 @@ export function CallGraphView({
     return m;
   }, [simNodes]);
 
+  const focusedNodeId = activeNode?.id || selectedNodeId || hovered;
+
+  // Set of connected node IDs to highlight
+  const connectedNodeIds = useMemo(() => {
+    if (!focusedNodeId) return null;
+    const s = new Set<string>([focusedNodeId]);
+    for (const e of filteredEdges) {
+      if (e.source === focusedNodeId) s.add(e.target);
+      if (e.target === focusedNodeId) s.add(e.source);
+    }
+    return s;
+  }, [focusedNodeId, filteredEdges]);
+
   // Connected edges for the active/selected node
   const activeIncoming = useMemo(() => {
     if (!activeNode) return [];
-    return rawEdges.filter((e) => e.target === activeNode.id);
-  }, [activeNode, rawEdges]);
+    return filteredEdges.filter((e) => e.target === activeNode.id);
+  }, [activeNode, filteredEdges]);
 
   const activeOutgoing = useMemo(() => {
     if (!activeNode) return [];
-    return rawEdges.filter((e) => e.source === activeNode.id);
-  }, [activeNode, rawEdges]);
+    return filteredEdges.filter((e) => e.source === activeNode.id);
+  }, [activeNode, filteredEdges]);
 
   return (
     <div className="relative w-full h-full select-none bg-black rounded-xl border border-[#262626] overflow-hidden flex flex-col">
@@ -314,7 +349,7 @@ export function CallGraphView({
 
           {/* Edge Kind Filter */}
           <div className="hidden sm:flex items-center gap-1 bg-black p-1 rounded-lg border border-[#262626]">
-            {["all", "calls", "imports", "renders"].map((ek) => (
+            {["all", "calls", "imports", "inherits", "renders"].map((ek) => (
               <button
                 key={ek}
                 onClick={() => setSelectedEdgeKind(ek)}
@@ -417,10 +452,10 @@ export function CallGraphView({
 
               const style = EDGE_KIND_STYLE[edge.kind] || EDGE_KIND_STYLE.calls;
               const isHighlight =
-                hovered === edge.source ||
-                hovered === edge.target ||
-                activeNode?.id === edge.source ||
-                activeNode?.id === edge.target;
+                focusedNodeId &&
+                (edge.source === focusedNodeId || edge.target === focusedNodeId);
+
+              const isDimmed = focusedNodeId && !isHighlight;
 
               return (
                 <line
@@ -433,7 +468,8 @@ export function CallGraphView({
                   strokeWidth={isHighlight ? style.width + 1.2 : style.width}
                   strokeDasharray={style.dash === "none" ? undefined : style.dash}
                   markerEnd={edge.kind === "renders" ? "url(#cg-arrow-renders)" : "url(#cg-arrow)"}
-                  opacity={isHighlight ? 1 : 0.45}
+                  opacity={isHighlight ? 1 : isDimmed ? 0.12 : 0.45}
+                  className="transition-opacity duration-150"
                 />
               );
             })}
@@ -442,6 +478,9 @@ export function CallGraphView({
             {simNodes.map((node) => {
               const isHovered = hovered === node.id;
               const isSelected = activeNode?.id === node.id || selectedNodeId === node.id;
+              const isConnected = connectedNodeIds ? connectedNodeIds.has(node.id) : true;
+              const isDimmed = connectedNodeIds !== null && !isConnected;
+
               const fill = NODE_KIND_BG[node.kind] || "#171717";
               const stroke = isSelected
                 ? "#ffffff"
@@ -458,6 +497,7 @@ export function CallGraphView({
                   onMouseEnter={() => setHovered(node.id)}
                   onMouseLeave={() => setHovered(null)}
                   className="cursor-pointer"
+                  opacity={isDimmed ? 0.2 : 1}
                 >
                   {/* Selection halo */}
                   {isSelected && (
@@ -544,7 +584,7 @@ export function CallGraphView({
               animate={{ opacity: 1, x: 0, scale: 1 }}
               exit={{ opacity: 0, x: 20, scale: 0.95 }}
               transition={{ duration: 0.2 }}
-              className="absolute right-4 top-4 w-72 sm:w-80 bg-black/95 backdrop-blur-md border border-[#333] rounded-xl shadow-2xl p-4 text-xs font-mono z-20 space-y-3"
+              className="absolute right-4 top-4 w-72 sm:w-84 bg-black/95 backdrop-blur-md border border-[#333] rounded-xl shadow-2xl p-4 text-xs font-mono z-20 space-y-3"
             >
               <div className="flex items-start justify-between pb-2 border-b border-[#262626]">
                 <div>
@@ -554,8 +594,8 @@ export function CallGraphView({
                       {activeNode.kind}
                     </Badge>
                   </div>
-                  <p className="text-[11px] text-neutral-400 mt-0.5 truncate max-w-[220px]">
-                    {activeNode.file}
+                  <p className="text-[10px] text-neutral-500 font-mono mt-0.5 break-all">
+                    {activeNode.id}
                   </p>
                 </div>
                 <button
@@ -566,12 +606,18 @@ export function CallGraphView({
                 </button>
               </div>
 
-              {activeNode.line && (
-                <div className="text-[11px] text-neutral-400">
-                  <span>Line Definition: </span>
-                  <span className="text-white font-bold">L{activeNode.line}</span>
+              <div className="space-y-1 text-[11px] text-neutral-400">
+                <div>
+                  <span className="text-neutral-500">File: </span>
+                  <span className="text-neutral-200">{activeNode.file}</span>
                 </div>
-              )}
+                {activeNode.line !== undefined && activeNode.line > 0 && (
+                  <div>
+                    <span className="text-neutral-500">Line: </span>
+                    <span className="text-neutral-200">L{activeNode.line}</span>
+                  </div>
+                )}
+              </div>
 
               {/* Incoming Callers */}
               <div>
@@ -581,15 +627,22 @@ export function CallGraphView({
                 {activeIncoming.length === 0 ? (
                   <span className="text-[11px] text-neutral-500 italic">None (entry or root module)</span>
                 ) : (
-                  <div className="flex flex-wrap gap-1 max-h-20 overflow-y-auto">
-                    {activeIncoming.map((edge) => (
-                      <span
-                        key={edge.source}
-                        className="px-1.5 py-0.5 rounded bg-[#141414] border border-[#2a2a2a] text-neutral-300 text-[10px]"
-                      >
-                        {edge.source}
-                      </span>
-                    ))}
+                  <div className="flex flex-col gap-1 max-h-28 overflow-y-auto">
+                    {activeIncoming.map((edge, idx) => {
+                      const matched = filteredNodes.find((n) => n.id === edge.source);
+                      return (
+                        <button
+                          key={`${edge.source}-${idx}`}
+                          onClick={() => matched && setActiveNode(matched)}
+                          className="flex items-center justify-between px-2 py-1 rounded bg-[#141414] border border-[#2a2a2a] text-neutral-300 text-[10px] hover:border-neutral-400 text-left cursor-pointer"
+                        >
+                          <span className="truncate max-w-[160px]">{matched?.label || edge.source}</span>
+                          <Badge variant="outline" className="text-[8px] uppercase border-[#333] text-neutral-400">
+                            {edge.kind}
+                          </Badge>
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -602,15 +655,22 @@ export function CallGraphView({
                 {activeOutgoing.length === 0 ? (
                   <span className="text-[11px] text-neutral-500 italic">None (leaf node)</span>
                 ) : (
-                  <div className="flex flex-wrap gap-1 max-h-20 overflow-y-auto">
-                    {activeOutgoing.map((edge) => (
-                      <span
-                        key={edge.target}
-                        className="px-1.5 py-0.5 rounded bg-[#141414] border border-[#2a2a2a] text-neutral-300 text-[10px]"
-                      >
-                        {edge.target}
-                      </span>
-                    ))}
+                  <div className="flex flex-col gap-1 max-h-28 overflow-y-auto">
+                    {activeOutgoing.map((edge, idx) => {
+                      const matched = filteredNodes.find((n) => n.id === edge.target);
+                      return (
+                        <button
+                          key={`${edge.target}-${idx}`}
+                          onClick={() => matched && setActiveNode(matched)}
+                          className="flex items-center justify-between px-2 py-1 rounded bg-[#141414] border border-[#2a2a2a] text-neutral-300 text-[10px] hover:border-neutral-400 text-left cursor-pointer"
+                        >
+                          <span className="truncate max-w-[160px]">{matched?.label || edge.target}</span>
+                          <Badge variant="outline" className="text-[8px] uppercase border-[#333] text-neutral-400">
+                            {edge.kind}
+                          </Badge>
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
               </div>

@@ -2,7 +2,7 @@
 
 Owns the backend services for RE:Track (RefinedEngine Track).
 
-Responsibilities include repository indexing, Cognee integration, call graph extraction, context retrieval, memory management, and Context Package generation.
+Responsibilities include repository indexing, Cognee integration, deterministic AST call graph extraction, context retrieval, memory management, Context Package generation, and reproducible benchmarks.
 
 ---
 
@@ -10,91 +10,61 @@ Responsibilities include repository indexing, Cognee integration, call graph ext
 
 Owns:
 
-- CogneeService
-- IndexingService (delta + .gitignore-aware filtering)
-- ContextService
-- PackageBuilder
-- BudgetManager
-- MarkdownRenderer
-- RepositorySummaryGenerator
-  - `_build_repo_map` — directory structure grouping
-  - `_extract_components` — Python AST + React/TS regex
-  - `_build_call_graph` — `ast.Call` traversal + TS import chain
-- Pipeline stages (Deduplicator, Ranker, Compressor, Categorizer, ReferenceResolver)
-- StatsLogger
-- Configuration
-- Data Models (`CallNode`, `CallEdge`, `RepositorySummary`, `ComponentInfo`, etc.)
-- Error Handling
-- Logging
+- CogneeService (Cognee lifecycle wrapper: remember, recall, improve, forget)
+- IndexingService (incremental delta indexing + .gitignore-aware filtering)
+- ManifestService (SHA256 file fingerprinting)
+- LLMProviderService (OpenAI-compatible multi-provider & model health)
+- CGCService (CodeGraphContext structural graph queries)
+- IntentParserService (task intent & symbol extraction)
+- ContextService & PackageBuilder (dedup → rank → compress → render)
+- BudgetManager (line-boundary token compression and priority enforcement)
+- MarkdownRenderer (structured markdown artifact generation)
+- RepositorySummaryGenerator (Depth-2.5 framework grouping + 2-pass AST call graph engine)
+- BenchmarkEngine (`backend/app/api/benchmarks.py` — full source baseline tokenization, discrete latencies, run metadata)
+- API Commands (`backend/app/api/commands.py`) & Schemas (`backend/app/api/schemas.py`)
+- CLI (`backend/app/cli/`)
+- Test Suites (`backend/tests/` — 294 unit tests + `test_ast_integrity.py`)
 
 ---
 
 # Current Status
-
-Milestone 1 — Backend Foundation: **Completed**
-Milestone 2 — API Layer: **Completed**
-Milestone 3 — Frontend Foundation: **Completed**
-Milestone 4 — Repository Knowledge Layer: **Completed**
-Milestone 5 — Call Graph: **Completed**
-Milestone 6 — Polish: **In Progress**
 
 Production services implemented and verified:
 
 - CogneeService ✅
 - IndexingService (incremental delta indexing + .gitignore filtering) ✅
 - ManifestService (SHA256 file fingerprinting) ✅
-- LLMProviderService (OpenAI-compatible multi-provider & model health) ✅
-- CGCService (CodeGraphContext structural graph queries) ✅
+- LLMProviderService (Multi-provider Ollama / LM Studio health) ✅
 - IntentParserService (task intent & symbol extraction) ✅
-- ContextService (rewired to PackageBuilder) ✅
-- PackageBuilder ✅
-- BudgetManager ✅
-- MarkdownRenderer ✅
-- RepositorySummaryGenerator (Depth-2.5 + call graph) ✅
-- CallGraphExtractor (embedded in RepositorySummaryGenerator) ✅
-- Pipeline stages (dedup, rank, compress, categorize, references) ✅
-- StatsLogger ✅
+- ContextService (discrete latency tracking: retrieval, ranking, synthesis) ✅
+- PackageBuilder & BudgetManager (line-boundary token compression) ✅
+- RepositorySummaryGenerator (2-pass deterministic Python & TypeScript AST resolver) ✅
+- BenchmarkEngine (authoritative baseline tokenization, compression ratio, token savings %) ✅
+- Hardware Telemetry (detected GPU presence vs active execution device, RAM pressure) ✅
+- Tests: 294 tests passing ✅
 
-API layer implemented and verified:
+---
 
-- Commands: health, get_backend_status, index_repository, generate_context, get_agent_context, forget_dataset, get_repository_summaries, _persist_repo_metadata ✅
-- Schemas (Pydantic request/response models with full metadata) ✅
-- REST Endpoints (/health, /status, /index, /context, /api/v1/context, /packages) ✅
+# Deterministic AST Call Graph Invariants
 
-Call graph persistence:
-- `call_graph_nodes` and `call_graph_edges` serialized to repo metadata store in `_persist_repo_metadata` ✅
-
-Tests: 284+ tests passing ✅
+1. **Resolution Pipeline**:
+   `AST Parse` → `Module Symbol Table` → `Import/Alias Table` → `Qualified Name Resolution` → `Internal Symbol Check` → `CallEdge Generation`.
+2. **Backend Invariant**:
+   Every edge strictly satisfies:
+   `assert edge.source in node_ids and edge.target in node_ids`
+   Self-loops and unresolved/dynamic symbols produce **0 internal edges**.
+3. **5 Explicit Graph States**:
+   `"not_analyzed"`, `"analyzing"`, `"analyzed"` (>0 edges), `"zero_edges"` (isolated symbols), `"failed"`.
 
 ---
 
 # Local Contracts
 
-Backend must remain independent from frontend implementation.
-
-Business logic belongs here.
-
-All Cognee interactions must go through CogneeService.
-
-Never call `cognee.*` directly outside CogneeService.
-
-Call graph extraction must stay inside `RepositorySummaryGenerator._build_call_graph`. Do not scatter AST parsing elsewhere.
-
----
-
-# Work Guidance
-
-Keep modules focused.
-
-Avoid unnecessary abstractions.
-
-Prefer composition over complex inheritance.
-
-Use structured logging (no print statements).
-
-Use complete Python type hints.
-
-When adding new node/edge kinds to the call graph, update both `responses.py` (the dataclass) and `CallGraphView.tsx` (legend + render logic).
+1. Backend must remain independent from frontend implementation.
+2. Business logic belongs here; frontend does not infer or fabricate state.
+3. All Cognee interactions must go through `CogneeService`.
+4. Call graph extraction must stay inside `RepositorySummaryGenerator._build_call_graph`.
+5. Benchmark calculations must use exact codebase tokenization against the configured tokenizer.
 
 ---
 
@@ -103,7 +73,12 @@ When adding new node/edge kinds to the call graph, update both `responses.py` (t
 ```bash
 cd backend/
 source .venv/bin/activate
-pytest tests/ -q                    # Must pass all 284+ tests
+
+# Full test suite (294 passed)
+pytest tests/ -q
+
+# AST deterministic resolution integrity tests
+pytest tests/test_ast_integrity.py -v
 ```
 
 Run backend server:
@@ -116,34 +91,12 @@ Run backend server:
 
 # Child DOX Index
 
-app/
-  Production backend: config, core, models, services, utils, api.
-
-app/config/
-  Environment loading, provider configuration, Cognee config setup.
-
-app/core/
-  Structured logging.
-
-app/models/
-  Data models: RememberResult, RecallResult, ContextPackage, RepositorySummary,
-  PackageMetadata, IndexingProgress, CallNode, CallEdge, DirectoryEntry,
-  ComponentInfo, and error hierarchy.
-
-app/services/
-  CogneeService, IndexingService, ContextService, PackageBuilder, BudgetManager,
-  MarkdownRenderer, RepositorySummaryGenerator (includes call graph extractor),
-  StatsLogger.
-
-app/services/pipeline/
-  Pipeline stages: Deduplicator, Ranker, Compressor, Categorizer, ReferenceResolver.
-
-app/api/
-  API layer: async commands exposing services, Pydantic request/response schemas,
-  repo metadata persistence with call graph data.
-
-app/cli/
-  CLI layer: Typer application exposing API commands to developers. Rich formatting.
-
-playground/
-  Validation scripts for Cognee integration.
+- `app/` — Production backend: config, core, models, services, utils, api.
+- `app/config/` — Environment loading, provider configuration, Cognee config setup.
+- `app/core/` — Structured logging.
+- `app/models/` — Data models (`CallNode`, `CallEdge`, `RepositorySummary`, `AgentContextResponse`, `HealthResponse`, `MemoryStatsResponse`).
+- `app/services/` — `CogneeService`, `IndexingService`, `ContextService`, `PackageBuilder`, `BudgetManager`, `MarkdownRenderer`, `RepositorySummaryGenerator`.
+- `app/services/pipeline/` — Pipeline stages: Deduplicator, Ranker, Compressor, Categorizer, ReferenceResolver.
+- `app/api/` — API commands, Pydantic schemas, benchmark runner, repo metadata persistence.
+- `app/cli/` — Typer CLI application.
+- `tests/` — Test suite including unit tests, integration tests, and `test_ast_integrity.py`.

@@ -263,6 +263,8 @@ class RepositorySummary:
     domain_vocabulary: dict[str, str]
     call_graph_nodes: list[CallNode] = field(default_factory=list)
     call_graph_edges: list[CallEdge] = field(default_factory=list)
+    call_graph_status: str = "analyzed"
+    call_graph_error: str | None = None
 
 
 # =============================================================================

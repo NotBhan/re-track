@@ -33,6 +33,8 @@ export interface Repository {
   components: string[];
   dependencies: string[];
   metadata: Record<string, unknown>;
+  call_graph_status?: "not_analyzed" | "analyzing" | "analyzed" | "zero_edges" | "failed";
+  call_graph_error?: string | null;
   call_graph_nodes?: CallGraphNode[];
   call_graph_edges?: CallGraphEdge[];
 }

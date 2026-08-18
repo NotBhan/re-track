@@ -22,6 +22,7 @@ import {
 import { getAgentContext, AgentContextResponse, getSuggestedPrompts, SuggestedPrompt } from "@/lib/api";
 import { useRepositoryStore } from "@/stores/repository-store";
 import { useContextPackageStore } from "@/stores/context-package-store";
+import { useHealthStore } from "@/stores/health-store";
 import { toast } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -86,6 +87,7 @@ export default function ContextStudio() {
   const repositories = useRepositoryStore((s) => s.repositories);
   const fetchRepositories = useRepositoryStore((s) => s.fetchRepositories);
   const savePackage = useContextPackageStore((s) => s.savePackage);
+  const health = useHealthStore((s) => s.health);
 
   useEffect(() => {
     fetchRepositories();
@@ -743,7 +745,7 @@ export default function ContextStudio() {
                   </div>
 
                   {/* Compact Metadata Row */}
-                  <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-xs font-mono text-neutral-400">
+                  <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5 text-xs font-mono text-neutral-400">
                     <div className="flex items-center gap-1.5">
                       <span className="text-neutral-500">Context:</span>
                       <span className="text-neutral-200 font-medium">
@@ -753,12 +755,13 @@ export default function ContextStudio() {
                     <div className="flex items-center gap-1.5">
                       <span className="text-neutral-500">Latency:</span>
                       <span className="text-emerald-400 font-medium">
-                        {agentResponse.generation_time_ms ? `${agentResponse.generation_time_ms}ms` : "< 350ms"}
+                        {agentResponse.total_time_ms || agentResponse.generation_time_ms}ms
                       </span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-neutral-500">Reduction:</span>
-                      <span className="text-emerald-400 font-medium">~92%</span>
+                      {agentResponse.retrieval_time_ms !== undefined && (
+                        <span className="text-[10px] text-neutral-500 hidden sm:inline">
+                          (retrieval: {agentResponse.retrieval_time_ms}ms · synthesis: {agentResponse.synthesis_time_ms || 0}ms)
+                        </span>
+                      )}
                     </div>
                     <div className="flex items-center gap-1.5">
                       <span className="text-neutral-500">Sources:</span>
@@ -766,6 +769,11 @@ export default function ContextStudio() {
                         {agentResponse.related_files.length} files
                       </span>
                     </div>
+                    {health?.high_memory_pressure && (
+                      <div className="flex items-center gap-1 text-[10px] text-amber-400">
+                        <span>High RAM Pressure ({health.ram_percent}%)</span>
+                      </div>
+                    )}
                   </div>
                 </div>
 

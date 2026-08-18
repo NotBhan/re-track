@@ -15,6 +15,7 @@ import {
   Zap,
   ChevronRight,
   ChevronDown,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -44,59 +45,35 @@ export default function KnowledgeExplorer() {
 
   const repo = repositories.find((r) => r.id === repoId);
 
-  // Extract call graph nodes and edges from metadata
+  // Authoritative call graph nodes and edges from repository state
   const callGraphNodes: CallGraphNode[] = useMemo(() => {
+    if (repo?.call_graph_nodes && Array.isArray(repo.call_graph_nodes)) {
+      return repo.call_graph_nodes;
+    }
     if (repo?.metadata?.call_graph_nodes && Array.isArray(repo.metadata.call_graph_nodes)) {
-      return repo.metadata.call_graph_nodes;
+      return repo.metadata.call_graph_nodes as CallGraphNode[];
     }
-    // Synthesize fallback nodes from components & entry points if not yet in metadata
-    const nodes: CallGraphNode[] = [];
-    if (repo?.components) {
-      repo.components.forEach((c) => {
-        nodes.push({
-          id: c,
-          label: c,
-          file: `${c.toLowerCase()}.py`,
-          kind: c.endsWith("Service") || c.endsWith("Manager") ? "class" : "component",
-        });
-      });
-    }
-    if (repo?.entry_points) {
-      repo.entry_points.forEach((ep) => {
-        nodes.push({
-          id: ep,
-          label: ep.split("/").pop() || ep,
-          file: ep,
-          kind: "module",
-        });
-      });
-    }
-    if (nodes.length === 0) {
-      nodes.push(
-        { id: "App", label: "App", file: "src/App.tsx", kind: "component" },
-        { id: "ContextStudio", label: "ContextStudio", file: "src/pages/ContextStudio.tsx", kind: "component" },
-        { id: "ContextService", label: "ContextService", file: "backend/app/services/context_service.py", kind: "class" },
-        { id: "CogneeService", label: "CogneeService", file: "backend/app/services/cognee_service.py", kind: "class" },
-        { id: "IndexingService", label: "IndexingService", file: "backend/app/services/indexing_service.py", kind: "class" }
-      );
-    }
-    return nodes;
+    return [];
   }, [repo]);
 
   const callGraphEdges: CallGraphEdge[] = useMemo(() => {
-    if (repo?.metadata?.call_graph_edges && Array.isArray(repo.metadata.call_graph_edges)) {
-      return repo.metadata.call_graph_edges;
+    if (repo?.call_graph_edges && Array.isArray(repo.call_graph_edges)) {
+      return repo.call_graph_edges;
     }
-    // Fallback default edges
-    if (callGraphNodes.length >= 4) {
-      return [
-        { source: callGraphNodes[0].id, target: callGraphNodes[1].id, kind: "renders" },
-        { source: callGraphNodes[1].id, target: callGraphNodes[2].id, kind: "calls" },
-        { source: callGraphNodes[2].id, target: callGraphNodes[3].id, kind: "calls" },
-      ];
+    if (repo?.metadata?.call_graph_edges && Array.isArray(repo.metadata.call_graph_edges)) {
+      return repo.metadata.call_graph_edges as CallGraphEdge[];
     }
     return [];
-  }, [repo, callGraphNodes]);
+  }, [repo]);
+
+  const graphStatus = useMemo(() => {
+    if (repo?.call_graph_status) return repo.call_graph_status;
+    if (repo?.metadata?.call_graph_status) return repo.metadata.call_graph_status as string;
+    if (callGraphEdges.length > 0) return "analyzed";
+    if (callGraphNodes.length > 0) return "zero_edges";
+    if (repo?.status === "indexing" || repo?.status === "scanning") return "analyzing";
+    return "not_analyzed";
+  }, [repo, callGraphNodes, callGraphEdges]);
 
   const toggleFolder = (f: string) => {
     setExpandedFolders((prev) => ({ ...prev, [f]: !prev[f] }));
@@ -178,8 +155,8 @@ export default function KnowledgeExplorer() {
                   <span className="text-white font-bold capitalize">{repo.architecture || "Modular"}</span>
                 </div>
                 <div className="bg-black border border-[#222] px-3 py-1.5 rounded-lg">
-                  <span className="text-neutral-500 uppercase text-[10px] block">Graph Nodes</span>
-                  <span className="text-emerald-400 font-bold">{callGraphNodes.length} symbols</span>
+                  <span className="text-neutral-500 uppercase text-[10px] block">AST Topology</span>
+                  <span className="text-emerald-400 font-bold">{callGraphNodes.length} nodes · {callGraphEdges.length} edges</span>
                 </div>
               </div>
             </div>
@@ -198,7 +175,7 @@ export default function KnowledgeExplorer() {
                 >
                   <Network className="w-3.5 h-3.5" />
                   <span>Call Graph &amp; AST Topology</span>
-                  <span className="text-[10px] font-mono opacity-70">({callGraphNodes.length})</span>
+                  <span className="text-[10px] font-mono opacity-70">({callGraphNodes.length} nodes / {callGraphEdges.length} edges)</span>
                 </button>
 
                 <button
@@ -242,14 +219,54 @@ export default function KnowledgeExplorer() {
                     animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0, scale: 0.99 }}
                     transition={{ duration: 0.2 }}
-                    className="w-full h-full"
+                    className="w-full h-full flex flex-col"
                   >
-                    <CallGraphView
-                      nodes={callGraphNodes}
-                      edges={callGraphEdges}
-                      onSelectNode={setSelectedNode}
-                      selectedNodeId={selectedNode?.id}
-                    />
+                    {graphStatus === "not_analyzed" ? (
+                      <div className="w-full h-full flex flex-col items-center justify-center bg-[#0a0a0a] rounded-xl border border-[#262626] p-8 text-center">
+                        <Network className="w-8 h-8 text-neutral-600 mb-3" />
+                        <h3 className="text-sm font-semibold text-white mb-1">AST Analysis Not Available</h3>
+                        <p className="text-xs text-neutral-400 max-w-md">
+                          This repository has not yet undergone static AST symbol extraction. Run repository indexing to discover modules, classes, and call relationships.
+                        </p>
+                      </div>
+                    ) : graphStatus === "analyzing" ? (
+                      <div className="w-full h-full flex flex-col items-center justify-center bg-[#0a0a0a] rounded-xl border border-[#262626] p-8 text-center">
+                        <div className="w-7 h-7 border-2 border-white/20 border-t-white rounded-full animate-spin mb-3" />
+                        <h3 className="text-sm font-semibold text-white mb-1">Analyzing AST Call Graph</h3>
+                        <p className="text-xs text-neutral-400 max-w-md">
+                          Scanning module symbol tables, import declarations, and function call hierarchies...
+                        </p>
+                      </div>
+                    ) : graphStatus === "failed" ? (
+                      <div className="w-full h-full flex flex-col items-center justify-center bg-[#0a0a0a] rounded-xl border border-red-500/30 p-8 text-center">
+                        <X className="w-8 h-8 text-red-400 mb-3" />
+                        <h3 className="text-sm font-semibold text-white mb-1">AST Analysis Error</h3>
+                        <p className="text-xs text-red-400/80 font-mono max-w-md mb-2">
+                          {repo.call_graph_error || "Failed to parse repository abstract syntax tree."}
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="w-full h-full flex flex-col relative">
+                        {graphStatus === "zero_edges" && (
+                          <div className="mb-2 px-3.5 py-2 rounded-lg bg-neutral-900 border border-neutral-800 text-[11px] font-mono text-neutral-400 flex items-center justify-between shrink-0">
+                            <span>
+                              Static AST analysis identified <strong className="text-neutral-200">{callGraphNodes.length}</strong> symbols, but detected <strong className="text-neutral-200">0</strong> direct internal call, import, or render relationships.
+                            </span>
+                            <Badge variant="outline" className="text-[9px] uppercase border-[#333] text-neutral-400">
+                              Zero Internal Edges
+                            </Badge>
+                          </div>
+                        )}
+                        <div className="flex-1 min-h-0">
+                          <CallGraphView
+                            nodes={callGraphNodes}
+                            edges={callGraphEdges}
+                            onSelectNode={setSelectedNode}
+                            selectedNodeId={selectedNode?.id}
+                          />
+                        </div>
+                      </div>
+                    )}
                   </motion.div>
                 )}
 

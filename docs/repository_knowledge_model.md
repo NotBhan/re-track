@@ -10,16 +10,16 @@ The goal is to move beyond simple code indexing and retrieval toward a structure
 
 ## Implementation Status
 
-| Knowledge Domain | Status |
-|-----------------|--------|
-| Code Knowledge (classes, functions, methods) | ✅ Extracted via Python `ast` |
-| Structural Knowledge (folder hierarchy, dependency graph) | ✅ `_build_repo_map` + `.gitignore` filtering |
-| Call Graph | ✅ `_build_call_graph` — `ast.Call` + React/TS imports |
-| Architectural Knowledge (MVC, layered, etc.) | ✅ `_infer_architecture` heuristics |
-| Configuration Knowledge | ⬜ Planned |
-| Documentation Knowledge (README) | ✅ README purpose extraction |
-| Domain Knowledge | ⬜ Planned |
-| Relationship Knowledge (call graph edges) | ✅ `CallEdge` — calls, imports, inherits, renders |
+| Knowledge Domain | Status | Description |
+|---|---|---|
+| Code Knowledge (classes, functions, methods) | ✅ Implemented | Extracted via Python `ast.ClassDef`, `ast.FunctionDef`, and TS export regex |
+| Structural Knowledge (folder hierarchy, modules) | ✅ Implemented | `_build_repo_map` with dynamic `.gitignore` filtering |
+| AST Call Graph | ✅ Implemented | 2-pass deterministic symbol & import alias resolver (`calls`, `imports`, `inherits`, `renders`) |
+| Graph Integrity Invariant | ✅ Implemented | Strict validation: `edge.source, edge.target ∈ node_ids` |
+| 5-State Graph Lifecycle | ✅ Implemented | `not_analyzed`, `analyzing`, `analyzed`, `zero_edges`, `failed` |
+| Multi-Tier Memory Model | ✅ Implemented | Ingested files, LanceDB vector index, Kùzu graph entities |
+| Architectural Heuristics | ✅ Implemented | `_infer_architecture` framework & pattern detection |
+| Documentation Knowledge (README) | ✅ Implemented | README purpose & tech stack extraction |
 
 ---
 

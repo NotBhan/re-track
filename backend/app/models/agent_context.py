@@ -36,3 +36,7 @@ class AgentContextResponse(BaseModel):
     quantization_warning: Optional[str] = None
     estimated_tokens: int = 0
     generation_time_ms: int = 0
+    retrieval_time_ms: int = 0
+    ranking_time_ms: int = 0
+    synthesis_time_ms: int = 0
+    total_time_ms: int = 0

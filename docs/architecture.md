@@ -2,78 +2,74 @@
 
 ## Overview
 
-RE:Track (RefinedEngine Track) is a local-first desktop application that provides persistent memory for AI-assisted software development.
+RE:Track (RefinedEngine Track) is a local-first desktop application that provides persistent memory and deterministic context synthesis for AI-assisted software development.
 
-The system separates user interaction, business logic, memory orchestration, and persistent storage into independent layers.
+The system separates user interaction, business logic, deterministic code topology analysis, memory orchestration, and persistent storage into independent layers.
 
-Rather than directly exposing Cognee to the frontend, all interactions occur through backend services responsible for indexing repositories, managing sessions, retrieving memory, and generating Context Packages.
+Rather than directly exposing memory backends to the frontend, all interactions occur through backend services responsible for indexing repositories, extracting AST relationships, managing sessions, retrieving memory, and generating token-budgeted Context Packages.
 
 ---
 
 # High-Level Architecture
 
-```
+```text
 ┌───────────────────────────────────────────────────────────────┐
-│                      RE:Track (RefinedEngine)                 │
+│                      RE:Track Desktop UI                      │
 ├───────────────────────────────────────────────────────────────┤
-│                     React + Tauri Frontend                    │
+│                     React + Vite + Tauri                      │
 │                                                               │
-│  • Projects                                                   │
-│  • Context Builder                                            │
-│  • Memory Viewer                                              │
-│  • Sessions                                                   │
-│  • Settings                                                   │
+│  • Context Studio (Prompt Workbench, Provenance, Package)     │
+│  • Knowledge Explorer (5-State AST Topology & Call Graph)     │
+│  • Repositories (Catalog & Indexing Telemetry)                │
+│  • Memory (Multi-Tier Storage Inspector)                      │
+│  • Benchmarks (Deterministic Baseline Evaluation)             │
+│  • Settings (Provider Configuration & Telemetry)              │
 └──────────────────────────────┬────────────────────────────────┘
                                │
-                          Tauri IPC
+                           Tauri IPC
                                │
                                ▼
 ┌───────────────────────────────────────────────────────────────┐
-│                      Python Backend                           │
+│                      Python Backend (3.12)                    │
 ├───────────────────────────────────────────────────────────────┤
 │                                                               │
-│  IndexingService           ✅ implemented (delta manifest)    │
-│  ManifestService           ✅ implemented (file hashes/mtime) │
-│  CogneeService             ✅ implemented                     │
-│  ContextService            ✅ implemented                     │
-│  CGCService                ✅ implemented (code graph)        │
-│  LLMProviderService        ✅ implemented (multi-provider)    │
-│  IntentParserService       ✅ implemented (hallucination guard│
-│  PackageBuilder            ✅ implemented                     │
+│  IndexingService           ✅ .gitignore-aware file discovery  │
+│  ManifestService           ✅ SHA256 file fingerprinting       │
+│  RepositorySummaryGenerator✅ 2-pass deterministic AST resolver│
+│  IntentParserService       ✅ Task intent & symbol extractor   │
+│  CogneeService             ✅ Cognee memory lifecycle wrapper  │
+│  ContextService            ✅ Discrete latency instrumentation │
+│  PackageBuilder            ✅ Dedup → Rank → Compress → Render │
+│  BudgetManager             ✅ Line-boundary token compression  │
+│  BenchmarkEngine           ✅ Source baseline token evaluator  │
+│  LLMProviderService        ✅ Multi-provider health manager    │
 │                                                               │
 └──────────────────────────────┬────────────────────────────────┘
                                │
                                ▼
 ┌───────────────────────────────────────────────────────────────┐
-│                           Cognee                              │
+│                         Storage Layer                         │
 ├───────────────────────────────────────────────────────────────┤
 │                                                               │
-│  remember()                                                   │
-│  recall()                                                     │
-│  improve()                                                    │
-│  forget()                                                     │
+│  • Ingested Source Files   → Local Filesystem & Manifest      │
+│  • Vector Semantic Index   → LanceDB (Embeddings)             │
+│  • Knowledge Graph Store   → Kùzu (Entities & Relationships)  │
+│  • Relational Metadata     → SQLite                           │
 │                                                               │
-└───────────────┬───────────────────────────────┬───────────────┘
-                │                               │
-                ▼                               ▼
-           LanceDB                         Kuzu Graph
-                │
-                ▼
-             SQLite
+└───────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
 # Architectural Principles
 
-The architecture follows four principles:
+The architecture follows five primary principles:
 
-1. Separation of concerns.
-2. Local-first execution.
-3. Explicit memory lifecycle.
-4. AI-provider independence.
-
-Each service has a single responsibility and communicates through well-defined interfaces.
+1. **Truth Boundary Authority**: The backend is the sole authority for repository analysis, graph identity, memory statistics, benchmark measurements, and hardware telemetry. The frontend never synthesizes fallback data or masks unknown states with fake zeroes.
+2. **Deterministic Static Certainty**: AST and call graph analysis prioritize static certainty over graph completeness. Unresolved or dynamic symbols produce no internal edge.
+3. **Local-First Execution**: All indexing, AST parsing, vector storage, and inference run locally on the developer's machine without external data transmission.
+4. **Explicit Memory Layering**: Ingested raw files, vector embeddings, and knowledge graph entities are separated into independent, inspectable storage tiers.
+5. **Token Budget Enforcement**: Context Packages enforce hard prompt token limits using line-boundary compression.
 
 ---
 
@@ -82,397 +78,63 @@ Each service has a single responsibility and communicates through well-defined i
 ## Frontend
 
 Responsible for:
+- User interaction and prompt authoring
+- 5-state AST call graph rendering with force-directed physics
+- Connected path highlighting and Symbol Inspector drawer
+- Progressive markdown rendering for generated Context Packages
+- Multi-tier memory inspection and deterministic benchmark triggers
+- Hardware telemetry presentation (GPU presence vs active device, RAM pressure)
 
-- User interaction
-- Project management
-- Displaying memory
-- Displaying Context Packages
-- Settings
-
-The frontend never communicates with Cognee directly.
-
----
-
-## Backend
-
-Responsible for:
-
-- Repository indexing
-- Memory orchestration
-- Context generation
-- Session management
-- IPC endpoints
-- Error handling
-
-The backend exposes a stable interface to the frontend while hiding Cognee implementation details.
+The frontend never communicates with Cognee or SQLite directly.
 
 ---
 
-## Cognee
+## Backend Services
 
-Cognee provides the persistent memory layer.
+### 1. RepositorySummaryGenerator (`backend/app/services/repository_summary.py`)
+- Traverses codebase files respecting `.gitignore` patterns dynamically.
+- Implements a 2-pass deterministic AST resolver:
+  - Pass 1: Registers module symbol tables, class definitions, function signatures, exported components, and import alias tables (`import X as Y`, `from A import B as C`, `@/` and `~/` path aliases).
+  - Pass 2: Resolves qualified names and function calls (`ast.Call`), class inheritance (`ast.ClassDef.bases`), and JSX renders (`<Component />`).
+- **Graph Integrity Invariant**: Every `CallEdge.source` and `CallEdge.target` strictly resolves to an existing `CallNode.id`. Ambiguous symbols produce zero edges.
+- Emits 5 explicit states: `"not_analyzed"`, `"analyzing"`, `"analyzed"`, `"zero_edges"`, `"failed"`.
 
-Its responsibilities include:
+### 2. CogneeService (`backend/app/services/cognee_service.py`)
+- Encapsulates Cognee memory lifecycle: `remember()`, `recall()`, `improve()`, `forget()`.
+- Configures internal provider settings for LanceDB, Kùzu, and SQLite.
 
-- remembering information
-- retrieving information
-- improving stored knowledge
-- forgetting obsolete knowledge
+### 3. ContextService & PackageBuilder (`backend/app/services/context_service.py`, `package_builder.py`)
+- Coordinates retrieval from vector and graph stores.
+- Instruments discrete latency timings: `retrieval_time_ms`, `ranking_time_ms`, `synthesis_time_ms`, `total_time_ms`.
+- Pipeline stages:
+  - **Deduplicator**: removes duplicate memories via normalized text comparison.
+  - **Ranker**: scores entries by semantic relevance, confidence, and type weights.
+  - **Compressor**: compresses redundant facts while preserving actionable code entities.
+  - **Categorizer**: groups facts into structured Markdown sections.
+  - **ReferenceResolver**: generates traceable source citations.
 
-Cognee is treated as infrastructure rather than business logic.
+### 4. BudgetManager (`backend/app/services/budget_manager.py`)
+- Enforces user-configured token budgets (e.g. 4,000 or 8,000 tokens).
+- Trims low-priority sections and compresses high-priority sections cleanly at line boundaries.
 
----
-
-# Service Responsibilities
-
-## CogneeService ✅
-
-Thin wrapper around Cognee APIs.
-
-Responsibilities:
-
-- initialize providers (Ollama, LanceDB, Kuzu, SQLite)
-- configure Cognee's internal config singleton
-- remember
-- recall
-- improve
-- forget
-
-No business logic exists here. All Cognee interactions go through this service.
-
-Implementation: `backend/app/services/cognee_service.py`
-
----
-
-## IndexingService ✅
-
-Repository indexing pipeline.
-
-Responsibilities:
-
-- discover repository files
-- apply ignore rules (`.git/`, `node_modules/`, etc.)
-- filter supported file types (`.py`, `.ts`, `.md`, etc.)
-- batch ingestion into Cognee
-- report indexing progress
-
-Implementation: `backend/app/services/indexing_service.py`
+### 5. BenchmarkEngine (`backend/app/api/benchmarks.py`)
+- Calculates deterministic baseline tokens across all eligible repository source files using the `character-4b-heuristic` tokenizer.
+- Computes `compression_ratio` and `token_savings_percent`.
+- Records immutable run metadata: repository path, Git commit SHA, eligible source file count, active model, execution device (`CPU`/`GPU`), and evaluation timestamp.
 
 ---
 
-## ContextService ✅
+# Verification & Test Coverage
 
-Orchestrates memory retrieval and delegates to PackageBuilder.
+The system is validated through 294 automated unit tests:
 
-Responsibilities:
+```bash
+# Full test suite
+cd backend && pytest tests/ -q
 
-- retrieve memories via CogneeService (with timing)
-- delegate package assembly to PackageBuilder
-- pass RepositorySummary to PackageBuilder
+# AST deterministic resolution tests
+cd backend && pytest tests/test_ast_integrity.py -v
 
-This service is the entry point for Context Package generation.
-
-Implementation: `backend/app/services/context_service.py`
-
----
-
-## PackageBuilder ✅
-
-Assembles Context Packages from pipeline output.
-
-Responsibilities:
-
-- orchestrate retrieval pipeline (dedup → rank → compress → categorize)
-- build sections from categorized results
-- apply budget enforcement
-- resolve references
-- render Markdown
-- generate package metadata
-
-Implementation: `backend/app/services/package_builder.py`
-
----
-
-## BudgetManager ✅
-
-Enforces soft-target token budgets on sections.
-
-Responsibilities:
-
-- prioritize sections by importance (Critical/High/Medium/Low)
-- remove low-priority sections when over budget
-- compress high-priority sections at line boundaries
-- track compression ratio
-
-Implementation: `backend/app/services/budget_manager.py`
-
----
-
-## MarkdownRenderer ✅
-
-Renders structured package data as Markdown.
-
-Responsibilities:
-
-- render Task, Objective, Repository Context, Sections, References
-- skip empty sections
-- render Repository Summary when available
-
-Implementation: `backend/app/services/renderer.py`
-
----
-
-## RepositorySummaryGenerator ✅
-
-Generates stable project knowledge from indexed files after indexing completes.
-
-Responsibilities:
-
-- apply `.gitignore` patterns dynamically to filter scanned files
-- extract technology stack from file extensions and config files
-- build repository directory map (framework-aware grouping)
-- infer architecture from structure
-- extract key components via Python `ast` module and React/TS regex
-- extract call graph nodes and edges (`_build_call_graph`)
-  - Python: `ast.ClassDef`, `ast.FunctionDef`, `ast.AsyncFunctionDef`, `ast.Call` visitor
-  - React/TS: exported component regex, relative import edges, JSX renders edges
-- infer project purpose from README or framework heuristics
-
-Output models: `RepositorySummary`, `CallNode`, `CallEdge`
-
-Implementation: `backend/app/services/repository_summary.py`
-
----
-
-## CallGraphExtractor (embedded in RepositorySummaryGenerator) ✅
-
-Builds a directed call graph from Python AST and React/TypeScript source files.
-
-| Node kind | Source | Shape in UI |
-|-----------|--------|-------------|
-| `class`   | Python `ast.ClassDef` | Square |
-| `function`| Python `ast.FunctionDef` at module level | Circle |
-| `method`  | Python `ast.FunctionDef` inside class | Circle |
-| `component` | React/TS exported uppercase identifier | Diamond |
-
-| Edge kind | Source | Style in UI |
-|-----------|--------|-------------|
-| `calls`   | `ast.Call` callee name | Solid |
-| `inherits`| `ast.ClassDef.bases` | Thick solid |
-| `imports` | TS `import ... from './path'` | Dashed |
-| `renders` | JSX `<ComponentName` usage | Dotted |
-
-Capacity: 80 nodes / 200 edges. Migrations and `__pycache__` excluded.
-
-Persisted in repo metadata store via `commands._persist_repo_metadata`.
-
-## Pipeline Stages ✅
-
-Independent, composable retrieval processing stages.
-
-- **Deduplicator**: removes duplicate memories via normalized text
-- **Ranker**: multi-factor scoring (semantic × confidence × type weight)
-- **Compressor**: merges redundant entries, preserves executable facts
-- **Categorizer**: rule-based classification into section types
-- **ReferenceResolver**: formats traceable citations with provenance
-
-Implementation: `backend/app/services/pipeline/`
-
----
-
-## WorkspaceService (planned)
-
-Manages repositories.
-
-Responsibilities:
-
-- create workspace
-- open workspace
-- close workspace
-- map repositories to datasets
-
----
-
-## SessionService (planned)
-
-Manages active development sessions.
-
-Responsibilities:
-
-- create session
-- close session
-- working memory
-- session metadata
-
----
-
-# Data Flow
-
-Repository
-
-↓
-
-IndexingService
-
-↓
-
-CogneeService.remember()
-
-↓
-
-Persistent Memory (LanceDB + Kuzu + SQLite)
-
-↓
-
-Developer Request
-
-↓
-
-ContextService.generate_context_package()
-
-↓
-
-CogneeService.recall() (timed)
-
-↓
-
-PackageBuilder.build()
-
-↓
-
-Dedup → Rank → Compress → Categorize → Budget → References → Render
-
-↓
-
-Context Package (Markdown + metadata + references)
-
-↓
-
-Coding LLM
-
----
-
-# Backend Package Structure
-
+# Frontend typecheck & build
+npm run build
 ```
-backend/app/
-    __init__.py
-    config/
-        __init__.py
-        settings.py          # Centralized env loading, provider config, validation
-    core/
-        __init__.py
-        logging.py           # Structured logging setup
-    models/
-        __init__.py
-        errors.py            # Exception hierarchy
-        responses.py         # Data models: ContextPackage, RepositorySummary, PackageMetadata,
-                             #   CallNode, CallEdge, DirectoryEntry, ComponentInfo, etc.
-    services/
-        __init__.py
-        cognee_service.py    # Thin Cognee wrapper
-        indexing_service.py  # Repository indexing pipeline
-        context_service.py   # Entry point for Context Package generation
-        package_builder.py   # Pipeline orchestrator
-        budget_manager.py    # Token budget enforcement
-        renderer.py          # Markdown rendering
-        repository_summary.py # RepositorySummaryGenerator: directory map, AST components,
-                              #   call graph extraction (_build_call_graph)
-        stats_logger.py      # Package statistics logging
-        pipeline/
-            __init__.py
-            dedup.py         # Deduplication stage
-            ranking.py       # Multi-factor ranking stage
-            compression.py   # Semantic compression stage
-            categorization.py # Rule-based categorization stage
-            references.py    # Reference resolution stage
-    api/
-        __init__.py          # API command exports
-        commands.py          # Async commands: health, index, context, forget,
-                             #   get_repository_summaries, _persist_repo_metadata
-                             #   Persists call_graph_nodes + call_graph_edges in repo metadata store
-        schemas.py           # Pydantic request/response models
-    utils/
-        __init__.py
-```
-
----
-
-# Configuration
-
-All configuration flows through `backend/app/config/settings.py`.
-
-Settings are loaded from environment variables with `.env` support.
-
-Cognee's internal config is set via `cognee.config.set_*()` methods — Cognee does not read from `os.environ` directly.
-
-Key environment variables:
-
-| Variable | Value | Purpose |
-|----------|-------|---------|
-| `LLM_MODEL` | phi3:mini | Structured output compatible |
-| `EMBEDDING_MODEL` | nomic-embed-text:latest | 768-dim embeddings |
-| `HUGGINGFACE_TOKENIZER` | nomic-ai/nomic-embed-text-v1 | Required by embedding engine |
-| `CACHING` | false | Disable session memory overhead |
-| `COGNEE_SKIP_CONNECTION_TEST` | true | Skip startup latency |
-
----
-
-# Design Constraints
-
-The MVP intentionally excludes:
-
-- Multi-user collaboration
-- Cloud synchronization
-- Distributed memory
-- Plugin architecture
-- Autonomous coding agents
-
-Features now **included** that were originally deferred:
-
-- Interactive call graph visualization (`src/components/repositories/CallGraphView.tsx`)
-- Real AST call edge extraction (`_build_call_graph` in `repository_summary.py`)
-- `.gitignore`-aware dynamic file filtering
-- React/Vite/Next component detection and graph nodes
-
----
-
-# Technology Stack
-
-Frontend
-
-- React
-- TypeScript
-- Vite
-- Tauri
-
-Backend
-
-- Python 3.13
-- Pydantic (settings, models)
-
-Memory
-
-- Cognee 1.2.2
-
-Storage
-
-- LanceDB (vectors)
-- Kuzu (graph)
-- SQLite (metadata)
-
-Models
-
-- Ollama
-- phi3:mini (LLM)
-- nomic-embed-text:latest (embeddings)
-
----
-
-# Guiding Principle
-
-RE:Track is not an AI coding assistant.
-
-It is a persistent memory layer that enables AI coding assistants to understand software projects with significantly less context.
-
-Every architectural decision should support this objective.

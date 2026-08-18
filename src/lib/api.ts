@@ -18,10 +18,15 @@ export interface HealthResponse {
   version: string;
   ram_total_gb?: number;
   ram_used_gb?: number;
+  ram_percent?: number;
+  high_memory_pressure?: boolean;
   cpu_percent?: number;
+  gpu_presence?: "AMD" | "NVIDIA" | "None" | string;
   gpu_name?: string | null;
   vram_total_gb?: number;
   vram_used_gb?: number;
+  execution_device?: "CPU" | "GPU" | "UNKNOWN" | string;
+  active_model?: string | null;
 }
 
 export interface BackendStatusResponse {
@@ -37,6 +42,8 @@ export interface BackendStatusResponse {
   data_root: string;
   system_root: string;
   cognee_initialized: boolean;
+  gpu_presence?: string;
+  execution_device?: string;
 }
 
 export interface IndexRepositoryRequest {
@@ -103,6 +110,10 @@ export interface AgentContextResponse {
   quantization_warning?: string | null;
   estimated_tokens: number;
   generation_time_ms: number;
+  retrieval_time_ms?: number;
+  ranking_time_ms?: number;
+  synthesis_time_ms?: number;
+  total_time_ms?: number;
 }
 
 export interface ForgetDatasetRequest {
@@ -160,6 +171,8 @@ export interface RepositorySummaryInfo {
   purpose?: string;
   architecture?: RepoArchInfo[];
   components?: RepoComponentInfo[];
+  call_graph_status?: "not_analyzed" | "analyzing" | "analyzed" | "zero_edges" | "failed";
+  call_graph_error?: string | null;
 }
 
 export interface RepositoryListResponse {
@@ -182,29 +195,40 @@ export interface DashboardStats {
 export interface MemoryStatsResponse {
   success: boolean;
   total_size_display: string;
-  graph_nodes: number;
-  graph_edges: number;
   dataset_count: number;
+  knowledge_graph_status?: "not_extracted" | "extracting" | "extracted" | "failed";
+  graph_nodes?: number | null;
+  graph_edges?: number | null;
 }
 
 export interface BenchmarkResultItem {
   question: string;
-  latency_ms: number;
-  token_count: number;
+  baseline_tokens?: number;
+  context_tokens?: number;
+  token_count?: number;
+  compression_ratio: number;
+  token_savings_percent?: number;
+  retrieval_time_ms?: number;
+  total_time_ms?: number;
+  latency_ms?: number;
   section_count: number;
   retrieved_memories: number;
-  compression_ratio: number;
-  quality_score: number;
+  accuracy_status?: string;
   passed: boolean;
 }
 
 export interface BenchmarkSuiteResponse {
   success: boolean;
   results: BenchmarkResultItem[];
-  avg_latency_ms: number;
-  avg_tokens: number;
-  pass_rate: number;
+  avg_retrieval_latency_ms?: number;
+  avg_total_latency_ms?: number;
+  avg_latency_ms?: number;
+  avg_token_savings_percent?: number;
+  avg_compression_ratio?: number;
+  avg_tokens?: number;
+  accuracy_summary?: string;
   total_questions: number;
+  run_metadata?: Record<string, unknown>;
 }
 
 // --- Context Package types ---

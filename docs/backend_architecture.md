@@ -1,254 +1,89 @@
-# RE:Track Architecture
+# RE:Track Backend Architecture
+
+## Overview
+
+The RE:Track backend is a Python 3.12 service layer communicating with the desktop application via Tauri IPC and external agents via REST.
 
 ```text
 ┌───────────────────────────────────────────────────────────────┐
-│                      RE:Track (RefinedEngine)                 │
+│                      RE:Track Desktop UI                      │
 ├───────────────────────────────────────────────────────────────┤
-│                     React + Tauri Frontend                    │
-│                                                               │
-│  • Projects                                                   │
-│  • Context Builder                                            │
-│  • Memory Viewer                                              │
-│  • Sessions                                                   │
-│  • Settings                                                   │
+│                     React + Vite + Tauri                      │
 └──────────────────────────────┬────────────────────────────────┘
                                │
-                          Tauri IPC
+                           Tauri IPC
                                │
                                ▼
 ┌───────────────────────────────────────────────────────────────┐
-│                      Python Backend                           │
+│                      Python Backend (3.12)                    │
 ├───────────────────────────────────────────────────────────────┤
-│                                                               │
-│  WorkspaceService                                             │
-│      • Repository Management                                  │
-│      • Dataset Lifecycle                                      │
 │                                                               │
 │  IndexingService                                              │
-│      • Repository Import                                      │
-│      • Incremental Indexing                                   │
-│      • File Change Detection                                  │
+│      • File Discovery & .gitignore Parsing                    │
+│      • SHA256 Manifest Fingerprinting                         │
+│                                                               │
+│  RepositorySummaryGenerator                                   │
+│      • Framework & Directory Mapping                          │
+│      • 2-Pass Deterministic AST Call Graph Resolver           │
+│                                                               │
+│  IntentParserService                                          │
+│      • Task Intent Classification & Symbol Extraction         │
 │                                                               │
 │  CogneeService                                                │
-│      • initialize()                                           │
-│      • remember()                                             │
-│      • recall()                                               │
-│      • improve()                                              │
-│      • forget()                                               │
+│      • remember() / recall() / improve() / forget()           │
 │                                                               │
-│  ContextService                                               │
-│      • Context Package Builder                                │
-│      • Context Compression                                    │
-│      • Memory Ranking                                         │
+│  ContextService & PackageBuilder                              │
+│      • Discrete Latency Breakdown                             │
+│      • Dedup → Rank → Compress → Categorize → Render          │
 │                                                               │
-│  SessionService                                               │
-│      • Coding Sessions                                        │
-│      • Working Memory                                         │
-│      • Session Lifecycle                                      │
+│  BudgetManager                                                │
+│      • Line-Boundary Token Compression                        │
+│                                                               │
+│  BenchmarkEngine                                              │
+│      • Exact Source Baseline Tokenization                     │
+│      • Immutable Run Metadata & Hardware Telemetry            │
 │                                                               │
 └──────────────────────────────┬────────────────────────────────┘
                                │
                                ▼
 ┌───────────────────────────────────────────────────────────────┐
-│                           Cognee                             │
+│                         Storage Layer                         │
 ├───────────────────────────────────────────────────────────────┤
-│                                                               │
-│  remember()                                                   │
-│  recall()                                                     │
-│  improve()                                                    │
-│  forget()                                                     │
-│                                                               │
-└───────────────┬───────────────────────────────┬───────────────┘
-                │                               │
-                ▼                               ▼
-         ┌──────────────┐               ┌──────────────┐
-         │   LanceDB    │               │     Kuzu     │
-         │ Vector Store │               │ Knowledge    │
-         │              │               │ Graph        │
-         └──────┬───────┘               └──────────────┘
-                │
-                ▼
-         ┌──────────────┐
-         │    SQLite    │
-         │ Metadata &   │
-         │ Relational   │
-         │ Storage      │
-         └──────────────┘
+│  • LanceDB (Vector Embeddings)                                │
+│  • Kùzu (Knowledge Graph Entities & Relationships)            │
+│  • SQLite (Relational Store & Metadata)                       │
+└───────────────────────────────────────────────────────────────┘
 ```
 
-## Data Flow
-
-```text
-Developer
-
-    │
-
-    ▼
-
-Tauri Frontend
-
-    │
-
-    ▼
-
-Python Backend
-
-    │
-
-    ▼
-
-ContextService
-
-    │
-
-    ▼
-
-Cognee recall()
-
-    │
-
-    ▼
-
-Context Package
-
-    │
-
-    ▼
-
-Coding LLM
-
-    │
-
-    ▼
-
-Generated Code
-
-    │
-
-    ▼
-
-Cognee remember()
-
-    │
-
-    ▼
-
-Session Memory
-
-    │
-
-    ▼
-
-improve()
-
-    │
-
-    ▼
-
-Permanent Knowledge Graph
-```
-
-## Repository Indexing Flow
-
-```text
-Open Repository
-
-        │
-
-        ▼
-
-WorkspaceService
-
-        │
-
-        ▼
-
-Create Dataset
-
-        │
-
-        ▼
-
-IndexingService
-
-        │
-
-        ▼
-
-remember()
-
-        │
-
-        ▼
-
-Knowledge Graph
-
-        │
-
-        ▼
-
-Ready for Retrieval
-```
-
-## Context Generation Flow
-
-```text
-User Request
-
-        │
-
-        ▼
-
-ContextService
-
-        │
-
-        ▼
-
-recall()
-
-        │
-
-        ▼
-
-Relevant Memories
-
-        │
-
-        ▼
-
-Ranking
-
-        │
-
-        ▼
-
-Compression
-
-        │
-
-        ▼
-
-Markdown Context Package
-
-        │
-
-        ▼
-
-Coding LLM
-```
-
-## Core Responsibilities
-
-| Layer | Responsibility |
-|-------|----------------|
-| Frontend | User interaction and workspace management |
-| WorkspaceService | Repository and dataset lifecycle |
-| IndexingService | Import and synchronize repositories |
-| CogneeService | Thin wrapper around Cognee APIs |
-| ContextService | Build optimized Context Packages |
-| SessionService | Temporary coding-session memory |
-| Cognee | Persistent memory lifecycle |
-| LanceDB | Semantic vector retrieval |
-| Kuzu | Knowledge graph relationships |
-| SQLite | Metadata and internal storage |
+---
+
+## Service Contracts & Invariants
+
+### 1. AST Call Graph Resolver
+- **Static Invariant**: Every `CallEdge.source` and `CallEdge.target` must exist in `node_ids`.
+- **Ambiguity Policy**: Unresolved cross-module calls or shadowed variables generate zero internal edges.
+- **5 Graph States**: `not_analyzed`, `analyzing`, `analyzed` (>0 edges), `zero_edges`, `failed`.
+
+### 2. Multi-Layer Memory Storage
+- **Ingested Source Files Layer**: Real file counts and dataset summaries.
+- **Vector / Semantic Index Layer**: LanceDB embedding index status (`Ready / Active`).
+- **Knowledge Graph Entities Layer**: Explicit `knowledge_graph_status` (`not_extracted`, `extracting`, `extracted`, `failed`).
+
+### 3. Latency Decomposition
+Context generation instruments discrete execution timings:
+- `retrieval_time_ms`: Memory query from vector/graph stores
+- `ranking_time_ms`: Pipeline multi-factor scoring
+- `synthesis_time_ms`: Markdown rendering and budget enforcement
+- `total_time_ms`: End-to-end execution latency
+
+---
+
+## API Endpoints
+
+- `GET /health` — Hardware & memory telemetry (CPU, RAM %, detected GPU, execution device)
+- `GET /status` — Backend system and model configuration
+- `POST /index` — Trigger repository indexing
+- `POST /context` — Synthesize Context Package for prompt
+- `POST /api/v1/context` — Agent Context API
+- `POST /forget` — Dataset deletion
+- `POST /benchmarks` — Run deterministic benchmark evaluation
