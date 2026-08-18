@@ -1,7 +1,6 @@
 import { useEffect, useState, useMemo } from "react";
 import {
   FileText,
-  Loader2,
   Sparkles,
   Plus,
   Search,
@@ -15,6 +14,7 @@ import { useContextPackageStore } from "@/stores/context-package-store";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { PackageCardSkeleton } from "@/components/ui/skeleton-loaders";
 import type { SavedContextPackage } from "@/lib/api";
 
 export default function ContextPackages() {
@@ -119,15 +119,24 @@ export default function ContextPackages() {
                   placeholder="Filter packages..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="h-7.5 pl-7 text-xs bg-[#0a0a0a] border-[#222222] rounded-md text-white placeholder:text-neutral-500"
+                  className="h-7.5 pl-7 pr-6 text-xs bg-[#050505] border-[#222222] rounded-md text-white placeholder:text-neutral-500"
                 />
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery("")}
+                    aria-label="Clear search"
+                    className="absolute right-1.5 top-1/2 -translate-y-1/2 text-neutral-500 hover:text-white p-0.5 rounded cursor-pointer"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                )}
               </div>
 
               {repoNames.length > 0 && (
                 <select
                   value={selectedRepoFilter}
                   onChange={(e) => setSelectedRepoFilter(e.target.value)}
-                  className="h-7.5 px-2.5 text-xs font-sans bg-[#0a0a0a] border border-[#222222] rounded-md text-neutral-300 focus:outline-none focus:border-white cursor-pointer"
+                  className="h-7.5 px-2.5 text-xs font-sans bg-[#050505] border border-[#222222] rounded-md text-neutral-300 focus:outline-none focus:border-neutral-400 cursor-pointer"
                 >
                   <option value="all">All Codebases</option>
                   {repoNames.map((rn) => (
@@ -149,11 +158,10 @@ export default function ContextPackages() {
 
           {/* Loading State */}
           {loading && (
-            <div className="flex flex-col items-center justify-center py-20 text-center gap-2">
-              <Loader2 className="w-6 h-6 text-neutral-400 animate-spin" />
-              <p className="text-xs text-neutral-500">
-                Loading saved packages...
-              </p>
+            <div className="flex flex-col gap-2.5">
+              <PackageCardSkeleton />
+              <PackageCardSkeleton />
+              <PackageCardSkeleton />
             </div>
           )}
 
@@ -164,21 +172,35 @@ export default function ContextPackages() {
                 <FileText className="w-5 h-5 text-neutral-300" />
               </div>
               <h3 className="text-sm font-semibold text-white tracking-tight">
-                {searchQuery ? "No matching packages found" : "No context packages saved yet"}
+                {searchQuery || selectedRepoFilter !== "all" ? "No matching packages found" : "No context packages saved yet"}
               </h3>
               <p className="text-xs text-neutral-500 max-w-sm mt-1 mb-4 leading-relaxed">
-                {searchQuery
+                {searchQuery || selectedRepoFilter !== "all"
                   ? "Try refining your search keyword or reset filters."
                   : "Synthesize task context in Context Studio and click 'Save to Library' to store reusable packages."}
               </p>
-              <Button
-                size="sm"
-                onClick={() => navigate("/studio")}
-                className="gap-1.5 h-7.5 px-3 text-xs bg-white text-black font-medium hover:bg-neutral-200 cursor-pointer shadow-xs"
-              >
-                <Sparkles className="w-3 h-3" />
-                <span>Launch Context Studio</span>
-              </Button>
+              {searchQuery || selectedRepoFilter !== "all" ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setSearchQuery("");
+                    setSelectedRepoFilter("all");
+                  }}
+                  className="h-7.5 px-3 text-xs"
+                >
+                  Reset filters
+                </Button>
+              ) : (
+                <Button
+                  size="sm"
+                  onClick={() => navigate("/studio")}
+                  className="gap-1.5 h-7.5 px-3 text-xs bg-white text-black font-medium hover:bg-neutral-200 cursor-pointer shadow-xs"
+                >
+                  <Sparkles className="w-3 h-3" />
+                  <span>Launch Context Studio</span>
+                </Button>
+              )}
             </div>
           )}
 

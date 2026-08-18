@@ -132,6 +132,8 @@ export function RepositoryCard({ repo, selected, onSelect }: RepositoryCardProps
                 e.stopPropagation();
                 setMenuOpen(!menuOpen);
               }}
+              title="More options"
+              aria-label="More options"
               className="h-7 w-7 rounded-md border border-[#222222] bg-[#0c0c0c] text-neutral-400 hover:text-white hover:border-[#333333] flex items-center justify-center transition-colors cursor-pointer"
             >
               <MoreVertical className="w-3.5 h-3.5" />

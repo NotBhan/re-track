@@ -16,6 +16,7 @@ import {
   BookmarkPlus,
   ShieldCheck,
   Loader2,
+  AlertCircle,
   X,
 } from "lucide-react";
 import { getAgentContext, AgentContextResponse, getSuggestedPrompts, SuggestedPrompt } from "@/lib/api";
@@ -67,6 +68,7 @@ export default function ContextStudio() {
   const [taskPrompt, setTaskPrompt] = useState(PRESET_WORKBENCH_PROMPTS[0].prompt);
   const [maxTokens, setMaxTokens] = useState(8000);
   const [loading, setLoading] = useState(false);
+  const [synthesisError, setSynthesisError] = useState<string | null>(null);
   const [cooldown, setCooldown] = useState(0);
   const [agentResponse, setAgentResponse] = useState<AgentContextResponse | null>(null);
   const [copied, setCopied] = useState(false);
@@ -145,6 +147,7 @@ export default function ContextStudio() {
     ];
   }, [activeRepo]);
 
+  // Fetch suggested prompts for active repo
   const handleFetchSuggestedPrompts = useCallback(
     async (isManual = false) => {
       if (!activeRepo?.id) return;
@@ -153,7 +156,7 @@ export default function ContextStudio() {
         const res = await getSuggestedPrompts(activeRepo.id);
         if (res.prompts && res.prompts.length > 0) {
           setPresetPrompts(res.prompts);
-          setPromptSource(res.source);
+          setPromptSource(res.source as "ai" | "heuristic");
           if (isManual) {
             toast.success(
               res.source === "ai"
@@ -181,6 +184,7 @@ export default function ContextStudio() {
     if (!taskPrompt.trim() || loading || cooldown > 0) return;
     setLoading(true);
     setSaved(false);
+    setSynthesisError(null);
 
     const requestId = Date.now();
     activeRequestIdRef.current = requestId;
@@ -207,6 +211,7 @@ export default function ContextStudio() {
     } catch (err: any) {
       if (activeRequestIdRef.current !== requestId) return;
       const msg = err?.message || String(err) || "Failed to synthesize context package";
+      setSynthesisError(msg);
       toast.error(msg);
     } finally {
       if (activeRequestIdRef.current === requestId) {
@@ -234,7 +239,7 @@ export default function ContextStudio() {
   };
 
   const handleSaveToLibrary = async () => {
-    if (!agentResponse?.context_markdown || !activeRepo) return;
+    if (!agentResponse?.context_markdown || !activeRepo || saved) return;
     try {
       await savePackage({
         name: `${activeRepo.name} — ${taskPrompt.slice(0, 32)}...`,
@@ -248,7 +253,6 @@ export default function ContextStudio() {
       });
       setSaved(true);
       toast.success("Package saved to Context Library (/packages)!");
-      setTimeout(() => setSaved(false), 3000);
     } catch {
       toast.error("Failed to save context package");
     }
@@ -419,8 +423,11 @@ export default function ContextStudio() {
               </button>
             </div>
 
-            <span className="text-[11px] font-mono text-neutral-500 hidden sm:inline">
-              Ctrl+Enter to synthesize
+            <span className="text-[11px] text-neutral-500 hidden sm:flex items-center gap-1.5 font-mono">
+              <span>Shortcut:</span>
+              <kbd className="px-1 py-0.5 rounded bg-[#141414] border border-[#262626] text-neutral-300 text-[10px]">
+                ⌘↵
+              </kbd>
             </span>
           </div>
 
@@ -428,6 +435,25 @@ export default function ContextStudio() {
           <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4">
             {desktopTab === "workspace" ? (
               <>
+                {/* Synthesis Error Recovery Banner */}
+                {synthesisError && !loading && (
+                  <div className="bg-red-950/25 border border-red-500/30 rounded-md p-3 flex items-start gap-2.5">
+                    <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+                    <div className="flex-1 text-xs">
+                      <span className="font-semibold text-red-300 block">Synthesis Error</span>
+                      <p className="text-red-400/90 mt-0.5">{synthesisError}</p>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="xs"
+                      onClick={handleSynthesize}
+                      className="h-6 px-2 text-[11px] text-neutral-200 border-[#333] hover:text-white"
+                    >
+                      Retry
+                    </Button>
+                  </div>
+                )}
+
                 {/* Suggested Prompts */}
                 <div>
                   <div className="flex items-center justify-between mb-1.5">
@@ -442,8 +468,8 @@ export default function ContextStudio() {
                     <button
                       type="button"
                       onClick={() => handleFetchSuggestedPrompts(true)}
-                      disabled={loadingPrompts}
-                      className="text-xs text-neutral-400 hover:text-white flex items-center gap-1 cursor-pointer transition-colors px-2 py-0.5 rounded border border-[#222222] bg-[#0c0c0c]"
+                      disabled={loadingPrompts || loading}
+                      className="text-xs text-neutral-400 hover:text-white disabled:opacity-40 disabled:pointer-events-none flex items-center gap-1 cursor-pointer transition-colors px-2 py-0.5 rounded border border-[#222222] bg-[#0c0c0c]"
                       title="Generate fresh prompts grounded in AST symbols"
                     >
                       {loadingPrompts ? (
@@ -458,9 +484,10 @@ export default function ContextStudio() {
                     {presetPrompts.map((p) => (
                       <button
                         key={p.label + p.prompt}
+                        disabled={loading}
                         onClick={() => setTaskPrompt(p.prompt)}
                         className={cn(
-                          "text-xs px-2.5 py-1 rounded-md border transition-colors cursor-pointer text-left",
+                          "text-xs px-2.5 py-1 rounded-md border transition-colors cursor-pointer text-left disabled:opacity-50 disabled:pointer-events-none",
                           taskPrompt === p.prompt
                             ? "bg-white text-black border-white font-medium shadow-xs"
                             : "bg-[#0c0c0c] border-[#222222] text-neutral-300 hover:text-white hover:border-[#333333]"
@@ -480,10 +507,11 @@ export default function ContextStudio() {
                   <textarea
                     rows={5}
                     value={taskPrompt}
+                    disabled={loading}
                     onChange={(e) => setTaskPrompt(e.target.value)}
                     onKeyDown={handleKeyDown}
                     placeholder="Type the feature, refactoring, or question for your local memory..."
-                    className="w-full bg-[#050505] border border-[#222222] rounded-md p-3 text-xs font-mono text-neutral-200 placeholder:text-neutral-600 focus:outline-none focus:border-white transition-colors resize-none leading-relaxed"
+                    className="w-full bg-[#050505] border border-[#222222] rounded-md p-3 text-xs font-mono text-neutral-200 placeholder:text-neutral-600 focus:outline-none focus:border-neutral-400 focus:ring-1 focus:ring-neutral-400 transition-colors resize-none leading-relaxed disabled:opacity-50 disabled:cursor-not-allowed"
                   />
                 </div>
 
@@ -505,8 +533,9 @@ export default function ContextStudio() {
                     max={32000}
                     step={1000}
                     value={maxTokens}
+                    disabled={loading}
                     onChange={(e) => setMaxTokens(Number(e.target.value))}
-                    className="w-full accent-white h-1 bg-[#1a1a1a] rounded cursor-pointer"
+                    className="w-full accent-white h-1 bg-[#1a1a1a] rounded cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                   />
                 </div>
 
@@ -633,11 +662,12 @@ export default function ContextStudio() {
                 <Button
                   variant="outline"
                   size="sm"
+                  disabled={saved}
                   onClick={handleSaveToLibrary}
-                  className="h-7 px-2 text-xs gap-1 cursor-pointer"
+                  className="h-7 px-2 text-xs gap-1 cursor-pointer disabled:opacity-60"
                 >
-                  <BookmarkPlus className="w-3 h-3 text-amber-400" />
-                  <span>{saved ? "Saved!" : "Save"}</span>
+                  <BookmarkPlus className={cn("w-3 h-3", saved ? "text-emerald-400" : "text-amber-400")} />
+                  <span>{saved ? "Saved" : "Save"}</span>
                 </Button>
 
                 <Button

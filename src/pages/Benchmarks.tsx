@@ -90,7 +90,7 @@ export default function Benchmarks() {
             onClick={handleRunSuite}
             disabled={loading}
             size="sm"
-            className="gap-2 h-8 text-xs font-mono font-bold bg-white text-black hover:bg-neutral-200 shadow-xs cursor-pointer"
+            className="w-[160px] justify-center gap-2 h-8 text-xs font-mono font-bold bg-white text-black hover:bg-neutral-200 shadow-xs cursor-pointer disabled:opacity-60"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
             <span>{loading ? "Running Suite..." : "Execute Benchmarks"}</span>

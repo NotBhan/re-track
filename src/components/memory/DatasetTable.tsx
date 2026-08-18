@@ -68,14 +68,14 @@ export function DatasetTable({ onForget }: DatasetTableProps) {
 
   if (isEmpty) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center text-center py-16 bg-[#0a0a0a] rounded-xl border border-[#262626] p-8">
-        <div className="w-14 h-14 rounded-xl bg-black border border-[#262626] flex items-center justify-center mb-4 text-neutral-400">
-          <Database className="w-6 h-6 text-white" />
+      <div className="flex-1 flex flex-col items-center justify-center text-center py-16 bg-[#050505] rounded-lg border border-[#1e1e1e] p-8">
+        <div className="w-12 h-12 rounded-lg bg-[#0f0f0f] border border-[#222222] flex items-center justify-center mb-3 text-neutral-400">
+          <Database className="w-5 h-5 text-neutral-300" />
         </div>
-        <h3 className="text-base font-bold text-white mb-1">
+        <h3 className="text-sm font-semibold text-white tracking-tight mb-1">
           No datasets indexed yet
         </h3>
-        <p className="text-xs font-mono text-neutral-400 max-w-sm">
+        <p className="text-xs text-neutral-500 max-w-sm leading-relaxed">
           Index a repository to populate Cognee vector embeddings and AST graph topologies.
         </p>
       </div>

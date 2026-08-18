@@ -152,6 +152,7 @@ export function ContextPackageCard({ pkg, onCompareSelect, isCompareSelected }: 
               onClick={handleDownload}
               className="h-7 w-7 p-0 border-[#222222] bg-[#0a0a0a] text-neutral-300 hover:text-white cursor-pointer"
               title="Download Markdown"
+              aria-label="Download Markdown"
             >
               <Download className="w-3 h-3" />
             </Button>
@@ -160,6 +161,7 @@ export function ContextPackageCard({ pkg, onCompareSelect, isCompareSelected }: 
               variant="outline"
               size="sm"
               onClick={() => setExpanded(!expanded)}
+              aria-label={expanded ? "Hide preview" : "Show preview"}
               className="h-7 px-2 text-xs border-[#222222] bg-[#0a0a0a] text-neutral-300 hover:text-white gap-1 cursor-pointer"
             >
               {expanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
@@ -172,6 +174,7 @@ export function ContextPackageCard({ pkg, onCompareSelect, isCompareSelected }: 
               onClick={() => setShowDeleteConfirm(true)}
               className="h-7 w-7 p-0 border-red-500/20 text-red-400 hover:bg-red-950/20 cursor-pointer"
               title="Delete Package"
+              aria-label="Delete Package"
             >
               <Trash2 className="w-3 h-3" />
             </Button>

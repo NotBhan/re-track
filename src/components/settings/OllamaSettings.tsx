@@ -257,14 +257,14 @@ export function OllamaSettings() {
           onClick={handleApply}
           disabled={saving}
           size="sm"
-          className="gap-1.5 h-7.5 px-3 text-xs bg-white text-black font-medium hover:bg-neutral-200 rounded-md cursor-pointer shadow-xs"
+          className="w-[125px] justify-center gap-1.5 h-7.5 px-3 text-xs bg-white text-black font-medium hover:bg-neutral-200 rounded-md cursor-pointer shadow-xs disabled:opacity-60"
         >
           {saving ? (
             <Loader2 className="w-3 h-3 animate-spin" />
           ) : (
             <RefreshCw className="w-3 h-3" />
           )}
-          <span>Apply &amp; Test</span>
+          <span>{saving ? "Applying..." : "Apply & Test"}</span>
         </Button>
       </div>
     </div>

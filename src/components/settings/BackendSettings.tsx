@@ -123,7 +123,7 @@ export function BackendSettings() {
           onClick={handleTestConnection}
           disabled={testing}
           size="sm"
-          className="gap-1.5 h-7.5 px-3 text-xs bg-white text-black font-medium hover:bg-neutral-200 cursor-pointer shadow-xs"
+          className="w-[140px] justify-center gap-1.5 h-7.5 px-3 text-xs bg-white text-black font-medium hover:bg-neutral-200 cursor-pointer shadow-xs disabled:opacity-60"
         >
           <RefreshCw className={`w-3 h-3 ${testing ? "animate-spin" : ""}`} />
           <span>{testing ? "Testing..." : "Test Connection"}</span>

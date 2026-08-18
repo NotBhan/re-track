@@ -10,8 +10,10 @@ import {
   LayoutGrid,
   Info,
   FolderGit2,
+  X,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { motion } from "motion/react";
 
@@ -50,15 +52,24 @@ export default function Repositories() {
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden bg-black text-foreground antialiased">
       <TopBar title="RE:Track | Workspaces & Repositories" subtitle="Repository Knowledge Base">
-        <div className="relative w-72 max-w-full hidden md:block">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-neutral-400" />
+        <div className="relative w-64 max-w-full hidden md:block">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-neutral-400" />
           <Input
             type="text"
             placeholder="Filter workspaces..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="h-8 pl-8 text-xs font-mono bg-[#0a0a0a] border-[#262626] rounded-lg text-white placeholder:text-neutral-500 focus-visible:ring-1 focus-visible:ring-white"
+            className="h-8 pl-8 pr-7 text-xs font-mono bg-[#050505] border-[#222222] rounded-md text-neutral-200 placeholder:text-neutral-500"
           />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery("")}
+              aria-label="Clear search"
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-neutral-500 hover:text-white p-0.5 rounded cursor-pointer"
+            >
+              <X className="w-3 h-3" />
+            </button>
+          )}
         </div>
       </TopBar>
 
@@ -94,8 +105,9 @@ export default function Repositories() {
         </div>
       </div>
 
-      <main className="flex-1 min-h-0 flex flex-col lg:flex-row overflow-hidden p-4 sm:p-5 gap-5 max-w-[1800px] w-full mx-auto">
-        {/* Repo Catalog Grid */}
+      {/* Main Content Area */}
+      <main className="flex-1 min-h-0 flex flex-col lg:flex-row overflow-hidden p-4 sm:p-6 gap-6 max-w-[1900px] w-full mx-auto">
+        {/* Left Column: Repository Catalog */}
         <div
           className={`flex-1 min-h-0 flex flex-col overflow-hidden bg-[#0a0a0a] rounded-lg border border-[#1e1e1e] p-4 sm:p-5 ${
             mobileTab === "detail" ? "hidden lg:flex" : "flex"
@@ -133,8 +145,17 @@ export default function Repositories() {
                 placeholder="Search..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="h-7 pl-7 text-xs bg-black border-[#222222] rounded-md text-white placeholder:text-neutral-500"
+                className="h-7 pl-7 pr-6 text-xs bg-[#050505] border-[#222222] rounded-md text-white placeholder:text-neutral-500"
               />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery("")}
+                  aria-label="Clear search"
+                  className="absolute right-1.5 top-1/2 -translate-y-1/2 text-neutral-500 hover:text-white p-0.5 rounded cursor-pointer"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              )}
             </div>
           </div>
 
@@ -159,14 +180,25 @@ export default function Repositories() {
               </div>
 
               <h3 className="text-sm font-semibold text-white tracking-tight mb-1">
-                {searchQuery ? "No matching repositories found" : "No repositories indexed yet"}
+                {searchQuery ? "No matching repositories" : "No repositories indexed yet"}
               </h3>
 
-              <p className="text-xs text-neutral-500 max-w-sm leading-relaxed">
+              <p className="text-xs text-neutral-500 max-w-sm leading-relaxed mb-3">
                 {searchQuery
-                  ? "Try refining your search keyword above or clear the filter."
-                  : "Click 'Index Repository' in the sidebar to index AST structure, call graphs, and local embeddings."}
+                  ? `No indexed repositories match "${searchQuery}". Clear the search query to see all workspaces.`
+                  : "Index a local directory or Git repository to generate semantic embeddings and AST call graphs."}
               </p>
+
+              {searchQuery && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setSearchQuery("")}
+                  className="h-7.5 px-3 text-xs"
+                >
+                  Clear search filter
+                </Button>
+              )}
             </motion.div>
           ) : (
             <div className="flex-1 min-h-0 overflow-y-auto pr-1">
