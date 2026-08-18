@@ -175,7 +175,7 @@ class LLMProviderService:
             "stream": False,
         }
 
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(timeout=60.0) as client:
             resp = await client.post(chat_url, headers=headers, json=payload)
             resp.raise_for_status()
             data = resp.json()

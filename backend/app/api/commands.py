@@ -7,7 +7,7 @@ import logging
 import os
 import time
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 from app.api.schemas import (
     BackendStatusResponse,
@@ -791,10 +791,12 @@ def _persist_repo_metadata(repo_path: Path, file_count: int) -> None:
         # Update matching repository in manager
         try:
             for m_repo in _manager.list_repositories():
-                if str(Path(m_repo.local_path).resolve()) == str(repo_path.resolve()) or m_repo.id == repo_id:
+                if str(Path(m_repo.local_path).resolve()) == str(repo_path.resolve()) or m_repo.id == repo_id or m_repo.name == repo_path.name:
                     _manager.update_repository(
                         m_repo.id,
                         status="indexed",
+                        indexed_at=datetime.now(timezone.utc).isoformat(),
+                        error_message=None,
                         summary=summary.project_purpose or m_repo.summary,
                         architecture=summary.architecture.pattern if summary.architecture else m_repo.architecture,
                         components=[c.name for c in summary.key_components] if summary.key_components else m_repo.components,
@@ -857,6 +859,109 @@ async def get_repository_summaries() -> RepositoryListResponse | ErrorResponse:
             error=type(e).__name__,
             message=f"Failed to list repositories: {e}",
         )
+
+
+async def generate_suggested_prompts(repo_id: str) -> dict[str, Any]:
+    """Generate repository-tailored developer prompts grounded strictly in AST metadata and real symbols."""
+    start = time.monotonic()
+    logger.info("command: generate_suggested_prompts() | repo_id=%s", repo_id)
+
+    repo = None
+    for r in _manager.list_repositories():
+        if r.id == repo_id or r.name == repo_id or Path(r.local_path).name == repo_id:
+            repo = r
+            break
+
+    name = repo.name if repo else "this repository"
+    langs = ", ".join(repo.languages) if (repo and repo.languages) else "code"
+    frameworks = ", ".join(repo.frameworks) if (repo and repo.frameworks) else ""
+    components = repo.components if (repo and repo.components) else []
+
+    # Extract actual verified AST symbols (classes, functions, components)
+    real_symbols = []
+    if repo and repo.metadata and isinstance(repo.metadata.get("call_graph_nodes"), list):
+        real_symbols = [
+            n["label"] for n in repo.metadata["call_graph_nodes"]
+            if isinstance(n, dict) and n.get("label") and not n.get("label", "").startswith(".")
+        ]
+    if not real_symbols and components:
+        real_symbols = components[:15]
+
+    symbols_str = ", ".join(real_symbols[:15]) if real_symbols else ""
+
+    heuristic_prompts = []
+    if real_symbols:
+        s1 = real_symbols[0]
+        heuristic_prompts.append({
+            "label": f"{s1[:20]} Architecture",
+            "prompt": f"Explain the implementation, callers, and lifecycle of `{s1}` in {name}."
+        })
+        if len(real_symbols) > 1:
+            s2 = real_symbols[1]
+            heuristic_prompts.append({
+                "label": f"{s2[:20]} Flow",
+                "prompt": f"Trace how `{s2}` interacts with related components and handles state in {name}."
+            })
+    if frameworks:
+        heuristic_prompts.append({
+            "label": f"{frameworks.split(',')[0]} Routing & Auth",
+            "prompt": f"Find where {frameworks} configuration, routing, and middleware pipelines are initialized in {name}."
+        })
+    heuristic_prompts.extend([
+        {
+            "label": "Call Graph Traversal",
+            "prompt": f"Trace the critical function call graph and data dependencies across {name}."
+        },
+        {
+            "label": "Data Schemas",
+            "prompt": f"Show the key data models, schemas, and API definitions present in {name}."
+        },
+    ])
+
+    if _llm_provider:
+        try:
+            health = await _llm_provider.check_health()
+            if health.is_reachable:
+                system_prompt = (
+                    "You are a strict, hallucination-free software engineer. "
+                    "You must base your task questions SOLELY and STRICTLY on the actual verified classes, "
+                    "symbols, and modules present in this repository. DO NOT invent external features, models, "
+                    "or endpoints not present in the provided symbols.\n"
+                    "Return STRICTLY a valid JSON array of objects with keys 'label' (2-4 words) "
+                    "and 'prompt' (a single clear developer question/task). Do not include markdown formatting or backticks."
+                )
+                user_prompt = (
+                    f"Repository: {name}\n"
+                    f"Frameworks: {frameworks or 'Standard'}\n"
+                    f"Languages: {langs}\n"
+                    f"Discovered Classes & Symbols: {symbols_str or 'Core codebase'}\n\n"
+                    "Generate 4-5 focused developer questions or implementation tasks referencing these exact symbols."
+                )
+                raw_text = await _llm_provider.generate_completion(
+                    prompt=user_prompt,
+                    system_prompt=system_prompt,
+                    temperature=0.1,
+                    max_tokens=600,
+                )
+                clean_json = re.sub(r"<think>.*?</think>", "", raw_text, flags=re.DOTALL).strip()
+                if "```" in clean_json:
+                    clean_json = re.sub(r"^```(?:json)?\s*", "", clean_json)
+                    clean_json = re.sub(r"\s*```$", "", clean_json)
+                parsed = json.loads(clean_json)
+                if isinstance(parsed, list) and len(parsed) >= 2:
+                    valid_prompts = [
+                        {"label": str(item.get("label", "Task"))[:30], "prompt": str(item.get("prompt", ""))}
+                        for item in parsed
+                        if item.get("label") and item.get("prompt")
+                    ]
+                    if valid_prompts:
+                        elapsed = time.monotonic() - start
+                        logger.info("Generated %d strictly grounded AI prompts in %.2fs", len(valid_prompts), elapsed)
+                        return {"success": True, "prompts": valid_prompts, "source": "ai"}
+        except Exception as e:
+            logger.debug("LLM prompt generation failed, falling back to heuristics: %s", e)
+
+    return {"success": True, "prompts": heuristic_prompts[:5], "source": "heuristic"}
 
 
 async def get_dashboard_stats() -> DashboardStats | ErrorResponse:
@@ -1621,6 +1726,10 @@ async def get_agent_context(
 
             elapsed_ms = int((time.monotonic() - start) * 1000)
 
+            all_related = list(dict.fromkeys(
+                [r[0] for r in matched_files] + (structural_res.related_files if structural_res else [])
+            ))
+
             response = AgentContextResponse(
                 success=True,
                 context_markdown=final_markdown,
@@ -1629,7 +1738,7 @@ async def get_agent_context(
                 extracted_symbols=intent.extracted_symbols,
                 callers=structural_res.callers if structural_res else [],
                 callees=structural_res.callees if structural_res else [],
-                related_files=structural_res.related_files if structural_res else [],
+                related_files=all_related,
                 quantization_warning=quant_warning,
                 estimated_tokens=len(final_markdown) // 4,
                 generation_time_ms=elapsed_ms,

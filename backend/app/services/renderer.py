@@ -51,8 +51,8 @@ class MarkdownRenderer:
         # Task (always first)
         parts.append(f"# Task\n\n{task}")
 
-        # Objective
-        if objective:
+        # Objective (only include if provided and distinct from Task)
+        if objective and objective.strip() and objective.strip().lower() != task.strip().lower():
             parts.append(f"# Objective\n\n{objective}")
 
         # Repository Context (from summary)

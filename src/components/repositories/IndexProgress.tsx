@@ -85,12 +85,21 @@ export function IndexProgress({ repositoryName, repoId }: IndexProgressProps) {
         </div>
 
         {/* Progress bar */}
-        {progress && progress.total_files > 0 && progress.status !== "indexed" && (
+        {progress && progress.total_files > 0 && (
           <div className="w-full bg-[#141414] border border-[#262626] rounded-full h-1.5 overflow-hidden">
             <div
-              className="bg-white h-1.5 rounded-full transition-all duration-300"
+              className={`h-1.5 rounded-full transition-all duration-300 ${
+                progress.status === "indexed"
+                  ? "bg-emerald-400"
+                  : progress.status === "error"
+                  ? "bg-red-500"
+                  : "bg-white"
+              }`}
               style={{
-                width: `${Math.min(100, (progress.processed_files / progress.total_files) * 100)}%`,
+                width:
+                  progress.status === "indexed"
+                    ? "100%"
+                    : `${Math.min(100, (progress.processed_files / progress.total_files) * 100)}%`,
               }}
             />
           </div>

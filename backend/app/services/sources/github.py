@@ -28,10 +28,12 @@ class GitHubSource:
         return True
 
     def get_repo_name(self) -> str:
-        """Extract the repository name from the URL (owner/repo)."""
+        """Extract the repository name from the URL (repo name without .git)."""
         parsed = urlparse(self.url)
-        parts = parsed.path.strip("/").split("/")
-        return "/".join(parts[:2])
+        name = parsed.path.strip("/").split("/")[-1]
+        if name.endswith(".git"):
+            name = name[:-4]
+        return name
 
     def get_metadata(self) -> dict[str, str | None]:
         """Return source metadata."""

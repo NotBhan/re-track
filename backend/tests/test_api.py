@@ -474,6 +474,17 @@ class TestSerializationRoundtrip:
         assert r2.repository_path == "/repo"
 
 
+class TestSuggestedPrompts:
+    @pytest.mark.asyncio
+    async def test_generate_suggested_prompts_fallback(self):
+        from app.api.commands import generate_suggested_prompts
+        result = await generate_suggested_prompts("unknown-repo")
+        assert result["success"] is True
+        assert len(result["prompts"]) > 0
+        assert "label" in result["prompts"][0]
+        assert "prompt" in result["prompts"][0]
+
+
 # ─── Main ───
 
 if __name__ == "__main__":

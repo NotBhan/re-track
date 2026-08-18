@@ -35,6 +35,7 @@ from app.api.commands import (
     delete_context_package,
     get_agent_context,
     get_repository_progress,
+    generate_suggested_prompts,
 )
 from app.models.agent_context import AgentContextRequest
 from app.api.schemas import (
@@ -307,3 +308,9 @@ async def provider_update_endpoint(request: UpdateProviderRequest):
     if isinstance(result, ErrorResponse):
         raise HTTPException(status_code=500, detail=result.model_dump())
     return result
+
+
+@app.get("/repos/{repo_id}/prompts")
+async def get_repo_prompts_endpoint(repo_id: str):
+    """Generate repository-tailored prompt recommendations using local LLM or AST metadata."""
+    return await generate_suggested_prompts(repo_id)

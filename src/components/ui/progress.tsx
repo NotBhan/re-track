@@ -10,9 +10,9 @@ export interface ProgressProps extends React.HTMLAttributes<HTMLDivElement> {
 
 const variantStyles = {
   default: "bg-white",
-  emerald: "bg-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.5)]",
-  amber: "bg-amber-400 shadow-[0_0_12px_rgba(251,191,36,0.5)]",
-  gradient: "bg-gradient-to-r from-emerald-400 via-amber-300 to-white",
+  emerald: "bg-emerald-400",
+  amber: "bg-amber-400",
+  gradient: "bg-white",
 };
 
 export const Progress = React.forwardRef<HTMLDivElement, ProgressProps>(

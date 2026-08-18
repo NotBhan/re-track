@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   GitBranch,
   FolderOpen,
@@ -33,8 +34,18 @@ export function CreateRepositoryIndexModal({
   open,
   onOpenChange,
 }: CreateRepositoryIndexModalProps) {
-  const { createAndScan, indexRepo, scanning, indexing, lastScan, clearScan, progress } =
-    useRepositoryStore();
+  const navigate = useNavigate();
+  const {
+    createAndScan,
+    indexRepo,
+    scanning,
+    indexing,
+    lastScan,
+    clearScan,
+    progress,
+    select,
+    fetchRepositories,
+  } = useRepositoryStore();
 
   const [sourceType, setSourceType] = useState<"github" | "local">("local");
   const [githubUrl, setGithubUrl] = useState("");
@@ -156,12 +167,32 @@ export function CreateRepositoryIndexModal({
     }
   };
 
+  const handleDone = () => {
+    onOpenChange(false);
+    if (createdRepoId) {
+      select(createdRepoId);
+    }
+    fetchRepositories();
+    navigate("/");
+  };
+
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (!nextOpen && progress?.status === "indexed") {
+      if (createdRepoId) {
+        select(createdRepoId);
+      }
+      fetchRepositories();
+      navigate("/");
+    }
+    onOpenChange(nextOpen);
+  };
+
   const isScanning = scanning;
   const isIndexing = indexing;
   const showScanResults = lastScan && createdRepoId;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-[620px] bg-[#0a0a0a] text-white border border-[#262626] p-7 shadow-2xl rounded-2xl">
         <DialogHeader className="pb-4 border-b border-[#222222]">
           <div className="flex items-center gap-3">
@@ -340,15 +371,14 @@ export function CreateRepositoryIndexModal({
             </div>
           </div>
         ) : (
-          /* Scan Results */
+          /* Scan Results & Indexing Progress */
           <div className="space-y-5 py-2">
-            {isIndexing && createdRepoId && (
+            {(isIndexing || progress?.status === "indexed" || progress?.status === "error") && createdRepoId ? (
               <IndexProgress
                 repositoryName={repoName}
                 repoId={createdRepoId}
               />
-            )}
-            {!isIndexing && (
+            ) : (
               <>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="rounded-xl bg-black border border-[#262626] p-4 space-y-2">
@@ -438,12 +468,30 @@ export function CreateRepositoryIndexModal({
             progress?.status === "indexed" ? (
               <Button
                 type="button"
-                onClick={() => onOpenChange(false)}
+                onClick={handleDone}
                 className="h-10 px-5 text-xs font-mono font-bold uppercase tracking-wider bg-white text-black hover:bg-neutral-200 rounded-lg shadow-sm"
               >
                 <CheckCircle2 className="w-4 h-4 mr-2 text-emerald-600" />
                 Done
               </Button>
+            ) : progress?.status === "error" ? (
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => onOpenChange(false)}
+                  className="h-10 px-4 text-xs font-mono border-[#262626] bg-black text-neutral-300 hover:text-white rounded-lg"
+                >
+                  Dismiss
+                </Button>
+                <Button
+                  type="button"
+                  onClick={handleIndexNow}
+                  className="h-10 px-4 text-xs font-mono font-bold uppercase tracking-wider bg-white text-black hover:bg-neutral-200 rounded-lg shadow-sm"
+                >
+                  Retry
+                </Button>
+              </div>
             ) : (
               <Button
                 type="button"

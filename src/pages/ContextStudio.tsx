@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { TopBar } from "@/components/layout/TopBar";
 import {
@@ -18,7 +18,7 @@ import {
   Loader2,
   X,
 } from "lucide-react";
-import { getAgentContext, AgentContextResponse } from "@/lib/api";
+import { getAgentContext, AgentContextResponse, getSuggestedPrompts, SuggestedPrompt } from "@/lib/api";
 import { useRepositoryStore } from "@/stores/repository-store";
 import { useContextPackageStore } from "@/stores/context-package-store";
 import { toast } from "@/components/ui/toast";
@@ -26,13 +26,13 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { CallGraphView } from "@/components/repositories/CallGraphView";
 import { SynthesisProgressBar } from "@/components/shared/SynthesisProgressBar";
-import { SynthesisModal } from "@/components/dashboard/SynthesisModal";
 import { ProgressiveMarkdownReveal } from "@/components/dashboard/ProgressiveMarkdownReveal";
+import { EvidenceProvenanceLayer } from "@/components/context-builder/EvidenceProvenanceLayer";
 import type { CallGraphNode, CallGraphEdge } from "@/types/repository";
 import { motion } from "motion/react";
 import { cn } from "@/lib/utils";
 
-const PRESET_WORKBENCH_PROMPTS = [
+const PRESET_WORKBENCH_PROMPTS: SuggestedPrompt[] = [
   {
     label: "Settings & Providers",
     prompt: "Find where Settings are initialized and how LLM providers are configured and hot-reloaded.",
@@ -59,6 +59,10 @@ export default function ContextStudio() {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const repoIdParam = searchParams.get("repo");
+
+  const [presetPrompts, setPresetPrompts] = useState<SuggestedPrompt[]>(PRESET_WORKBENCH_PROMPTS);
+  const [loadingPrompts, setLoadingPrompts] = useState(false);
+  const [promptSource, setPromptSource] = useState<"ai" | "heuristic" | "preset">("preset");
 
   const [taskPrompt, setTaskPrompt] = useState(PRESET_WORKBENCH_PROMPTS[0].prompt);
   const [maxTokens, setMaxTokens] = useState(8000);
@@ -141,15 +145,42 @@ export default function ContextStudio() {
     ];
   }, [activeRepo]);
 
-  const [showSynthesisModal, setShowSynthesisModal] = useState(false);
-  const [synthesisError, setSynthesisError] = useState<string | null>(null);
+  const handleFetchSuggestedPrompts = useCallback(
+    async (isManual = false) => {
+      if (!activeRepo?.id) return;
+      setLoadingPrompts(true);
+      try {
+        const res = await getSuggestedPrompts(activeRepo.id);
+        if (res.prompts && res.prompts.length > 0) {
+          setPresetPrompts(res.prompts);
+          setPromptSource(res.source);
+          if (isManual) {
+            toast.success(
+              res.source === "ai"
+                ? "Generated fresh AI prompts from loaded model"
+                : "Generated repository-tailored task prompts"
+            );
+          }
+        }
+      } catch (e) {
+        console.debug("Failed to load suggested prompts", e);
+      } finally {
+        setLoadingPrompts(false);
+      }
+    },
+    [activeRepo?.id]
+  );
+
+  useEffect(() => {
+    if (activeRepo?.id) {
+      handleFetchSuggestedPrompts(false);
+    }
+  }, [activeRepo?.id, handleFetchSuggestedPrompts]);
 
   const handleSynthesize = async () => {
     if (!taskPrompt.trim() || loading || cooldown > 0) return;
     setLoading(true);
     setSaved(false);
-    setSynthesisError(null);
-    setShowSynthesisModal(true);
 
     const requestId = Date.now();
     activeRequestIdRef.current = requestId;
@@ -176,7 +207,6 @@ export default function ContextStudio() {
     } catch (err: any) {
       if (activeRequestIdRef.current !== requestId) return;
       const msg = err?.message || String(err) || "Failed to synthesize context package";
-      setSynthesisError(msg);
       toast.error(msg);
     } finally {
       if (activeRequestIdRef.current === requestId) {
@@ -301,14 +331,6 @@ export default function ContextStudio() {
         </div>
       </TopBar>
 
-      {/* Global Top Banner Progress Bar (Active whenever model is synthesizing) */}
-      <SynthesisProgressBar
-        loading={loading}
-        onCancel={handleCancelSynthesis}
-        variant="compact"
-        taskTitle={taskPrompt}
-      />
-
       {/* Mobile/Tablet Segmented Tab Controller (< 1024px) */}
       <div className="lg:hidden px-4 pt-3 pb-1 border-b border-[#222222] bg-[#080808]">
         <div className="grid grid-cols-3 gap-1 bg-[#121212] p-1 rounded-lg border border-[#262626]">
@@ -408,13 +430,34 @@ export default function ContextStudio() {
               <>
                 {/* Preset Prompt Template Chips */}
                 <div>
-                  <label className="text-[11px] font-mono uppercase tracking-wider text-neutral-400 block mb-2">
-                    Preset Development Prompts
-                  </label>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-[11px] font-mono uppercase tracking-wider text-neutral-400 flex items-center gap-2">
+                      <span>Suggested Prompts</span>
+                      {promptSource === "ai" && (
+                        <Badge variant="outline" className="text-[9px] font-mono border-emerald-500/40 text-emerald-400 bg-emerald-950/30 px-1.5 py-0">
+                          AI Generated
+                        </Badge>
+                      )}
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => handleFetchSuggestedPrompts(true)}
+                      disabled={loadingPrompts}
+                      className="text-[11px] font-mono text-neutral-400 hover:text-white flex items-center gap-1 cursor-pointer transition-colors px-2 py-0.5 rounded border border-[#262626] hover:border-[#444] bg-black"
+                      title="Generate fresh AI prompts for this codebase using the active LLM"
+                    >
+                      {loadingPrompts ? (
+                        <Loader2 className="w-3 h-3 animate-spin text-white" />
+                      ) : (
+                        <Sparkles className="w-3 h-3 text-amber-400" />
+                      )}
+                      <span>{loadingPrompts ? "Generating..." : "AI Generate"}</span>
+                    </button>
+                  </div>
                   <div className="flex flex-wrap gap-1.5">
-                    {PRESET_WORKBENCH_PROMPTS.map((p) => (
+                    {presetPrompts.map((p) => (
                       <button
-                        key={p.label}
+                        key={p.label + p.prompt}
                         onClick={() => setTaskPrompt(p.prompt)}
                         className={cn(
                           "text-xs font-mono px-2.5 py-1 rounded-lg border transition-all cursor-pointer",
@@ -466,16 +509,6 @@ export default function ContextStudio() {
                     className="w-full accent-white h-1.5 bg-[#1f1f1f] rounded-lg cursor-pointer"
                   />
                 </div>
-
-                {/* Rich Real-Time Progress Bar in Workbench */}
-                {loading && (
-                  <SynthesisProgressBar
-                    loading={loading}
-                    onCancel={handleCancelSynthesis}
-                    variant="card"
-                    taskTitle={taskPrompt}
-                  />
-                )}
 
                 {/* Intent Parser & Hallucination Guard Feedback */}
                 {agentResponse && !loading && (
@@ -629,26 +662,16 @@ export default function ContextStudio() {
 
           {/* Package Content & Non-blocking Live Telemetry */}
           <div className="flex-1 min-h-0 overflow-y-auto p-5 space-y-4 relative">
-            {/* If synthesizing and already has a package, show floating live progress card overlay */}
+            {/* If synthesizing and already has a package, show live re-synthesis card overlay */}
             {loading && agentResponse && (
               <div className="sticky top-0 z-20 mb-4">
-                <div className="bg-gradient-to-r from-amber-950/40 via-black to-emerald-950/40 border border-white/20 rounded-xl p-3.5 shadow-2xl backdrop-blur-md space-y-2">
-                  <div className="flex items-center justify-between text-xs font-mono">
-                    <span className="text-white font-semibold flex items-center gap-2">
-                      <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-400" />
-                      Re-synthesizing new context package in background...
-                    </span>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={handleCancelSynthesis}
-                      className="h-6 px-2 text-[10px] text-neutral-400 hover:text-red-400 hover:bg-red-500/10 cursor-pointer"
-                    >
-                      Cancel
-                    </Button>
-                  </div>
-                  <SynthesisProgressBar loading={loading} variant="compact" />
-                </div>
+                <SynthesisProgressBar
+                  loading={loading}
+                  onCancel={handleCancelSynthesis}
+                  variant="card"
+                  taskTitle={`Re-synthesizing for: "${taskPrompt}"`}
+                  className="w-full bg-[#0e0e0e] border border-[#333] shadow-2xl"
+                />
               </div>
             )}
 
@@ -666,11 +689,11 @@ export default function ContextStudio() {
             ) : agentResponse ? (
               <motion.div
                 initial={{ opacity: 0 }}
-                animate={{ opacity: loading ? 0.6 : 1 }}
+                animate={{ opacity: loading ? 0.5 : 1 }}
                 transition={{ duration: 0.2 }}
                 className="space-y-4"
               >
-                {/* Telemetry reduction bar */}
+                {/* Telemetry reduction metrics bar */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-black border border-[#222222] rounded-xl p-3.5">
                   <div>
                     <span className="text-[10px] font-mono text-neutral-400 uppercase block">Context Tokens</span>
@@ -698,7 +721,10 @@ export default function ContextStudio() {
                   </div>
                 </div>
 
-                {/* Markdown Display with Progressive Reveal Animation */}
+                {/* What RE:Track Found - Evidence & Source Provenance Layer */}
+                <EvidenceProvenanceLayer agentResponse={agentResponse} />
+
+                {/* Generated Context Package Markdown */}
                 <ProgressiveMarkdownReveal markdown={agentResponse.context_markdown} />
               </motion.div>
             ) : (
@@ -717,19 +743,6 @@ export default function ContextStudio() {
           </div>
         </div>
       </main>
-
-      {/* Synthesis Progress Modal (matching ReindexModal style) */}
-      <SynthesisModal
-        open={showSynthesisModal}
-        onOpenChange={setShowSynthesisModal}
-        loading={loading}
-        onCancel={handleCancelSynthesis}
-        repoName={activeRepo.name}
-        taskPrompt={taskPrompt}
-        maxTokens={maxTokens}
-        agentResponse={agentResponse}
-        error={synthesisError}
-      />
     </div>
   );
 }

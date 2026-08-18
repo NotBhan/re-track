@@ -172,7 +172,7 @@ export function SynthesisProgressBar({
         {/* Shimmering Progress Bar */}
         <Progress
           value={progress}
-          variant="gradient"
+          variant={progress >= 100 ? "emerald" : "default"}
           className="h-1 rounded-none border-none bg-[#141414]"
         />
       </div>
@@ -239,12 +239,12 @@ export function SynthesisProgressBar({
           </div>
         </div>
 
-        {/* Progress Bar with Gradient Glow */}
+        {/* Progress Bar with crisp indicator */}
         <div className="space-y-1.5">
           <Progress
             value={progress}
-            variant="gradient"
-            className="h-2 bg-[#181818]"
+            variant={progress >= 100 ? "emerald" : "default"}
+            className="h-1.5 bg-[#141414] border border-[#262626]"
           />
           <div className="flex justify-between text-[11px] font-mono text-neutral-400">
             <span className="text-white font-medium flex items-center gap-1.5">

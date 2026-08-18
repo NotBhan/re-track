@@ -477,6 +477,26 @@ export async function appendContextPackage(
   return invoke<SavedContextPackage>("append_context_package", { packageId, request: req });
 }
 
+export interface SuggestedPrompt {
+  label: string;
+  prompt: string;
+}
+
+export interface SuggestedPromptsResponse {
+  success: boolean;
+  prompts: SuggestedPrompt[];
+  source: "ai" | "heuristic";
+}
+
+/**
+ * Get AI or AST-derived prompt recommendations for a repository.
+ */
+export async function getSuggestedPrompts(
+  repoId: string
+): Promise<SuggestedPromptsResponse> {
+  return invoke<SuggestedPromptsResponse>("get_suggested_prompts", { repoId });
+}
+
 // --- UI domain types (previously in src/types/index.ts) ---
 
 export interface BenchmarkMetric {

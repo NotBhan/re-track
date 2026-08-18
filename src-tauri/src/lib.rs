@@ -281,6 +281,11 @@ async fn delete_repository(repo_id: String) -> Result<serde_json::Value, String>
     http_delete(&format!("/repos/{}", repo_id)).await
 }
 
+#[tauri::command]
+async fn get_suggested_prompts(repo_id: String) -> Result<serde_json::Value, String> {
+    http_get(&format!("/repos/{}/prompts", repo_id)).await
+}
+
 // --- Context Package commands ---
 
 #[tauri::command]
@@ -493,6 +498,7 @@ pub fn run() {
             delete_context_package,
             append_context_package,
             update_provider,
+            get_suggested_prompts,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

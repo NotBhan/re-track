@@ -14,6 +14,7 @@ All Cognee imports stay inside this module.
 
 import logging
 import asyncio
+import re
 from typing import Any, Optional
 
 import cognee
@@ -23,6 +24,20 @@ from app.models.errors import CogneeServiceError
 from app.models.responses import RememberResult, RecallResult, RecallResponse, SectionType
 
 logger = logging.getLogger(__name__)
+
+
+def sanitize_dataset_name(name: str | None) -> str:
+    """Sanitize a dataset name for Cognee and vector databases.
+    Removes .git suffix, and replaces dots, spaces, slashes, and non-alphanumerics with underscores.
+    """
+    if not name:
+        return "default"
+    clean = str(name).strip()
+    if clean.endswith(".git"):
+        clean = clean[:-4]
+    clean = re.sub(r"[^a-zA-Z0-9_-]", "_", clean)
+    clean = re.sub(r"_+", "_", clean).strip("-_")
+    return clean or "default"
 
 
 class CogneeService:
@@ -86,6 +101,7 @@ class CogneeService:
             CogneeServiceError: If ingestion fails.
         """
         self._ensure_initialized()
+        dataset_name = sanitize_dataset_name(dataset_name)
         try:
             items = len(data) if isinstance(data, list) else 1
             logger.info("add() | dataset=%s | items=%d", dataset_name, items)
@@ -121,6 +137,7 @@ class CogneeService:
             CogneeServiceError: If ingestion fails.
         """
         self._ensure_initialized()
+        dataset_name = sanitize_dataset_name(dataset_name)
         try:
             items = len(data) if isinstance(data, list) else 1
             logger.info(
@@ -160,16 +177,17 @@ class CogneeService:
             CogneeServiceError: If retrieval fails.
         """
         self._ensure_initialized()
+        clean_datasets = [sanitize_dataset_name(d) for d in datasets]
         try:
             logger.info(
                 "recall() | query=%s | datasets=%s | top_k=%d",
                 query_text[:80],
-                datasets,
+                clean_datasets,
                 top_k,
             )
             raw_results = await cognee.recall(
                 query_text=query_text,
-                datasets=datasets,
+                datasets=clean_datasets,
                 top_k=top_k,
                 **kwargs,
             )
@@ -186,7 +204,7 @@ class CogneeService:
             ]
             return RecallResponse(
                 query=query_text,
-                dataset=", ".join(datasets),
+                dataset=", ".join(clean_datasets),
                 results=results,
             )
         except Exception as e:
@@ -211,9 +229,10 @@ class CogneeService:
             CogneeServiceError: If improvement fails.
         """
         self._ensure_initialized()
+        clean_dataset = sanitize_dataset_name(dataset) if dataset else None
         try:
-            logger.info("improve() | dataset=%s", dataset or "all")
-            kwargs["dataset"] = dataset
+            logger.info("improve() | dataset=%s", clean_dataset or "all")
+            kwargs["dataset"] = clean_dataset
             result = await cognee.improve(**kwargs)
             logger.info("improve() completed")
             return result
@@ -240,15 +259,16 @@ class CogneeService:
             CogneeServiceError: If deletion fails.
         """
         self._ensure_initialized()
+        clean_dataset = sanitize_dataset_name(dataset) if dataset else None
         try:
             logger.info(
                 "forget() | dataset=%s | dataset_id=%s | data_id=%s",
-                dataset,
+                clean_dataset,
                 dataset_id,
                 data_id,
             )
-            if dataset is not None:
-                kwargs["dataset"] = dataset
+            if clean_dataset is not None:
+                kwargs["dataset"] = clean_dataset
             if dataset_id is not None:
                 kwargs["dataset_id"] = dataset_id
             if data_id is not None:
