@@ -14,20 +14,20 @@
   --color-primary: #ffffff;
   --color-primary-foreground: #000000;
   
-  --color-secondary: #171717;
+  --color-secondary: #121212;
   --color-secondary-foreground: #ededed;
   
-  --color-muted: #171717;
-  --color-muted-foreground: #888888;
+  --color-muted: #141414;
+  --color-muted-foreground: #a3a3a3;
   
-  --color-accent: #262626;
+  --color-accent: #1c1c1c;
   --color-accent-foreground: #ffffff;
   
-  --color-destructive: #ff4444;
+  --color-destructive: #ef4444;
   --color-destructive-foreground: #ffffff;
   
-  --color-border: #262626;
-  --color-input: #171717;
+  --color-border: #1e1e1e;
+  --color-input: #121212;
   --color-ring: #ededed;
   
   --radius: 0.375rem;
@@ -57,32 +57,23 @@ body {
   margin: 0;
   overflow: hidden;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   letter-spacing: -0.01em;
 }
 
-/* Subtle Vercel Geist Scrollbar */
+/* Subtle Quiet Scrollbar */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #262626;
-  border-radius: 4px;
+  background: #222222;
+  border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #404040;
+  background: #333333;
 }
 
-/* Vercel Mesh Gradient subtle accent */
-.vercel-gradient-text {
-  background: linear-gradient(135deg, #0070f3 0%, #7928ca 50%, #ff0080 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-}
-
-.vercel-mesh-border {
-  border-image: linear-gradient(to right, #0070f3, #7928ca, #ff0080) 1;
-}

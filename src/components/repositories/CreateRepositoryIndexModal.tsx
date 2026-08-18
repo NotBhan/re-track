@@ -239,40 +239,40 @@ export function CreateRepositoryIndexModal({
                   <FolderOpen className="w-4 h-4" />
                 </div>
                 <div>
-                  <p className="text-xs font-bold text-white">Local Directory</p>
-                  <p className="text-[11px] text-neutral-400 font-mono">Browse disk</p>
+                  <p className="text-xs font-medium text-white">Local Directory</p>
+                  <p className="text-[11px] text-neutral-500">Browse disk</p>
                 </div>
               </button>
 
               <button
                 type="button"
                 onClick={() => setSourceType("github")}
-                className={`flex items-center gap-3.5 p-3.5 rounded-xl border text-left transition-all ${
+                className={`flex items-center gap-3 p-2.5 rounded-md border text-left transition-colors cursor-pointer ${
                   sourceType === "github"
-                    ? "border-white bg-[#141414] text-white shadow-sm"
-                    : "border-[#222222] bg-black text-neutral-400 hover:border-[#383838] hover:text-white"
+                    ? "border-white bg-[#141414] text-white shadow-xs"
+                    : "border-[#222222] bg-[#050505] text-neutral-400 hover:border-[#383838] hover:text-white"
                 }`}
               >
                 <div
-                  className={`w-9 h-9 rounded-lg flex items-center justify-center ${
+                  className={`w-7 h-7 rounded flex items-center justify-center ${
                     sourceType === "github"
                       ? "bg-white text-black font-bold"
                       : "bg-[#141414] text-neutral-400"
                   }`}
                 >
-                  <GitBranch className="w-4 h-4" />
+                  <GitBranch className="w-3.5 h-3.5" />
                 </div>
                 <div>
-                  <p className="text-xs font-bold text-white">Git Remote</p>
-                  <p className="text-[11px] text-neutral-400 font-mono">Clone via URL</p>
+                  <p className="text-xs font-medium text-white">Git Remote</p>
+                  <p className="text-[11px] text-neutral-500">Clone via URL</p>
                 </div>
               </button>
             </div>
 
             {/* Local Path Picker */}
             {sourceType === "local" && (
-              <div className="space-y-1.5">
-                <label className="text-xs font-mono font-semibold text-neutral-300 uppercase tracking-wider">
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-neutral-300">
                   Folder Path
                 </label>
                 <div className="flex gap-2">
@@ -280,14 +280,14 @@ export function CreateRepositoryIndexModal({
                     placeholder="/home/user/my-project"
                     value={localPath}
                     onChange={(e) => setLocalPath(e.target.value)}
-                    className={`h-10 text-xs font-mono bg-black border-[#262626] text-white placeholder:text-neutral-600 rounded-lg focus-visible:ring-1 focus-visible:ring-white ${
+                    className={`h-8 text-xs font-mono bg-[#050505] border-[#222222] text-neutral-200 placeholder:text-neutral-600 rounded-md focus-visible:ring-1 focus-visible:ring-white ${
                       validationErrors.localPath ? "border-red-500/80" : ""
                     }`}
                   />
                   <Button
                     type="button"
                     onClick={handleBrowseFolder}
-                    className="shrink-0 h-10 px-4 text-xs font-mono font-bold bg-white text-black hover:bg-neutral-200 rounded-lg shadow-sm"
+                    className="shrink-0 h-8 px-3 text-xs font-medium bg-white text-black hover:bg-neutral-200 rounded-md cursor-pointer shadow-xs"
                   >
                     Browse...
                   </Button>
@@ -300,15 +300,15 @@ export function CreateRepositoryIndexModal({
 
             {/* GitHub URL */}
             {sourceType === "github" && (
-              <div className="space-y-1.5">
-                <label className="text-xs font-mono font-semibold text-neutral-300 uppercase tracking-wider">
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-neutral-300">
                   Repository URL
                 </label>
                 <Input
                   placeholder="https://github.com/organization/repository"
                   value={githubUrl}
                   onChange={(e) => setGithubUrl(e.target.value)}
-                  className={`h-10 text-xs font-mono bg-black border-[#262626] text-white placeholder:text-neutral-600 rounded-lg focus-visible:ring-1 focus-visible:ring-white ${
+                  className={`h-8 text-xs font-mono bg-[#050505] border-[#222222] text-neutral-200 placeholder:text-neutral-600 rounded-md focus-visible:ring-1 focus-visible:ring-white ${
                     validationErrors.githubUrl ? "border-red-500/80" : ""
                   }`}
                 />
@@ -320,15 +320,15 @@ export function CreateRepositoryIndexModal({
 
             {/* Repository Name & Dataset Name Grid */}
             <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <label className="text-xs font-mono font-semibold text-neutral-300 uppercase tracking-wider">
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-neutral-300">
                   Repository Name
                 </label>
                 <Input
                   placeholder="re-track"
                   value={repoName}
                   onChange={(e) => setRepoName(e.target.value)}
-                  className={`h-10 text-xs font-mono bg-black border-[#262626] text-white placeholder:text-neutral-600 rounded-lg focus-visible:ring-1 focus-visible:ring-white ${
+                  className={`h-8 text-xs font-mono bg-[#050505] border-[#222222] text-neutral-200 placeholder:text-neutral-600 rounded-md focus-visible:ring-1 focus-visible:ring-white ${
                     validationErrors.repoName ? "border-red-500/80" : ""
                   }`}
                 />
@@ -337,26 +337,26 @@ export function CreateRepositoryIndexModal({
                 )}
               </div>
 
-              <div className="space-y-1.5">
-                <label className="text-xs font-mono font-semibold text-neutral-400 uppercase tracking-wider">
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-neutral-400">
                   Dataset Tag <span className="text-neutral-500 font-normal">(optional)</span>
                 </label>
                 <Input
                   placeholder="defaults to repo name"
                   value={datasetName}
                   onChange={(e) => setDatasetName(e.target.value)}
-                  className="h-10 text-xs font-mono bg-black border-[#262626] text-white placeholder:text-neutral-600 rounded-lg focus-visible:ring-1 focus-visible:ring-white"
+                  className="h-8 text-xs font-mono bg-[#050505] border-[#222222] text-neutral-200 placeholder:text-neutral-600 rounded-md focus-visible:ring-1 focus-visible:ring-white"
                 />
               </div>
             </div>
 
             {/* Checkboxes in clean dark card */}
-            <div className="p-3.5 rounded-lg bg-black border border-[#222222] flex gap-6">
-              <label className="flex items-center gap-2.5 cursor-pointer text-xs font-mono text-neutral-300">
+            <div className="p-3 rounded-md bg-[#050505] border border-[#1e1e1e] flex gap-6">
+              <label className="flex items-center gap-2 cursor-pointer text-xs text-neutral-300">
                 <Checkbox
                   checked={cloneIfMissing}
                   onCheckedChange={(checked) => setCloneIfMissing(checked === true)}
-                  className="border-[#444444] data-[state=checked]:bg-white data-[state=checked]:text-black"
+                  className="border-[#444444] data-[state=checked]:bg-white data-[state=checked]:text-black rounded"
                 />
                 <span>Clone if not local</span>
               </label>

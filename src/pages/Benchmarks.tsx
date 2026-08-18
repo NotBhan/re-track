@@ -98,22 +98,22 @@ export default function Benchmarks() {
         </div>
       </TopBar>
 
-      <main className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6">
-        <div className="max-w-5xl mx-auto space-y-6">
+      <main className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-5">
+        <div className="max-w-5xl mx-auto space-y-4">
           {/* Header */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#262626] pb-5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#1a1a1a] pb-4">
             <div>
-              <div className="flex items-center gap-2.5">
-                <h1 className="text-xl font-bold tracking-tight text-white">
+              <div className="flex items-center gap-2">
+                <h1 className="text-sm font-semibold tracking-tight text-white">
                   Memory Retrieval &amp; Token Benchmarks
                 </h1>
                 {suite && (
-                  <Badge variant="outline" className="text-xs font-mono border-emerald-500/30 text-emerald-400 bg-emerald-500/10">
+                  <Badge variant="success" className="text-[10px] font-mono">
                     Accuracy: {Math.round(suite.pass_rate)}%
                   </Badge>
                 )}
               </div>
-              <p className="text-xs font-mono text-neutral-400 mt-1">
+              <p className="text-xs text-neutral-500 mt-0.5">
                 Gauging recall latency, token reduction ratios, and LLM context window optimization.
               </p>
             </div>
@@ -121,13 +121,13 @@ export default function Benchmarks() {
 
           {/* Error Notice */}
           {error && (
-            <div className="bg-red-500/10 text-red-400 border border-red-500/30 rounded-xl p-4 text-xs font-mono">
+            <div className="bg-red-950/20 text-red-400 border border-red-500/20 rounded-md p-3 text-xs font-mono">
               {error}
             </div>
           )}
 
           {/* KPI Metrics Grid */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             <MetricCard
               metric={{
                 label: "Token Savings",
@@ -166,49 +166,49 @@ export default function Benchmarks() {
           </div>
 
           {/* Token Reduction Comparison Visual Card */}
-          <div className="bg-[#0a0a0a] rounded-2xl border border-[#262626] p-6 shadow-xl space-y-5">
-            <div className="flex items-center justify-between border-b border-[#222] pb-3">
+          <div className="bg-[#0a0a0a] rounded-lg border border-[#1e1e1e] p-4 space-y-3">
+            <div className="flex items-center justify-between border-b border-[#181818] pb-2.5">
               <div>
-                <h3 className="text-sm font-bold text-white tracking-tight flex items-center gap-2">
-                  <Zap className="w-4 h-4 text-amber-400" />
+                <h3 className="text-xs font-semibold text-white tracking-tight flex items-center gap-1.5">
+                  <Zap className="w-3.5 h-3.5 text-amber-400" />
                   <span>Token Budget Comparison (Raw Repo vs RE:Track Context)</span>
                 </h3>
-                <p className="text-xs font-mono text-neutral-400 mt-0.5">
+                <p className="text-xs text-neutral-500 mt-0.5">
                   How much prompt window and LLM inference cost is saved per coding task
                 </p>
               </div>
-              <Badge variant="outline" className="text-xs font-mono text-emerald-400 border-emerald-500/30 bg-emerald-500/10">
+              <Badge variant="success" className="text-[10px] font-mono">
                 ~90% Reduction
               </Badge>
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-3 font-mono text-xs">
               {/* Raw Repo Scan */}
-              <div className="space-y-1.5 font-mono text-xs">
-                <div className="flex justify-between text-neutral-400">
+              <div className="space-y-1">
+                <div className="flex justify-between text-neutral-400 text-[11px]">
                   <span>Raw Full-Repo Scanning (500 files)</span>
                   <span>~48,000 tokens</span>
                 </div>
-                <div className="w-full bg-[#1c1c1c] h-3 rounded-full overflow-hidden">
+                <div className="w-full bg-[#141414] h-2 rounded overflow-hidden">
                   <div className="bg-neutral-600 h-full w-full" />
                 </div>
               </div>
 
               {/* RE:Track Context Package */}
-              <div className="space-y-1.5 font-mono text-xs">
-                <div className="flex justify-between text-white font-semibold">
+              <div className="space-y-1">
+                <div className="flex justify-between text-neutral-200 text-[11px]">
                   <span className="flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_6px_#34d399]" />
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
                     RE:Track Compact Context Package
                   </span>
-                  <span className="text-emerald-400 font-bold">~1,320 tokens</span>
+                  <span className="text-emerald-400 font-medium">~1,320 tokens</span>
                 </div>
-                <div className="w-full bg-[#1c1c1c] h-3 rounded-full overflow-hidden">
+                <div className="w-full bg-[#141414] h-2 rounded overflow-hidden">
                   <motion.div
                     initial={{ width: 0 }}
                     animate={{ width: "10%" }}
-                    transition={{ duration: 0.8, delay: 0.2 }}
-                    className="bg-emerald-400 h-full rounded-full"
+                    transition={{ duration: 0.5 }}
+                    className="bg-emerald-400 h-full rounded"
                   />
                 </div>
               </div>
@@ -217,39 +217,41 @@ export default function Benchmarks() {
 
           {/* Test Questions & Results Table */}
           {suite?.results && suite.results.length > 0 && (
-            <div className="bg-[#0a0a0a] rounded-2xl border border-[#262626] overflow-hidden shadow-xl">
-              <div className="p-4 border-b border-[#262626] bg-[#0d0d0d] flex items-center justify-between">
-                <h3 className="text-sm font-bold text-white tracking-tight flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+            <div className="bg-[#0a0a0a] rounded-lg border border-[#1e1e1e] overflow-hidden">
+              <div className="px-4 py-2.5 border-b border-[#1a1a1a] bg-[#080808] flex items-center justify-between">
+                <h3 className="text-xs font-semibold text-white tracking-tight flex items-center gap-1.5">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
                   <span>Evaluation Suite Queries</span>
                 </h3>
-                <span className="text-xs font-mono text-neutral-400">
+                <span className="text-[11px] font-mono text-neutral-500">
                   {suite.results.length} questions evaluated
                 </span>
               </div>
 
-              <div className="divide-y divide-[#222222]">
+              <div className="divide-y divide-[#141414]">
                 {suite.results.map((res, i) => (
-                  <div key={i} className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-[#0e0e0e] transition-colors">
-                    <div className="flex-1 min-w-0 pr-4">
-                      <div className="flex items-center gap-2 mb-1">
-                        <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                        <h4 className="text-xs sm:text-sm font-bold text-white truncate">
+                  <div key={i} className="px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 hover:bg-[#0e0e0e] transition-colors">
+                    <div className="flex-1 min-w-0 pr-2">
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                        <h4 className="text-xs font-medium text-white truncate">
                           {res.question}
                         </h4>
                       </div>
-                      <div className="flex items-center gap-3 text-xs font-mono text-neutral-400 mt-1 pl-6 flex-wrap">
+                      <div className="flex items-center gap-2.5 text-xs font-mono text-neutral-500 pl-5.5 flex-wrap">
                         <span>{res.section_count} sections</span>
+                        <span>·</span>
                         <span>{res.retrieved_memories} facts retrieved</span>
-                        <span className="text-emerald-400 font-bold">{res.compression_ratio}x compressed</span>
+                        <span>·</span>
+                        <span className="text-emerald-400">{res.compression_ratio}x compressed</span>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-3 shrink-0 self-end sm:self-center font-mono text-xs">
-                      <Badge variant="outline" className="border-[#333] text-neutral-300">
+                    <div className="flex items-center gap-2 shrink-0 self-end sm:self-center font-mono text-xs">
+                      <Badge variant="outline" className="text-[10px]">
                         {res.latency_ms}ms
                       </Badge>
-                      <Badge variant="outline" className="border-emerald-500/30 text-emerald-400 bg-emerald-500/10">
+                      <Badge variant="success" className="text-[10px]">
                         Score: {res.quality_score}%
                       </Badge>
                     </div>

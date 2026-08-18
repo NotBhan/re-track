@@ -22,17 +22,17 @@ export function MetricCard({ metric }: MetricCardProps) {
       : "text-neutral-500";
 
   return (
-    <div className="bg-[#0a0a0a] border border-[#262626] rounded-xl p-5 relative overflow-hidden group hover:border-[#404040] transition-colors shadow-lg">
-      <div className="flex justify-between items-start mb-3">
-        <h3 className="text-xs font-mono font-medium text-neutral-400 uppercase tracking-wider">
+    <div className="bg-[#0a0a0a] border border-[#1e1e1e] rounded-lg p-3.5 transition-colors hover:border-[#2a2a2a]">
+      <div className="flex justify-between items-start mb-2">
+        <h3 className="text-xs font-medium text-neutral-400">
           {metric.label}
         </h3>
       </div>
-      <div className="flex items-end gap-2.5">
-        <span className="text-2xl font-bold font-mono text-white leading-none">
+      <div className="flex items-baseline gap-2">
+        <span className="text-xl font-semibold font-mono text-white leading-none">
           {metric.value}
           {metric.unit && (
-            <span className="text-sm font-normal text-neutral-400 ml-1">
+            <span className="text-xs font-normal text-neutral-500 ml-0.5">
               {metric.unit}
             </span>
           )}
@@ -40,16 +40,16 @@ export function MetricCard({ metric }: MetricCardProps) {
         {metric.trend && metric.trendDirection !== "stable" && (
           <span
             className={cn(
-              "text-xs font-mono font-bold flex items-center gap-0.5 mb-0.5",
+              "text-[11px] font-mono flex items-center gap-0.5",
               trendColor
             )}
           >
-            <TrendIcon className="w-3.5 h-3.5" />
+            <TrendIcon className="w-3 h-3" />
             {metric.trend}
           </span>
         )}
         {metric.trendDirection === "stable" && (
-          <span className="text-xs font-mono text-neutral-500 mb-0.5">
+          <span className="text-[11px] font-mono text-neutral-500">
             stable
           </span>
         )}

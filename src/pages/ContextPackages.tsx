@@ -92,34 +92,34 @@ export default function ContextPackages() {
         </div>
       </TopBar>
 
-      <main className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6">
-        <div className="max-w-5xl mx-auto space-y-6">
+      <main className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-5">
+        <div className="max-w-5xl mx-auto space-y-4">
           {/* Header & Filter Controls */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#262626] pb-5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#1a1a1a] pb-4">
             <div>
-              <div className="flex items-center gap-2.5">
-                <h1 className="text-xl font-bold tracking-tight text-white">
+              <div className="flex items-center gap-2">
+                <h1 className="text-sm font-semibold tracking-tight text-white">
                   Context Packages Library
                 </h1>
-                <Badge variant="outline" className="text-xs font-mono border-[#333] bg-black text-neutral-300">
+                <Badge variant="outline" className="text-[11px] font-mono">
                   {filteredPackages.length} packages
                 </Badge>
               </div>
-              <p className="text-xs font-mono text-neutral-400 mt-1">
+              <p className="text-xs text-neutral-500 mt-0.5">
                 Saved markdown packages synthesized for Cursor, Claude, and local AI coding assistants.
               </p>
             </div>
 
             {/* Search & Repository Filter */}
             <div className="flex items-center gap-2 flex-wrap">
-              <div className="relative w-48 sm:w-60">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-neutral-400" />
+              <div className="relative w-48 sm:w-56">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-neutral-400" />
                 <Input
                   type="text"
                   placeholder="Filter packages..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="h-8 pl-8 text-xs font-mono bg-[#0a0a0a] border-[#262626] rounded-lg text-white placeholder:text-neutral-500"
+                  className="h-7.5 pl-7 text-xs bg-[#0a0a0a] border-[#222222] rounded-md text-white placeholder:text-neutral-500"
                 />
               </div>
 
@@ -127,7 +127,7 @@ export default function ContextPackages() {
                 <select
                   value={selectedRepoFilter}
                   onChange={(e) => setSelectedRepoFilter(e.target.value)}
-                  className="h-8 px-2.5 text-xs font-mono bg-[#0a0a0a] border border-[#262626] rounded-lg text-neutral-300 focus:outline-none focus:border-white cursor-pointer"
+                  className="h-7.5 px-2.5 text-xs font-sans bg-[#0a0a0a] border border-[#222222] rounded-md text-neutral-300 focus:outline-none focus:border-white cursor-pointer"
                 >
                   <option value="all">All Codebases</option>
                   {repoNames.map((rn) => (
@@ -142,16 +142,16 @@ export default function ContextPackages() {
 
           {/* Error Notice */}
           {error && (
-            <div className="bg-red-500/10 text-red-400 border border-red-500/30 rounded-xl p-4 text-xs font-mono">
+            <div className="bg-red-950/20 text-red-400 border border-red-500/20 rounded-md p-3 text-xs font-mono">
               {error}
             </div>
           )}
 
           {/* Loading State */}
           {loading && (
-            <div className="flex flex-col items-center justify-center py-24 text-center gap-3">
-              <Loader2 className="w-8 h-8 text-white animate-spin" />
-              <p className="text-xs font-mono text-neutral-400">
+            <div className="flex flex-col items-center justify-center py-20 text-center gap-2">
+              <Loader2 className="w-6 h-6 text-neutral-400 animate-spin" />
+              <p className="text-xs text-neutral-500">
                 Loading saved packages...
               </p>
             </div>
@@ -159,14 +159,14 @@ export default function ContextPackages() {
 
           {/* Empty State */}
           {!loading && filteredPackages.length === 0 && (
-            <div className="flex flex-col items-center justify-center py-20 text-center bg-[#0a0a0a] rounded-2xl border border-[#262626] p-8">
-              <div className="w-14 h-14 rounded-2xl bg-black border border-[#262626] flex items-center justify-center mb-3 text-neutral-500 shadow-xl">
-                <FileText className="w-7 h-7 text-neutral-400" />
+            <div className="flex flex-col items-center justify-center py-16 text-center bg-[#050505] rounded-lg border border-[#1e1e1e] p-6">
+              <div className="w-10 h-10 rounded-lg bg-[#0f0f0f] border border-[#222222] flex items-center justify-center mb-3 text-neutral-400">
+                <FileText className="w-5 h-5 text-neutral-300" />
               </div>
-              <h3 className="text-base font-bold text-white tracking-tight">
+              <h3 className="text-sm font-semibold text-white tracking-tight">
                 {searchQuery ? "No matching packages found" : "No context packages saved yet"}
               </h3>
-              <p className="text-xs font-mono text-neutral-400 max-w-sm mt-1 mb-5">
+              <p className="text-xs text-neutral-500 max-w-sm mt-1 mb-4 leading-relaxed">
                 {searchQuery
                   ? "Try refining your search keyword or reset filters."
                   : "Synthesize task context in Context Studio and click 'Save to Library' to store reusable packages."}
@@ -174,9 +174,9 @@ export default function ContextPackages() {
               <Button
                 size="sm"
                 onClick={() => navigate("/studio")}
-                className="gap-2 text-xs font-mono font-bold bg-white text-black hover:bg-neutral-200 cursor-pointer"
+                className="gap-1.5 h-7.5 px-3 text-xs bg-white text-black font-medium hover:bg-neutral-200 cursor-pointer shadow-xs"
               >
-                <Sparkles className="w-3.5 h-3.5" />
+                <Sparkles className="w-3 h-3" />
                 <span>Launch Context Studio</span>
               </Button>
             </div>
@@ -184,7 +184,7 @@ export default function ContextPackages() {
 
           {/* Package List */}
           {!loading && filteredPackages.length > 0 && (
-            <div className="flex flex-col gap-3.5">
+            <div className="flex flex-col gap-2.5">
               {filteredPackages.map((pkg) => (
                 <ContextPackageCard
                   key={pkg.id}

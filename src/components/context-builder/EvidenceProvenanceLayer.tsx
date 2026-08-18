@@ -254,50 +254,45 @@ export function EvidenceProvenanceLayer({
   return (
     <div
       className={cn(
-        "rounded-xl bg-black border border-[#222222] p-3.5 sm:p-4 space-y-3 shadow-md",
+        "rounded-md bg-[#050505] border border-[#1a1a1a] p-3 space-y-2.5",
         className
       )}
     >
       {/* Header Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#1c1c1c] pb-2.5">
-        <div className="flex items-center gap-2">
-          <div className="w-5 h-5 rounded-md bg-[#141414] border border-[#2a2a2a] flex items-center justify-center text-white">
-            <Workflow className="w-3 h-3 text-emerald-400" />
-          </div>
-          <span className="text-xs font-bold text-white tracking-tight">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#141414] pb-2">
+        <div className="flex items-center gap-1.5">
+          <Workflow className="w-3.5 h-3.5 text-neutral-300" />
+          <span className="text-xs font-medium text-white tracking-tight">
             What RE:Track Found
           </span>
         </div>
 
         {/* Evidence Count Badges */}
-        <div className="flex items-center gap-1.5 flex-wrap">
+        <div className="flex items-center gap-1 flex-wrap text-[11px] font-mono">
           {totalSources > 0 && (
             <Badge
-              variant="outline"
-              className="text-[10px] font-mono border-emerald-500/30 text-emerald-400 bg-emerald-950/20 px-2 py-0.5"
+              variant="success"
+              className="text-[10px] px-1.5 py-0"
             >
-              {totalSources} verified {totalSources === 1 ? "source" : "sources"}
+              {totalSources} {totalSources === 1 ? "source" : "sources"}
             </Badge>
           )}
           {totalSymbols > 0 && (
             <Badge
               variant="outline"
-              className="text-[10px] font-mono border-[#333] text-neutral-300 bg-[#121212] px-2 py-0.5"
+              className="text-[10px] px-1.5 py-0"
             >
-              {totalSymbols} structural {totalSymbols === 1 ? "entity" : "entities"}
+              {totalSymbols} {totalSymbols === 1 ? "symbol" : "symbols"}
             </Badge>
           )}
-          <Badge
-            variant="outline"
-            className="text-[10px] font-mono border-[#333] text-neutral-400 bg-black px-2 py-0.5"
-          >
-            {groups.length} evidence {groups.length === 1 ? "group" : "groups"}
-          </Badge>
+          <span className="text-neutral-500 text-[10px]">
+            · {groups.length} {groups.length === 1 ? "group" : "groups"}
+          </span>
         </div>
       </div>
 
       {/* Collapsible Evidence Groups */}
-      <div className="space-y-2">
+      <div className="space-y-1.5">
         {groups.map((group) => {
           const isExpanded = expandedGroups[group.id] ?? true;
           const GroupIcon = group.icon;
@@ -305,28 +300,28 @@ export function EvidenceProvenanceLayer({
           return (
             <div
               key={group.id}
-              className="rounded-lg border border-[#1f1f1f] bg-[#0a0a0a] overflow-hidden"
+              className="rounded border border-[#161616] bg-[#080808] overflow-hidden"
             >
               {/* Group Toggle Header */}
               <button
                 type="button"
                 onClick={() => toggleGroup(group.id)}
-                className="w-full px-3 py-2 flex items-center justify-between text-xs font-mono text-neutral-300 hover:text-white bg-[#0e0e0e] hover:bg-[#141414] transition-colors cursor-pointer"
+                className="w-full px-2.5 py-1.5 flex items-center justify-between text-xs text-neutral-300 hover:text-white bg-[#0b0b0b] hover:bg-[#101010] transition-colors cursor-pointer"
               >
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5">
                   {isExpanded ? (
-                    <ChevronDown className="w-3.5 h-3.5 text-neutral-400" />
+                    <ChevronDown className="w-3 h-3 text-neutral-500" />
                   ) : (
-                    <ChevronRight className="w-3.5 h-3.5 text-neutral-400" />
+                    <ChevronRight className="w-3 h-3 text-neutral-500" />
                   )}
-                  <GroupIcon className="w-3.5 h-3.5 text-neutral-400" />
-                  <span className="font-semibold text-white">{group.title}</span>
-                  <span className="text-[10px] text-neutral-500 font-normal">
-                    · {group.items.length} {group.items.length === 1 ? "item" : "items"}
+                  <GroupIcon className="w-3 h-3 text-neutral-400" />
+                  <span className="font-medium text-neutral-200">{group.title}</span>
+                  <span className="text-[11px] text-neutral-500 font-mono">
+                    ({group.items.length})
                   </span>
                 </div>
                 <span className="text-[10px] text-neutral-500 font-mono">
-                  {isExpanded ? "Collapse" : "Expand"}
+                  {isExpanded ? "Hide" : "Show"}
                 </span>
               </button>
 
@@ -337,17 +332,17 @@ export function EvidenceProvenanceLayer({
                     initial={{ height: 0, opacity: 0 }}
                     animate={{ height: "auto", opacity: 1 }}
                     exit={{ height: 0, opacity: 0 }}
-                    transition={{ duration: 0.15 }}
-                    className="divide-y divide-[#171717] px-3 py-1 bg-black/60"
+                    transition={{ duration: 0.1 }}
+                    className="divide-y divide-[#121212] px-2.5 py-1 bg-black"
                   >
                     {group.items.map((item) => (
                       <div
                         key={item.id}
-                        className="py-1.5 flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-xs font-mono group"
+                        className="py-1 flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-xs font-mono group"
                       >
                         {/* Name & Path */}
-                        <div className="flex items-center gap-2 min-w-0 flex-1">
-                          <span className="font-bold text-white shrink-0 group-hover:text-emerald-300 transition-colors">
+                        <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                          <span className="font-semibold text-neutral-200 shrink-0">
                             {item.name}
                           </span>
 
@@ -362,7 +357,7 @@ export function EvidenceProvenanceLayer({
                           )}
 
                           {item.lineRange && (
-                            <span className="text-[10px] text-emerald-400 bg-emerald-950/40 border border-emerald-500/20 px-1 rounded shrink-0 font-medium">
+                            <span className="text-[10px] text-emerald-400 bg-emerald-950/30 border border-emerald-500/20 px-1 rounded shrink-0">
                               {item.lineRange}
                             </span>
                           )}
@@ -384,8 +379,8 @@ export function EvidenceProvenanceLayer({
                         </div>
 
                         {/* Relevance Explanation Badge */}
-                        <div className="shrink-0 flex items-center gap-1.5 self-start sm:self-auto">
-                          <span className="text-[10px] text-neutral-400 bg-[#121212] border border-[#222] px-2 py-0.5 rounded">
+                        <div className="shrink-0 flex items-center gap-1 self-start sm:self-auto">
+                          <span className="text-[10px] text-neutral-500 bg-[#0e0e0e] border border-[#1c1c1c] px-1.5 py-0.5 rounded">
                             {item.relevanceReason}
                           </span>
                         </div>

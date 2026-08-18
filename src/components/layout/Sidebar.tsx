@@ -9,13 +9,10 @@ import {
   Settings,
   Plus,
   Layers,
-  HardDrive,
-  Cpu,
-  Activity,
   RefreshCw,
-  Zap,
-  Network,
   X,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useHealthStore } from "@/stores/health-store";
@@ -36,60 +33,11 @@ interface SidebarProps {
   isMobile?: boolean;
 }
 
-/** Compact status dot with optional glow */
-function StatusDot({ online }: { online: boolean }) {
-  return (
-    <span
-      className={cn(
-        "inline-block w-1.5 h-1.5 rounded-full flex-shrink-0",
-        online
-          ? "bg-emerald-400 shadow-[0_0_6px_#34d399]"
-          : "bg-neutral-600"
-      )}
-    />
-  );
-}
-
-/** One provider row inside the telemetry deck */
-function ProviderRow({
-  icon: Icon,
-  label,
-  detail,
-  online,
-}: {
-  icon: React.ElementType;
-  label: string;
-  detail?: string;
-  online: boolean;
-}) {
-  return (
-    <div className="flex items-center justify-between py-1">
-      <div className="flex items-center gap-1.5 text-[10px] text-neutral-400 min-w-0">
-        <Icon className="w-3 h-3 text-neutral-500 flex-shrink-0" />
-        <span className="truncate">{label}</span>
-        {detail && (
-          <span className="truncate text-neutral-600 hidden sm:block">{detail}</span>
-        )}
-      </div>
-      <div className="flex items-center gap-1 flex-shrink-0">
-        <StatusDot online={online} />
-        <span
-          className={cn(
-            "text-[10px] font-mono",
-            online ? "text-emerald-400" : "text-neutral-600"
-          )}
-        >
-          {online ? "online" : "offline"}
-        </span>
-      </div>
-    </div>
-  );
-}
-
 export function Sidebar({ onNewIndex, onCloseMobile, isMobile = false }: SidebarProps) {
   const { health, status, backendOnline, ollamaRunning, cogneeIdle, fetchDashboardStats, pollHealth } =
     useHealthStore();
   const [refreshing, setRefreshing] = useState(false);
+  const [showDetails, setShowDetails] = useState(false);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -104,8 +52,7 @@ export function Sidebar({ onNewIndex, onCloseMobile, isMobile = false }: Sidebar
   const cpuPct = health?.cpu_percent ?? 0;
 
   // Model labels from BackendStatusResponse (trimmed for display)
-  const llmModel = status?.llm_model?.split(":")[0] ?? "";
-  const embedModel = status?.embedding_model?.split(":")[0] ?? "";
+  const llmModel = status?.llm_model?.split(":")[0] || "phi-4-mini";
 
   // Overall engine status
   const engineOk = backendOnline && ollamaRunning;
@@ -119,29 +66,24 @@ export function Sidebar({ onNewIndex, onCloseMobile, isMobile = false }: Sidebar
   return (
     <aside
       className={cn(
-        "h-screen bg-black border-r border-[#222222] flex flex-col z-40 select-none",
+        "h-screen bg-black border-r border-[#1e1e1e] flex flex-col z-40 select-none",
         isMobile
-          ? "w-[280px] max-w-[85vw] shadow-2xl"
-          : "w-[260px] fixed left-0 top-0 hidden lg:flex"
+          ? "w-[260px] max-w-[85vw] shadow-2xl"
+          : "w-[240px] fixed left-0 top-0 hidden lg:flex"
       )}
     >
       {/* Brand Header */}
-      <div className="p-5 pb-4 border-b border-[#1c1c1c] flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-white text-black flex items-center justify-center font-bold text-sm tracking-tighter shadow-md">
-            <Layers className="w-4 h-4" />
+      <div className="p-4 pb-3.5 border-b border-[#1a1a1a] flex items-center justify-between">
+        <div className="flex items-center gap-2.5">
+          <div className="w-6 h-6 rounded-md bg-white text-black flex items-center justify-center font-bold text-xs shrink-0">
+            <Layers className="w-3.5 h-3.5" />
           </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-bold text-white tracking-tight">
-                RE:Track
-              </span>
-              <span className="text-[10px] font-mono font-medium px-1.5 py-0.5 rounded bg-[#1f1f1f] text-neutral-400 border border-[#2f2f2f]">
-                v0.1
-              </span>
-            </div>
-            <span className="text-[11px] font-mono text-neutral-400 block">
-              Context Engine
+          <div className="flex items-center gap-1.5">
+            <span className="text-sm font-semibold text-white tracking-tight">
+              RE:Track
+            </span>
+            <span className="text-[10px] text-neutral-500 font-mono">
+              v0.1
             </span>
           </div>
         </div>
@@ -149,7 +91,7 @@ export function Sidebar({ onNewIndex, onCloseMobile, isMobile = false }: Sidebar
         {isMobile && (
           <button
             onClick={onCloseMobile}
-            className="p-1.5 rounded-lg text-neutral-400 hover:text-white hover:bg-[#1f1f1f] transition-colors"
+            className="p-1 rounded-md text-neutral-400 hover:text-white hover:bg-[#141414] transition-colors"
           >
             <X className="w-4 h-4" />
           </button>
@@ -157,22 +99,22 @@ export function Sidebar({ onNewIndex, onCloseMobile, isMobile = false }: Sidebar
       </div>
 
       {/* Primary Action Button */}
-      <div className="p-3.5 pb-2">
+      <div className="px-3 pt-3 pb-1.5">
         <button
           onClick={() => {
             if (isMobile && onCloseMobile) onCloseMobile();
             onNewIndex?.();
           }}
-          className="w-full h-10 rounded-lg bg-white text-black font-semibold text-xs flex items-center justify-center gap-2 hover:bg-neutral-200 transition-colors shadow-sm font-mono tracking-tight cursor-pointer"
+          className="w-full h-8.5 rounded-md bg-white text-black font-medium text-xs flex items-center justify-center gap-1.5 hover:bg-neutral-200 transition-colors shadow-xs cursor-pointer"
         >
-          <Plus className="w-4 h-4 text-black stroke-[2.5]" />
+          <Plus className="w-3.5 h-3.5 text-black stroke-[2.5]" />
           <span>Index Repository</span>
         </button>
       </div>
 
       {/* Navigation Links */}
       <ScrollArea className="flex-1 px-3 py-2">
-        <div className="space-y-1">
+        <div className="space-y-0.5">
           {navItems.map((item) => (
             <NavLink
               key={item.to}
@@ -181,28 +123,28 @@ export function Sidebar({ onNewIndex, onCloseMobile, isMobile = false }: Sidebar
               onClick={handleNavClick}
               className={({ isActive }) =>
                 cn(
-                  "flex items-center justify-between px-3 py-2.5 rounded-lg text-xs font-medium group select-none transition-all",
+                  "flex items-center justify-between px-2.5 py-2 rounded-md text-xs font-normal group transition-colors",
                   isActive
-                    ? "bg-[#141414] text-white font-semibold border border-[#2a2a2a] shadow-xs"
-                    : "text-neutral-400 hover:text-white hover:bg-[#0f0f0f] border border-transparent"
+                    ? "bg-[#181818] text-white font-medium"
+                    : "text-neutral-400 hover:text-white hover:bg-[#121212]"
                 )
               }
             >
               {({ isActive }) => (
                 <>
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2.5">
                     <item.icon
                       className={cn(
                         "w-4 h-4 transition-colors",
                         isActive
                           ? "text-white"
-                          : "text-neutral-400 group-hover:text-white"
+                          : "text-neutral-500 group-hover:text-neutral-300"
                       )}
                     />
                     <span>{item.label}</span>
                   </div>
                   {isActive && (
-                    <span className="w-1.5 h-1.5 rounded-full bg-white shadow-[0_0_6px_#ffffff]" />
+                    <span className="w-1 h-1 rounded-full bg-white" />
                   )}
                 </>
               )}
@@ -211,106 +153,77 @@ export function Sidebar({ onNewIndex, onCloseMobile, isMobile = false }: Sidebar
         </div>
       </ScrollArea>
 
-      {/* Telemetry Hardware Deck */}
-      <div className="p-4 border-t border-[#1c1c1c] bg-[#080808] space-y-3">
-        {/* Header row */}
+      {/* Engine Core Status Deck (Restrained & Calm) */}
+      <div className="p-3 border-t border-[#1a1a1a] bg-[#050505] space-y-2">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 min-w-0">
             <span
               className={cn(
-                "w-2 h-2 rounded-full",
+                "w-1.5 h-1.5 rounded-full shrink-0",
                 engineOk
-                  ? "bg-emerald-400 shadow-[0_0_8px_#34d399]"
+                  ? "bg-emerald-400"
                   : backendOnline
-                  ? "bg-amber-400 shadow-[0_0_8px_#fbbf24]"
+                  ? "bg-amber-400"
                   : "bg-red-500"
               )}
             />
-            <span className="text-white font-semibold text-[11px] font-mono">
-              Engine Core
-            </span>
-            <span
-              className={cn(
-                "text-[9px] font-mono uppercase px-1.5 py-0.5 rounded border",
-                engineOk
-                  ? "text-emerald-400 border-emerald-500/30 bg-emerald-500/10"
-                  : backendOnline
-                  ? "text-amber-400 border-amber-500/30 bg-amber-500/10"
-                  : "text-neutral-500 border-neutral-700 bg-neutral-900"
-              )}
+            <div className="min-w-0">
+              <div className="text-xs font-medium text-neutral-200 truncate">
+                {engineOk ? "Engine ready" : backendOnline ? "Engine degraded" : "Engine offline"}
+              </div>
+              <div className="text-[11px] text-neutral-500 font-mono truncate">
+                {llmModel} · Local inference
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1 shrink-0">
+            <button
+              onClick={handleRefresh}
+              className="text-neutral-500 hover:text-white p-1 rounded hover:bg-[#141414] transition-colors cursor-pointer"
+              title="Refresh telemetry"
             >
-              {engineOk ? "Ready" : backendOnline ? "Degraded" : "Offline"}
-            </span>
-          </div>
-
-          <button
-            onClick={handleRefresh}
-            className="text-neutral-400 hover:text-white p-1 rounded-md hover:bg-[#1f1f1f] transition-colors cursor-pointer"
-            title="Refresh engine & hardware metrics"
-          >
-            <RefreshCw className={cn("w-3 h-3", refreshing && "animate-spin text-white")} />
-          </button>
-        </div>
-
-        {/* AI provider status rows */}
-        <div className="rounded-lg bg-[#0e0e0e] border border-[#222222] px-2.5 py-1.5 space-y-0.5 font-mono">
-          <ProviderRow
-            icon={Zap}
-            label={llmModel ? `Ollama · ${llmModel}` : "Ollama"}
-            online={ollamaRunning}
-          />
-          <div className="border-t border-[#1a1a1a]" />
-          <ProviderRow
-            icon={Network}
-            label={embedModel ? `Embed · ${embedModel}` : "Embeddings"}
-            online={ollamaRunning && !!embedModel}
-          />
-          <div className="border-t border-[#1a1a1a]" />
-          <ProviderRow
-            icon={Brain}
-            label="Cognee"
-            online={!!cogneeIdle}
-          />
-        </div>
-
-        {/* Hardware telemetry grid */}
-        <div className="space-y-1.5 font-mono text-[11px]">
-          <div className="grid grid-cols-2 gap-1.5">
-            <div className="p-2 rounded-lg bg-[#0e0e0e] border border-[#222222] flex flex-col gap-0.5">
-              <div className="flex items-center gap-1.5 text-neutral-400 text-[10px]">
-                <HardDrive className="w-3 h-3 text-neutral-300" />
-                <span>RAM</span>
-              </div>
-              <div className="text-white font-bold">
-                {ramUsed > 0 ? ramUsed.toFixed(1) : "--"}{" "}
-                <span className="text-neutral-400 font-normal text-[10px]">/ {ramTotal.toFixed(0)}G</span>
-              </div>
-            </div>
-
-            <div className="p-2 rounded-lg bg-[#0e0e0e] border border-[#222222] flex flex-col gap-0.5">
-              <div className="flex items-center gap-1.5 text-neutral-400 text-[10px]">
-                <Activity className="w-3 h-3 text-neutral-300" />
-                <span>CPU</span>
-              </div>
-              <div className="text-white font-bold">
-                {cpuPct > 0 ? `${cpuPct}%` : "Idle"}
-              </div>
-            </div>
-          </div>
-
-          <div className="p-2 rounded-lg bg-[#0e0e0e] border border-[#222222] flex items-center justify-between">
-            <div className="flex items-center gap-1.5 text-neutral-400 text-[10px]">
-              <Cpu className="w-3 h-3 text-neutral-300" />
-              <span>VRAM (GPU)</span>
-            </div>
-            <div className="text-white font-bold">
-              {vramTotal > 0
-                ? `${vramUsed.toFixed(1)} / ${vramTotal.toFixed(0)}G`
-                : "-- / -- GB"}
-            </div>
+              <RefreshCw className={cn("w-3 h-3", refreshing && "animate-spin text-white")} />
+            </button>
+            <button
+              onClick={() => setShowDetails(!showDetails)}
+              className="text-neutral-500 hover:text-white p-1 rounded hover:bg-[#141414] transition-colors cursor-pointer"
+              title={showDetails ? "Hide hardware stats" : "Show hardware stats"}
+            >
+              {showDetails ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />}
+            </button>
           </div>
         </div>
+
+        {/* Detailed Hardware Stats (Collapsible/Flattened) */}
+        {showDetails && (
+          <div className="pt-2 border-t border-[#181818] space-y-1.5 text-[11px] font-mono text-neutral-400">
+            <div className="flex items-center justify-between">
+              <span className="text-neutral-500">RAM</span>
+              <span className="text-neutral-200">
+                {ramUsed > 0 ? ramUsed.toFixed(1) : "--"} / {ramTotal.toFixed(0)} GB
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-neutral-500">CPU</span>
+              <span className="text-neutral-200">{cpuPct > 0 ? `${cpuPct}%` : "Idle"}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-neutral-500">VRAM</span>
+              <span className="text-neutral-200">
+                {vramTotal > 0 ? `${vramUsed.toFixed(1)} / ${vramTotal.toFixed(0)} GB` : "--"}
+              </span>
+            </div>
+            <div className="flex items-center justify-between pt-1 border-t border-[#181818]">
+              <span className="text-neutral-500">Cognee</span>
+              <span className={cn(cogneeIdle ? "text-emerald-400" : "text-neutral-500")}>
+                {cogneeIdle ? "ready" : "offline"}
+              </span>
+            </div>
+          </div>
+        )}
       </div>
     </aside>
   );
 }
+

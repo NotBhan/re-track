@@ -379,22 +379,22 @@ export default function ContextStudio() {
       <main className="flex-1 min-h-0 flex flex-col lg:flex-row overflow-hidden p-4 sm:p-6 gap-6 max-w-[1900px] w-full mx-auto">
         {/* Left Column: Prompt Workbench & AST Topology */}
         <div
-          className={`w-full lg:w-[48%] xl:w-[45%] flex-shrink-0 flex flex-col h-full min-h-0 bg-[#0a0a0a] rounded-xl border border-[#262626] shadow-2xl overflow-hidden ${
+          className={`w-full lg:w-[48%] xl:w-[45%] flex-shrink-0 flex flex-col h-full min-h-0 bg-[#0a0a0a] rounded-lg border border-[#1e1e1e] overflow-hidden ${
             mobileTab === "package" ? "hidden lg:flex" : "flex"
           }`}
         >
           {/* Inner Tab Control (Prompt Workbench vs Call Graph) */}
-          <div className="p-4 border-b border-[#262626] bg-[#0d0d0d] flex items-center justify-between gap-3 shrink-0">
-            <div className="flex items-center gap-1 bg-black p-1 rounded-lg border border-[#262626]">
+          <div className="p-3 border-b border-[#1a1a1a] bg-[#080808] flex items-center justify-between gap-3 shrink-0">
+            <div className="flex items-center gap-1 bg-black p-0.5 rounded-md border border-[#222222]">
               <button
                 onClick={() => {
                   setDesktopTab("workspace");
                   setMobileTab("prompt");
                 }}
                 className={cn(
-                  "px-3 py-1.5 text-xs font-mono rounded-md transition-all flex items-center gap-1.5 cursor-pointer",
+                  "px-2.5 py-1 text-xs rounded transition-colors flex items-center gap-1.5 cursor-pointer",
                   desktopTab === "workspace"
-                    ? "bg-white text-black font-semibold shadow-xs"
+                    ? "bg-white text-black font-medium shadow-xs"
                     : "text-neutral-400 hover:text-white"
                 )}
               >
@@ -408,9 +408,9 @@ export default function ContextStudio() {
                   setMobileTab("topology");
                 }}
                 className={cn(
-                  "px-3 py-1.5 text-xs font-mono rounded-md transition-all flex items-center gap-1.5 cursor-pointer",
+                  "px-2.5 py-1 text-xs rounded transition-colors flex items-center gap-1.5 cursor-pointer",
                   desktopTab === "tree"
-                    ? "bg-white text-black font-semibold shadow-xs"
+                    ? "bg-white text-black font-medium shadow-xs"
                     : "text-neutral-400 hover:text-white"
                 )}
               >
@@ -419,22 +419,22 @@ export default function ContextStudio() {
               </button>
             </div>
 
-            <Badge variant="outline" className="text-[10px] font-mono border-[#333] hidden sm:inline-flex">
-              Ctrl+Enter to Synthesize
-            </Badge>
+            <span className="text-[11px] font-mono text-neutral-500 hidden sm:inline">
+              Ctrl+Enter to synthesize
+            </span>
           </div>
 
           {/* Workbench Tab Content */}
-          <div className="flex-1 min-h-0 overflow-y-auto p-5 space-y-5">
+          <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4">
             {desktopTab === "workspace" ? (
               <>
-                {/* Preset Prompt Template Chips */}
+                {/* Suggested Prompts */}
                 <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <label className="text-[11px] font-mono uppercase tracking-wider text-neutral-400 flex items-center gap-2">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-xs font-medium text-neutral-300 flex items-center gap-2">
                       <span>Suggested Prompts</span>
                       {promptSource === "ai" && (
-                        <Badge variant="outline" className="text-[9px] font-mono border-emerald-500/40 text-emerald-400 bg-emerald-950/30 px-1.5 py-0">
+                        <Badge variant="success" className="text-[10px] font-mono px-1 py-0">
                           AI Generated
                         </Badge>
                       )}
@@ -443,8 +443,8 @@ export default function ContextStudio() {
                       type="button"
                       onClick={() => handleFetchSuggestedPrompts(true)}
                       disabled={loadingPrompts}
-                      className="text-[11px] font-mono text-neutral-400 hover:text-white flex items-center gap-1 cursor-pointer transition-colors px-2 py-0.5 rounded border border-[#262626] hover:border-[#444] bg-black"
-                      title="Generate fresh AI prompts for this codebase using the active LLM"
+                      className="text-xs text-neutral-400 hover:text-white flex items-center gap-1 cursor-pointer transition-colors px-2 py-0.5 rounded border border-[#222222] bg-[#0c0c0c]"
+                      title="Generate fresh prompts grounded in AST symbols"
                     >
                       {loadingPrompts ? (
                         <Loader2 className="w-3 h-3 animate-spin text-white" />
@@ -460,10 +460,10 @@ export default function ContextStudio() {
                         key={p.label + p.prompt}
                         onClick={() => setTaskPrompt(p.prompt)}
                         className={cn(
-                          "text-xs font-mono px-2.5 py-1 rounded-lg border transition-all cursor-pointer",
+                          "text-xs px-2.5 py-1 rounded-md border transition-colors cursor-pointer text-left",
                           taskPrompt === p.prompt
                             ? "bg-white text-black border-white font-medium shadow-xs"
-                            : "bg-black border-[#262626] text-neutral-300 hover:text-white hover:border-[#404040]"
+                            : "bg-[#0c0c0c] border-[#222222] text-neutral-300 hover:text-white hover:border-[#333333]"
                         )}
                       >
                         {p.label}
@@ -474,7 +474,7 @@ export default function ContextStudio() {
 
                 {/* Prompt Textarea */}
                 <div>
-                  <label className="text-[11px] font-mono uppercase tracking-wider text-neutral-400 block mb-2">
+                  <label className="text-xs font-medium text-neutral-300 block mb-1.5">
                     Development Task or Technical Question
                   </label>
                   <textarea
@@ -483,18 +483,18 @@ export default function ContextStudio() {
                     onChange={(e) => setTaskPrompt(e.target.value)}
                     onKeyDown={handleKeyDown}
                     placeholder="Type the feature, refactoring, or question for your local memory..."
-                    className="w-full bg-black border border-[#262626] rounded-xl p-4 text-xs sm:text-sm font-mono text-white placeholder:text-neutral-600 focus:outline-none focus:border-white transition-colors resize-none leading-relaxed"
+                    className="w-full bg-[#050505] border border-[#222222] rounded-md p-3 text-xs font-mono text-neutral-200 placeholder:text-neutral-600 focus:outline-none focus:border-white transition-colors resize-none leading-relaxed"
                   />
                 </div>
 
-                {/* Controls Bar: Token Slider & Constraints */}
-                <div className="bg-black p-4 rounded-xl border border-[#222222] space-y-4">
+                {/* Token Budget Constraint */}
+                <div className="bg-[#050505] p-3 rounded-md border border-[#1a1a1a] space-y-2">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-mono text-neutral-400 flex items-center gap-1.5">
-                      <Gauge className="w-3.5 h-3.5 text-white" />
+                    <span className="text-xs text-neutral-300 flex items-center gap-1.5">
+                      <Gauge className="w-3.5 h-3.5 text-neutral-400" />
                       Token Budget Constraint
                     </span>
-                    <span className="text-xs font-mono font-bold text-white">
+                    <span className="text-xs font-mono font-medium text-neutral-200">
                       {maxTokens.toLocaleString()} max tokens
                     </span>
                   </div>
@@ -506,41 +506,41 @@ export default function ContextStudio() {
                     step={1000}
                     value={maxTokens}
                     onChange={(e) => setMaxTokens(Number(e.target.value))}
-                    className="w-full accent-white h-1.5 bg-[#1f1f1f] rounded-lg cursor-pointer"
+                    className="w-full accent-white h-1 bg-[#1a1a1a] rounded cursor-pointer"
                   />
                 </div>
 
-                {/* Intent Parser & Hallucination Guard Feedback */}
+                {/* Intent Parser & Guardrails Feedback */}
                 {agentResponse && !loading && (
                   <motion.div
-                    initial={{ opacity: 0, y: 6 }}
+                    initial={{ opacity: 0, y: 4 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="bg-black rounded-xl border border-[#222222] p-4 space-y-3"
+                    className="bg-[#050505] rounded-md border border-[#1a1a1a] p-3 space-y-2.5"
                   >
-                    <div className="flex items-center justify-between border-b border-[#222] pb-2">
-                      <span className="text-xs font-mono font-semibold text-white flex items-center gap-2">
-                        <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                    <div className="flex items-center justify-between border-b border-[#181818] pb-1.5">
+                      <span className="text-xs font-medium text-neutral-200 flex items-center gap-1.5">
+                        <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
                         Intent Parser &amp; Guardrails
                       </span>
-                      <Badge variant="outline" className="text-[10px] font-mono border-[#333] text-neutral-300">
+                      <Badge variant="outline" className="text-[10px] font-mono">
                         {agentResponse.intent_category || "Semantic Query"}
                       </Badge>
                     </div>
 
-                    <p className="text-xs font-sans text-neutral-300 leading-relaxed">
+                    <p className="text-xs text-neutral-300 leading-relaxed">
                       {agentResponse.task_summary}
                     </p>
 
                     {agentResponse.extracted_symbols && agentResponse.extracted_symbols.length > 0 && (
                       <div>
-                        <span className="text-[10px] font-mono uppercase text-neutral-500 block mb-1">
+                        <span className="text-[11px] text-neutral-500 block mb-1">
                           Extracted Symbols:
                         </span>
                         <div className="flex flex-wrap gap-1">
                           {agentResponse.extracted_symbols.map((sym) => (
                             <span
                               key={sym}
-                              className="text-[11px] font-mono bg-[#141414] border border-[#2a2a2a] px-2 py-0.5 rounded text-neutral-300"
+                              className="text-[11px] font-mono bg-[#101010] border border-[#222222] px-1.5 py-0.5 rounded text-neutral-300"
                             >
                               {sym}
                             </span>
@@ -553,7 +553,7 @@ export default function ContextStudio() {
               </>
             ) : (
               /* AST Call Graph Tab */
-              <div className="h-full min-h-[420px]">
+              <div className="h-full min-h-[400px]">
                 <CallGraphView
                   nodes={callGraphNodes}
                   edges={callGraphEdges}
@@ -563,18 +563,18 @@ export default function ContextStudio() {
           </div>
 
           {/* Workbench Footer Action */}
-          <div className="p-4 border-t border-[#262626] bg-[#0d0d0d] flex items-center justify-between gap-3 shrink-0">
-            <span className="text-xs font-mono text-neutral-400 hidden sm:inline">
+          <div className="p-3 border-t border-[#1a1a1a] bg-[#080808] flex items-center justify-between gap-3 shrink-0">
+            <span className="text-xs text-neutral-500 hidden sm:inline">
               {loading ? "Processing local memory graph..." : "Ready to query Cognee memory graph"}
             </span>
 
             {loading ? (
               <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
                 <Button
-                  variant="outline"
+                  variant="destructive"
                   size="sm"
                   onClick={handleCancelSynthesis}
-                  className="h-9 px-3 text-xs font-mono border-red-500/30 bg-red-950/20 text-red-300 hover:bg-red-900/30 gap-1.5 cursor-pointer"
+                  className="h-8 px-3 text-xs gap-1 cursor-pointer"
                 >
                   <X className="w-3.5 h-3.5" />
                   <span>Cancel</span>
@@ -582,9 +582,10 @@ export default function ContextStudio() {
 
                 <Button
                   disabled
-                  className="h-9 px-4 text-xs font-mono font-bold bg-white/20 text-white gap-2 cursor-not-allowed"
+                  size="sm"
+                  className="h-8 px-4 text-xs font-medium bg-neutral-800 text-neutral-400 gap-1.5 cursor-not-allowed"
                 >
-                  <Loader2 className="w-4 h-4 animate-spin text-white" />
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
                   <span>Synthesizing...</span>
                 </Button>
               </div>
@@ -592,9 +593,10 @@ export default function ContextStudio() {
               <Button
                 disabled={cooldown > 0 || !taskPrompt.trim()}
                 onClick={handleSynthesize}
-                className="w-full sm:w-auto h-9 px-5 text-xs font-mono font-bold bg-white text-black hover:bg-neutral-200 gap-2 shadow-md cursor-pointer ml-auto"
+                size="sm"
+                className="w-full sm:w-auto h-8 px-4 text-xs font-medium bg-white text-black hover:bg-neutral-200 gap-1.5 shadow-xs cursor-pointer ml-auto"
               >
-                <Play className="w-4 h-4 fill-black" />
+                <Play className="w-3.5 h-3.5 fill-black" />
                 <span>{agentResponse ? "Re-synthesize Context" : "Synthesize Context Package"}</span>
               </Button>
             )}
@@ -603,38 +605,38 @@ export default function ContextStudio() {
 
         {/* Right Column: Generated Context Package */}
         <div
-          className={`flex-1 min-h-0 flex flex-col h-full bg-[#0a0a0a] rounded-xl border border-[#262626] shadow-2xl overflow-hidden ${
+          className={`flex-1 min-h-0 flex flex-col h-full bg-[#0a0a0a] rounded-lg border border-[#1e1e1e] overflow-hidden ${
             mobileTab !== "package" ? "hidden lg:flex" : "flex"
           }`}
         >
           {/* Header & Export Actions */}
-          <div className="p-4 border-b border-[#262626] bg-[#0d0d0d] flex items-center justify-between gap-3 shrink-0">
+          <div className="p-3 border-b border-[#1a1a1a] bg-[#080808] flex items-center justify-between gap-3 shrink-0">
             <div className="flex items-center gap-2">
-              <FileText className="w-4 h-4 text-white" />
-              <h3 className="text-sm font-bold text-white tracking-tight">
+              <FileText className="w-3.5 h-3.5 text-neutral-300" />
+              <h3 className="text-xs font-semibold text-white tracking-tight">
                 Synthesized Context Package
               </h3>
               {loading ? (
-                <Badge variant="outline" className="text-[10px] font-mono border-amber-500/30 text-amber-300 bg-amber-500/10 flex items-center gap-1">
-                  <Loader2 className="w-3 h-3 animate-spin" />
+                <Badge variant="warning" className="text-[10px] font-mono flex items-center gap-1">
+                  <Loader2 className="w-2.5 h-2.5 animate-spin" />
                   <span>Re-synthesizing</span>
                 </Badge>
               ) : agentResponse ? (
-                <Badge variant="outline" className="text-[10px] font-mono border-emerald-500/30 text-emerald-400 bg-emerald-500/10">
+                <Badge variant="success" className="text-[10px] font-mono">
                   Ready
                 </Badge>
               ) : null}
             </div>
 
             {agentResponse && !loading && (
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5">
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={handleSaveToLibrary}
-                  className="h-8 px-2.5 text-xs font-mono border-[#333] bg-black text-neutral-300 hover:text-white gap-1.5 cursor-pointer"
+                  className="h-7 px-2 text-xs gap-1 cursor-pointer"
                 >
-                  <BookmarkPlus className="w-3.5 h-3.5 text-amber-400" />
+                  <BookmarkPlus className="w-3 h-3 text-amber-400" />
                   <span>{saved ? "Saved!" : "Save"}</span>
                 </Button>
 
@@ -642,35 +644,35 @@ export default function ContextStudio() {
                   variant="outline"
                   size="sm"
                   onClick={handleDownload}
-                  className="h-8 px-2.5 text-xs font-mono border-[#333] bg-black text-neutral-300 hover:text-white gap-1.5 cursor-pointer"
+                  className="h-7 px-2 text-xs gap-1 cursor-pointer"
                 >
-                  <Download className="w-3.5 h-3.5" />
+                  <Download className="w-3 h-3" />
                   <span className="hidden sm:inline">Export</span>
                 </Button>
 
                 <Button
                   size="sm"
                   onClick={handleCopy}
-                  className="h-8 px-3.5 text-xs font-mono font-bold bg-white text-black hover:bg-neutral-200 gap-1.5 shadow-sm cursor-pointer"
+                  className="h-7 px-2.5 text-xs font-medium bg-white text-black hover:bg-neutral-200 gap-1 shadow-xs cursor-pointer"
                 >
-                  {copied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                  {copied ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
                   <span>{copied ? "Copied!" : "Copy Context"}</span>
                 </Button>
               </div>
             )}
           </div>
 
-          {/* Package Content & Non-blocking Live Telemetry */}
-          <div className="flex-1 min-h-0 overflow-y-auto p-5 space-y-4 relative">
+          {/* Package Content & Telemetry */}
+          <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4 relative">
             {/* If synthesizing and already has a package, show live re-synthesis card overlay */}
             {loading && agentResponse && (
-              <div className="sticky top-0 z-20 mb-4">
+              <div className="sticky top-0 z-20 mb-3">
                 <SynthesisProgressBar
                   loading={loading}
                   onCancel={handleCancelSynthesis}
                   variant="card"
                   taskTitle={`Re-synthesizing for: "${taskPrompt}"`}
-                  className="w-full bg-[#0e0e0e] border border-[#333] shadow-2xl"
+                  className="w-full bg-[#0a0a0a] border border-[#262626] shadow-xl"
                 />
               </div>
             )}
@@ -691,31 +693,31 @@ export default function ContextStudio() {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: loading ? 0.5 : 1 }}
                 transition={{ duration: 0.2 }}
-                className="space-y-4"
+                className="space-y-3"
               >
-                {/* Telemetry reduction metrics bar */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-black border border-[#222222] rounded-xl p-3.5">
+                {/* Telemetry reduction metrics bar (Quiet & Flattened) */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-[#050505] border border-[#1a1a1a] rounded-md p-2.5 font-mono text-xs">
                   <div>
-                    <span className="text-[10px] font-mono text-neutral-400 uppercase block">Context Tokens</span>
-                    <span className="text-sm font-bold text-white font-mono">
+                    <span className="text-[10px] text-neutral-500 block">Context Tokens</span>
+                    <span className="font-medium text-neutral-200">
                       ~{agentResponse.estimated_tokens.toLocaleString()}
                     </span>
                   </div>
                   <div>
-                    <span className="text-[10px] font-mono text-neutral-400 uppercase block">Raw Repo Size</span>
-                    <span className="text-sm font-bold text-neutral-400 font-mono line-through">
+                    <span className="text-[10px] text-neutral-500 block">Raw Repo Size</span>
+                    <span className="text-neutral-500 line-through">
                       ~{((activeRepo.file_count || 100) * 350).toLocaleString()}
                     </span>
                   </div>
                   <div>
-                    <span className="text-[10px] font-mono text-neutral-400 uppercase block">Generation Time</span>
-                    <span className="text-sm font-bold text-emerald-400 font-mono">
+                    <span className="text-[10px] text-neutral-500 block">Generation Time</span>
+                    <span className="text-emerald-400 font-medium">
                       {agentResponse.generation_time_ms ? `${agentResponse.generation_time_ms}ms` : "< 350ms"}
                     </span>
                   </div>
                   <div>
-                    <span className="text-[10px] font-mono text-neutral-400 uppercase block">Context Reduction</span>
-                    <span className="text-sm font-bold text-emerald-400 font-mono">
+                    <span className="text-[10px] text-neutral-500 block">Context Reduction</span>
+                    <span className="text-emerald-400 font-medium">
                       ~92% Savings
                     </span>
                   </div>
@@ -728,14 +730,14 @@ export default function ContextStudio() {
                 <ProgressiveMarkdownReveal markdown={agentResponse.context_markdown} />
               </motion.div>
             ) : (
-              <div className="h-full flex flex-col items-center justify-center p-12 text-center">
-                <div className="w-14 h-14 rounded-2xl bg-black border border-[#262626] flex items-center justify-center mb-4 text-neutral-500 shadow-xl">
-                  <Sparkles className="w-7 h-7 text-neutral-400" />
+              <div className="h-full flex flex-col items-center justify-center p-8 text-center">
+                <div className="w-12 h-12 rounded-lg bg-[#0f0f0f] border border-[#222222] flex items-center justify-center mb-3 text-neutral-400">
+                  <Sparkles className="w-5 h-5 text-neutral-400" />
                 </div>
-                <h4 className="text-base font-bold text-white tracking-tight">
+                <h4 className="text-sm font-semibold text-white tracking-tight">
                   No Context Package Generated Yet
                 </h4>
-                <p className="text-xs font-mono text-neutral-400 mt-2 max-w-sm leading-relaxed">
+                <p className="text-xs text-neutral-500 mt-1 max-w-sm leading-relaxed">
                   Enter your task in the Prompt Workbench on the left and click &ldquo;Synthesize Context Package&rdquo; to retrieve compact memories.
                 </p>
               </div>
