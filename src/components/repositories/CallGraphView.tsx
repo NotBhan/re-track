@@ -63,6 +63,17 @@ const LINK_DISTANCE = 95;
 const CENTERING = 0.05;
 const DAMPING = 0.85;
 
+function normalizeKind(kind?: string): string {
+  if (!kind) return "function";
+  const k = kind.toLowerCase().trim();
+  if (k === "classes") return "class";
+  if (k === "functions") return "function";
+  if (k === "methods") return "method";
+  if (k === "components") return "component";
+  if (k === "modules") return "module";
+  return k;
+}
+
 interface SimNode extends CallGraphNode {
   x: number;
   y: number;
@@ -104,7 +115,8 @@ export function CallGraphView({
   // Filter nodes
   const filteredNodes = useMemo(() => {
     return rawNodes.filter((node) => {
-      const matchesKind = selectedKind === "all" || node.kind === selectedKind;
+      const nodeKind = normalizeKind(node.kind);
+      const matchesKind = selectedKind === "all" || nodeKind === selectedKind.toLowerCase();
       const matchesSearch =
         !searchQuery ||
         node.label.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -120,7 +132,8 @@ export function CallGraphView({
   const filteredEdges = useMemo(() => {
     const results: CallGraphEdge[] = [];
     for (const edge of rawEdges) {
-      const matchesKind = selectedEdgeKind === "all" || edge.kind === selectedEdgeKind;
+      const edgeKind = (edge.kind || "").toLowerCase().trim();
+      const matchesKind = selectedEdgeKind === "all" || edgeKind === selectedEdgeKind.toLowerCase();
       if (!matchesKind) continue;
 
       let sId: string | null = null;
@@ -536,12 +549,13 @@ export function CallGraphView({
               const isConnected = connectedNodeIds ? connectedNodeIds.has(node.id) : true;
               const isDimmed = connectedNodeIds !== null && !isConnected;
 
-              const fill = NODE_KIND_BG[node.kind] || "#171717";
+              const kind = normalizeKind(node.kind);
+              const fill = NODE_KIND_BG[kind] || "#171717";
               const stroke = isSelected
                 ? "#ffffff"
                 : isHovered
                 ? "#ffffff"
-                : NODE_KIND_STROKE[node.kind] || "#737373";
+                : NODE_KIND_STROKE[kind] || "#737373";
 
               return (
                 <g
@@ -568,7 +582,7 @@ export function CallGraphView({
                   )}
 
                   {/* Node Shape */}
-                  {node.kind === "class" ? (
+                  {kind === "class" ? (
                     <rect
                       x={-RADIUS}
                       y={-RADIUS}
@@ -579,7 +593,7 @@ export function CallGraphView({
                       stroke={stroke}
                       strokeWidth={isSelected ? 2.5 : isHovered ? 2 : 1.2}
                     />
-                  ) : node.kind === "component" ? (
+                  ) : kind === "component" ? (
                     <polygon
                       points={`0,${-RADIUS - 2} ${RADIUS + 2},0 0,${RADIUS + 2} ${-RADIUS - 2},0`}
                       fill={fill}
@@ -599,17 +613,19 @@ export function CallGraphView({
                   <text
                     textAnchor="middle"
                     dominantBaseline="central"
-                    fill={isSelected ? "#ffffff" : NODE_KIND_COLOR[node.kind] || "#ffffff"}
+                    fill={isSelected ? "#ffffff" : NODE_KIND_COLOR[kind] || "#ffffff"}
                     fontSize={10}
                     fontFamily="monospace"
                     fontWeight="bold"
                   >
-                    {node.kind === "class"
+                    {kind === "class"
                       ? "C"
-                      : node.kind === "component"
+                      : kind === "component"
                       ? "◇"
-                      : node.kind === "method"
+                      : kind === "method"
                       ? "m"
+                      : kind === "module"
+                      ? "M"
                       : "ƒ"}
                   </text>
 

@@ -18,6 +18,8 @@ import {
   Loader2,
   AlertCircle,
   X,
+  PanelRightClose,
+  PanelRightOpen,
 } from "lucide-react";
 import { getAgentContext, AgentContextResponse } from "@/lib/api";
 import { useRepositoryStore } from "@/stores/repository-store";
@@ -59,6 +61,8 @@ export default function ContextStudio() {
   const [mobileTab, setMobileTab] = useState<"prompt" | "topology" | "package">("prompt");
   // Desktop inner tab: 'workspace' (prompt) vs 'tree' (AST/topology)
   const [desktopTab, setDesktopTab] = useState<"workspace" | "tree">("workspace");
+  // Local session state for collapsing context pane in AST Call Graph mode
+  const [isContextPaneCollapsed, setIsContextPaneCollapsed] = useState(false);
 
   const [repoDropdownOpen, setRepoDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -105,8 +109,11 @@ export default function ContextStudio() {
 
   // Extract call graph nodes and edges
   const callGraphNodes: CallGraphNode[] = useMemo(() => {
+    if (activeRepo?.call_graph_nodes && Array.isArray(activeRepo.call_graph_nodes)) {
+      return activeRepo.call_graph_nodes;
+    }
     if (activeRepo?.metadata?.call_graph_nodes && Array.isArray(activeRepo.metadata.call_graph_nodes)) {
-      return activeRepo.metadata.call_graph_nodes;
+      return activeRepo.metadata.call_graph_nodes as CallGraphNode[];
     }
     return [
       { id: "App", label: "App", file: "src/App.tsx", kind: "component" },
@@ -118,8 +125,11 @@ export default function ContextStudio() {
   }, [activeRepo]);
 
   const callGraphEdges: CallGraphEdge[] = useMemo(() => {
+    if (activeRepo?.call_graph_edges && Array.isArray(activeRepo.call_graph_edges)) {
+      return activeRepo.call_graph_edges;
+    }
     if (activeRepo?.metadata?.call_graph_edges && Array.isArray(activeRepo.metadata.call_graph_edges)) {
-      return activeRepo.metadata.call_graph_edges;
+      return activeRepo.metadata.call_graph_edges as CallGraphEdge[];
     }
     return [
       { source: "App", target: "ContextStudio", kind: "renders" },
@@ -234,7 +244,7 @@ export default function ContextStudio() {
     }
   };
 
-  const isCallGraphExpanded = desktopTab === "tree" && !agentResponse;
+  const isCallGraphExpanded = desktopTab === "tree" && isContextPaneCollapsed;
 
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden bg-black text-foreground antialiased font-sans">
@@ -247,19 +257,19 @@ export default function ContextStudio() {
           <div ref={dropdownRef} className="relative">
             <button
               onClick={() => setRepoDropdownOpen(!repoDropdownOpen)}
-              className="h-8 px-2.5 sm:px-3 rounded-lg border border-[#262626] bg-[#0a0a0a] text-white hover:border-[#404040] transition-colors flex items-center gap-2 text-xs font-mono cursor-pointer"
+              className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-[#0a0a0a] border border-[#222222] hover:border-[#333333] text-xs font-medium text-white transition-colors cursor-pointer"
             >
-              <GitBranch className="w-3.5 h-3.5 text-white shrink-0" />
-              <span className="font-semibold truncate max-w-[110px] xs:max-w-[150px] sm:max-w-[200px]">{activeRepo.name}</span>
-              <ChevronDown className="w-3 h-3 text-neutral-400 shrink-0" />
+              <div className="w-2 h-2 rounded-full bg-emerald-500" />
+              <span className="truncate max-w-[140px] sm:max-w-[200px]">{activeRepo.name}</span>
+              <ChevronDown className="w-3.5 h-3.5 text-neutral-400" />
             </button>
 
             {repoDropdownOpen && (
-              <div className="absolute right-0 top-full mt-1.5 w-64 bg-black border border-[#2e2e2e] rounded-xl shadow-2xl z-50 py-1.5 overflow-hidden">
-                <div className="px-3 py-1.5 border-b border-[#222]">
-                  <span className="text-[10px] font-mono uppercase text-neutral-400">Select Codebase</span>
+              <div className="absolute left-0 mt-1 w-64 bg-[#0a0a0a] border border-[#262626] rounded-lg shadow-2xl py-1 z-50 animate-in fade-in-50 zoom-in-95">
+                <div className="px-3 py-1.5 text-[10px] font-mono text-neutral-500 uppercase tracking-wider border-b border-[#1f1f1f]">
+                  Select Workspace ({repositories.length})
                 </div>
-                <div className="max-h-48 overflow-y-auto py-1">
+                <div className="max-h-48 overflow-y-auto">
                   {repositories.map((r) => (
                     <button
                       key={r.id}
@@ -268,12 +278,12 @@ export default function ContextStudio() {
                         setRepoDropdownOpen(false);
                       }}
                       className={cn(
-                        "w-full px-3 py-2 text-left text-xs font-mono flex items-center justify-between hover:bg-[#1a1a1a] transition-colors cursor-pointer",
-                        r.id === activeRepo.id ? "text-white bg-[#141414] font-bold" : "text-neutral-300"
+                        "w-full text-left px-3 py-2 text-xs flex items-center justify-between hover:bg-[#141414] transition-colors cursor-pointer",
+                        r.id === activeRepo.id ? "text-white font-medium bg-[#121212]" : "text-neutral-400"
                       )}
                     >
                       <span className="truncate">{r.name}</span>
-                      {r.id === activeRepo.id && <Check className="w-3.5 h-3.5 text-emerald-400" />}
+                      {r.id === activeRepo.id && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />}
                     </button>
                   ))}
                 </div>
@@ -387,12 +397,38 @@ export default function ContextStudio() {
               </button>
             </div>
 
-            <span className="text-[11px] text-neutral-500 hidden sm:flex items-center gap-1.5 font-mono">
-              <span>Shortcut:</span>
-              <kbd className="px-1 py-0.5 rounded bg-[#141414] border border-[#262626] text-neutral-300 text-[10px]">
-                ⌘↵
-              </kbd>
-            </span>
+            {desktopTab === "tree" ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsContextPaneCollapsed((prev) => !prev)}
+                className="h-7 px-2.5 text-xs font-mono border-[#262626] bg-[#121212] text-neutral-300 hover:text-white hover:bg-[#1f1f1f] gap-1.5 cursor-pointer"
+                title={
+                  isContextPaneCollapsed
+                    ? "Restore split layout (expand Context pane)"
+                    : "Expand Call Graph (collapse Context pane)"
+                }
+              >
+                {isContextPaneCollapsed ? (
+                  <>
+                    <PanelRightOpen className="w-3.5 h-3.5 text-neutral-400" />
+                    <span className="hidden sm:inline">Split Layout</span>
+                  </>
+                ) : (
+                  <>
+                    <PanelRightClose className="w-3.5 h-3.5 text-neutral-400" />
+                    <span className="hidden sm:inline">Full Width</span>
+                  </>
+                )}
+              </Button>
+            ) : (
+              <span className="text-[11px] text-neutral-500 hidden sm:flex items-center gap-1.5 font-mono">
+                <span>Shortcut:</span>
+                <kbd className="px-1 py-0.5 rounded bg-[#141414] border border-[#262626] text-neutral-300 text-[10px]">
+                  ⌘↵
+                </kbd>
+              </span>
+            )}
           </div>
 
           {/* Workbench Tab Content */}
