@@ -201,6 +201,72 @@ export interface MemoryStatsResponse {
   graph_edges?: number | null;
 }
 
+export interface MemoryGraphNode {
+  id: string;
+  label: string;
+  kind: string;
+  type?: string | null;
+  properties?: Record<string, string>;
+}
+
+export interface MemoryGraphEdge {
+  source: string;
+  target: string;
+  kind: string;
+  relationship_type?: string | null;
+  properties?: Record<string, string>;
+}
+
+export interface MemoryGraphResponse {
+  success: boolean;
+  status: "extracted" | "not_extracted" | "extracting" | "failed";
+  nodes: MemoryGraphNode[];
+  edges: MemoryGraphEdge[];
+  total_nodes: number;
+  total_edges: number;
+  dataset_name?: string | null;
+  message: string;
+}
+
+export interface VectorDatasetInfo {
+  id: string;
+  name: string;
+  file_count: number;
+  size_bytes: number;
+  created_at?: string | null;
+  vector_status: "ready" | "indexing" | "empty" | string;
+  chunk_count: number;
+}
+
+export interface MemoryVectorsResponse {
+  success: boolean;
+  vector_db_provider: string;
+  embedding_model: string;
+  embedding_dimensions: number;
+  total_datasets: number;
+  total_files: number;
+  datasets: VectorDatasetInfo[];
+}
+
+export interface MemoryDataItem {
+  id: string;
+  name: string;
+  mime_type: string;
+  data_size: number;
+  created_at?: string | null;
+  extension: string;
+  content_hash: string;
+  pipeline_status?: Record<string, unknown>;
+}
+
+export interface DatasetDataItemsResponse {
+  success: boolean;
+  dataset_id: string;
+  dataset_name: string;
+  items: MemoryDataItem[];
+  total_count: number;
+}
+
 export interface BenchmarkResultItem {
   question: string;
   baseline_tokens?: number;
@@ -389,6 +455,27 @@ export async function getDashboardStats(): Promise<DashboardStats> {
  */
 export async function getMemoryStats(): Promise<MemoryStatsResponse> {
   return invoke<MemoryStatsResponse>("get_memory_stats");
+}
+
+/**
+ * Get authoritative Cognee Knowledge Graph nodes and edges.
+ */
+export async function getMemoryGraph(dataset?: string): Promise<MemoryGraphResponse> {
+  return invoke<MemoryGraphResponse>("get_memory_graph", { dataset });
+}
+
+/**
+ * Get authoritative Vector Space and embedding index statistics.
+ */
+export async function getMemoryVectors(): Promise<MemoryVectorsResponse> {
+  return invoke<MemoryVectorsResponse>("get_memory_vectors");
+}
+
+/**
+ * Get stored/ingested files and documents for a dataset.
+ */
+export async function getDatasetItems(datasetId: string): Promise<DatasetDataItemsResponse> {
+  return invoke<DatasetDataItemsResponse>("get_dataset_items", { datasetId });
 }
 
 /**

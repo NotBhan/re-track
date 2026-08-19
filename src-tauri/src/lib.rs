@@ -251,6 +251,25 @@ async fn get_settings() -> Result<serde_json::Value, String> {
 }
 
 #[tauri::command]
+async fn get_memory_graph(dataset: Option<String>) -> Result<serde_json::Value, String> {
+    let path = match dataset {
+        Some(d) => format!("/memory/graph?dataset={}", d),
+        None => "/memory/graph".to_string(),
+    };
+    http_get(&path).await
+}
+
+#[tauri::command]
+async fn get_memory_vectors() -> Result<serde_json::Value, String> {
+    http_get("/memory/vectors").await
+}
+
+#[tauri::command]
+async fn get_dataset_items(dataset_id: String) -> Result<serde_json::Value, String> {
+    http_get(&format!("/datasets/{}/items", dataset_id)).await
+}
+
+#[tauri::command]
 async fn update_cognee_settings(request: serde_json::Value) -> Result<serde_json::Value, String> {
     http_post("/settings/cognee", &request).await
 }
@@ -494,6 +513,9 @@ pub fn run() {
             get_repository_summaries,
             get_dashboard_stats,
             get_memory_stats,
+            get_memory_graph,
+            get_memory_vectors,
+            get_dataset_items,
             run_benchmark,
             list_repositories,
             create_repository,

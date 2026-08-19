@@ -3,7 +3,7 @@
 Serializable Pydantic models for Tauri IPC transport.
 """
 
-from typing import Optional
+from typing import Optional, Any
 
 from pydantic import BaseModel, Field
 
@@ -123,6 +123,89 @@ class DatasetListResponse(BaseModel):
     success: bool = Field(description="Whether the query succeeded")
     datasets: list[DatasetInfo] = Field(default_factory=list, description="List of datasets")
     total_count: int = Field(default=0, description="Total number of datasets")
+
+
+# --- Memory Graph & Vector Schemas ---
+
+
+class MemoryGraphNode(BaseModel):
+    """A node in the Cognee semantic knowledge graph."""
+
+    id: str = Field(description="Unique node identifier")
+    label: str = Field(description="Display label")
+    kind: str = Field(default="entity", description="Node kind (entity, concept, document, file)")
+    type: Optional[str] = Field(default=None, description="Entity type classification")
+    properties: dict[str, Any] = Field(default_factory=dict, description="Node attributes")
+
+
+class MemoryGraphEdge(BaseModel):
+    """A directed edge in the Cognee semantic knowledge graph."""
+
+    source: str = Field(description="Source node ID")
+    target: str = Field(description="Target node ID")
+    kind: str = Field(default="relates_to", description="Relationship classification")
+    relationship_type: Optional[str] = Field(default=None, description="Semantic relation")
+    properties: dict[str, Any] = Field(default_factory=dict, description="Edge attributes")
+
+
+class MemoryGraphResponse(BaseModel):
+    """Response containing Cognee Knowledge Graph topology."""
+
+    success: bool = Field(description="Whether the operation succeeded")
+    status: str = Field(description="Knowledge graph status: extracted, not_extracted, extracting, failed")
+    nodes: list[MemoryGraphNode] = Field(default_factory=list, description="Authoritative graph nodes")
+    edges: list[MemoryGraphEdge] = Field(default_factory=list, description="Authoritative graph edges")
+    total_nodes: int = Field(default=0, description="Total nodes count")
+    total_edges: int = Field(default=0, description="Total edges count")
+    dataset_name: Optional[str] = Field(default=None, description="Filtered dataset namespace")
+    message: str = Field(default="", description="Truthful explanatory status message")
+
+
+class VectorDatasetInfo(BaseModel):
+    """Authoritative vector index status for a dataset."""
+
+    id: str = Field(description="Dataset UUID")
+    name: str = Field(description="Dataset name")
+    file_count: int = Field(default=0, description="Number of source files")
+    size_bytes: int = Field(default=0, description="Size in bytes")
+    created_at: Optional[str] = Field(default=None, description="Creation timestamp")
+    vector_status: str = Field(default="ready", description="Vector index status (ready, indexing, empty)")
+    chunk_count: int = Field(default=0, description="Estimated vector chunk count")
+
+
+class MemoryVectorsResponse(BaseModel):
+    """Response containing vector space and embedding index details."""
+
+    success: bool = Field(description="Whether query succeeded")
+    vector_db_provider: str = Field(default="lancedb", description="Vector database provider")
+    embedding_model: str = Field(default="", description="Active embedding model")
+    embedding_dimensions: int = Field(default=768, description="Embedding vector dimensions")
+    total_datasets: int = Field(default=0, description="Total datasets count")
+    total_files: int = Field(default=0, description="Total source files indexed")
+    datasets: list[VectorDatasetInfo] = Field(default_factory=list, description="Vector datasets list")
+
+
+class MemoryDataItem(BaseModel):
+    """A single stored/ingested file or document in Cognee."""
+
+    id: str = Field(description="Data item UUID")
+    name: str = Field(description="Data item file or document name")
+    mime_type: str = Field(default="text/plain", description="MIME content type")
+    data_size: int = Field(default=0, description="Size in bytes")
+    created_at: Optional[str] = Field(default=None, description="Ingestion timestamp")
+    extension: str = Field(default="", description="File extension")
+    content_hash: str = Field(default="", description="Content SHA hash")
+    pipeline_status: dict[str, Any] = Field(default_factory=dict, description="Pipeline processing status")
+
+
+class DatasetDataItemsResponse(BaseModel):
+    """Response listing stored files/documents for a dataset."""
+
+    success: bool = Field(description="Whether query succeeded")
+    dataset_id: str = Field(description="Dataset UUID")
+    dataset_name: str = Field(description="Dataset name")
+    items: list[MemoryDataItem] = Field(default_factory=list, description="Stored data items")
+    total_count: int = Field(default=0, description="Total items count")
 
 
 # --- Repository Summary Schemas ---

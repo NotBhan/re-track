@@ -298,13 +298,16 @@ class CogneeService:
         try:
             logger.info("list_datasets()")
             raw_datasets = await cognee.datasets.list_datasets()
+            from cognee.modules.data.methods import get_dataset_data
 
             datasets: list[dict[str, Any]] = []
             for ds in raw_datasets:
                 file_count = 0
+                size_bytes = 0
                 try:
-                    data_items = await cognee.datasets.list_data(ds.id)
+                    data_items = await get_dataset_data(ds.id)
                     file_count = len(data_items)
+                    size_bytes = sum(getattr(it, "data_size", 0) or 0 for it in data_items)
                 except Exception:
                     pass
 
@@ -317,6 +320,7 @@ class CogneeService:
                     "name": ds.name or "",
                     "created_at": created,
                     "file_count": file_count,
+                    "size_bytes": size_bytes,
                 })
 
             logger.info("list_datasets() | count=%d", len(datasets))
@@ -325,40 +329,88 @@ class CogneeService:
             logger.error("list_datasets() failed: %s", e)
             raise CogneeServiceError(f"list_datasets() failed: {e}") from e
 
-    async def get_graph_stats(self) -> dict[str, int]:
-        """Get graph engine statistics if available.
+    async def get_dataset_data_items(self, dataset_id_or_name: str) -> list[dict[str, Any]]:
+        """Get all stored/ingested files and documents for a dataset.
+
+        Args:
+            dataset_id_or_name: UUID string or name of the dataset.
 
         Returns:
-            Dict with keys: graph_nodes, graph_edges.
-            Returns 0 for both if graph engine is not available.
-
-        Raises:
-            CogneeServiceError: If stats retrieval fails unexpectedly.
+            List of data item dicts with authoritative fields.
         """
         self._ensure_initialized()
         try:
-            # Try to access graph engine through Cognee's public API
-            # Cognee may expose graph_stats or similar methods
-            graph_nodes = 0
-            graph_edges = 0
+            from uuid import UUID
+            from cognee.modules.data.methods import get_dataset_data
 
-            # Attempt to get graph stats through cognee's graph module
+            target_id = None
             try:
-                if hasattr(cognee, "graph"):
-                    graph_module = cognee.graph
-                    if hasattr(graph_module, "get_node_count"):
-                        graph_nodes = await graph_module.get_node_count()
-                    if hasattr(graph_module, "get_edge_count"):
-                        graph_edges = await graph_module.get_edge_count()
-            except Exception:
-                # Graph engine not available or doesn't support stats
-                pass
+                target_id = UUID(dataset_id_or_name)
+            except ValueError:
+                # Resolve name to ID
+                raw_datasets = await cognee.datasets.list_datasets()
+                for ds in raw_datasets:
+                    if ds.name == dataset_id_or_name:
+                        target_id = ds.id
+                        break
 
-            return {"graph_nodes": graph_nodes, "graph_edges": graph_edges}
+            if target_id is None:
+                return []
+
+            data_items = await get_dataset_data(target_id)
+            results: list[dict[str, Any]] = []
+            for it in data_items:
+                created = None
+                if hasattr(it, "created_at") and it.created_at:
+                    created = it.created_at.isoformat() if hasattr(it.created_at, "isoformat") else str(it.created_at)
+
+                results.append({
+                    "id": str(it.id),
+                    "name": getattr(it, "name", "unknown"),
+                    "mime_type": getattr(it, "mime_type", "text/plain"),
+                    "data_size": getattr(it, "data_size", 0) or 0,
+                    "created_at": created,
+                    "extension": getattr(it, "extension", "") or "",
+                    "content_hash": getattr(it, "content_hash", "") or "",
+                    "pipeline_status": getattr(it, "pipeline_status", {}) or {},
+                })
+
+            return results
         except Exception as e:
-            # Gracefully return zeros if anything goes wrong
+            logger.warning("get_dataset_data_items failed: %s", e)
+            return []
+
+    async def get_graph_stats(self) -> dict[str, int]:
+        """Get graph engine statistics from Cognee graph engine.
+
+        Returns:
+            Dict with keys: graph_nodes, graph_edges.
+        """
+        self._ensure_initialized()
+        try:
+            from cognee.infrastructure.databases.graph.get_graph_engine import get_graph_engine
+            ge = await get_graph_engine()
+            nodes, edges = await ge.get_graph_data()
+            return {"graph_nodes": len(nodes), "graph_edges": len(edges)}
+        except Exception as e:
             logger.warning("get_graph_stats() failed, returning zeros: %s", e)
             return {"graph_nodes": 0, "graph_edges": 0}
+
+    async def get_graph_data(self) -> tuple[list[Any], list[Any]]:
+        """Get authoritative nodes and edges directly from the Cognee graph engine.
+
+        Returns:
+            Tuple of (nodes, edges).
+        """
+        self._ensure_initialized()
+        try:
+            from cognee.infrastructure.databases.graph.get_graph_engine import get_graph_engine
+            ge = await get_graph_engine()
+            nodes, edges = await ge.get_graph_data()
+            return nodes, edges
+        except Exception as e:
+            logger.warning("get_graph_data() failed: %s", e)
+            return [], []
 
     def _ensure_initialized(self) -> None:
         """Raise if service is not initialized."""

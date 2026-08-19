@@ -17,6 +17,9 @@ from app.api.commands import (
     get_backend_status,
     get_dashboard_stats,
     get_memory_stats,
+    get_memory_graph,
+    get_memory_vectors,
+    get_dataset_items,
     index_repository,
     generate_context,
     forget_dataset,
@@ -160,6 +163,33 @@ async def dashboard_stats_endpoint():
 async def memory_stats_endpoint():
     """Get memory topology statistics."""
     result = await get_memory_stats()
+    if isinstance(result, ErrorResponse):
+        raise HTTPException(status_code=500, detail=result.model_dump())
+    return result.model_dump()
+
+
+@app.get("/memory/graph")
+async def memory_graph_endpoint(dataset: str | None = None):
+    """Get authoritative Cognee knowledge graph nodes and edges."""
+    result = await get_memory_graph(dataset_name=dataset)
+    if isinstance(result, ErrorResponse):
+        raise HTTPException(status_code=500, detail=result.model_dump())
+    return result.model_dump()
+
+
+@app.get("/memory/vectors")
+async def memory_vectors_endpoint():
+    """Get authoritative vector space and embedding index details."""
+    result = await get_memory_vectors()
+    if isinstance(result, ErrorResponse):
+        raise HTTPException(status_code=500, detail=result.model_dump())
+    return result.model_dump()
+
+
+@app.get("/datasets/{dataset_id}/items")
+async def dataset_items_endpoint(dataset_id: str):
+    """Get stored/ingested files for a dataset."""
+    result = await get_dataset_items(dataset_id)
     if isinstance(result, ErrorResponse):
         raise HTTPException(status_code=500, detail=result.model_dump())
     return result.model_dump()

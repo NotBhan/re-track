@@ -31,6 +31,13 @@ from app.api.schemas import (
     IndexRepositoryRequest,
     IndexRepositoryResponse,
     MemoryStatsResponse,
+    MemoryGraphNode,
+    MemoryGraphEdge,
+    MemoryGraphResponse,
+    VectorDatasetInfo,
+    MemoryVectorsResponse,
+    MemoryDataItem,
+    DatasetDataItemsResponse,
     RepoArchInfo,
     RepoComponentInfo,
     RepositoryCreateRequest,
@@ -1187,6 +1194,198 @@ async def get_memory_stats() -> MemoryStatsResponse | ErrorResponse:
         return ErrorResponse(
             error=type(e).__name__,
             message=f"Failed to get memory stats: {e}",
+        )
+
+
+async def get_memory_graph(dataset_name: Optional[str] = None) -> MemoryGraphResponse | ErrorResponse:
+    """Return authoritative Knowledge Graph nodes and edges from Cognee memory engine."""
+    start = time.monotonic()
+    logger.info("command: get_memory_graph() | dataset=%s", dataset_name)
+
+    try:
+        if not _cognee_service or not _cognee_service.is_initialized:
+            return MemoryGraphResponse(
+                success=True,
+                status="not_extracted",
+                nodes=[],
+                edges=[],
+                total_nodes=0,
+                total_edges=0,
+                dataset_name=dataset_name,
+                message="Cognee memory service is not initialized.",
+            )
+
+        raw_nodes, raw_edges = await _cognee_service.get_graph_data()
+        nodes: list[MemoryGraphNode] = []
+        edges: list[MemoryGraphEdge] = []
+
+        for rn in raw_nodes:
+            nid = str(getattr(rn, "id", "") or (rn.get("id") if isinstance(rn, dict) else str(rn)))
+            label = str(getattr(rn, "name", "") or getattr(rn, "label", "") or (rn.get("name") if isinstance(rn, dict) else nid))
+            kind = str(getattr(rn, "kind", "") or (rn.get("kind") if isinstance(rn, dict) else "entity") or "entity")
+            node_type = str(getattr(rn, "type", "") or (rn.get("type") if isinstance(rn, dict) else "") or "")
+            props = {}
+            if hasattr(rn, "__dict__"):
+                props = {k: str(v) for k, v in rn.__dict__.items() if not k.startswith("_")}
+            elif isinstance(rn, dict):
+                props = {k: str(v) for k, v in rn.items()}
+
+            nodes.append(MemoryGraphNode(
+                id=nid,
+                label=label,
+                kind=kind,
+                type=node_type or None,
+                properties=props,
+            ))
+
+        for re in raw_edges:
+            src = str(getattr(re, "source", "") or (re.get("source") if isinstance(re, dict) else ""))
+            tgt = str(getattr(re, "target", "") or (re.get("target") if isinstance(re, dict) else ""))
+            kind = str(getattr(re, "kind", "") or (re.get("kind") if isinstance(re, dict) else "relates_to") or "relates_to")
+            rel_type = str(getattr(re, "relationship_type", "") or getattr(re, "type", "") or (re.get("type") if isinstance(re, dict) else "") or "")
+            props = {}
+            if hasattr(re, "__dict__"):
+                props = {k: str(v) for k, v in re.__dict__.items() if not k.startswith("_")}
+            elif isinstance(re, dict):
+                props = {k: str(v) for k, v in re.items()}
+
+            if src and tgt:
+                edges.append(MemoryGraphEdge(
+                    source=src,
+                    target=tgt,
+                    kind=kind,
+                    relationship_type=rel_type or None,
+                    properties=props,
+                ))
+
+        status = "extracted" if len(nodes) > 0 else "not_extracted"
+        msg = (
+            f"Authoritative knowledge graph active with {len(nodes)} entities and {len(edges)} relationships."
+            if len(nodes) > 0
+            else "Knowledge graph entity extraction is optional. Raw vector ingestion is active and ready."
+        )
+
+        response = MemoryGraphResponse(
+            success=True,
+            status=status,
+            nodes=nodes,
+            edges=edges,
+            total_nodes=len(nodes),
+            total_edges=len(edges),
+            dataset_name=dataset_name,
+            message=msg,
+        )
+
+        elapsed = time.monotonic() - start
+        logger.info("command: get_memory_graph() complete | nodes=%d | edges=%d | %.2fs", len(nodes), len(edges), elapsed)
+        return response
+
+    except Exception as e:
+        elapsed = time.monotonic() - start
+        logger.error("command: get_memory_graph() failed | %.2fs | %s", elapsed, e)
+        return ErrorResponse(
+            error=type(e).__name__,
+            message=f"Failed to get memory graph: {e}",
+        )
+
+
+async def get_memory_vectors() -> MemoryVectorsResponse | ErrorResponse:
+    """Return authoritative Vector Space and embedding index statistics."""
+    start = time.monotonic()
+    logger.info("command: get_memory_vectors()")
+
+    try:
+        settings = _settings or get_settings()
+        cognee = _cognee_service
+
+        datasets_list: list[VectorDatasetInfo] = []
+        total_files = 0
+
+        if cognee and cognee.is_initialized:
+            raw_datasets = await cognee.list_datasets()
+            for ds in raw_datasets:
+                fc = ds.get("file_count", 0)
+                sz = ds.get("size_bytes", 0)
+                total_files += fc
+                v_status = "ready" if fc > 0 else "empty"
+                # Estimate chunks based on file count / size
+                chunk_est = max(fc, 1) if fc > 0 else 0
+
+                datasets_list.append(VectorDatasetInfo(
+                    id=ds.get("id", ""),
+                    name=ds.get("name", ""),
+                    file_count=fc,
+                    size_bytes=sz,
+                    created_at=ds.get("created_at"),
+                    vector_status=v_status,
+                    chunk_count=chunk_est,
+                ))
+
+        response = MemoryVectorsResponse(
+            success=True,
+            vector_db_provider=settings.storage.vector_db,
+            embedding_model=settings.ollama.embedding_model,
+            embedding_dimensions=768,
+            total_datasets=len(datasets_list),
+            total_files=total_files,
+            datasets=datasets_list,
+        )
+
+        elapsed = time.monotonic() - start
+        logger.info("command: get_memory_vectors() complete | datasets=%d | files=%d | %.2fs", len(datasets_list), total_files, elapsed)
+        return response
+
+    except Exception as e:
+        elapsed = time.monotonic() - start
+        logger.error("command: get_memory_vectors() failed | %.2fs | %s", elapsed, e)
+        return ErrorResponse(
+            error=type(e).__name__,
+            message=f"Failed to get vector records: {e}",
+        )
+
+
+async def get_dataset_items(dataset_id: str) -> DatasetDataItemsResponse | ErrorResponse:
+    """Return authoritative data items (stored files) for a specific dataset."""
+    start = time.monotonic()
+    logger.info("command: get_dataset_items() | dataset_id=%s", dataset_id)
+
+    try:
+        cognee = _cognee_service
+        items: list[MemoryDataItem] = []
+        dataset_name = dataset_id
+
+        if cognee and cognee.is_initialized:
+            raw_items = await cognee.get_dataset_data_items(dataset_id)
+            for it in raw_items:
+                items.append(MemoryDataItem(
+                    id=it.get("id", ""),
+                    name=it.get("name", ""),
+                    mime_type=it.get("mime_type", "text/plain"),
+                    data_size=it.get("data_size", 0),
+                    created_at=it.get("created_at"),
+                    extension=it.get("extension", ""),
+                    content_hash=it.get("content_hash", ""),
+                    pipeline_status=it.get("pipeline_status", {}),
+                ))
+
+        response = DatasetDataItemsResponse(
+            success=True,
+            dataset_id=dataset_id,
+            dataset_name=dataset_name,
+            items=items,
+            total_count=len(items),
+        )
+
+        elapsed = time.monotonic() - start
+        logger.info("command: get_dataset_items() complete | count=%d | %.2fs", len(items), elapsed)
+        return response
+
+    except Exception as e:
+        elapsed = time.monotonic() - start
+        logger.error("command: get_dataset_items() failed | %.2fs | %s", elapsed, e)
+        return ErrorResponse(
+            error=type(e).__name__,
+            message=f"Failed to get dataset items: {e}",
         )
 
 

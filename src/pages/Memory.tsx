@@ -1,13 +1,16 @@
 import { useState, useEffect } from "react";
 import { TopBar } from "@/components/layout/TopBar";
 import { DatasetTable } from "@/components/memory/DatasetTable";
+import { VectorSpaceView } from "@/components/memory/VectorSpaceView";
+import { KnowledgeGraphView } from "@/components/memory/KnowledgeGraphView";
 import { MemoryStats } from "@/components/memory/MemoryStats";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
-import { Search, Loader2 } from "lucide-react";
-import { useMemoryStore } from "@/stores/memory-store";
+import { Search, Loader2, Database, Layers, Share2 } from "lucide-react";
+import { useMemoryStore, type MemoryTabType } from "@/stores/memory-store";
 import { forgetDataset as forgetDatasetApi } from "@/lib/api";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 
 export default function Memory() {
   const [forgetDataset, setForgetDataset] = useState<{
@@ -15,7 +18,18 @@ export default function Memory() {
     name: string;
   } | null>(null);
 
-  const { loading, fetchDatasets, fetchStats, datasets } = useMemoryStore();
+  const {
+    loading,
+    fetchDatasets,
+    fetchStats,
+    fetchMemoryVectors,
+    fetchMemoryGraph,
+    datasets,
+    activeTab,
+    setActiveTab,
+    searchQuery,
+    setSearchQuery,
+  } = useMemoryStore();
 
   useEffect(() => {
     fetchDatasets();
@@ -27,6 +41,9 @@ export default function Memory() {
       try {
         await forgetDatasetApi({ dataset: forgetDataset.name });
         await fetchDatasets();
+        await fetchStats();
+        if (activeTab === "vectors") await fetchMemoryVectors();
+        if (activeTab === "graph") await fetchMemoryGraph();
       } catch (error) {
         console.error("Failed to forget dataset:", error);
       }
@@ -34,14 +51,35 @@ export default function Memory() {
     }
   };
 
+  const tabs: { id: MemoryTabType; label: string; icon: typeof Database; badge?: string | number }[] = [
+    {
+      id: "datasets",
+      label: "Datasets & Files",
+      icon: Database,
+      badge: datasets.length,
+    },
+    {
+      id: "vectors",
+      label: "Vector Space",
+      icon: Layers,
+    },
+    {
+      id: "graph",
+      label: "Knowledge Graph",
+      icon: Share2,
+    },
+  ];
+
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden bg-black text-foreground antialiased font-sans">
       <TopBar title="RE:Track | Memory Graph" subtitle="Cognee Semantic Graph & Vectors">
-        <div className="relative w-48 sm:w-56 hidden sm:block">
+        <div className="relative w-48 sm:w-64 hidden sm:block">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-neutral-500" />
           <Input
             type="text"
-            placeholder="Search memory space..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search memory..."
             className="h-8 pl-8 pr-3 text-xs bg-[#0a0a0a] border-[#222222] text-white placeholder:text-neutral-500 focus:border-white rounded-md font-mono"
           />
         </div>
@@ -49,7 +87,7 @@ export default function Memory() {
 
       <main className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-5 lg:p-6">
         <div className="max-w-6xl mx-auto space-y-5">
-          {/* Header */}
+          {/* Header & Tabs Navigation */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#1a1a1a] pb-4">
             <div>
               <div className="flex items-center gap-2">
@@ -61,26 +99,70 @@ export default function Memory() {
                 </Badge>
               </div>
               <p className="text-xs text-neutral-500 mt-0.5">
-                Vector embeddings, knowledge graphs, and persistent repository concepts.
+                Vector embeddings, semantic knowledge graphs, and persistent repository concepts.
               </p>
+            </div>
+
+            {/* View Mode Tabs */}
+            <div className="flex items-center gap-1 bg-[#0a0a0a] p-1 rounded-lg border border-[#222222]">
+              {tabs.map((tab) => {
+                const Icon = tab.icon;
+                const isActive = activeTab === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setActiveTab(tab.id)}
+                    className={cn(
+                      "flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md transition-colors cursor-pointer font-mono",
+                      isActive
+                        ? "bg-white text-black font-semibold shadow-xs"
+                        : "text-neutral-400 hover:text-white hover:bg-[#141414]"
+                    )}
+                  >
+                    <Icon className="w-3.5 h-3.5" />
+                    <span>{tab.label}</span>
+                    {tab.badge !== undefined && (
+                      <span
+                        className={cn(
+                          "ml-1 text-[10px] px-1.5 py-0.2 rounded-full",
+                          isActive
+                            ? "bg-black/15 text-black"
+                            : "bg-[#222222] text-neutral-400"
+                        )}
+                      >
+                        {tab.badge}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
           {loading ? (
             <div className="flex flex-col items-center justify-center py-20 text-center gap-2 bg-[#050505] rounded-lg border border-[#1e1e1e]">
               <Loader2 className="w-5 h-5 text-neutral-400 animate-spin" />
-              <p className="text-xs text-neutral-500">
-                Connecting to Cognee graph store...
+              <p className="text-xs text-neutral-500 font-mono">
+                Connecting to Cognee memory store...
               </p>
             </div>
           ) : (
-            <div className="flex flex-col lg:flex-row gap-4">
-              <div className="flex-1 min-w-0">
-                <DatasetTable onForget={setForgetDataset} />
-              </div>
-              <div className="w-full lg:w-80 shrink-0">
-                <MemoryStats />
-              </div>
+            <div>
+              {activeTab === "datasets" && (
+                <div className="flex flex-col lg:flex-row gap-4">
+                  <div className="flex-1 min-w-0">
+                    <DatasetTable onForget={setForgetDataset} />
+                  </div>
+                  <div className="w-full lg:w-80 shrink-0">
+                    <MemoryStats />
+                  </div>
+                </div>
+              )}
+
+              {activeTab === "vectors" && <VectorSpaceView />}
+
+              {activeTab === "graph" && <KnowledgeGraphView />}
             </div>
           )}
         </div>

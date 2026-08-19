@@ -5,23 +5,16 @@ import {
   RefreshCw,
   Download,
   Trash2,
-  Grid3X3,
-  List,
+  Eye,
 } from "lucide-react";
 import { useMemoryStore } from "@/stores/memory-store";
 import { useRepositoryStore } from "@/stores/repository-store";
-import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
+import { DatasetItemsModal } from "./DatasetItemsModal";
 
 interface DatasetTableProps {
   onForget: (dataset: { id: string; name: string }) => void;
 }
-
-const filterOptions = [
-  { key: "all" as const, label: "All Datasets" },
-  { key: "vectors" as const, label: "Vector Spaces" },
-  { key: "graphs" as const, label: "Knowledge Graphs" },
-];
 
 function formatDate(dateString: string): string {
   if (!dateString) return "N/A";
@@ -50,19 +43,30 @@ function formatBytes(bytes: number | null): string {
 }
 
 export function DatasetTable({ onForget }: DatasetTableProps) {
-  const { datasets, filterType, viewMode, setFilter, setViewMode, loading } =
-    useMemoryStore();
+  const {
+    datasets,
+    loading,
+    searchQuery,
+    selectDataset,
+  } = useMemoryStore();
   const { repositories, indexRepo } = useRepositoryStore();
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [inspectingDataset, setInspectingDataset] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
 
-  const filtered =
-    filterType === "all"
-      ? datasets
-      : datasets.filter((d) => {
-          if (filterType === "vectors") return d.type === "vector_db" || d.type === "vectors";
-          if (filterType === "graphs") return d.type === "graph" || d.type === "knowledge_graph";
-          return true;
-        });
+  const filtered = datasets.filter((d) => {
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      return (
+        d.name.toLowerCase().includes(q) ||
+        (d.source_path && d.source_path.toLowerCase().includes(q)) ||
+        d.id.toLowerCase().includes(q)
+      );
+    }
+    return true;
+  });
 
   const isEmpty = !loading && datasets.length === 0;
 
@@ -102,53 +106,6 @@ export function DatasetTable({ onForget }: DatasetTableProps) {
 
   return (
     <div className="space-y-4">
-      {/* Controls Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-1 bg-[#0a0a0a] p-0.5 rounded-md border border-[#222222] overflow-x-auto">
-          {filterOptions.map((opt) => (
-            <button
-              key={opt.key}
-              onClick={() => setFilter(opt.key)}
-              className={cn(
-                "px-2.5 py-1 text-xs rounded transition-colors whitespace-nowrap cursor-pointer",
-                filterType === opt.key
-                  ? "bg-white text-black font-medium shadow-xs"
-                  : "text-neutral-400 hover:text-white"
-              )}
-            >
-              {opt.label}
-            </button>
-          ))}
-        </div>
-
-        <div className="flex items-center gap-1 bg-[#0a0a0a] p-0.5 rounded-md border border-[#222222]">
-          <button
-            onClick={() => setViewMode("list")}
-            className={cn(
-              "p-1 rounded transition-colors cursor-pointer",
-              viewMode === "list"
-                ? "bg-[#222222] text-white"
-                : "text-neutral-400 hover:text-white"
-            )}
-            title="List view"
-          >
-            <List className="w-3.5 h-3.5" />
-          </button>
-          <button
-            onClick={() => setViewMode("grid")}
-            className={cn(
-              "p-1 rounded transition-colors cursor-pointer",
-              viewMode === "grid"
-                ? "bg-[#222222] text-white"
-                : "text-neutral-400 hover:text-white"
-            )}
-            title="Grid view"
-          >
-            <Grid3X3 className="w-3.5 h-3.5" />
-          </button>
-        </div>
-      </div>
-
       {/* Table Container with Horizontal Scroll on Narrow Viewports */}
       <div className="bg-[#0a0a0a] border border-[#1e1e1e] rounded-lg overflow-hidden flex flex-col">
         <div className="overflow-x-auto">
@@ -217,7 +174,18 @@ export function DatasetTable({ onForget }: DatasetTableProps) {
                     </button>
 
                     {openMenuId === dataset.id && (
-                      <div className="absolute right-0 top-8 w-40 bg-[#0a0a0a] border border-[#262626] rounded-md shadow-xl py-1 z-20 text-xs animate-in fade-in zoom-in-95 duration-100">
+                      <div className="absolute right-0 top-8 w-44 bg-[#0a0a0a] border border-[#262626] rounded-md shadow-xl py-1 z-20 text-xs animate-in fade-in zoom-in-95 duration-100">
+                        <button
+                          onClick={() => {
+                            setOpenMenuId(null);
+                            selectDataset(dataset.id);
+                            setInspectingDataset({ id: dataset.id, name: dataset.name });
+                          }}
+                          className="w-full text-left px-3 py-1.5 text-neutral-300 hover:text-white hover:bg-[#141414] flex items-center gap-2 cursor-pointer"
+                        >
+                          <Eye className="w-3 h-3 text-neutral-400" />
+                          <span>View Stored Files</span>
+                        </button>
                         <button
                           onClick={() => {
                             setOpenMenuId(null);
@@ -259,6 +227,15 @@ export function DatasetTable({ onForget }: DatasetTableProps) {
           </div>
         </div>
       </div>
+
+      {inspectingDataset && (
+        <DatasetItemsModal
+          datasetId={inspectingDataset.id}
+          datasetName={inspectingDataset.name}
+          isOpen={!!inspectingDataset}
+          onClose={() => setInspectingDataset(null)}
+        />
+      )}
     </div>
   );
 }
