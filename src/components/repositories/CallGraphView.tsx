@@ -159,7 +159,26 @@ export function CallGraphView({
     return results;
   }, [rawEdges, selectedEdgeKind, activeNodeIds, filteredNodes]);
 
-  const [simNodes, setSimNodes] = useState<SimNode[]>(() => initSim(filteredNodes, width, height));
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [canvasSize, setCanvasSize] = useState({ w: width, h: height });
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        if (entry.contentRect.width > 50 && entry.contentRect.height > 50) {
+          setCanvasSize({
+            w: Math.round(entry.contentRect.width),
+            h: Math.round(entry.contentRect.height),
+          });
+        }
+      }
+    });
+    observer.observe(containerRef.current);
+    return () => observer.disconnect();
+  }, []);
+
+  const [simNodes, setSimNodes] = useState<SimNode[]>(() => initSim(filteredNodes, canvasSize.w, canvasSize.h));
   const [hovered, setHovered] = useState<string | null>(null);
   const [dragging, setDragging] = useState<{ id: string; ox: number; oy: number } | null>(null);
   const [pan, setPan] = useState({ x: 0, y: 0 });
@@ -198,16 +217,16 @@ export function CallGraphView({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [activeNode, selectedNodeId, onSelectNode]);
 
-  // Re-sync simulation when filtered nodes change
+  // Re-sync simulation when filtered nodes or canvas dimensions change
   useEffect(() => {
     const map = new Map<string, number>();
     filteredNodes.forEach((n, i) => map.set(n.id, i));
     idxRef.current = map;
-    const s = initSim(filteredNodes, width, height);
+    const s = initSim(filteredNodes, canvasSize.w, canvasSize.h);
     nodesRef.current = s;
     setSimNodes([...s]);
     alphaRef.current = 0.35;
-  }, [filteredNodes, width, height]);
+  }, [filteredNodes, canvasSize.w, canvasSize.h]);
 
   // Spring physics loop
   useEffect(() => {
@@ -215,8 +234,8 @@ export function CallGraphView({
       if (alphaRef.current < 0.004) return;
       alphaRef.current *= 0.97;
       const ns = nodesRef.current.map((n) => ({ ...n }));
-      const cx = width / 2,
-        cy = height / 2;
+      const cx = canvasSize.w / 2,
+        cy = canvasSize.h / 2;
 
       for (const n of ns) {
         n.vx += (cx - n.x) * CENTERING * alphaRef.current;
@@ -387,7 +406,7 @@ export function CallGraphView({
   }, [activeNode, filteredEdges]);
 
   return (
-    <div className="relative w-full h-full select-none bg-black rounded-xl border border-[#262626] overflow-hidden flex flex-col">
+    <div ref={containerRef} className="relative w-full h-full select-none bg-black rounded-xl border border-[#262626] overflow-hidden flex flex-col">
       {/* Top Filter & Search Controls Bar */}
       <div
         onClick={(e) => e.stopPropagation()}

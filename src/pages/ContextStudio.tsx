@@ -11,15 +11,16 @@ import {
   Code2,
   FileText,
   ChevronDown,
+  ChevronLeft,
   Network,
   Sparkles,
   BookmarkPlus,
   ShieldCheck,
   Loader2,
   AlertCircle,
-  X,
   PanelRightClose,
   PanelRightOpen,
+  X,
 } from "lucide-react";
 import { getAgentContext, AgentContextResponse } from "@/lib/api";
 import { useRepositoryStore } from "@/stores/repository-store";
@@ -61,7 +62,7 @@ export default function ContextStudio() {
   const [mobileTab, setMobileTab] = useState<"prompt" | "topology" | "package">("prompt");
   // Desktop inner tab: 'workspace' (prompt) vs 'tree' (AST/topology)
   const [desktopTab, setDesktopTab] = useState<"workspace" | "tree">("workspace");
-  // Local session state for collapsing context pane in AST Call Graph mode
+  // User-controlled collapsible right-side context package pane
   const [isContextPaneCollapsed, setIsContextPaneCollapsed] = useState(false);
 
   const [repoDropdownOpen, setRepoDropdownOpen] = useState(false);
@@ -244,8 +245,6 @@ export default function ContextStudio() {
     }
   };
 
-  const isCallGraphExpanded = desktopTab === "tree" && isContextPaneCollapsed;
-
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden bg-black text-foreground antialiased font-sans">
       <TopBar
@@ -257,19 +256,19 @@ export default function ContextStudio() {
           <div ref={dropdownRef} className="relative">
             <button
               onClick={() => setRepoDropdownOpen(!repoDropdownOpen)}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-[#0a0a0a] border border-[#222222] hover:border-[#333333] text-xs font-medium text-white transition-colors cursor-pointer"
+              className="h-8 px-2.5 sm:px-3 rounded-lg border border-[#262626] bg-[#0a0a0a] text-white hover:border-[#404040] transition-colors flex items-center gap-2 text-xs font-mono cursor-pointer"
             >
-              <div className="w-2 h-2 rounded-full bg-emerald-500" />
-              <span className="truncate max-w-[140px] sm:max-w-[200px]">{activeRepo.name}</span>
-              <ChevronDown className="w-3.5 h-3.5 text-neutral-400" />
+              <GitBranch className="w-3.5 h-3.5 text-white shrink-0" />
+              <span className="font-semibold truncate max-w-[110px] xs:max-w-[150px] sm:max-w-[200px]">{activeRepo.name}</span>
+              <ChevronDown className="w-3 h-3 text-neutral-400 shrink-0" />
             </button>
 
             {repoDropdownOpen && (
-              <div className="absolute left-0 mt-1 w-64 bg-[#0a0a0a] border border-[#262626] rounded-lg shadow-2xl py-1 z-50 animate-in fade-in-50 zoom-in-95">
-                <div className="px-3 py-1.5 text-[10px] font-mono text-neutral-500 uppercase tracking-wider border-b border-[#1f1f1f]">
-                  Select Workspace ({repositories.length})
+              <div className="absolute right-0 top-full mt-1.5 w-64 bg-black border border-[#2e2e2e] rounded-xl shadow-2xl z-50 py-1.5 overflow-hidden">
+                <div className="px-3 py-1.5 border-b border-[#222]">
+                  <span className="text-[10px] font-mono uppercase text-neutral-400">Select Codebase</span>
                 </div>
-                <div className="max-h-48 overflow-y-auto">
+                <div className="max-h-48 overflow-y-auto py-1">
                   {repositories.map((r) => (
                     <button
                       key={r.id}
@@ -278,12 +277,12 @@ export default function ContextStudio() {
                         setRepoDropdownOpen(false);
                       }}
                       className={cn(
-                        "w-full text-left px-3 py-2 text-xs flex items-center justify-between hover:bg-[#141414] transition-colors cursor-pointer",
-                        r.id === activeRepo.id ? "text-white font-medium bg-[#121212]" : "text-neutral-400"
+                        "w-full px-3 py-2 text-left text-xs font-mono flex items-center justify-between hover:bg-[#1a1a1a] transition-colors cursor-pointer",
+                        r.id === activeRepo.id ? "text-white bg-[#141414] font-bold" : "text-neutral-300"
                       )}
                     >
                       <span className="truncate">{r.name}</span>
-                      {r.id === activeRepo.id && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />}
+                      {r.id === activeRepo.id && <Check className="w-3.5 h-3.5 text-emerald-400" />}
                     </button>
                   ))}
                 </div>
@@ -352,13 +351,8 @@ export default function ContextStudio() {
         {/* Left Column: Prompt Workbench & AST Topology */}
         <div
           className={cn(
-            "flex flex-col h-full min-h-0 bg-[#0a0a0a] rounded-lg border border-[#1e1e1e] overflow-hidden",
-            isCallGraphExpanded
-              ? "w-full flex-1"
-              : cn(
-                  "w-full lg:w-[46%] xl:w-[42%] 2xl:w-[40%] flex-shrink-0",
-                  mobileTab === "package" ? "hidden lg:flex" : "flex"
-                )
+            "flex flex-col h-full min-h-0 bg-[#0a0a0a] rounded-lg border border-[#1e1e1e] overflow-hidden flex-1 min-w-0 transition-all duration-300 ease-in-out",
+            mobileTab === "package" ? "hidden lg:flex" : "flex"
           )}
         >
           {/* Inner Tab Control (Prompt Workbench vs Call Graph) */}
@@ -397,38 +391,35 @@ export default function ContextStudio() {
               </button>
             </div>
 
-            {desktopTab === "tree" ? (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setIsContextPaneCollapsed((prev) => !prev)}
-                className="h-7 px-2.5 text-xs font-mono border-[#262626] bg-[#121212] text-neutral-300 hover:text-white hover:bg-[#1f1f1f] gap-1.5 cursor-pointer"
-                title={
-                  isContextPaneCollapsed
-                    ? "Restore split layout (expand Context pane)"
-                    : "Expand Call Graph (collapse Context pane)"
-                }
-              >
-                {isContextPaneCollapsed ? (
-                  <>
-                    <PanelRightOpen className="w-3.5 h-3.5 text-neutral-400" />
-                    <span className="hidden sm:inline">Split Layout</span>
-                  </>
-                ) : (
-                  <>
-                    <PanelRightClose className="w-3.5 h-3.5 text-neutral-400" />
-                    <span className="hidden sm:inline">Full Width</span>
-                  </>
-                )}
-              </Button>
-            ) : (
+            <div className="flex items-center gap-2">
               <span className="text-[11px] text-neutral-500 hidden sm:flex items-center gap-1.5 font-mono">
                 <span>Shortcut:</span>
                 <kbd className="px-1 py-0.5 rounded bg-[#141414] border border-[#262626] text-neutral-300 text-[10px]">
                   ⌘↵
                 </kbd>
               </span>
-            )}
+
+              {isContextPaneCollapsed && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setIsContextPaneCollapsed(false);
+                  }}
+                  className="h-7 px-2.5 text-xs gap-1.5 border-[#262626] text-neutral-300 hover:text-white hover:border-neutral-500 cursor-pointer hidden lg:flex"
+                  title="Expand Synthesized Context Package"
+                >
+                  <PanelRightOpen className="w-3.5 h-3.5 text-neutral-400" />
+                  <span>Show Context Pane</span>
+                  {agentResponse && (
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_4px_#34d399]" />
+                  )}
+                </Button>
+              )}
+            </div>
           </div>
 
           {/* Workbench Tab Content */}
@@ -637,174 +628,241 @@ export default function ContextStudio() {
           </div>
         </div>
 
-        {/* Right Column: Generated Context Package */}
+        {/* Right Column: Unified Collapsible Context Package Pane */}
         <div
           className={cn(
-            "flex-1 min-h-0 flex-col h-full bg-[#0a0a0a] rounded-lg border border-[#1e1e1e] overflow-hidden",
-            isCallGraphExpanded
-              ? "hidden"
-              : mobileTab !== "package"
-              ? "hidden lg:flex"
-              : "flex"
+            "flex flex-col h-full min-h-0 bg-[#0a0a0a] rounded-lg border border-[#1e1e1e] overflow-hidden transition-[width,min-width,max-width] duration-300 ease-in-out shrink-0 relative",
+            isContextPaneCollapsed
+              ? "w-full lg:w-11 lg:min-w-[44px] lg:max-w-[44px]"
+              : "w-full lg:w-[48%] xl:w-[46%] 2xl:w-[44%] lg:min-w-[440px] lg:max-w-[850px]",
+            mobileTab !== "package" ? "hidden lg:flex" : "flex"
           )}
         >
-          {/* Header & Export Actions */}
-          <div className="p-3 border-b border-[#1a1a1a] bg-[#080808] flex items-center justify-between gap-3 shrink-0">
-            <div className="flex items-center gap-2">
-              <FileText className="w-3.5 h-3.5 text-neutral-300" />
-              <h3 className="text-xs font-semibold text-white tracking-tight">
-                Synthesized Context Package
-              </h3>
-              {loading ? (
-                <Badge variant="warning" className="text-[10px] font-mono flex items-center gap-1">
-                  <Loader2 className="w-2.5 h-2.5 animate-spin" />
-                  <span>Re-synthesizing</span>
-                </Badge>
-              ) : agentResponse ? (
-                <Badge variant="success" className="text-[10px] font-mono">
-                  Ready
-                </Badge>
-              ) : null}
+          {isContextPaneCollapsed ? (
+            /* Collapsed Vertical Rail (Visible on desktop) */
+            <div
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setIsContextPaneCollapsed(false);
+              }}
+              className="hidden lg:flex flex-col items-center justify-between w-full h-full py-3 px-1 hover:bg-[#0f0f0f] transition-colors cursor-pointer select-none group"
+              title="Click to expand Synthesized Context Package"
+            >
+              <div className="flex flex-col items-center gap-3">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setIsContextPaneCollapsed(false);
+                  }}
+                  className="p-1 rounded text-neutral-400 group-hover:text-white hover:bg-[#1a1a1a] transition-colors cursor-pointer"
+                  title="Expand Context Pane"
+                >
+                  <PanelRightOpen className="w-4 h-4" />
+                </button>
+
+                {agentResponse && (
+                  <span
+                    className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_5px_#34d399]"
+                    title="Context is ready"
+                  />
+                )}
+              </div>
+
+              <div className="[writing-mode:vertical-rl] rotate-180 flex items-center gap-2 text-[11px] font-mono text-neutral-400 group-hover:text-neutral-200 tracking-wider">
+                <FileText className="w-3.5 h-3.5 rotate-90" />
+                <span>Context Package</span>
+              </div>
+
+              <div className="w-6 h-6 rounded flex items-center justify-center text-neutral-500 group-hover:text-white">
+                <ChevronLeft className="w-3.5 h-3.5" />
+              </div>
             </div>
+          ) : (
+            /* Full Expanded Context Package Content */
+            <div className="flex flex-col h-full w-full min-w-[440px] overflow-hidden">
+              {/* Header & Export Actions */}
+              <div className="p-3 border-b border-[#1a1a1a] bg-[#080808] flex items-center justify-between gap-3 shrink-0">
+                <div className="flex items-center gap-2">
+                  <FileText className="w-3.5 h-3.5 text-neutral-300" />
+                  <h3 className="text-xs font-semibold text-white tracking-tight">
+                    Synthesized Context Package
+                  </h3>
+                  {loading ? (
+                    <Badge variant="warning" className="text-[10px] font-mono flex items-center gap-1">
+                      <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                      <span>Re-synthesizing</span>
+                    </Badge>
+                  ) : agentResponse ? (
+                    <Badge variant="success" className="text-[10px] font-mono">
+                      Ready
+                    </Badge>
+                  ) : null}
+                </div>
 
-            {agentResponse && !loading && (
-              <div className="flex items-center gap-1.5">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={saved}
-                  onClick={handleSaveToLibrary}
-                  className="h-7 px-2 text-xs gap-1 cursor-pointer disabled:opacity-60"
-                >
-                  <BookmarkPlus className={cn("w-3 h-3", saved ? "text-emerald-400" : "text-amber-400")} />
-                  <span>{saved ? "Saved" : "Save"}</span>
-                </Button>
+                <div className="flex items-center gap-1.5">
+                  {agentResponse && !loading && (
+                    <>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={saved}
+                        onClick={handleSaveToLibrary}
+                        className="h-7 px-2 text-xs gap-1 cursor-pointer disabled:opacity-60"
+                      >
+                        <BookmarkPlus className={cn("w-3 h-3", saved ? "text-emerald-400" : "text-amber-400")} />
+                        <span>{saved ? "Saved" : "Save"}</span>
+                      </Button>
 
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleDownload}
-                  className="h-7 px-2 text-xs gap-1 cursor-pointer"
-                >
-                  <Download className="w-3 h-3" />
-                  <span className="hidden sm:inline">Export</span>
-                </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={handleDownload}
+                        className="h-7 px-2 text-xs gap-1 cursor-pointer"
+                      >
+                        <Download className="w-3 h-3" />
+                        <span className="hidden sm:inline">Export</span>
+                      </Button>
 
-                <Button
-                  size="sm"
-                  onClick={handleCopy}
-                  className="h-7 px-2.5 text-xs font-medium bg-white text-black hover:bg-neutral-200 gap-1 shadow-xs cursor-pointer"
-                >
-                  {copied ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
-                  <span>{copied ? "Copied!" : "Copy Context"}</span>
-                </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={handleCopy}
+                        className="h-7 px-2.5 text-xs font-medium bg-white text-black hover:bg-neutral-200 gap-1 shadow-xs cursor-pointer"
+                      >
+                        {copied ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                        <span>{copied ? "Copied!" : "Copy Context"}</span>
+                      </Button>
+                    </>
+                  )}
+
+                  {/* Collapse Right Pane Toggle */}
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setIsContextPaneCollapsed(true);
+                    }}
+                    className="h-7 w-7 p-0 text-neutral-400 hover:text-white hover:bg-[#1a1a1a] cursor-pointer hidden lg:flex"
+                    title="Collapse Context Package Pane"
+                  >
+                    <PanelRightClose className="w-4 h-4" />
+                  </Button>
+                </div>
               </div>
-            )}
-          </div>
 
-          {/* Package Content & Telemetry */}
-          <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4 relative">
-            {/* If synthesizing and already has a package, show live re-synthesis card overlay */}
-            {loading && agentResponse && (
-              <div className="sticky top-0 z-20 mb-3">
-                <SynthesisProgressBar
-                  loading={loading}
-                  onCancel={handleCancelSynthesis}
-                  variant="card"
-                  taskTitle={`Re-synthesizing for: "${taskPrompt}"`}
-                  className="w-full bg-[#0a0a0a] border border-[#262626] shadow-xl"
-                />
-              </div>
-            )}
-
-            {/* If synthesizing and NO previous response */}
-            {loading && !agentResponse ? (
-              <div className="h-full flex flex-col items-center justify-center p-6 max-w-xl mx-auto">
-                <SynthesisProgressBar
-                  loading={loading}
-                  onCancel={handleCancelSynthesis}
-                  variant="card"
-                  taskTitle={taskPrompt}
-                  className="w-full"
-                />
-              </div>
-            ) : agentResponse ? (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: loading ? 0.5 : 1 }}
-                transition={{ duration: 0.2 }}
-                className="space-y-3"
-              >
-                {/* Task -> Codebase -> Context Package Relationship Strip */}
-                <div className="bg-[#050505] border border-[#1a1a1a] rounded-lg p-3 space-y-2">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#141414] pb-2">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="text-[10px] uppercase font-mono tracking-wider text-neutral-500 shrink-0">
-                        Task Target
-                      </span>
-                      <span className="text-xs text-neutral-200 font-medium truncate">
-                        &ldquo;{agentResponse.task_summary || taskPrompt}&rdquo;
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-1.5 shrink-0 text-xs font-mono text-neutral-400">
-                      <GitBranch className="w-3 h-3 text-neutral-300" />
-                      <span className="text-white font-medium">{activeRepo.name}</span>
-                    </div>
+              {/* Package Content & Telemetry */}
+              <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4 relative">
+                {/* If synthesizing and already has a package, show live re-synthesis card overlay */}
+                {loading && agentResponse && (
+                  <div className="sticky top-0 z-20 mb-3">
+                    <SynthesisProgressBar
+                      loading={loading}
+                      onCancel={handleCancelSynthesis}
+                      variant="card"
+                      taskTitle={`Re-synthesizing for: "${taskPrompt}"`}
+                      className="w-full bg-[#0a0a0a] border border-[#262626] shadow-xl"
+                    />
                   </div>
+                )}
 
-                  {/* Compact Metadata Row */}
-                  <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5 text-xs font-mono text-neutral-400">
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-neutral-500">Context:</span>
-                      <span className="text-neutral-200 font-medium">
-                        ~{agentResponse.estimated_tokens.toLocaleString()} tokens
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-neutral-500">Latency:</span>
-                      <span className="text-emerald-400 font-medium">
-                        {agentResponse.total_time_ms || agentResponse.generation_time_ms}ms
-                      </span>
-                      {agentResponse.retrieval_time_ms !== undefined && (
-                        <span className="text-[10px] text-neutral-500 hidden sm:inline">
-                          (retrieval: {agentResponse.retrieval_time_ms}ms · synthesis: {agentResponse.synthesis_time_ms || 0}ms)
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-neutral-500">Sources:</span>
-                      <span className="text-neutral-200 font-medium">
-                        {agentResponse.related_files.length} files
-                      </span>
-                    </div>
-                    {health?.high_memory_pressure && (
-                      <div className="flex items-center gap-1 text-[10px] text-amber-400">
-                        <span>High RAM Pressure ({health.ram_percent}%)</span>
+                {/* If synthesizing and NO previous response */}
+                {loading && !agentResponse ? (
+                  <div className="h-full flex flex-col items-center justify-center p-6 max-w-xl mx-auto">
+                    <SynthesisProgressBar
+                      loading={loading}
+                      onCancel={handleCancelSynthesis}
+                      variant="card"
+                      taskTitle={taskPrompt}
+                      className="w-full"
+                    />
+                  </div>
+                ) : agentResponse ? (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: loading ? 0.5 : 1 }}
+                    transition={{ duration: 0.2 }}
+                    className="space-y-3"
+                  >
+                    {/* Task -> Codebase -> Context Package Relationship Strip */}
+                    <div className="bg-[#050505] border border-[#1a1a1a] rounded-lg p-3 space-y-2">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#141414] pb-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="text-[10px] uppercase font-mono tracking-wider text-neutral-500 shrink-0">
+                            Task Target
+                          </span>
+                          <span className="text-xs text-neutral-200 font-medium truncate">
+                            &ldquo;{agentResponse.task_summary || taskPrompt}&rdquo;
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0 text-xs font-mono text-neutral-400">
+                          <GitBranch className="w-3 h-3 text-neutral-300" />
+                          <span className="text-white font-medium">{activeRepo.name}</span>
+                        </div>
                       </div>
-                    )}
+
+                      {/* Compact Metadata Row */}
+                      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5 text-xs font-mono text-neutral-400">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-neutral-500">Context:</span>
+                          <span className="text-neutral-200 font-medium">
+                            ~{agentResponse.estimated_tokens.toLocaleString()} tokens
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-neutral-500">Latency:</span>
+                          <span className="text-emerald-400 font-medium">
+                            {agentResponse.total_time_ms || agentResponse.generation_time_ms}ms
+                          </span>
+                          {agentResponse.retrieval_time_ms !== undefined && (
+                            <span className="text-[10px] text-neutral-500 hidden sm:inline">
+                              (retrieval: {agentResponse.retrieval_time_ms}ms · synthesis: {agentResponse.synthesis_time_ms || 0}ms)
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-neutral-500">Sources:</span>
+                          <span className="text-neutral-200 font-medium">
+                            {agentResponse.related_files.length} files
+                          </span>
+                        </div>
+                        {health?.high_memory_pressure && (
+                          <div className="flex items-center gap-1 text-[10px] text-amber-400">
+                            <span>High RAM Pressure ({health.ram_percent}%)</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* What RE:Track Found - Evidence & Source Provenance Layer */}
+                    <EvidenceProvenanceLayer agentResponse={agentResponse} />
+
+                    {/* Generated Context Package Markdown */}
+                    <ProgressiveMarkdownReveal markdown={agentResponse.context_markdown} />
+                  </motion.div>
+                ) : (
+                  <div className="h-full flex flex-col items-center justify-center p-8 text-center">
+                    <div className="w-12 h-12 rounded-lg bg-[#0f0f0f] border border-[#222222] flex items-center justify-center mb-3 text-neutral-400">
+                      <Sparkles className="w-5 h-5 text-neutral-400" />
+                    </div>
+                    <h4 className="text-sm font-semibold text-white tracking-tight">
+                      No Context Package Generated Yet
+                    </h4>
+                    <p className="text-xs text-neutral-500 mt-1 max-w-sm leading-relaxed">
+                      Enter your task in the Prompt Workbench on the left and click &ldquo;Synthesize Context Package&rdquo; to retrieve compact memories.
+                    </p>
                   </div>
-                </div>
-
-                {/* What RE:Track Found - Evidence & Source Provenance Layer */}
-                <EvidenceProvenanceLayer agentResponse={agentResponse} />
-
-                {/* Generated Context Package Markdown */}
-                <ProgressiveMarkdownReveal markdown={agentResponse.context_markdown} />
-              </motion.div>
-            ) : (
-              <div className="h-full flex flex-col items-center justify-center p-8 text-center">
-                <div className="w-12 h-12 rounded-lg bg-[#0f0f0f] border border-[#222222] flex items-center justify-center mb-3 text-neutral-400">
-                  <Sparkles className="w-5 h-5 text-neutral-400" />
-                </div>
-                <h4 className="text-sm font-semibold text-white tracking-tight">
-                  No Context Package Generated Yet
-                </h4>
-                <p className="text-xs text-neutral-500 mt-1 max-w-sm leading-relaxed">
-                  Enter your task in the Prompt Workbench on the left and click &ldquo;Synthesize Context Package&rdquo; to retrieve compact memories.
-                </p>
+                )}
               </div>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       </main>
     </div>
