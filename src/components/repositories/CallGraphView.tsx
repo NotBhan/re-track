@@ -152,10 +152,38 @@ export function CallGraphView({
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
   const [panDrag, setPanDrag] = useState<{ sx: number; sy: number; px: number; py: number } | null>(null);
+  const panStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
 
   const nodesRef = useRef<SimNode[]>(simNodes);
   const alphaRef = useRef(0.35);
   const idxRef = useRef<Map<string, number>>(new Map());
+
+  // Sync external selectedNodeId prop with internal activeNode
+  useEffect(() => {
+    if (selectedNodeId === undefined) return;
+    if (!selectedNodeId) {
+      setActiveNode(null);
+    } else {
+      const found = filteredNodes.find((n) => n.id === selectedNodeId);
+      if (found) {
+        setActiveNode(found);
+      }
+    }
+  }, [selectedNodeId, filteredNodes]);
+
+  // Global Escape key listener to clear selection
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        if (activeNode || selectedNodeId) {
+          setActiveNode(null);
+          onSelectNode?.(null);
+        }
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [activeNode, selectedNodeId, onSelectNode]);
 
   // Re-sync simulation when filtered nodes change
   useEffect(() => {
@@ -243,7 +271,8 @@ export function CallGraphView({
   );
 
   const handleNodeClick = useCallback(
-    (node: CallGraphNode) => {
+    (e: React.MouseEvent, node: CallGraphNode) => {
+      e.stopPropagation();
       setActiveNode(node);
       onSelectNode?.(node);
     },
@@ -276,11 +305,31 @@ export function CallGraphView({
 
   const handleSvgMouseDown = useCallback(
     (e: React.MouseEvent) => {
-      if ((e.target as HTMLElement).tagName === "svg" || (e.target as HTMLElement).tagName === "rect") {
+      const target = e.target as HTMLElement;
+      const isBackground = target.tagName === "svg" || target.id === "canvas-bg";
+      if (isBackground) {
+        panStartRef.current = { sx: e.clientX, sy: e.clientY, time: Date.now() } as unknown as { x: number; y: number; time: number };
         setPanDrag({ sx: e.clientX, sy: e.clientY, px: pan.x, py: pan.y });
       }
     },
     [pan]
+  );
+
+  const handleCanvasClick = useCallback(
+    (e: React.MouseEvent) => {
+      const target = e.target as HTMLElement;
+      const isBackground = target.tagName === "svg" || target.id === "canvas-bg";
+      if (isBackground && panStartRef.current) {
+        const p = panStartRef.current as unknown as { sx: number; sy: number };
+        const dist = Math.hypot(e.clientX - p.sx, e.clientY - p.sy);
+        if (dist < 5) {
+          // Deselect active node when clicking empty canvas space
+          setActiveNode(null);
+          onSelectNode?.(null);
+        }
+      }
+    },
+    [onSelectNode]
   );
 
   const handleWheel = useCallback((e: React.WheelEvent) => {
@@ -327,7 +376,11 @@ export function CallGraphView({
   return (
     <div className="relative w-full h-full select-none bg-black rounded-xl border border-[#262626] overflow-hidden flex flex-col">
       {/* Top Filter & Search Controls Bar */}
-      <div className="p-3 border-b border-[#222222] bg-[#0c0c0c] flex flex-wrap items-center justify-between gap-3 shrink-0 z-10">
+      <div
+        onClick={(e) => e.stopPropagation()}
+        onMouseDown={(e) => e.stopPropagation()}
+        className="p-3 border-b border-[#222222] bg-[#0c0c0c] flex flex-wrap items-center justify-between gap-3 shrink-0 z-10"
+      >
         <div className="flex items-center gap-2 flex-wrap">
           {/* Node Kind Filter */}
           <div className="flex items-center gap-1 bg-black p-1 rounded-lg border border-[#262626]">
@@ -416,8 +469,10 @@ export function CallGraphView({
           width="100%"
           height="100%"
           onMouseDown={handleSvgMouseDown}
+          onClick={handleCanvasClick}
           className="w-full h-full"
         >
+          <rect id="canvas-bg" width="100%" height="100%" fill="transparent" />
           <defs>
             <marker
               id="cg-arrow"
@@ -493,7 +548,7 @@ export function CallGraphView({
                   key={node.id}
                   transform={`translate(${node.x},${node.y})`}
                   onMouseDown={(e) => handleNodeMouseDown(e, node)}
-                  onClick={() => handleNodeClick(node)}
+                  onClick={(e) => handleNodeClick(e, node)}
                   onMouseEnter={() => setHovered(node.id)}
                   onMouseLeave={() => setHovered(null)}
                   className="cursor-pointer"
@@ -584,7 +639,9 @@ export function CallGraphView({
               animate={{ opacity: 1, x: 0, scale: 1 }}
               exit={{ opacity: 0, x: 20, scale: 0.95 }}
               transition={{ duration: 0.2 }}
-              className="absolute right-4 top-4 w-72 sm:w-84 bg-black/95 backdrop-blur-md border border-[#333] rounded-xl shadow-2xl p-4 text-xs font-mono z-20 space-y-3"
+              onClick={(e) => e.stopPropagation()}
+              onMouseDown={(e) => e.stopPropagation()}
+              className="absolute right-4 top-4 w-72 sm:w-84 max-w-[calc(100%-2rem)] bg-black/95 backdrop-blur-md border border-[#333] rounded-xl shadow-2xl p-4 text-xs font-mono z-20 space-y-3"
             >
               <div className="flex items-start justify-between pb-2 border-b border-[#262626]">
                 <div>
@@ -599,8 +656,13 @@ export function CallGraphView({
                   </p>
                 </div>
                 <button
-                  onClick={() => setActiveNode(null)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setActiveNode(null);
+                    onSelectNode?.(null);
+                  }}
                   className="p-1 rounded hover:bg-[#222] text-neutral-400 hover:text-white cursor-pointer"
+                  title="Close Inspector"
                 >
                   <X className="w-3.5 h-3.5" />
                 </button>

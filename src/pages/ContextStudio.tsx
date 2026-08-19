@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { TopBar } from "@/components/layout/TopBar";
 import {
@@ -19,10 +19,11 @@ import {
   AlertCircle,
   X,
 } from "lucide-react";
-import { getAgentContext, AgentContextResponse, getSuggestedPrompts, SuggestedPrompt } from "@/lib/api";
+import { getAgentContext, AgentContextResponse } from "@/lib/api";
 import { useRepositoryStore } from "@/stores/repository-store";
 import { useContextPackageStore } from "@/stores/context-package-store";
 import { useHealthStore } from "@/stores/health-store";
+import { useContextStore, PRESET_WORKBENCH_PROMPTS } from "@/stores/context-store";
 import { toast } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -34,37 +35,16 @@ import type { CallGraphNode, CallGraphEdge } from "@/types/repository";
 import { motion } from "motion/react";
 import { cn } from "@/lib/utils";
 
-const PRESET_WORKBENCH_PROMPTS: SuggestedPrompt[] = [
-  {
-    label: "Settings & Providers",
-    prompt: "Find where Settings are initialized and how LLM providers are configured and hot-reloaded.",
-  },
-  {
-    label: "OAuth2 Login",
-    prompt: "Implement OAuth2 login with Google and GitHub providers including session tokens.",
-  },
-  {
-    label: "AST Call Graph",
-    prompt: "Show how AST call graphs are extracted from Python and TypeScript source files.",
-  },
-  {
-    label: "Memory Indexing",
-    prompt: "How does the IndexingService discover files, filter ignore patterns, and batch memories into Cognee?",
-  },
-  {
-    label: "Context Budget",
-    prompt: "Explain how BudgetManager trims low-priority sections and compresses tokens at line boundaries.",
-  },
-];
-
 export default function ContextStudio() {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const repoIdParam = searchParams.get("repo");
 
-  const [presetPrompts, setPresetPrompts] = useState<SuggestedPrompt[]>(PRESET_WORKBENCH_PROMPTS);
-  const [loadingPrompts, setLoadingPrompts] = useState(false);
-  const [promptSource, setPromptSource] = useState<"ai" | "heuristic" | "preset">("preset");
+  const recommendedPrompts = useContextStore((s) => s.recommendedPrompts);
+  const promptSource = useContextStore((s) => s.promptSource);
+  const loadingPrompts = useContextStore((s) => s.loadingPrompts);
+  const initializeRecommendedPrompts = useContextStore((s) => s.initializeRecommendedPrompts);
+  const generateRecommendedPrompts = useContextStore((s) => s.generateRecommendedPrompts);
 
   const [taskPrompt, setTaskPrompt] = useState(PRESET_WORKBENCH_PROMPTS[0].prompt);
   const [maxTokens, setMaxTokens] = useState(8000);
@@ -149,38 +129,12 @@ export default function ContextStudio() {
     ];
   }, [activeRepo]);
 
-  // Fetch suggested prompts for active repo
-  const handleFetchSuggestedPrompts = useCallback(
-    async (isManual = false) => {
-      if (!activeRepo?.id) return;
-      setLoadingPrompts(true);
-      try {
-        const res = await getSuggestedPrompts(activeRepo.id);
-        if (res.prompts && res.prompts.length > 0) {
-          setPresetPrompts(res.prompts);
-          setPromptSource(res.source as "ai" | "heuristic");
-          if (isManual) {
-            toast.success(
-              res.source === "ai"
-                ? "Generated fresh AI prompts from loaded model"
-                : "Generated repository-tailored task prompts"
-            );
-          }
-        }
-      } catch (e) {
-        console.debug("Failed to load suggested prompts", e);
-      } finally {
-        setLoadingPrompts(false);
-      }
-    },
-    [activeRepo?.id]
-  );
-
+  // Initialize recommended prompts once on Context Studio initialization
   useEffect(() => {
     if (activeRepo?.id) {
-      handleFetchSuggestedPrompts(false);
+      initializeRecommendedPrompts(activeRepo.id);
     }
-  }, [activeRepo?.id, handleFetchSuggestedPrompts]);
+  }, [activeRepo?.id, initializeRecommendedPrompts]);
 
   const handleSynthesize = async () => {
     if (!taskPrompt.trim() || loading || cooldown > 0) return;
@@ -280,22 +234,24 @@ export default function ContextStudio() {
     }
   };
 
+  const isCallGraphExpanded = desktopTab === "tree" && !agentResponse;
+
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden bg-black text-foreground antialiased font-sans">
       <TopBar
         title="RE:Track | Context Studio"
         subtitle="Prompt Workbench & Context Package Synthesizer"
       >
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 sm:gap-2.5">
           {/* Active Workspace Selector Dropdown */}
           <div ref={dropdownRef} className="relative">
             <button
               onClick={() => setRepoDropdownOpen(!repoDropdownOpen)}
-              className="h-8 px-3 rounded-lg border border-[#262626] bg-[#0a0a0a] text-white hover:border-[#404040] transition-colors flex items-center gap-2 text-xs font-mono cursor-pointer"
+              className="h-8 px-2.5 sm:px-3 rounded-lg border border-[#262626] bg-[#0a0a0a] text-white hover:border-[#404040] transition-colors flex items-center gap-2 text-xs font-mono cursor-pointer"
             >
-              <GitBranch className="w-3.5 h-3.5 text-white" />
-              <span className="font-semibold truncate max-w-[140px]">{activeRepo.name}</span>
-              <ChevronDown className="w-3 h-3 text-neutral-400" />
+              <GitBranch className="w-3.5 h-3.5 text-white shrink-0" />
+              <span className="font-semibold truncate max-w-[110px] xs:max-w-[150px] sm:max-w-[200px]">{activeRepo.name}</span>
+              <ChevronDown className="w-3 h-3 text-neutral-400 shrink-0" />
             </button>
 
             {repoDropdownOpen && (
@@ -331,8 +287,8 @@ export default function ContextStudio() {
             onClick={() => navigate(`/knowledge/${activeRepo.id}`)}
             className="h-8 px-2.5 text-xs font-mono border-[#262626] bg-black text-neutral-300 hover:text-white hover:bg-[#1a1a1a] gap-1 cursor-pointer"
           >
-            <Network className="w-3.5 h-3.5" />
-            <span>AST Map</span>
+            <Network className="w-3.5 h-3.5 shrink-0" />
+            <span className="hidden xs:inline">AST Map</span>
           </Button>
         </div>
       </TopBar>
@@ -382,12 +338,18 @@ export default function ContextStudio() {
       </div>
 
       {/* Main Studio Body — Responsive 2/3-Column Layout */}
-      <main className="flex-1 min-h-0 flex flex-col lg:flex-row overflow-hidden p-4 sm:p-6 gap-6 max-w-[1900px] w-full mx-auto">
+      <main className="flex-1 min-h-0 flex flex-col lg:flex-row overflow-hidden p-4 sm:p-5 lg:p-6 gap-5 lg:gap-6 max-w-[1900px] w-full mx-auto">
         {/* Left Column: Prompt Workbench & AST Topology */}
         <div
-          className={`w-full lg:w-[48%] xl:w-[45%] flex-shrink-0 flex flex-col h-full min-h-0 bg-[#0a0a0a] rounded-lg border border-[#1e1e1e] overflow-hidden ${
-            mobileTab === "package" ? "hidden lg:flex" : "flex"
-          }`}
+          className={cn(
+            "flex flex-col h-full min-h-0 bg-[#0a0a0a] rounded-lg border border-[#1e1e1e] overflow-hidden",
+            isCallGraphExpanded
+              ? "w-full flex-1"
+              : cn(
+                  "w-full lg:w-[46%] xl:w-[42%] 2xl:w-[40%] flex-shrink-0",
+                  mobileTab === "package" ? "hidden lg:flex" : "flex"
+                )
+          )}
         >
           {/* Inner Tab Control (Prompt Workbench vs Call Graph) */}
           <div className="p-3 border-b border-[#1a1a1a] bg-[#080808] flex items-center justify-between gap-3 shrink-0">
@@ -434,7 +396,12 @@ export default function ContextStudio() {
           </div>
 
           {/* Workbench Tab Content */}
-          <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4">
+          <div
+            className={cn(
+              "flex-1 min-h-0",
+              desktopTab === "workspace" ? "overflow-y-auto p-4 space-y-4" : "p-4 flex flex-col"
+            )}
+          >
             {desktopTab === "workspace" ? (
               <>
                 {/* Synthesis Error Recovery Banner */}
@@ -469,7 +436,7 @@ export default function ContextStudio() {
                     </label>
                     <button
                       type="button"
-                      onClick={() => handleFetchSuggestedPrompts(true)}
+                      onClick={() => generateRecommendedPrompts(activeRepo.id, true)}
                       disabled={loadingPrompts || loading}
                       className="text-xs text-neutral-400 hover:text-white disabled:opacity-40 disabled:pointer-events-none flex items-center gap-1 cursor-pointer transition-colors px-2 py-0.5 rounded border border-[#222222] bg-[#0c0c0c]"
                       title="Generate fresh prompts grounded in AST symbols"
@@ -483,7 +450,7 @@ export default function ContextStudio() {
                     </button>
                   </div>
                   <div className="flex flex-wrap gap-1.5">
-                    {presetPrompts.map((p) => (
+                    {recommendedPrompts.map((p) => (
                       <button
                         key={p.label + p.prompt}
                         disabled={loading}
@@ -584,7 +551,7 @@ export default function ContextStudio() {
               </>
             ) : (
               /* AST Call Graph Tab */
-              <div className="h-full min-h-[400px]">
+              <div className="flex-1 min-h-[400px] h-full">
                 <CallGraphView
                   nodes={callGraphNodes}
                   edges={callGraphEdges}
@@ -636,9 +603,14 @@ export default function ContextStudio() {
 
         {/* Right Column: Generated Context Package */}
         <div
-          className={`flex-1 min-h-0 flex flex-col h-full bg-[#0a0a0a] rounded-lg border border-[#1e1e1e] overflow-hidden ${
-            mobileTab !== "package" ? "hidden lg:flex" : "flex"
-          }`}
+          className={cn(
+            "flex-1 min-h-0 flex-col h-full bg-[#0a0a0a] rounded-lg border border-[#1e1e1e] overflow-hidden",
+            isCallGraphExpanded
+              ? "hidden"
+              : mobileTab !== "package"
+              ? "hidden lg:flex"
+              : "flex"
+          )}
         >
           {/* Header & Export Actions */}
           <div className="p-3 border-b border-[#1a1a1a] bg-[#080808] flex items-center justify-between gap-3 shrink-0">

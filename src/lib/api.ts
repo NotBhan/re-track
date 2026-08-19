@@ -521,6 +521,47 @@ export async function getSuggestedPrompts(
   return invoke<SuggestedPromptsResponse>("get_suggested_prompts", { repoId });
 }
 
+export interface AppSettingsResponse {
+  success: boolean;
+  vector_db: string;
+  graph_db: string;
+  relational_db: string;
+  enable_kg_extraction: boolean;
+  auto_link_entities: boolean;
+  caching: boolean;
+  data_root: string;
+  system_root: string;
+  llm_provider: string;
+  llm_host: string;
+  llm_port: number;
+  llm_model: string;
+  embedding_model: string;
+}
+
+export interface CogneeSettingsRequest {
+  vector_db?: string;
+  graph_db?: string;
+  enable_kg_extraction?: boolean;
+  auto_link_entities?: boolean;
+  caching?: boolean;
+}
+
+/**
+ * Get current application and Cognee configuration.
+ */
+export async function getAppSettings(): Promise<AppSettingsResponse> {
+  return invoke<AppSettingsResponse>("get_settings");
+}
+
+/**
+ * Update and persist Cognee / storage settings to backend and disk.
+ */
+export async function updateCogneeSettings(
+  req: CogneeSettingsRequest
+): Promise<AppSettingsResponse> {
+  return invoke<AppSettingsResponse>("update_cognee_settings", { request: req });
+}
+
 // --- UI domain types (previously in src/types/index.ts) ---
 
 export interface BenchmarkMetric {

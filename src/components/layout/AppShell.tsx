@@ -41,7 +41,7 @@ function AppShellContent({ children, onNewIndex }: AppShellProps) {
       <div
         className={cn(
           "w-full flex-1 flex flex-col h-screen overflow-hidden transition-all duration-200",
-          "lg:ml-[260px]"
+          "lg:ml-[240px]"
         )}
       >
         {children}

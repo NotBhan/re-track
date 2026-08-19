@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 _BACKEND_ROOT = Path(__file__).resolve().parent.parent.parent
 DEFAULT_DATA_ROOT = _BACKEND_ROOT / ".cognee_data"
 DEFAULT_SYSTEM_ROOT = _BACKEND_ROOT / ".cognee_system"
+DEFAULT_SETTINGS_STORE_PATH = Path.home() / ".andes" / "settings.json"
 
 
 class OllamaConfig(BaseSettings):
@@ -69,6 +70,8 @@ class StorageConfig(BaseSettings):
     vector_db: str = Field(default="lancedb", description="Vector database provider")
     graph_db: str = Field(default="kuzu", description="Graph database provider")
     relational_db: str = Field(default="sqlite", description="Relational database provider")
+    enable_kg_extraction: bool = Field(default=True, description="Enable knowledge graph extraction")
+    auto_link_entities: bool = Field(default=False, description="Auto-link detected symbols & entities")
     data_root: Path = Field(default=DEFAULT_DATA_ROOT, description="Data storage root")
     system_root: Path = Field(default=DEFAULT_SYSTEM_ROOT, description="System storage root")
 
@@ -91,6 +94,7 @@ class Settings(BaseSettings):
     ollama: OllamaConfig = Field(default_factory=OllamaConfig)
     storage: StorageConfig = Field(default_factory=StorageConfig)
     service: ServiceConfig = Field(default_factory=ServiceConfig)
+    settings_store_path: Path = Field(default_factory=lambda: DEFAULT_SETTINGS_STORE_PATH)
 
     model_config = {
         "env_prefix": "",
@@ -99,9 +103,75 @@ class Settings(BaseSettings):
         "extra": "ignore",
     }
 
+    def load_persisted_settings(self, store_path: Path | None = None) -> None:
+        """Load user-customized settings from persistent JSON file if present."""
+        path = store_path or self.settings_store_path
+        if not path.exists():
+            return
+
+        try:
+            import json
+            data = json.loads(path.read_text(encoding="utf-8"))
+            if not isinstance(data, dict):
+                return
+
+            # Storage overrides
+            if "vector_db" in data and data["vector_db"]:
+                self.storage.vector_db = str(data["vector_db"])
+            if "graph_db" in data and data["graph_db"]:
+                self.storage.graph_db = str(data["graph_db"])
+            if "relational_db" in data and data["relational_db"]:
+                self.storage.relational_db = str(data["relational_db"])
+            if "enable_kg_extraction" in data:
+                self.storage.enable_kg_extraction = bool(data["enable_kg_extraction"])
+            if "auto_link_entities" in data:
+                self.storage.auto_link_entities = bool(data["auto_link_entities"])
+
+            # Service overrides
+            if "caching" in data:
+                self.service.caching = bool(data["caching"])
+
+            # Inference / Ollama overrides
+            if "llm_model" in data and data["llm_model"]:
+                self.ollama.llm_model = str(data["llm_model"])
+            if "embedding_model" in data and data["embedding_model"]:
+                self.ollama.embedding_model = str(data["embedding_model"])
+            if "llm_host" in data and data["llm_host"]:
+                self.ollama.host = str(data["llm_host"])
+            if "llm_port" in data and data["llm_port"]:
+                self.ollama.port = int(data["llm_port"])
+
+            logger.info("Loaded persistent settings from %s (vector_db=%s, graph_db=%s, kg=%s)",
+                        path, self.storage.vector_db, self.storage.graph_db, self.storage.enable_kg_extraction)
+        except Exception as e:
+            logger.warning("Failed to load persistent settings from %s: %s", path, e)
+
+    def save_persisted_settings(self, store_path: Path | None = None) -> None:
+        """Save current user-customized settings to persistent JSON file."""
+        path = store_path or self.settings_store_path
+        try:
+            import json
+            path.parent.mkdir(parents=True, exist_ok=True)
+            data = {
+                "vector_db": self.storage.vector_db,
+                "graph_db": self.storage.graph_db,
+                "relational_db": self.storage.relational_db,
+                "enable_kg_extraction": self.storage.enable_kg_extraction,
+                "auto_link_entities": self.storage.auto_link_entities,
+                "caching": self.service.caching,
+                "llm_model": self.ollama.llm_model,
+                "embedding_model": self.ollama.embedding_model,
+                "llm_host": self.ollama.host,
+                "llm_port": self.ollama.port,
+            }
+            path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+            logger.info("Saved persistent settings to %s", path)
+        except Exception as e:
+            logger.error("Failed to save persistent settings to %s: %s", path, e)
+
     @model_validator(mode="after")
     def _apply_env_overrides(self) -> "Settings":
-        """Read environment variables and override defaults."""
+        """Read environment variables, then load persisted user settings."""
         self.ollama.llm_model = os.environ.get("LLM_MODEL", self.ollama.llm_model)
         self.ollama.embedding_model = os.environ.get(
             "EMBEDDING_MODEL", self.ollama.embedding_model
@@ -138,6 +208,9 @@ class Settings(BaseSettings):
         skip = os.environ.get("COGNEE_SKIP_CONNECTION_TEST")
         if skip is not None:
             self.service.skip_connection_test = skip.lower() == "true"
+
+        # Apply persisted user settings (if any exist on disk)
+        self.load_persisted_settings()
 
         return self
 

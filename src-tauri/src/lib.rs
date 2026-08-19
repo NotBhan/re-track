@@ -245,7 +245,15 @@ async fn run_benchmark() -> Result<serde_json::Value, String> {
     }
 }
 
-// --- Repository commands ---
+#[tauri::command]
+async fn get_settings() -> Result<serde_json::Value, String> {
+    http_get("/settings").await
+}
+
+#[tauri::command]
+async fn update_cognee_settings(request: serde_json::Value) -> Result<serde_json::Value, String> {
+    http_post("/settings/cognee", &request).await
+}
 
 #[tauri::command]
 async fn update_provider(request: serde_json::Value) -> Result<serde_json::Value, String> {
@@ -499,6 +507,8 @@ pub fn run() {
             append_context_package,
             update_provider,
             get_suggested_prompts,
+            get_settings,
+            update_cognee_settings,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

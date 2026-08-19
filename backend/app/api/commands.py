@@ -10,9 +10,11 @@ from pathlib import Path
 from typing import Any, Optional
 
 from app.api.schemas import (
+    AppSettingsResponse,
     BackendStatusResponse,
     BenchmarkResultItem,
     BenchmarkSuiteResponse,
+    CogneeSettingsRequest,
     ContextPackageAppendRequest,
     ContextPackageListResponse,
     ContextPackageResponse,
@@ -200,8 +202,10 @@ async def update_provider(
             os.environ["LLM_ENDPOINT"] = base_url.rstrip("/")
             os.environ["LLM_MODEL"] = model
             os.environ["LLM_API_KEY"] = api_key
+            _settings.ollama.llm_model = model
             try:
                 _settings.configure_cognee()
+                _settings.save_persisted_settings()
             except Exception as cog_err:
                 logger.warning("Could not reconfigure Cognee runtime: %s", cog_err)
 
@@ -226,6 +230,76 @@ async def update_provider(
             error=type(e).__name__,
             message=f"Provider update failed: {e}",
         )
+
+
+# --- Settings Commands ---
+
+
+async def get_app_settings() -> AppSettingsResponse | ErrorResponse:
+    """Return current app configuration and Cognee settings."""
+    try:
+        settings = _settings or get_settings()
+        llm_prov = "ollama"
+        if _llm_provider is not None:
+            llm_prov = _llm_provider.provider_type.value
+
+        return AppSettingsResponse(
+            success=True,
+            vector_db=settings.storage.vector_db,
+            graph_db=settings.storage.graph_db,
+            relational_db=settings.storage.relational_db,
+            enable_kg_extraction=settings.storage.enable_kg_extraction,
+            auto_link_entities=settings.storage.auto_link_entities,
+            caching=settings.service.caching,
+            data_root=str(settings.storage.data_root),
+            system_root=str(settings.storage.system_root),
+            llm_provider=llm_prov,
+            llm_host=settings.ollama.host,
+            llm_port=settings.ollama.port,
+            llm_model=_llm_provider.default_model if _llm_provider else settings.ollama.llm_model,
+            embedding_model=settings.ollama.embedding_model,
+        )
+    except Exception as e:
+        logger.error("get_app_settings() failed: %s", e)
+        return ErrorResponse(error=type(e).__name__, message=str(e))
+
+
+async def update_cognee_settings(
+    request: CogneeSettingsRequest,
+) -> AppSettingsResponse | ErrorResponse:
+    """Update and persist Cognee / storage settings to disk and runtime."""
+    global _settings
+    start = time.monotonic()
+    logger.info("command: update_cognee_settings() | %s", request.model_dump())
+
+    try:
+        settings = _settings or get_settings()
+        if request.vector_db is not None:
+            settings.storage.vector_db = request.vector_db.strip().lower()
+        if request.graph_db is not None:
+            settings.storage.graph_db = request.graph_db.strip().lower()
+        if request.enable_kg_extraction is not None:
+            settings.storage.enable_kg_extraction = request.enable_kg_extraction
+        if request.auto_link_entities is not None:
+            settings.storage.auto_link_entities = request.auto_link_entities
+        if request.caching is not None:
+            settings.service.caching = request.caching
+
+        # Persist to disk (~/.andes/settings.json)
+        settings.save_persisted_settings()
+
+        # Reconfigure Cognee runtime
+        try:
+            settings.configure_cognee()
+        except Exception as cog_err:
+            logger.warning("Could not reconfigure Cognee runtime: %s", cog_err)
+
+        elapsed = time.monotonic() - start
+        logger.info("command: update_cognee_settings() complete | %.2fs", elapsed)
+        return await get_app_settings()
+    except Exception as e:
+        logger.error("update_cognee_settings() failed: %s", e)
+        return ErrorResponse(error=type(e).__name__, message=str(e))
 
 
 # --- Commands ---

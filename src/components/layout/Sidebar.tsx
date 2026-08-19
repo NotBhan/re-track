@@ -72,10 +72,10 @@ export function Sidebar({ onNewIndex, onCloseMobile, isMobile = false }: Sidebar
           : "w-[240px] fixed left-0 top-0 hidden lg:flex"
       )}
     >
-      {/* Brand Header */}
-      <div className="p-4 pb-3.5 border-b border-[#1a1a1a] flex items-center justify-between">
+      {/* Brand Header — Aligned with TopBar height */}
+      <div className="h-13 sm:h-14 px-4.5 border-b border-[#1a1a1a] flex items-center justify-between shrink-0">
         <div className="flex items-center gap-2.5">
-          <div className="w-6 h-6 rounded-md bg-white text-black flex items-center justify-center font-bold text-xs shrink-0">
+          <div className="w-6 h-6 rounded-md bg-white text-black flex items-center justify-center font-bold text-xs shrink-0 shadow-xs">
             <Layers className="w-3.5 h-3.5" />
           </div>
           <div className="flex items-center gap-1.5">
@@ -99,13 +99,13 @@ export function Sidebar({ onNewIndex, onCloseMobile, isMobile = false }: Sidebar
       </div>
 
       {/* Primary Action Button */}
-      <div className="px-3 pt-3 pb-1.5">
+      <div className="px-3.5 pt-3.5 pb-2 shrink-0">
         <button
           onClick={() => {
             if (isMobile && onCloseMobile) onCloseMobile();
             onNewIndex?.();
           }}
-          className="w-full h-8.5 rounded-md bg-white text-black font-medium text-xs flex items-center justify-center gap-1.5 hover:bg-neutral-200 transition-colors shadow-xs cursor-pointer"
+          className="w-full h-9 rounded-lg bg-white text-black font-medium text-xs flex items-center justify-center gap-1.5 hover:bg-neutral-200 transition-colors shadow-xs cursor-pointer"
         >
           <Plus className="w-3.5 h-3.5 text-black stroke-[2.5]" />
           <span>Index Repository</span>
@@ -114,7 +114,7 @@ export function Sidebar({ onNewIndex, onCloseMobile, isMobile = false }: Sidebar
 
       {/* Navigation Links */}
       <ScrollArea className="flex-1 px-3 py-2">
-        <div className="space-y-0.5">
+        <div className="space-y-1">
           {navItems.map((item) => (
             <NavLink
               key={item.to}
@@ -123,9 +123,9 @@ export function Sidebar({ onNewIndex, onCloseMobile, isMobile = false }: Sidebar
               onClick={handleNavClick}
               className={({ isActive }) =>
                 cn(
-                  "flex items-center justify-between px-2.5 py-2 rounded-md text-xs font-normal group transition-colors",
+                  "flex items-center justify-between px-3 py-2.25 rounded-lg text-xs font-normal group transition-colors",
                   isActive
-                    ? "bg-[#181818] text-white font-medium"
+                    ? "bg-[#181818] text-white font-medium shadow-xs"
                     : "text-neutral-400 hover:text-white hover:bg-[#121212]"
                 )
               }
@@ -154,7 +154,7 @@ export function Sidebar({ onNewIndex, onCloseMobile, isMobile = false }: Sidebar
       </ScrollArea>
 
       {/* Engine Core Status Deck (Restrained & Calm) */}
-      <div className="p-3 border-t border-[#1a1a1a] bg-[#050505] space-y-2">
+      <div className="p-3.5 border-t border-[#1a1a1a] bg-[#050505] space-y-2.5 shrink-0">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 min-w-0">
             <span

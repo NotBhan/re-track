@@ -81,8 +81,11 @@ export default function KnowledgeExplorer() {
 
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden bg-black text-foreground antialiased">
-      <TopBar title={`RE:Track | Knowledge Explorer: ${repo ? repo.name : repoId}`}>
-        <div className="flex items-center gap-2">
+      <TopBar
+        title="RE:Track | Knowledge Explorer"
+        subtitle={repo ? `Codebase: ${repo.name}` : `ID: ${repoId}`}
+      >
+        <div className="flex items-center gap-1.5 sm:gap-2">
           <Button
             variant="outline"
             size="sm"
@@ -90,17 +93,17 @@ export default function KnowledgeExplorer() {
             className="h-8 px-2.5 text-xs font-mono gap-1.5 border-[#262626] bg-[#0a0a0a] text-neutral-300 hover:text-white hover:bg-[#1f1f1f] cursor-pointer"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
-            <span>Workspaces</span>
+            <span className="hidden sm:inline">Workspaces</span>
           </Button>
 
           {repo && (
             <Button
               size="sm"
               onClick={() => setShowQuickContext(true)}
-              className="h-8 px-3 text-xs font-mono font-semibold bg-[#1a1a1a] border border-[#333] text-white hover:bg-white hover:text-black gap-1.5 transition-all cursor-pointer"
+              className="h-8 px-2.5 sm:px-3 text-xs font-mono font-semibold bg-[#1a1a1a] border border-[#333] text-white hover:bg-white hover:text-black gap-1.5 transition-all cursor-pointer"
             >
               <Zap className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
-              <span>Quick Context</span>
+              <span className="hidden xs:inline">Quick Context</span>
             </Button>
           )}
 
@@ -108,10 +111,10 @@ export default function KnowledgeExplorer() {
             <Button
               size="sm"
               onClick={() => navigate(`/studio?repo=${repo.id}`)}
-              className="h-8 px-3.5 text-xs font-mono font-bold bg-white text-black hover:bg-neutral-200 gap-1.5 shadow-sm cursor-pointer"
+              className="h-8 px-2.5 sm:px-3.5 text-xs font-mono font-bold bg-white text-black hover:bg-neutral-200 gap-1.5 shadow-sm cursor-pointer"
             >
               <Sparkles className="w-3.5 h-3.5" />
-              <span>Context Studio</span>
+              <span className="hidden xs:inline">Context Studio</span>
             </Button>
           )}
         </div>

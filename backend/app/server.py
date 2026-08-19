@@ -36,9 +36,12 @@ from app.api.commands import (
     get_agent_context,
     get_repository_progress,
     generate_suggested_prompts,
+    get_app_settings,
+    update_cognee_settings,
 )
 from app.models.agent_context import AgentContextRequest
 from app.api.schemas import (
+    CogneeSettingsRequest,
     ContextPackageAppendRequest,
     ContextPackageSaveRequest,
     ErrorResponse,
@@ -314,3 +317,25 @@ async def provider_update_endpoint(request: UpdateProviderRequest):
 async def get_repo_prompts_endpoint(repo_id: str):
     """Generate repository-tailored prompt recommendations using local LLM or AST metadata."""
     return await generate_suggested_prompts(repo_id)
+
+
+# --- Settings Management ---
+
+
+@app.get("/settings")
+async def settings_get_endpoint():
+    """Get current persistent application and Cognee settings."""
+    result = await get_app_settings()
+    if isinstance(result, ErrorResponse):
+        raise HTTPException(status_code=500, detail=result.model_dump())
+    return result.model_dump()
+
+
+@app.post("/settings/cognee")
+async def settings_cognee_update_endpoint(request: CogneeSettingsRequest):
+    """Update and persist Cognee settings to disk and active runtime."""
+    result = await update_cognee_settings(request)
+    if isinstance(result, ErrorResponse):
+        raise HTTPException(status_code=500, detail=result.model_dump())
+    return result.model_dump()
+

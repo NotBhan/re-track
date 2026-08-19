@@ -485,7 +485,47 @@ class TestSuggestedPrompts:
         assert "prompt" in result["prompts"][0]
 
 
+class TestSettingsAPI:
+    @pytest.mark.asyncio
+    async def test_get_and_update_cognee_settings(self, tmp_path):
+        from app.api.commands import get_app_settings, update_cognee_settings
+        from app.api.schemas import CogneeSettingsRequest
+        from app.config.settings import Settings
+
+        settings_file = tmp_path / "settings.json"
+        import app.api.commands as cmd_module
+        settings = Settings(settings_store_path=settings_file)
+        cmd_module._settings = settings
+
+        # Update settings
+        req = CogneeSettingsRequest(
+            vector_db="qdrant",
+            graph_db="networkx",
+            enable_kg_extraction=False,
+            auto_link_entities=True,
+            caching=True,
+        )
+
+        result = await update_cognee_settings(req)
+        assert result.success is True
+        assert result.vector_db == "qdrant"
+        assert result.graph_db == "networkx"
+        assert result.enable_kg_extraction is False
+        assert result.auto_link_entities is True
+        assert result.caching is True
+
+        # Verify persistent file was written
+        assert settings_file.exists()
+
+        # Verify get_app_settings returns the persisted values
+        get_res = await get_app_settings()
+        assert get_res.success is True
+        assert get_res.vector_db == "qdrant"
+        assert get_res.graph_db == "networkx"
+
+
 # ─── Main ───
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+

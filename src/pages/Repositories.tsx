@@ -52,7 +52,7 @@ export default function Repositories() {
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden bg-black text-foreground antialiased">
       <TopBar title="RE:Track | Workspaces & Repositories" subtitle="Repository Knowledge Base">
-        <div className="relative w-64 max-w-full hidden md:block">
+        <div className="relative w-48 sm:w-60 md:w-64 max-w-full hidden sm:block">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-neutral-400" />
           <Input
             type="text"
@@ -106,7 +106,7 @@ export default function Repositories() {
       </div>
 
       {/* Main Content Area */}
-      <main className="flex-1 min-h-0 flex flex-col lg:flex-row overflow-hidden p-4 sm:p-6 gap-6 max-w-[1900px] w-full mx-auto">
+      <main className="flex-1 min-h-0 flex flex-col lg:flex-row overflow-hidden p-4 sm:p-5 lg:p-6 gap-5 lg:gap-6 max-w-[1900px] w-full mx-auto">
         {/* Left Column: Repository Catalog */}
         <div
           className={`flex-1 min-h-0 flex flex-col overflow-hidden bg-[#0a0a0a] rounded-lg border border-[#1e1e1e] p-4 sm:p-5 ${

@@ -407,3 +407,33 @@ class ScanResultResponse(BaseModel):
     size_bytes: int = Field(default=0, description="Total size in bytes")
     ignored_dirs: list[str] = Field(default_factory=list, description="Directories skipped")
     estimated_index_time_ms: float = Field(default=0.0, description="Estimated indexing time")
+
+
+class CogneeSettingsRequest(BaseModel):
+    """Request to update Cognee configuration."""
+
+    vector_db: Optional[str] = Field(default=None, description="Vector database provider (lancedb, qdrant, milvus)")
+    graph_db: Optional[str] = Field(default=None, description="Graph database provider (kuzu, ladybug, networkx)")
+    enable_kg_extraction: Optional[bool] = Field(default=None, description="Enable knowledge graph extraction")
+    auto_link_entities: Optional[bool] = Field(default=None, description="Auto-link detected symbols & entities")
+    caching: Optional[bool] = Field(default=None, description="Enable session memory caching")
+
+
+class AppSettingsResponse(BaseModel):
+    """Current application configuration."""
+
+    success: bool = Field(default=True, description="Whether query succeeded")
+    vector_db: str = Field(description="Active vector database provider")
+    graph_db: str = Field(description="Active graph database provider")
+    relational_db: str = Field(description="Active relational database provider")
+    enable_kg_extraction: bool = Field(description="Whether knowledge graph extraction is enabled")
+    auto_link_entities: bool = Field(description="Whether auto-linking is enabled")
+    caching: bool = Field(description="Whether session memory caching is enabled")
+    data_root: str = Field(description="Data root storage directory")
+    system_root: str = Field(description="System root storage directory")
+    llm_provider: str = Field(default="ollama", description="Active LLM provider")
+    llm_host: str = Field(default="localhost", description="LLM host")
+    llm_port: int = Field(default=11434, description="LLM port")
+    llm_model: str = Field(default="phi4-mini", description="Active LLM model")
+    embedding_model: str = Field(default="nomic-embed-text:latest", description="Active embedding model")
+

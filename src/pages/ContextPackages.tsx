@@ -69,31 +69,32 @@ export default function ContextPackages() {
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden bg-black text-foreground antialiased font-sans">
       <TopBar title="RE:Track | Context Packages" subtitle="Versioned Context Library">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 sm:gap-2">
           {compareList.length === 2 && (
             <Button
               size="sm"
               onClick={() => setShowCompareModal(true)}
-              className="h-8 px-3 text-xs font-mono font-bold bg-white text-black hover:bg-neutral-200 gap-1.5 shadow-sm cursor-pointer"
+              className="h-8 px-2.5 sm:px-3 text-xs font-mono font-bold bg-white text-black hover:bg-neutral-200 gap-1.5 shadow-sm cursor-pointer"
             >
               <ArrowRightLeft className="w-3.5 h-3.5" />
-              <span>Compare 2 Packages</span>
+              <span className="hidden xs:inline">Compare</span>
+              <span className="hidden sm:inline">2 Packages</span>
             </Button>
           )}
 
           <Button
             onClick={() => navigate("/studio")}
             size="sm"
-            className="gap-1.5 h-8 text-xs font-mono font-bold bg-white text-black hover:bg-neutral-200 shadow-xs cursor-pointer"
+            className="gap-1.5 h-8 px-2.5 sm:px-3.5 text-xs font-mono font-bold bg-white text-black hover:bg-neutral-200 shadow-xs cursor-pointer"
           >
             <Plus className="w-3.5 h-3.5" />
-            <span>New Package</span>
+            <span className="hidden xs:inline">New Package</span>
           </Button>
         </div>
       </TopBar>
 
-      <main className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-5">
-        <div className="max-w-5xl mx-auto space-y-4">
+      <main className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-5 lg:p-6">
+        <div className="max-w-5xl mx-auto space-y-5">
           {/* Header & Filter Controls */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#1a1a1a] pb-4">
             <div>

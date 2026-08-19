@@ -48,16 +48,17 @@ export default function Benchmarks() {
             onClick={handleRunSuite}
             disabled={loading}
             size="sm"
-            className="w-[170px] justify-center gap-2 h-8 text-xs font-mono font-bold bg-white text-black hover:bg-neutral-200 shadow-xs cursor-pointer disabled:opacity-60"
+            className="h-8 px-3 text-xs font-mono font-bold bg-white text-black hover:bg-neutral-200 shadow-xs cursor-pointer disabled:opacity-60 gap-1.5"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
-            <span>{loading ? "Running Suite..." : "Execute Benchmarks"}</span>
+            <span className="hidden xs:inline">{loading ? "Running Suite..." : "Execute Benchmarks"}</span>
+            <span className="xs:hidden">{loading ? "Running..." : "Run"}</span>
           </Button>
         </div>
       </TopBar>
 
-      <main className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-5">
-        <div className="max-w-5xl mx-auto space-y-5">
+      <main className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-5 lg:p-6">
+        <div className="max-w-5xl mx-auto space-y-5 lg:space-y-6">
           {/* Header */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#1a1a1a] pb-4">
             <div>

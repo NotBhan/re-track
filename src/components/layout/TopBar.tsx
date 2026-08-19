@@ -18,12 +18,12 @@ export function TopBar({ title, subtitle, children }: TopBarProps) {
   const engineOk = backendOnline && ollamaRunning;
 
   return (
-    <header className="h-12 w-full sticky top-0 z-30 bg-black/95 backdrop-blur-md flex items-center justify-between px-4 sm:px-5 border-b border-[#1e1e1e]">
-      {/* Left: Mobile Menu Trigger + Title */}
-      <div className="flex items-center gap-3 min-w-0">
+    <header className="h-13 sm:h-14 w-full sticky top-0 z-30 bg-black/95 backdrop-blur-md flex items-center justify-between px-4 sm:px-6 border-b border-[#1e1e1e] select-none shrink-0">
+      {/* Group A: Mobile Menu Trigger + Brand/Title/Subtitle */}
+      <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1 mr-3 sm:mr-4">
         <button
           onClick={toggleMobileMenu}
-          className="lg:hidden p-1 rounded-md text-neutral-400 hover:text-white hover:bg-[#141414] transition-colors -ml-1 cursor-pointer"
+          className="lg:hidden p-1.5 rounded-md text-neutral-400 hover:text-white hover:bg-[#141414] transition-colors -ml-1 cursor-pointer shrink-0"
           aria-label="Toggle navigation menu"
         >
           <Menu className="w-4 h-4" />
@@ -33,33 +33,38 @@ export function TopBar({ title, subtitle, children }: TopBarProps) {
           <div className="lg:hidden w-5 h-5 rounded-md bg-white text-black flex items-center justify-center font-bold text-xs shrink-0">
             <Layers className="w-3 h-3" />
           </div>
-          <div className="min-w-0">
-            <h2 className="text-xs font-semibold text-white tracking-tight truncate">
+          <div className="min-w-0 flex flex-col justify-center">
+            <h2 className="text-xs sm:text-[13px] font-semibold text-white tracking-tight truncate leading-tight">
               {title || "RE:Track"}
             </h2>
             {subtitle && (
-              <p className="text-[11px] text-neutral-500 truncate hidden sm:block">
+              <p className="text-[10px] sm:text-[11px] text-neutral-500 font-mono truncate hidden sm:block mt-0.5 leading-none">
                 {subtitle}
               </p>
             )}
           </div>
         </div>
 
-        {children && <div className="hidden md:flex items-center gap-2 ml-2">{children}</div>}
+        {/* Group B: Contextual Actions & Workspace Switcher */}
+        {children && (
+          <div className="flex items-center gap-2 sm:gap-3 ml-2 sm:ml-4 pl-2 sm:pl-4 border-l border-[#222222]">
+            {children}
+          </div>
+        )}
       </div>
 
-      {/* Right: Engine Status */}
-      <div className="flex items-center gap-2 shrink-0">
-        <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md border border-[#222222] bg-[#0a0a0a] text-[11px] font-mono text-neutral-300">
+      {/* Group C: Engine Status & Telemetry */}
+      <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+        <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-[#222222] bg-[#0a0a0a] text-[11px] font-mono text-neutral-300 shadow-xs">
           <span
             className={cn(
               "w-1.5 h-1.5 rounded-full shrink-0",
               engineOk ? "bg-emerald-400" : backendOnline ? "bg-amber-400" : "bg-red-500"
             )}
           />
-          <span>{llmModel}</span>
-          <span className="text-neutral-500">·</span>
-          <span className={cn(engineOk ? "text-neutral-400" : "text-amber-400")}>
+          <span className="truncate max-w-[90px] sm:max-w-[140px]">{llmModel}</span>
+          <span className="text-neutral-600 hidden xs:inline">·</span>
+          <span className={cn("hidden xs:inline", engineOk ? "text-neutral-400" : "text-amber-400")}>
             {engineOk ? "Ready" : backendOnline ? "Degraded" : "Offline"}
           </span>
         </div>
@@ -67,3 +72,4 @@ export function TopBar({ title, subtitle, children }: TopBarProps) {
     </header>
   );
 }
+
