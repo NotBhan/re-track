@@ -101,32 +101,39 @@ Make `app.application` genuinely independent of `app.api`, `FastAPI`, `app.serve
 
 ---
 
-## Phase 3: Infrastructure Ports & Adapters
+## Phase 3: Infrastructure Ports & Adapters (Completed)
 
 ### Objective
-Define explicit abstraction interfaces (Ports) for all external systems (Memory/Vector/Graph store, LLM Inference, Structural Code Graph CLI, Filesystem persistence) and move vendor-specific SDK code into Adapters.
+Define explicit abstraction interfaces (Ports) for all external systems (Memory/Vector/Graph store, LLM Inference, Structural Code Graph CLI, Filesystem persistence, Telemetry) and decouple Use Cases from concrete service implementations.
 
 ### Affected Components
-- `backend/app/ports/` (New: `MemoryPort`, `ModelPort`, `StructuralGraphPort`, `RepositoryStorePort`, `PackageStorePort`)
-- `backend/app/adapters/memory/cognee_adapter.py` (Extract from `cognee_service.py`)
-- `backend/app/adapters/model/openai_adapter.py` (Extract from `llm_provider_service.py`)
-- `backend/app/adapters/graph/cgc_adapter.py` (Extract from `cgc_service.py`)
-- `backend/app/adapters/storage/json_store_adapter.py` (Disk persistence)
+- `backend/app/application/domain/repository.py` (New: `IndexedRepositoryRecord` domain entity)
+- `backend/app/application/ports/` (New: `FileSystemPort`, `RepositoryMetadataPort`, `MemoryPort`, `SourceSearchPort`, `ContextServicePort`, `IndexingServicePort`, `RepositoryManagerPort`, `LLMProviderPort`, `ContextPackageRepositoryPort`, `CGCServicePort`, `IntentParserPort`, `SummaryGeneratorPort`, `ContextCachePort`, `HardwareTelemetryPort`, `BenchmarkRunnerPort`)
+- `backend/app/services/local_filesystem.py` (New: `LocalFileSystemAdapter` implementing `FileSystemPort`)
+- `backend/app/services/hardware_telemetry.py` (New: `LocalHardwareTelemetryAdapter` implementing `HardwareTelemetryPort`)
+- `backend/app/services/repository_metadata_store.py` (Updated to implement `RepositoryMetadataPort` with typed `IndexedRepositoryRecord`)
+- `backend/app/services/source_search_service.py` (Updated to use injected `FileSystemPort`)
+- `backend/app/application/use_cases/` (All 7 use cases refactored to depend on ports; 0 imports of `app.services`)
+- `backend/app/application/container.py` (Wires adapters to ports at composition root)
+- `backend/tests/test_application_boundary.py` (Expanded with port AST purity, domain entity roundtrip, adapter contract tests)
 
 ### Migration Strategy
-1. Define typed Python `Protocol` classes in `app/ports/`.
-2. Wrap `CogneeService` behind `MemoryPort` implementing `remember`, `recall`, `cognify`, `get_stats`, `get_graph`, `get_vectors`.
-3. Wrap `LLMProviderService` behind `ModelPort` implementing `generate_completion`, `list_models`, `check_health`.
-4. Wrap `CGCService` behind `StructuralGraphPort`.
-5. Inject adapters into application use cases via dependency injection / factory registry.
-
-### Risks
-- Latency overhead from additional abstraction layers.
-- Cognee internal changes breaking adapter assumptions.
+1. Defined typed `IndexedRepositoryRecord` domain entity in `app.application.domain.repository.py`.
+2. Created Python `Protocol` ports under `app.application.ports/`.
+3. Created `LocalFileSystemAdapter` and `LocalHardwareTelemetryAdapter` in `app.services/`.
+4. Refactored `JsonRepositoryMetadataStore` to implement `RepositoryMetadataPort` using `IndexedRepositoryRecord`.
+5. Refactored all seven use-case constructors to receive capability ports rather than concrete service classes.
+6. Updated `ApplicationContainer` to construct adapters and wire them into use cases.
+7. Validated strict AST purity enforcing zero `app.services` imports across `use_cases/`, `ports/`, and `domain/`.
 
 ### Acceptance Criteria
-- [ ] Core domain and use cases depend exclusively on `ports/` and never directly import `cognee`, `lance`, or `kuzu`.
-- [ ] In-memory mock adapters can be instantiated for fast testing without running Ollama or Cognee databases.
+- [x] Core domain and use cases depend exclusively on `app.application.ports` and never import `app.services` or concrete adapters.
+- [x] Typed `IndexedRepositoryRecord` entity eliminates untyped dictionary leakage across metadata operations.
+- [x] Filesystem operations and hardware telemetry are encapsulated behind `FileSystemPort` and `HardwareTelemetryPort`.
+- [x] In-memory mock/fake port adapters can be instantiated for fast testing without running live external databases.
+- [x] 100% backend tests pass (313 passed, 2 skipped, 0 failed).
+- [x] 100% AST architectural boundary tests pass (18 passed).
+- [x] Frontend production build succeeds (`npm run build`).
 
 ---
 

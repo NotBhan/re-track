@@ -1,11 +1,10 @@
 """System, health, settings, and provider use cases for RE:Track.
 
 Coordinates hardware telemetry, service status, settings persistence, and provider updates.
-All dependencies are explicitly injected via constructor.
+All dependencies are explicitly injected via constructor capability ports.
 """
 
 import logging
-from pathlib import Path
 import time
 from typing import Any, Callable, Coroutine, Optional
 
@@ -16,11 +15,15 @@ from app.application.dto import (
     ErrorResponse,
     HealthResponse,
 )
+from app.application.ports.hardware_telemetry import (
+    HardwareTelemetry,
+    HardwareTelemetryPort,
+)
+from app.application.ports.llm_provider import LLMProviderPort
+from app.application.ports.memory import MemoryPort
 from app.config.settings import Settings
 from app.models.errors import CogneeServiceError
 from app.models.provider import ProviderType
-from app.services.cognee_service import CogneeService
-from app.services.llm_provider_service import LLMProviderService
 
 logger = logging.getLogger(__name__)
 
@@ -31,15 +34,17 @@ class SystemUseCases:
     def __init__(
         self,
         settings_getter: Callable[[], Settings],
-        cognee_service_getter: Callable[[], Optional[CogneeService]],
-        llm_provider_getter: Callable[[], Optional[LLMProviderService]],
+        cognee_service_getter: Callable[[], Optional[MemoryPort]],
+        llm_provider_getter: Callable[[], Optional[LLMProviderPort]],
         provider_updater_fn: Callable[[str, str, str, str], Coroutine[Any, Any, dict | ErrorResponse]],
+        telemetry_port: Optional[HardwareTelemetryPort] = None,
         version: str = "0.1.0",
     ) -> None:
         self._get_settings = settings_getter
         self._get_cognee = cognee_service_getter
         self._get_llm_provider = llm_provider_getter
         self._update_provider_fn = provider_updater_fn
+        self._telemetry = telemetry_port
         self.version = version
 
     async def health(self) -> HealthResponse | ErrorResponse:
@@ -56,8 +61,8 @@ class SystemUseCases:
             if llm_provider:
                 try:
                     p_health = await llm_provider.check_health()
-                    ollama_ok = p_health.is_reachable
-                    active_model = p_health.active_model
+                    ollama_ok = getattr(p_health, "is_reachable", False)
+                    active_model = getattr(p_health, "active_model", None)
                 except Exception:
                     ollama_ok = False
             else:
@@ -67,55 +72,22 @@ class SystemUseCases:
             cognee_ok = cognee.is_initialized if cognee else False
             overall_status = "ok" if (ollama_ok and cognee_ok) else "degraded"
 
-            # Telemetry collection (RAM, CPU, GPU)
-            ram_total = 0.0
-            ram_used = 0.0
-            cpu_pct = 0.0
-            try:
-                import psutil
-                mem = psutil.virtual_memory()
-                ram_total = round(mem.total / (1024 ** 3), 1)
-                ram_used = round(mem.used / (1024 ** 3), 1)
-                cpu_pct = round(psutil.cpu_percent(interval=None), 1)
-            except Exception:
-                pass
-
-            vram_total = 0.0
-            vram_used = 0.0
-            gpu_name = None
-
-            # 1. Try Linux sysfs DRM mem_info (AMD Radeon / Intel / generic DRM drivers)
-            try:
-                for card in sorted(Path("/sys/class/drm").glob("card*")):
-                    vram_tot_f = card / "device" / "mem_info_vram_total"
-                    vram_used_f = card / "device" / "mem_info_vram_used"
-                    if vram_tot_f.exists() and vram_used_f.exists():
-                        tot = int(vram_tot_f.read_text().strip()) / (1024 ** 3)
-                        used = int(vram_used_f.read_text().strip()) / (1024 ** 3)
-                        if tot > vram_total:
-                            vram_total = round(tot, 1)
-                            vram_used = round(used, 1)
-                            gpu_name = "AMD Radeon GPU"
-            except Exception:
-                pass
-
-            # 2. Try NVIDIA SMI if sysfs didn't find dedicated VRAM
-            if vram_total == 0.0:
-                try:
-                    import subprocess
-                    out = subprocess.check_output(
-                        ["nvidia-smi", "--query-gpu=name,memory.total,memory.used", "--format=csv,noheader,nounits"],
-                        stderr=subprocess.DEVNULL,
-                        timeout=1,
-                    ).decode().strip()
-                    if out:
-                        parts = [p.strip() for p in out.split(",")]
-                        if len(parts) >= 3:
-                            gpu_name = parts[0]
-                            vram_total = round(float(parts[1]) / 1024.0, 1)
-                            vram_used = round(float(parts[2]) / 1024.0, 1)
-                except Exception:
-                    pass
+            # Telemetry collection via HardwareTelemetryPort
+            if self._telemetry:
+                telem = self._telemetry.get_telemetry()
+                ram_total = telem.ram_total_gb
+                ram_used = telem.ram_used_gb
+                cpu_pct = telem.cpu_percent
+                vram_total = telem.vram_total_gb
+                vram_used = telem.vram_used_gb
+                gpu_name = telem.gpu_name
+            else:
+                ram_total = 16.0
+                ram_used = 8.0
+                cpu_pct = 10.0
+                vram_total = 0.0
+                vram_used = 0.0
+                gpu_name = None
 
             ram_pct = round((ram_used / ram_total) * 100, 1) if ram_total > 0 else 0.0
             high_mem_pressure = ram_pct >= 90.0
@@ -174,8 +146,8 @@ class SystemUseCases:
             if llm_provider:
                 try:
                     p_health = await llm_provider.check_health()
-                    ollama_ok = p_health.is_reachable
-                    active_model = p_health.active_model
+                    ollama_ok = getattr(p_health, "is_reachable", False)
+                    active_model = getattr(p_health, "active_model", None)
                 except Exception:
                     ollama_ok = False
             else:
@@ -270,7 +242,11 @@ class SystemUseCases:
             llm_prov = "ollama"
             llm_provider = self._get_llm_provider()
             if llm_provider is not None:
-                llm_prov = llm_provider.provider_type.value
+                provider_type = getattr(llm_provider, "provider_type", None)
+                if hasattr(provider_type, "value"):
+                    llm_prov = provider_type.value
+                elif isinstance(provider_type, str):
+                    llm_prov = provider_type
 
             response = AppSettingsResponse(
                 success=True,

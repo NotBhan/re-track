@@ -1,7 +1,7 @@
 """Context generation use cases for RE:Track.
 
 Coordinates interactive Context Package assembly and external AI coding agent middleware.
-All dependencies are explicitly injected via constructor.
+All dependencies are explicitly injected via constructor capability ports.
 """
 
 import asyncio
@@ -17,18 +17,53 @@ from app.application.dto import (
     ErrorResponse,
     GenerateContextRequest,
 )
+from app.application.ports.cgc_service import CGCServicePort
+from app.application.ports.context_cache import ContextCachePort
+from app.application.ports.context_service import ContextServicePort
+from app.application.ports.filesystem import FileSystemPort
+from app.application.ports.indexing_service import IndexingServicePort
+from app.application.ports.intent_parser import IntentParserPort
+from app.application.ports.llm_provider import LLMProviderPort
+from app.application.ports.memory import MemoryPort
+from app.application.ports.source_search import SourceSearchPort
+from app.application.ports.summary_generator import SummaryGeneratorPort
 from app.models.errors import CogneeServiceError
-from app.services.cgc_service import CGCService
-from app.services.cognee_service import CogneeService
-from app.services.context_cache import ContextCacheEngine
-from app.services.context_service import ContextService
-from app.services.indexing_service import IndexingService
-from app.services.intent_parser import IntentParserService
-from app.services.llm_provider_service import LLMProviderService
-from app.services.repository_summary import RepositorySummaryGenerator
-from app.services.source_search_service import SourceSearchService
 
 logger = logging.getLogger(__name__)
+
+
+def _rule_based_fallback_intent(prompt: str):
+    """Fast, LLM-free rule-based intent parser for zero-hallucination fallback."""
+    from pydantic import BaseModel, Field
+
+    class _FallbackIntent(BaseModel):
+        task_summary: str
+        category: str = "general"
+        extracted_symbols: list[str] = Field(default_factory=list)
+        relevant_file_hints: list[str] = Field(default_factory=list)
+        is_vague: bool = False
+
+    lowered = prompt.lower()
+    category = "general"
+    if any(w in lowered for w in ["fix", "bug", "error", "issue", "fail", "crash"]):
+        category = "bug_fix"
+    elif any(w in lowered for w in ["add", "create", "implement", "build", "new"]):
+        category = "feature_addition"
+    elif any(w in lowered for w in ["refactor", "clean", "structure", "rename", "move"]):
+        category = "refactoring"
+
+    # Extract symbols with backticks or identifiers
+    import re
+    backticked = re.findall(r"`([a-zA-Z_][a-zA-Z0-9_\.]*)`", prompt)
+    hints = re.findall(r"([a-zA-Z0-9_\-\./]+\.[a-zA-Z0-9]+)", prompt)
+
+    return _FallbackIntent(
+        task_summary=prompt.strip().split("\n")[0][:120],
+        category=category,
+        extracted_symbols=list(dict.fromkeys(backticked)),
+        relevant_file_hints=list(dict.fromkeys(hints)),
+        is_vague=len(prompt.split()) < 5,
+    )
 
 
 class ContextUseCases:
@@ -36,17 +71,18 @@ class ContextUseCases:
 
     def __init__(
         self,
-        context_service: Optional[ContextService],
-        cognee_service: Optional[CogneeService],
-        indexing_service: Optional[IndexingService],
-        intent_parser: Optional[IntentParserService],
-        llm_provider: Optional[LLMProviderService],
-        cgc_service: Optional[CGCService],
-        summary_generator: RepositorySummaryGenerator,
-        context_cache: ContextCacheEngine,
+        context_service: Optional[ContextServicePort],
+        cognee_service: Optional[MemoryPort],
+        indexing_service: Optional[IndexingServicePort],
+        intent_parser: Optional[IntentParserPort],
+        llm_provider: Optional[LLMProviderPort],
+        cgc_service: Optional[CGCServicePort],
+        summary_generator: SummaryGeneratorPort,
+        context_cache: ContextCachePort,
         context_gen_lock: asyncio.Lock,
         ensure_services_fn: Callable[[], None],
-        source_search: Optional[SourceSearchService] = None,
+        source_search: Optional[SourceSearchPort] = None,
+        filesystem: Optional[FileSystemPort] = None,
     ) -> None:
         self._context_service = context_service
         self._cognee_service = cognee_service
@@ -58,7 +94,8 @@ class ContextUseCases:
         self._cache = context_cache
         self._lock = context_gen_lock
         self._ensure_services = ensure_services_fn
-        self._source_search = source_search or SourceSearchService()
+        self._source_search = source_search
+        self._fs = filesystem
 
     async def generate_context(
         self,
@@ -93,31 +130,34 @@ class ContextUseCases:
                 top_k=request.top_k or 20,
             )
 
+            meta = getattr(package, "metadata", None)
+            retrieved = getattr(meta, "retrieved_memory_count", 0) if meta else 0
+            deduped = getattr(meta, "deduplicated_count", 0) if meta else 0
+            compressed = getattr(meta, "compressed_count", 0) if meta else 0
+            ratio = getattr(meta, "compression_ratio", 1.0) if meta else 1.0
+            retrieval_ms = getattr(meta, "retrieval_time_ms", 0) if meta else 0
+            total_ms = getattr(meta, "total_time_ms", 0) if meta else int((time.monotonic() - start) * 1000)
+            sections = getattr(package, "sections", []) or []
+            headings = [s.heading for s in sections if hasattr(s, "heading")]
+            references = getattr(package, "references", []) or []
+
             response = ContextResponse(
                 success=True,
-                task=package.task,
-                objective=package.objective,
-                markdown=package.markdown,
-                section_count=package.section_count,
-                source_count=package.source_count,
-                token_estimate=package.token_estimate,
-                dataset=package.dataset,
-                retrieved_memories=package.metadata.retrieved_memory_count if package.metadata else 0,
-                deduplicated_memories=package.metadata.deduplicated_count if package.metadata else 0,
-                compressed_memories=package.metadata.compressed_count if package.metadata else 0,
-                compression_ratio=package.metadata.compression_ratio if package.metadata else 1.0,
-                retrieval_time_ms=package.metadata.retrieval_time_ms if package.metadata else 0,
-                total_time_ms=package.metadata.total_time_ms if package.metadata else 0,
-                reference_count=len(package.references),
-                section_headings=[s.heading for s in package.sections],
-            )
-
-            elapsed = time.monotonic() - start
-            logger.info(
-                "use_case: generate_context() complete | sources=%d | ~%d tokens | %.2fs",
-                package.source_count,
-                package.token_estimate,
-                elapsed,
+                task=getattr(package, "task", request.task),
+                objective=getattr(package, "objective", ""),
+                markdown=getattr(package, "markdown", ""),
+                section_count=getattr(package, "section_count", len(sections)),
+                source_count=getattr(package, "source_count", 0),
+                token_estimate=getattr(package, "token_estimate", len(getattr(package, "markdown", "")) // 4),
+                dataset=getattr(package, "dataset", ", ".join(request.datasets)),
+                retrieved_memories=retrieved,
+                deduplicated_memories=deduped,
+                compressed_memories=compressed,
+                compression_ratio=ratio,
+                retrieval_time_ms=retrieval_ms,
+                total_time_ms=total_ms,
+                reference_count=len(references),
+                section_headings=headings,
             )
             return response
 
@@ -144,9 +184,9 @@ class ContextUseCases:
         self,
         request: AgentContextRequest,
     ) -> AgentContextResponse | ErrorResponse:
-        """Generate an optimized context package for an external coding agent.
+        """Generate compact, high-precision context for external AI coding agents.
 
-        Parses intent, retrieves structural code graphs via CGC, fetches semantic
+        Parses prompt intent, checks file relevance, synthesizes semantic
         memory via Cognee, and builds a compact Markdown Context Package.
         """
         start = time.monotonic()
@@ -172,7 +212,12 @@ class ContextUseCases:
                 # 0. Check in-memory context synthesis cache (< 5ms hit)
                 manifest_hash = ""
                 manifest_file = repo_path / ".andes" / "manifest.json"
-                if manifest_file.exists():
+                if self._fs and self._fs.exists(manifest_file):
+                    try:
+                        manifest_hash = str(self._fs.get_mtime(manifest_file))
+                    except Exception:
+                        pass
+                elif manifest_file.exists():
                     try:
                         manifest_hash = str(manifest_file.stat().st_mtime)
                     except Exception:
@@ -197,13 +242,12 @@ class ContextUseCases:
                 async def _get_intent():
                     if self._intent_parser:
                         return await self._intent_parser.parse_intent(request.task_prompt)
-                    from app.services.intent_parser import IntentParserService
-                    return IntentParserService.rule_based_fallback(request.task_prompt)
+                    return _rule_based_fallback_intent(request.task_prompt)
 
                 async def _get_repo_summary():
                     raw_files = self._indexing_service.discover_files(repo_path)
                     indexed = self._indexing_service.filter_files(raw_files, repo_path)
-                    summary = self._summary_generator.generate(repo_path, indexed)
+                    summary = await self._summary_generator.generate(repo_path, indexed) if asyncio.iscoroutinefunction(self._summary_generator.generate) else self._summary_generator.generate(repo_path, indexed)
                     return indexed, summary
 
                 async def _get_provider_health():
@@ -252,16 +296,19 @@ class ContextUseCases:
 
                 # 3. Direct AST & symbol relevance search across repository files (Ranking Stage)
                 t_rank_start = time.perf_counter()
-                search_terms = self._source_search.build_search_terms(
-                    task_prompt=request.task_prompt,
-                    extracted_symbols=intent.extracted_symbols,
-                    relevant_file_hints=intent.relevant_file_hints,
-                )
-                relevant_snippets, matched_file_rels = self._source_search.extract_relevant_snippets(
-                    repo_path=repo_path,
-                    indexed_files=indexed_files,
-                    search_terms=search_terms,
-                )
+                relevant_snippets = []
+                matched_file_rels = []
+                if self._source_search:
+                    search_terms = self._source_search.build_search_terms(
+                        task_prompt=request.task_prompt,
+                        extracted_symbols=intent.extracted_symbols,
+                        relevant_file_hints=intent.relevant_file_hints,
+                    )
+                    relevant_snippets, matched_file_rels = self._source_search.extract_relevant_snippets(
+                        repo_path=repo_path,
+                        indexed_files=indexed_files,
+                        search_terms=search_terms,
+                    )
                 ranking_time_ms = int((time.perf_counter() - t_rank_start) * 1000)
 
                 # 4. Merge snippets and structural graph into Markdown output (Synthesis Stage)

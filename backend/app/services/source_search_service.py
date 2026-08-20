@@ -2,7 +2,11 @@
 
 import logging
 from pathlib import Path
-from typing import Sequence
+from typing import Optional, Sequence
+
+from app.application.ports.filesystem import FileSystemPort
+from app.application.ports.source_search import SourceSearchPort
+from app.services.local_filesystem import LocalFileSystemAdapter
 
 logger = logging.getLogger(__name__)
 
@@ -12,8 +16,11 @@ STOP_WORDS = frozenset({
 })
 
 
-class SourceSearchService:
+class SourceSearchService(SourceSearchPort):
     """Encapsulates filesystem source scanning, term matching, and snippet extraction."""
+
+    def __init__(self, filesystem: Optional[FileSystemPort] = None) -> None:
+        self._fs = filesystem or LocalFileSystemAdapter()
 
     def build_search_terms(
         self,
@@ -63,8 +70,8 @@ class SourceSearchService:
                         if (rel, fpath) not in matched_files:
                             matched_files.append((rel, fpath))
                     # 2. Content scan for smaller files
-                    elif fpath.stat().st_size < max_file_size:
-                        content = fpath.read_text(errors="replace").lower()
+                    elif self._fs.get_file_size(fpath) < max_file_size:
+                        content = self._fs.read_text(fpath, errors="replace").lower()
                         if any(t in content for t in term_lowers):
                             if (rel, fpath) not in matched_files:
                                 matched_files.append((rel, fpath))
@@ -77,7 +84,7 @@ class SourceSearchService:
         relevant_snippets: list[str] = []
         for rel_path, full_path in matched_files[:max_snippets]:
             try:
-                text = full_path.read_text(errors="replace")
+                text = self._fs.read_text(full_path, errors="replace")
                 lines = text.splitlines()
                 matching_indices = [
                     i for i, line in enumerate(lines)

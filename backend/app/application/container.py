@@ -1,7 +1,7 @@
 """Application container and composition root for RE:Track.
 
 Manages lifecycle and dependency wiring for domain and infrastructure services.
-Instantiates use cases via constructor dependency injection.
+Instantiates use cases via constructor dependency injection of capability ports.
 """
 
 import asyncio
@@ -10,6 +10,21 @@ import os
 from pathlib import Path
 from typing import Optional
 
+from app.application.ports.benchmark_runner import BenchmarkRunnerPort
+from app.application.ports.cgc_service import CGCServicePort
+from app.application.ports.context_cache import ContextCachePort
+from app.application.ports.context_package_repository import ContextPackageRepositoryPort
+from app.application.ports.context_service import ContextServicePort
+from app.application.ports.filesystem import FileSystemPort
+from app.application.ports.hardware_telemetry import HardwareTelemetryPort
+from app.application.ports.indexing_service import IndexingServicePort
+from app.application.ports.intent_parser import IntentParserPort
+from app.application.ports.llm_provider import LLMProviderPort
+from app.application.ports.memory import MemoryPort
+from app.application.ports.repository_manager import RepositoryManagerPort
+from app.application.ports.repository_metadata import RepositoryMetadataPort
+from app.application.ports.source_search import SourceSearchPort
+from app.application.ports.summary_generator import SummaryGeneratorPort
 from app.application.use_cases.benchmarks import BenchmarkUseCases
 from app.application.use_cases.context import ContextUseCases
 from app.application.use_cases.context_packages import PackageUseCases
@@ -26,9 +41,11 @@ from app.services.cognee_service import CogneeService
 from app.services.context_cache import ContextCacheEngine, context_cache
 from app.services.context_package_repository import JsonContextPackageRepository
 from app.services.context_service import ContextService
+from app.services.hardware_telemetry import LocalHardwareTelemetryAdapter
 from app.services.indexing_service import IndexingService
 from app.services.intent_parser import IntentParserService
 from app.services.llm_provider_service import LLMProviderService
+from app.services.local_filesystem import LocalFileSystemAdapter
 from app.services.manifest_service import ManifestService
 from app.services.repository_manager import RepositoryManager
 from app.services.repository_metadata_store import (
@@ -58,7 +75,9 @@ class ApplicationContainer:
         self.summary_generator: RepositorySummaryGenerator = RepositorySummaryGenerator()
         self.context_cache: ContextCacheEngine = context_cache
         self.metadata_store: RepositoryMetadataStore = JsonRepositoryMetadataStore()
-        self.source_search: SourceSearchService = SourceSearchService()
+        self.filesystem: FileSystemPort = LocalFileSystemAdapter()
+        self.telemetry: HardwareTelemetryPort = LocalHardwareTelemetryAdapter()
+        self.source_search: SourceSearchPort = SourceSearchService(filesystem=self.filesystem)
 
         # Concurrency locks
         self.indexing_lock: asyncio.Lock = asyncio.Lock()
@@ -174,6 +193,7 @@ class ApplicationContainer:
             context_gen_lock=self.context_gen_lock,
             ensure_services_fn=self.ensure_services,
             source_search=self.source_search,
+            filesystem=self.filesystem,
         )
 
     def get_indexing_use_cases(self) -> IndexingUseCases:
@@ -183,6 +203,7 @@ class ApplicationContainer:
             ensure_services_fn=self.ensure_services,
             summary_generator=self.summary_generator,
             metadata_store=self.metadata_store,
+            filesystem=self.filesystem,
         )
 
     def get_repository_use_cases(self) -> RepositoryUseCases:
@@ -215,6 +236,7 @@ class ApplicationContainer:
             cognee_service_getter=lambda: self.cognee_service,
             llm_provider_getter=lambda: self.llm_provider,
             provider_updater_fn=self.update_provider,
+            telemetry_port=self.telemetry,
         )
 
     def get_benchmark_use_cases(self) -> BenchmarkUseCases:
@@ -225,7 +247,7 @@ class ApplicationContainer:
             settings_getter=lambda: self.settings or get_settings(),
         )
         return BenchmarkUseCases(
-            benchmark_runner_fn=bench_service.run_benchmark_suite,
+            benchmark_runner=bench_service,
         )
 
 

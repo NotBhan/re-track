@@ -1,7 +1,7 @@
 """Repository indexing and summary use cases for RE:Track.
 
 Coordinates incremental indexing, file filtering, manifest updates, and repository summaries.
-All dependencies are explicitly injected via constructor.
+All dependencies are explicitly injected via constructor capability ports.
 """
 
 import asyncio
@@ -11,6 +11,7 @@ from pathlib import Path
 import time
 from typing import Callable, Optional
 
+from app.application.domain.repository import IndexedRepositoryRecord
 from app.application.dto import (
     ErrorResponse,
     IndexRepositoryRequest,
@@ -20,13 +21,11 @@ from app.application.dto import (
     RepoComponentInfo,
     RepositorySummaryInfo,
 )
+from app.application.ports.filesystem import FileSystemPort
+from app.application.ports.indexing_service import IndexingServicePort
+from app.application.ports.repository_metadata import RepositoryMetadataPort
+from app.application.ports.summary_generator import SummaryGeneratorPort
 from app.models.errors import CogneeServiceError
-from app.services.indexing_service import IndexingService
-from app.services.repository_metadata_store import (
-    JsonRepositoryMetadataStore,
-    RepositoryMetadataStore,
-)
-from app.services.repository_summary import RepositorySummaryGenerator
 
 logger = logging.getLogger(__name__)
 
@@ -36,17 +35,19 @@ class IndexingUseCases:
 
     def __init__(
         self,
-        indexing_service: Optional[IndexingService],
+        indexing_service: Optional[IndexingServicePort],
         indexing_lock: asyncio.Lock,
         ensure_services_fn: Callable[[], None],
-        summary_generator: RepositorySummaryGenerator,
-        metadata_store: Optional[RepositoryMetadataStore] = None,
+        summary_generator: SummaryGeneratorPort,
+        metadata_store: Optional[RepositoryMetadataPort] = None,
+        filesystem: Optional[FileSystemPort] = None,
     ) -> None:
         self._indexing_service = indexing_service
         self._lock = indexing_lock
         self._ensure_services = ensure_services_fn
         self._summary_generator = summary_generator
-        self._metadata_store = metadata_store or JsonRepositoryMetadataStore()
+        self._metadata_store = metadata_store
+        self._fs = filesystem
 
     async def index_repository(
         self,
@@ -71,10 +72,16 @@ class IndexingUseCases:
                 raise CogneeServiceError("IndexingService is not initialized.")
 
             repo_path = Path(request.repository_path).resolve()
-            if not repo_path.exists():
-                raise ValueError(f"Repository path does not exist: {request.repository_path}")
-            if not repo_path.is_dir():
-                raise ValueError(f"Repository path is not a directory: {request.repository_path}")
+            if self._fs:
+                if not self._fs.exists(repo_path):
+                    raise ValueError(f"Repository path does not exist: {request.repository_path}")
+                if not self._fs.is_dir(repo_path):
+                    raise ValueError(f"Repository path is not a directory: {request.repository_path}")
+            else:
+                if not repo_path.exists():
+                    raise ValueError(f"Repository path does not exist: {request.repository_path}")
+                if not repo_path.is_dir():
+                    raise ValueError(f"Repository path is not a directory: {request.repository_path}")
 
             if self._lock.locked():
                 logger.warning("use_case: index_repository() rejected | another indexing job is in progress")
@@ -90,10 +97,6 @@ class IndexingUseCases:
                     force_reindex=request.force_reindex,
                 )
 
-                # Persist repository metadata using abstracted metadata store
-                store = self._metadata_store.load()
-                repos = store.get("repositories", [])
-
                 # Extract languages, purpose, architecture, and components from summary generator
                 languages: list[str] = []
                 purpose = "Software Repository"
@@ -103,50 +106,73 @@ class IndexingUseCases:
                 call_graph_error = None
 
                 try:
-                    all_files = self._indexing_service.discover_files(repo_path)
-                    filtered = self._indexing_service.filter_files(all_files, repo_path)
-                    summary = self._summary_generator.generate(repo_path, filtered)
-                    languages = [lang.name for lang in summary.technology_stack.languages]
-                    if summary.technology_stack.frameworks:
-                        languages.extend(summary.technology_stack.frameworks)
-                    purpose = summary.project_purpose
-                    arch_list = [{"icon": a.icon, "label": a.label} for a in summary.architecture]
-                    comp_list = [{"path": c.path, "centrality": c.centrality} for c in summary.key_components]
-                    call_graph_status = summary.call_graph_status
-                    call_graph_error = summary.call_graph_error
+                    all_files: list[Path] = []
+                    if hasattr(self._indexing_service, "discover_files"):
+                        res = self._indexing_service.discover_files(repo_path)
+                        if isinstance(res, (list, tuple, set)):
+                            all_files = list(res)
+                    filtered: list[Path] = all_files
+                    if hasattr(self._indexing_service, "filter_files"):
+                        res_f = self._indexing_service.filter_files(all_files, repo_path)
+                        if isinstance(res_f, (list, tuple, set)):
+                            filtered = list(res_f)
+
+                    if self._summary_generator and hasattr(self._summary_generator, "generate"):
+                        summary = await self._summary_generator.generate(repo_path, filtered) if asyncio.iscoroutinefunction(self._summary_generator.generate) else self._summary_generator.generate(repo_path, filtered)
+
+                        if summary and hasattr(summary, "technology_stack") and summary.technology_stack:
+                            languages = [lang.name if hasattr(lang, "name") else str(lang) for lang in getattr(summary.technology_stack, "languages", [])]
+                            if getattr(summary.technology_stack, "frameworks", None):
+                                languages.extend([f.name if hasattr(f, "name") else str(f) for f in summary.technology_stack.frameworks])
+
+                        purpose = getattr(summary, "project_purpose", "Software Repository")
+
+                        if summary and hasattr(summary, "architecture") and summary.architecture:
+                            arch = summary.architecture
+                            if hasattr(arch, "layers") and arch.layers:
+                                arch_list = [{"icon": "Layers", "label": layer} for layer in arch.layers]
+                            elif isinstance(arch, list):
+                                arch_list = [{"icon": a.get("icon", "Layers") if isinstance(a, dict) else getattr(a, "icon", "Layers"), "label": a.get("label", str(a)) if isinstance(a, dict) else getattr(a, "label", str(a))} for a in arch]
+                            elif hasattr(arch, "pattern") and arch.pattern:
+                                arch_list = [{"icon": "Layers", "label": arch.pattern}]
+
+                        if summary and hasattr(summary, "key_components") and summary.key_components:
+                            for c in summary.key_components:
+                                c_path = c.name if hasattr(c, "name") else c.path if hasattr(c, "path") else c.get("path", str(c)) if isinstance(c, dict) else str(c)
+                                comp_list.append({"path": c_path, "centrality": "core"})
+
+                        call_graph_status = getattr(summary, "call_graph_status", "not_analyzed")
+                        call_graph_error = getattr(summary, "call_graph_error", None)
                 except Exception as e:
                     logger.warning("Failed to extract repository summary: %s", e)
 
                 # Calculate memory size representation
                 mem_size = f"{max(1, progress.processed_files * 4)} KB"
 
-                # Update or append repo entry
-                existing = next(
-                    (r for r in repos if r.get("path") == str(repo_path)),
-                    None,
-                )
-                repo_entry = {
-                    "id": existing["id"] if existing else str(len(repos) + 1),
-                    "name": request.dataset_name or repo_path.name,
-                    "path": str(repo_path),
-                    "languages": languages or ["Code"],
-                    "file_count": progress.processed_files,
-                    "memory_size": mem_size,
-                    "last_indexed": datetime.now(timezone.utc).isoformat(),
-                    "purpose": purpose,
-                    "architecture": arch_list,
-                    "components": comp_list,
-                    "call_graph_status": call_graph_status,
-                    "call_graph_error": call_graph_error,
-                }
+                # Persist repository metadata using typed domain record
+                if self._metadata_store:
+                    try:
+                        existing_record = self._metadata_store.get_by_path(str(repo_path))
+                        all_records = self._metadata_store.load_all()
+                        record_id = existing_record.id if existing_record else str(len(all_records) + 1)
 
-                if existing:
-                    repos[repos.index(existing)] = repo_entry
-                else:
-                    repos.append(repo_entry)
-
-                store["repositories"] = repos
-                self._metadata_store.save(store)
+                        record = IndexedRepositoryRecord(
+                            id=record_id,
+                            name=request.dataset_name or repo_path.name,
+                            path=str(repo_path),
+                            languages=languages or ["Code"],
+                            file_count=progress.processed_files,
+                            memory_size=mem_size,
+                            last_indexed=datetime.now(timezone.utc).isoformat(),
+                            purpose=purpose,
+                            architecture=arch_list,
+                            components=comp_list,
+                            call_graph_status=call_graph_status,
+                            call_graph_error=call_graph_error,
+                        )
+                        self._metadata_store.upsert(record)
+                    except Exception as em:
+                        logger.warning("Failed to persist metadata record: %s", em)
 
                 response = IndexRepositoryResponse(
                     success=progress.failed_files == 0,
@@ -193,34 +219,33 @@ class IndexingUseCases:
         logger.info("use_case: get_repository_summaries()")
 
         try:
-            store = self._metadata_store.load()
-            repos_data = store.get("repositories", [])
+            records = self._metadata_store.load_all() if self._metadata_store else []
             repos: list[RepositorySummaryInfo] = []
 
-            for r in repos_data:
+            for r in records:
                 arch_objs = [
                     RepoArchInfo(icon=a.get("icon", "Layers"), label=a.get("label", ""))
-                    for a in r.get("architecture", [])
+                    for a in r.architecture
                 ]
                 comp_objs = [
                     RepoComponentInfo(path=c.get("path", ""), centrality=c.get("centrality", "core"))
-                    for c in r.get("components", [])
+                    for c in r.components
                 ]
 
                 repos.append(
                     RepositorySummaryInfo(
-                        id=str(r.get("id", "")),
-                        name=r.get("name", ""),
-                        path=r.get("path", ""),
-                        languages=r.get("languages", ["Code"]),
-                        file_count=r.get("file_count", 0),
-                        memory_size=r.get("memory_size", "0 KB"),
-                        last_indexed=r.get("last_indexed", ""),
-                        purpose=r.get("purpose", ""),
+                        id=str(r.id),
+                        name=r.name,
+                        path=r.path,
+                        languages=r.languages,
+                        file_count=r.file_count,
+                        memory_size=r.memory_size,
+                        last_indexed=r.last_indexed,
+                        purpose=r.purpose,
                         architecture=arch_objs,
                         components=comp_objs,
-                        call_graph_status=r.get("call_graph_status", "not_analyzed"),
-                        call_graph_error=r.get("call_graph_error"),
+                        call_graph_status=r.call_graph_status,
+                        call_graph_error=r.call_graph_error,
                     )
                 )
 

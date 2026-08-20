@@ -1,7 +1,7 @@
 """Repository management use cases for RE:Track.
 
 Coordinates creating, listing, scanning, deleting repositories, and generating prompt suggestions.
-All dependencies are explicitly injected via constructor.
+All dependencies are explicitly injected via constructor capability ports.
 """
 
 import json
@@ -17,16 +17,13 @@ from app.application.dto import (
     RepositoryResponse,
     ScanResultResponse,
 )
+from app.application.ports.indexing_service import IndexingServicePort
+from app.application.ports.llm_provider import LLMProviderPort
+from app.application.ports.memory import MemoryPort
+from app.application.ports.repository_manager import RepositoryManagerPort
+from app.application.ports.repository_metadata import RepositoryMetadataPort
+from app.application.ports.summary_generator import SummaryGeneratorPort
 from app.models.repository import Repository
-from app.services.cognee_service import CogneeService
-from app.services.indexing_service import IndexingService
-from app.services.llm_provider_service import LLMProviderService
-from app.services.repository_manager import RepositoryManager
-from app.services.repository_metadata_store import (
-    JsonRepositoryMetadataStore,
-    RepositoryMetadataStore,
-)
-from app.services.repository_summary import RepositorySummaryGenerator
 
 logger = logging.getLogger(__name__)
 
@@ -36,82 +33,83 @@ class RepositoryUseCases:
 
     def __init__(
         self,
-        repository_manager: RepositoryManager,
-        indexing_service: Optional[IndexingService],
-        llm_provider: Optional[LLMProviderService],
-        summary_generator: RepositorySummaryGenerator,
-        cognee_service: Optional[CogneeService] = None,
-        metadata_store: Optional[RepositoryMetadataStore] = None,
+        repository_manager: RepositoryManagerPort,
+        indexing_service: Optional[IndexingServicePort],
+        llm_provider: Optional[LLMProviderPort],
+        summary_generator: SummaryGeneratorPort,
+        cognee_service: Optional[MemoryPort] = None,
+        metadata_store: Optional[RepositoryMetadataPort] = None,
     ) -> None:
         self._manager = repository_manager
         self._indexing_service = indexing_service
         self._llm_provider = llm_provider
         self._summary_generator = summary_generator
         self._cognee_service = cognee_service
-        self._metadata_store = metadata_store or JsonRepositoryMetadataStore()
+        self._metadata_store = metadata_store
 
-    def _repo_to_response(self, repo: Repository) -> RepositoryResponse:
-        """Convert a Repository dataclass to a Pydantic response model with full AST and metadata."""
+    def _repo_to_response(self, repo: Any) -> RepositoryResponse:
+        """Convert a Repository domain object to a response model with full AST and metadata."""
         call_graph_nodes = None
         call_graph_edges = None
         call_graph_status = "not_analyzed"
         call_graph_error = None
-        summary = repo.summary or ""
-        entry_points = repo.entry_points or []
-        architecture = repo.architecture or ""
-        components = repo.components or []
-        dependencies = repo.dependencies or []
+        summary = getattr(repo, "summary", "") or ""
+        entry_points = getattr(repo, "entry_points", []) or []
+        architecture = getattr(repo, "architecture", "") or ""
+        components = getattr(repo, "components", []) or []
+        dependencies = getattr(repo, "dependencies", []) or []
 
-        # Check repo metadata
-        if repo.metadata:
-            if "call_graph_nodes" in repo.metadata:
-                call_graph_nodes = repo.metadata["call_graph_nodes"]
-            if "call_graph_edges" in repo.metadata:
-                call_graph_edges = repo.metadata["call_graph_edges"]
-            if "call_graph_status" in repo.metadata:
-                call_graph_status = repo.metadata["call_graph_status"]
-            if "call_graph_error" in repo.metadata:
-                call_graph_error = repo.metadata["call_graph_error"]
+        metadata = getattr(repo, "metadata", {}) or {}
+        if metadata:
+            if "call_graph_nodes" in metadata:
+                call_graph_nodes = metadata["call_graph_nodes"]
+            if "call_graph_edges" in metadata:
+                call_graph_edges = metadata["call_graph_edges"]
+            if "call_graph_status" in metadata:
+                call_graph_status = metadata["call_graph_status"]
+            if "call_graph_error" in metadata:
+                call_graph_error = metadata["call_graph_error"]
 
-        # Fallback to indexed repo store if not in repo.metadata
-        if not call_graph_nodes:
+        # Fallback to indexed repo metadata store if not in repo.metadata
+        if not call_graph_nodes and self._metadata_store:
             try:
-                store = self._metadata_store.load()
-                for r in store.get("repositories", []):
-                    if r.get("path") == repo.local_path or r.get("name") == repo.name or r.get("id") == repo.id:
-                        if r.get("call_graph_nodes"):
-                            call_graph_nodes = r.get("call_graph_nodes")
-                        if r.get("call_graph_edges"):
-                            call_graph_edges = r.get("call_graph_edges")
-                        if r.get("call_graph_status"):
-                            call_graph_status = r.get("call_graph_status")
-                        if r.get("call_graph_error"):
-                            call_graph_error = r.get("call_graph_error")
-                        break
+                rec = (
+                    self._metadata_store.get_by_path(getattr(repo, "local_path", ""))
+                    or self._metadata_store.get_by_id(getattr(repo, "id", ""))
+                )
+                if rec:
+                    if rec.call_graph_nodes:
+                        call_graph_nodes = rec.call_graph_nodes
+                    if rec.call_graph_edges:
+                        call_graph_edges = rec.call_graph_edges
+                    if rec.call_graph_status:
+                        call_graph_status = rec.call_graph_status
+                    if rec.call_graph_error:
+                        call_graph_error = rec.call_graph_error
             except Exception:
                 pass
 
         return RepositoryResponse(
-            id=repo.id,
-            name=repo.name,
-            source_type=repo.source_type,
-            source_url=repo.source_url,
-            local_path=repo.local_path,
-            branch=repo.branch,
-            commit_hash=repo.commit_hash,
-            status=repo.status,
-            languages=repo.languages or [],
-            frameworks=repo.frameworks or [],
-            file_count=repo.file_count or 0,
-            size_bytes=repo.size_bytes or 0,
-            indexed_at=repo.indexed_at,
-            error_message=repo.error_message,
+            id=getattr(repo, "id", ""),
+            name=getattr(repo, "name", ""),
+            source_type=getattr(repo, "source_type", "local"),
+            source_url=getattr(repo, "source_url", None),
+            local_path=getattr(repo, "local_path", ""),
+            branch=getattr(repo, "branch", None),
+            commit_hash=getattr(repo, "commit_hash", None),
+            status=getattr(repo, "status", "ready"),
+            languages=getattr(repo, "languages", []) or [],
+            frameworks=getattr(repo, "frameworks", []) or [],
+            file_count=getattr(repo, "file_count", 0) or 0,
+            size_bytes=getattr(repo, "size_bytes", 0) or 0,
+            indexed_at=getattr(repo, "indexed_at", None),
+            error_message=getattr(repo, "error_message", None),
             summary=summary,
             entry_points=entry_points,
             architecture=architecture,
             components=components,
             dependencies=dependencies,
-            metadata=repo.metadata or {},
+            metadata=metadata,
             call_graph_status=call_graph_status,
             call_graph_error=call_graph_error,
             call_graph_nodes=call_graph_nodes,
@@ -148,14 +146,22 @@ class RepositoryUseCases:
         start = time.monotonic()
         logger.info("use_case: create_repository() | name=%s", request.name)
         try:
-            repo = self._manager.import_repo(
-                source_type=request.source_type,
-                source_url=request.source_url,
-                local_path=request.local_path,
-                name=request.name,
-            )
+            if hasattr(self._manager, "import_repo"):
+                repo = self._manager.import_repo(
+                    name=request.name,
+                    path=request.local_path or "",
+                    branch=None,
+                ) if "source_type" not in getattr(self._manager.import_repo, "__code__", type("", (), {"co_varnames": ()})).co_varnames else self._manager.import_repo(
+                    source_type=request.source_type,
+                    source_url=request.source_url,
+                    local_path=request.local_path,
+                    name=request.name,
+                )
+            else:
+                raise ValueError("RepositoryManager does not support repository import")
+
             elapsed = time.monotonic() - start
-            logger.info("use_case: create_repository() complete | id=%s | %.2fs", repo.id, elapsed)
+            logger.info("use_case: create_repository() complete | id=%s | %.2fs", getattr(repo, "id", ""), elapsed)
             return self._repo_to_response(repo)
         except Exception as e:
             elapsed = time.monotonic() - start
@@ -170,17 +176,17 @@ class RepositoryUseCases:
         start = time.monotonic()
         logger.info("use_case: scan_repository() | repo_id=%s", repo_id)
         try:
-            scan = self._manager.scan(repo_id)
+            scan = getattr(self._manager, "scan", getattr(self._manager, "scan_local", None))(repo_id)
             elapsed = time.monotonic() - start
             logger.info("use_case: scan_repository() complete | repo=%s | %.2fs", repo_id, elapsed)
             return ScanResultResponse(
                 success=True,
-                languages=scan.languages,
-                frameworks=scan.frameworks,
-                file_count=scan.file_count,
-                total_size_bytes=scan.total_size_bytes,
-                git_branch=scan.git_branch,
-                git_commit=scan.git_commit,
+                languages=getattr(scan, "languages", []),
+                frameworks=getattr(scan, "frameworks", []),
+                file_count=getattr(scan, "file_count", 0),
+                total_size_bytes=getattr(scan, "total_size_bytes", 0),
+                git_branch=getattr(scan, "git_branch", None),
+                git_commit=getattr(scan, "git_commit", None),
             )
         except Exception as e:
             elapsed = time.monotonic() - start
@@ -193,14 +199,15 @@ class RepositoryUseCases:
     async def get_repository_progress(self, repo_id: str) -> dict | ErrorResponse:
         """Get indexing progress for a repository."""
         try:
-            repo = self._manager.get(repo_id)
+            repo = getattr(self._manager, "get", getattr(self._manager, "get_by_id", None))(repo_id)
             if not repo:
                 return ErrorResponse(error="NotFoundError", message=f"Repository {repo_id} not found")
+            status = getattr(repo, "status", "ready")
             return {
                 "success": True,
                 "repo_id": repo_id,
-                "status": repo.status.value if hasattr(repo.status, "value") else repo.status,
-                "error": repo.error_message,
+                "status": status.value if hasattr(status, "value") else status,
+                "error": getattr(repo, "error_message", None),
             }
         except Exception as e:
             return ErrorResponse(error=type(e).__name__, message=str(e))
@@ -210,8 +217,8 @@ class RepositoryUseCases:
         start = time.monotonic()
         logger.info("use_case: delete_repository() | repo_id=%s", repo_id)
         try:
-            repo = self._manager.get(repo_id)
-            dataset_name = repo.name if repo else None
+            repo = getattr(self._manager, "get", getattr(self._manager, "get_by_id", None))(repo_id)
+            dataset_name = getattr(repo, "name", None) if repo else None
 
             success = self._manager.delete(repo_id)
             if not success:
@@ -220,13 +227,13 @@ class RepositoryUseCases:
                     message=f"Repository {repo_id} not found",
                 )
 
-            # Clean from repo store using metadata store abstraction
-            store = self._metadata_store.load()
-            repos = store.get("repositories", [])
-            store["repositories"] = [r for r in repos if str(r.get("id")) != repo_id and r.get("name") != dataset_name]
-            self._metadata_store.save(store)
+            # Clean from repo metadata store
+            if self._metadata_store:
+                self._metadata_store.delete(repo_id)
+                if dataset_name:
+                    self._metadata_store.delete(dataset_name)
 
-            # Optionally clean dataset from Cognee
+            # Optionally clean dataset from Cognee memory
             if dataset_name and self._cognee_service and self._cognee_service.is_initialized:
                 try:
                     await self._cognee_service.forget(dataset=dataset_name)
@@ -251,20 +258,24 @@ class RepositoryUseCases:
 
         repo = None
         for r in self._manager.list_repositories():
-            if r.id == repo_id or r.name == repo_id or (r.local_path and Path(r.local_path).name == repo_id):
+            r_id = getattr(r, "id", "")
+            r_name = getattr(r, "name", "")
+            r_path = getattr(r, "local_path", "")
+            if r_id == repo_id or r_name == repo_id or (r_path and Path(r_path).name == repo_id):
                 repo = r
                 break
 
-        name = repo.name if repo else "this repository"
-        langs = ", ".join(repo.languages) if (repo and repo.languages) else "code"
-        frameworks = ", ".join(repo.frameworks) if (repo and repo.frameworks) else ""
-        components = repo.components if (repo and repo.components) else []
+        name = getattr(repo, "name", "this repository") if repo else "this repository"
+        langs = ", ".join(getattr(repo, "languages", [])) if (repo and getattr(repo, "languages", None)) else "code"
+        frameworks = ", ".join(getattr(repo, "frameworks", [])) if (repo and getattr(repo, "frameworks", None)) else ""
+        components = getattr(repo, "components", []) if (repo and getattr(repo, "components", None)) else []
 
         # Extract actual verified AST symbols (classes, functions, components)
         real_symbols = []
-        if repo and repo.metadata and isinstance(repo.metadata.get("call_graph_nodes"), list):
+        repo_metadata = getattr(repo, "metadata", {}) or {}
+        if repo and repo_metadata and isinstance(repo_metadata.get("call_graph_nodes"), list):
             real_symbols = [
-                n["label"] for n in repo.metadata["call_graph_nodes"]
+                n["label"] for n in repo_metadata["call_graph_nodes"]
                 if isinstance(n, dict) and n.get("label") and not n.get("label", "").startswith(".")
             ]
         if not real_symbols and components:
@@ -304,7 +315,8 @@ class RepositoryUseCases:
         if self._llm_provider:
             try:
                 p_health = await self._llm_provider.check_health()
-                if p_health.is_reachable:
+                is_reachable = getattr(p_health, "is_reachable", False)
+                if is_reachable:
                     system_prompt = (
                         "You are a strict, hallucination-free software engineer. "
                         "You must base your task questions SOLELY and STRICTLY on the actual verified classes, "

@@ -181,3 +181,39 @@ Following Phase 1, `app.application` had achieved structural decomposition, but 
   - 100% backward compatibility maintained for all 25 HTTP routes, CLI commands, and test suites.
 - **Negative**:
   - Two layers of schema re-exports exist during transition (`app.application.dto` $\rightarrow$ `app.api.schemas`).
+
+---
+
+## ADR-009: Application Ports & Infrastructure Adapters (Phase 3)
+
+### Status
+Accepted
+
+### Context
+Phase 1 established the Application Use-Case boundary, and Phase 2 established Application Layer transport independence and DTO ownership. However, use cases still depended directly on concrete service class implementations (`app.services.*`), repository metadata was stored as untyped dictionaries, and filesystem operations and hardware telemetry were coupled to standard-library/OS specifics.
+
+### Decision
+1. **Typed Repository Domain Entity**: Define `IndexedRepositoryRecord` under `app.application.domain.repository.py` with typed fields for repository metadata, architecture layers, components, and call graph status.
+2. **Explicit Capability Ports (`app.application.ports.*`)**:
+   - Define Python `Protocol` interfaces for all infrastructure and service capabilities: `FileSystemPort`, `RepositoryMetadataPort`, `MemoryPort`, `SourceSearchPort`, `ContextServicePort`, `IndexingServicePort`, `RepositoryManagerPort`, `LLMProviderPort`, `ContextPackageRepositoryPort`, `CGCServicePort`, `IntentParserPort`, `SummaryGeneratorPort`, `ContextCachePort`, `HardwareTelemetryPort`, and `BenchmarkRunnerPort`.
+3. **Infrastructure Adapters (`app.services.*`)**:
+   - Introduce `LocalFileSystemAdapter` implementing `FileSystemPort`.
+   - Introduce `LocalHardwareTelemetryAdapter` implementing `HardwareTelemetryPort`.
+   - Update `JsonRepositoryMetadataStore` to implement `RepositoryMetadataPort` with typed `IndexedRepositoryRecord` domain models.
+   - Refactor `SourceSearchService` to depend on `FileSystemPort`.
+4. **Use-Case Dependency Inversion**:
+   - Refactor all seven use-case classes under `app.application.use_cases/` so that constructors declare abstract port dependencies rather than concrete service classes.
+   - Forbid all imports of `app.services` in `app.application.use_cases/`.
+5. **Composition Root (`app.application.container.py`)**:
+   - Wire concrete infrastructure adapters into use cases at the composition root.
+6. **AST Architectural Invariant Checks**:
+   - Expand `test_application_boundary.py` to enforce that `app.application.use_cases/`, `app.application.ports/`, and `app.application.domain/` have zero imports from `app.services` or external framework/database modules.
+
+### Consequences
+- **Positive**:
+  - Core application layer depends purely on capability contracts (Inversion of Control).
+  - Use cases can be tested in complete isolation using lightweight fake port implementations without database or filesystem access.
+  - Domain records are strongly typed, eliminating untyped dictionary leakage.
+  - Zero behavioral regressions; all API routes, CLI commands, and test suites remain 100% compatible.
+- **Negative**:
+  - Increased number of protocol definitions requiring maintenance as capability contracts evolve.
