@@ -10,7 +10,7 @@ import time
 from typing import Optional
 import uuid
 
-from app.api.schemas import (
+from app.application.dto import (
     ContextPackageAppendRequest,
     ContextPackageListResponse,
     ContextPackageResponse,

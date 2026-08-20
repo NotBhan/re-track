@@ -128,13 +128,11 @@ def _ensure_services() -> None:
 
 
 def _load_repo_store() -> dict:
-    indexer = _container.get_indexing_use_cases()
-    return indexer._load_repo_store()
+    return _container.metadata_store.load()
 
 
 def _save_repo_store(data: dict) -> None:
-    indexer = _container.get_indexing_use_cases()
-    indexer._save_repo_store(data)
+    _container.metadata_store.save(data)
 
 
 async def initialize_backend(settings: Optional[Settings] = None) -> None:

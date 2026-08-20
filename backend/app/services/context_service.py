@@ -35,6 +35,8 @@ class ContextService:
         task: str,
         datasets: list[str],
         top_k: int = 20,
+        repository_summary: RepositorySummary | None = None,
+        target_tokens: int | None = None,
     ) -> ContextPackage:
         """Generate a Context Package for a developer task.
 
@@ -42,6 +44,8 @@ class ContextService:
             task: The developer request or question.
             datasets: Dataset names to search.
             top_k: Maximum memories to retrieve.
+            repository_summary: Optional repository summary override.
+            target_tokens: Optional target token count override.
 
         Returns:
             ContextPackage with structured Markdown content.
@@ -67,10 +71,13 @@ class ContextService:
             recall_results = []
         retrieval_ms = int((time.monotonic() - recall_start) * 1000)
 
-        package = self._builder.build(
+        builder = PackageBuilder(target_tokens) if target_tokens is not None else self._builder
+        effective_summary = repository_summary if repository_summary is not None else self._repository_summary
+
+        package = builder.build(
             task=task,
             results=recall_results,
-            repository_summary=self._repository_summary,
+            repository_summary=effective_summary,
             datasets=datasets,
             retrieval_time_ms=retrieval_ms,
         )

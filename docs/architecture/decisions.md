@@ -152,3 +152,32 @@ All use cases receive their dependencies explicitly via constructors. `backend/a
 - **Negative**:
   - Requires maintaining the `commands.py` facade until all callers are migrated to use case interfaces in subsequent phases.
 
+---
+
+## ADR-008: Application DTO Ownership & Core Boundary Isolation
+
+### Status
+**Accepted / Implemented (Phase 2)**
+
+### Context
+Following Phase 1, `app.application` had achieved structural decomposition, but still had architectural coupling:
+1. Use cases imported request/response schemas from `app.api.schemas`.
+2. `get_agent_context()` contained low-level source searching, file reading, and inline `ContextService(...)` instantiation.
+3. `IndexingUseCases`, `RepositoryUseCases`, and `MemoryUseCases` performed raw JSON filesystem I/O against `~/.retrack/indexed_repos.json`.
+4. `ApplicationContainer` imported `app.api.benchmarks` at runtime.
+
+### Decision
+1. **Application-Owned DTOs**: Create `backend/app/application/dto/` (`common.py`, `context.py`, `indexing.py`, `repositories.py`, `memory.py`, `packages.py`, `system.py`, `benchmarks.py`) to own all application contracts. `app.api.schemas` acts as a backward-compatibility facade re-exporting these DTOs.
+2. **Persistence Abstraction**: Introduce `RepositoryMetadataStore` (Protocol) and `JsonRepositoryMetadataStore` under `app/services/repository_metadata_store.py`. Inject the store into use cases, removing all direct `Path.write_text()` and `json.loads()` from application orchestration.
+3. **Source Search Service**: Extract source scanning and snippet extraction from `ContextUseCases` into `SourceSearchService` (`app/services/source_search_service.py`).
+4. **Eliminate Inline Service Construction**: Extend `ContextService.generate_context_package()` to accept optional `repository_summary` and `target_tokens`, enabling direct delegation from `ContextUseCases`.
+5. **Benchmark Service Relocation**: Move core benchmark suite execution to `app/services/benchmark_service.py` with constructor DI. `app.api.benchmarks` remains as a compatibility wrapper.
+6. **Enforce Boundary Invariants**: Update AST static analysis tests in `test_application_boundary.py` to forbid any imports of `app.api`, `fastapi`, `starlette`, `app.server`, `app.cli`, `kuzu`, `lancedb`, or `cognee.api.v1` in `app/application/*`.
+
+### Consequences
+- **Positive**:
+  - `app.application` is completely decoupled from `app.api` and web frameworks (0 AST boundary violations).
+  - Use cases represent pure domain orchestration and can be run in any headless environment (CLI, test runner, background worker).
+  - 100% backward compatibility maintained for all 25 HTTP routes, CLI commands, and test suites.
+- **Negative**:
+  - Two layers of schema re-exports exist during transition (`app.application.dto` $\rightarrow$ `app.api.schemas`).

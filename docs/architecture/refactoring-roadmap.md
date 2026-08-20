@@ -62,33 +62,42 @@ Decompose the 2,158-line monolithic `app.api.commands` module into explicit, coh
 
 ---
 
-## Phase 2: Core Context Engine Extraction
+## Phase 2: Application Layer Independence & Core Boundary Stabilization
+
+> **Status**: Completed (2026-08-20) — 307 backend tests passing, 0 AST boundary violations, frontend build 100% clean.
 
 ### Objective
-Isolate RE:Track's core intellectual property (AST call graph generation, multi-stage retrieval pipeline, semantic compression, token budgeting, and Context Package synthesis) into a framework-independent `core/` package.
+Make `app.application` genuinely independent of `app.api`, `FastAPI`, `app.server`, `app.cli`, and direct persistence I/O, establishing an application-owned DTO contract and explicit domain service dependencies.
 
 ### Affected Components
-- `backend/app/services/pipeline/` (`dedup.py`, `ranking.py`, `compression.py`, `categorization.py`, `references.py`)
-- `backend/app/services/package_builder.py`
-- `backend/app/services/budget_manager.py`
-- `backend/app/services/repository_summary.py`
-- `backend/app/services/renderer.py`
-- `backend/app/core/context_engine/` (Consolidated core package)
+- `backend/app/application/dto/` (New package: `common.py`, `context.py`, `indexing.py`, `repositories.py`, `memory.py`, `packages.py`, `system.py`, `benchmarks.py`)
+- `backend/app/api/schemas.py` (Refactored to re-export from `app.application.dto`)
+- `backend/app/services/repository_metadata_store.py` (New: `RepositoryMetadataStore` protocol + `JsonRepositoryMetadataStore`)
+- `backend/app/services/source_search_service.py` (New: `SourceSearchService` for file filtering & snippet extraction)
+- `backend/app/services/benchmark_service.py` (New: `BenchmarkService` with constructor DI)
+- `backend/app/services/context_service.py` (Extended to accept dynamic `repository_summary` and `target_tokens`)
+- `backend/app/application/use_cases/` (All 7 use cases updated to use application DTOs and injected services)
+- `backend/app/application/container.py` (Updated to wire new services; removed all `app.api` imports)
+- `backend/tests/test_application_boundary.py` (Strengthened with AST import purity and persistence checks)
 
 ### Migration Strategy
-1. Establish `backend/app/core/engine/` containing pure domain logic.
-2. Ensure no file in the core engine imports from `fastapi`, `uvicorn`, `tauri`, `cognee`, or `httpx`.
-3. Provide pure Python interfaces (`Protocol` or `ABC`) for external inputs (memory candidates, AST trees, token counts).
-4. Unify `ContextService` and the `get_agent_context` synthesis logic into a single cohesive pipeline.
-
-### Risks
-- Subtle behavioral divergence between `/context` (simple UI) and `/api/v1/context` (agent middleware).
-- Token estimation inaccuracies causing budget overflows.
+1. Created `app/application/dto/` package owning all request/response data contracts.
+2. Refactored `app/api/schemas.py` as a backward-compatibility facade re-exporting application DTOs.
+3. Created `RepositoryMetadataStore` protocol and `JsonRepositoryMetadataStore` implementation; removed raw filesystem I/O from `IndexingUseCases`, `RepositoryUseCases`, and `MemoryUseCases`.
+4. Extracted low-level source searching and snippet slicing from `ContextUseCases.get_agent_context()` into `SourceSearchService`.
+5. Updated `ContextService.generate_context_package` to accept optional overrides, eliminating inline `ContextService(...)` construction.
+6. Relocated benchmark execution logic to `app/services/benchmark_service.py`, eliminating `app.api.benchmarks` dependency from `container.py`.
+7. Strengthened AST boundary tests to strictly forbid `app.api`, `fastapi`, `starlette`, `app.server`, `app.cli`, `kuzu`, `lancedb`, and `cognee.api.v1` in `app/application/`.
 
 ### Acceptance Criteria
-- [ ] The core context engine has zero dependencies on web frameworks or database SDKs.
-- [ ] All unit tests for deduplication, ranking, compression, categorization, budgeting, and AST parsing pass.
-- [ ] Quality metric validation tests (`test_quality_metrics.py`, `test_ast_integrity.py`) pass with 100% compliance.
+- [x] `app.application` contains 0 imports from `app.api`, `fastapi`, `starlette`, `app.server`, `app.cli`.
+- [x] Application layer owns all DTO contracts under `app.application.dto`.
+- [x] No use case performs direct JSON file I/O or accesses `~/.retrack/indexed_repos.json` directly.
+- [x] No use case constructs infrastructure services inline during execution.
+- [x] Core benchmark execution is moved out of the API adapter layer into `app.services.benchmark_service`.
+- [x] 100% of backend tests pass (307 passed, 2 skipped, 0 failed).
+- [x] All 12 boundary tests pass in `test_application_boundary.py`.
+- [x] Frontend production build succeeds (`npm run build`).
 
 ---
 

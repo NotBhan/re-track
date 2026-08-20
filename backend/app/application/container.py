@@ -20,6 +20,7 @@ from app.application.use_cases.system import SystemUseCases
 from app.config.settings import Settings, get_settings
 from app.models.errors import CogneeServiceError
 from app.models.provider import ProviderType
+from app.services.benchmark_service import BenchmarkService
 from app.services.cgc_service import CGCService
 from app.services.cognee_service import CogneeService
 from app.services.context_cache import ContextCacheEngine, context_cache
@@ -30,7 +31,12 @@ from app.services.intent_parser import IntentParserService
 from app.services.llm_provider_service import LLMProviderService
 from app.services.manifest_service import ManifestService
 from app.services.repository_manager import RepositoryManager
+from app.services.repository_metadata_store import (
+    JsonRepositoryMetadataStore,
+    RepositoryMetadataStore,
+)
 from app.services.repository_summary import RepositorySummaryGenerator
+from app.services.source_search_service import SourceSearchService
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +57,8 @@ class ApplicationContainer:
         self.package_repository: JsonContextPackageRepository = JsonContextPackageRepository()
         self.summary_generator: RepositorySummaryGenerator = RepositorySummaryGenerator()
         self.context_cache: ContextCacheEngine = context_cache
+        self.metadata_store: RepositoryMetadataStore = JsonRepositoryMetadataStore()
+        self.source_search: SourceSearchService = SourceSearchService()
 
         # Concurrency locks
         self.indexing_lock: asyncio.Lock = asyncio.Lock()
@@ -165,6 +173,7 @@ class ApplicationContainer:
             context_cache=self.context_cache,
             context_gen_lock=self.context_gen_lock,
             ensure_services_fn=self.ensure_services,
+            source_search=self.source_search,
         )
 
     def get_indexing_use_cases(self) -> IndexingUseCases:
@@ -173,6 +182,7 @@ class ApplicationContainer:
             indexing_lock=self.indexing_lock,
             ensure_services_fn=self.ensure_services,
             summary_generator=self.summary_generator,
+            metadata_store=self.metadata_store,
         )
 
     def get_repository_use_cases(self) -> RepositoryUseCases:
@@ -182,6 +192,7 @@ class ApplicationContainer:
             llm_provider=self.llm_provider,
             summary_generator=self.summary_generator,
             cognee_service=self.cognee_service,
+            metadata_store=self.metadata_store,
         )
 
     def get_memory_use_cases(self) -> MemoryUseCases:
@@ -190,6 +201,7 @@ class ApplicationContainer:
             settings_getter=lambda: self.settings or get_settings(),
             ensure_services_fn=self.ensure_services,
             package_repository=self.package_repository,
+            metadata_store=self.metadata_store,
         )
 
     def get_package_use_cases(self) -> PackageUseCases:
@@ -206,13 +218,18 @@ class ApplicationContainer:
         )
 
     def get_benchmark_use_cases(self) -> BenchmarkUseCases:
-        from app.api.benchmarks import run_benchmark_suite
+        bench_service = BenchmarkService(
+            generate_context_fn=lambda req: self.get_context_use_cases().generate_context(req),
+            health_fn=lambda: self.get_system_use_cases().health(),
+            metadata_store=self.metadata_store,
+            settings_getter=lambda: self.settings or get_settings(),
+        )
         return BenchmarkUseCases(
-            benchmark_runner_fn=run_benchmark_suite,
+            benchmark_runner_fn=bench_service.run_benchmark_suite,
         )
 
 
-# Global default container instance
+# Global default container instance (transitional composition root for legacy entrypoints)
 _container = ApplicationContainer()
 
 

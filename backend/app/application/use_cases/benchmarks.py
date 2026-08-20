@@ -6,9 +6,9 @@ All dependencies are explicitly injected via constructor.
 
 import logging
 import time
-from typing import Any, Callable, Coroutine
+from typing import Any, Callable, Coroutine, Optional
 
-from app.api.schemas import BenchmarkSuiteResponse, ErrorResponse
+from app.application.dto import BenchmarkSuiteResponse, ErrorResponse
 
 logger = logging.getLogger(__name__)
 
@@ -18,16 +18,20 @@ class BenchmarkUseCases:
 
     def __init__(
         self,
-        benchmark_runner_fn: Callable[[], Coroutine[Any, Any, BenchmarkSuiteResponse]],
+        benchmark_runner_fn: Callable[..., Coroutine[Any, Any, BenchmarkSuiteResponse]],
     ) -> None:
         self._runner = benchmark_runner_fn
 
-    async def run_benchmark(self) -> BenchmarkSuiteResponse | ErrorResponse:
+    async def run_benchmark(
+        self,
+        questions: Optional[list[str]] = None,
+        target_repo_path: Optional[str] = None,
+    ) -> BenchmarkSuiteResponse | ErrorResponse:
         """Run an authoritative benchmark suite measuring compression and latency."""
         start = time.monotonic()
         logger.info("use_case: run_benchmark()")
         try:
-            result = await self._runner()
+            result = await self._runner(questions=questions, target_repo_path=target_repo_path)
             elapsed = time.monotonic() - start
             logger.info("use_case: run_benchmark() complete | %.2fs", elapsed)
             return result

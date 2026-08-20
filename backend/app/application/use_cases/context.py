@@ -10,8 +10,13 @@ from pathlib import Path
 import time
 from typing import Callable, Optional
 
-from app.api.schemas import ContextResponse, ErrorResponse, GenerateContextRequest
-from app.models.agent_context import AgentContextRequest, AgentContextResponse
+from app.application.dto import (
+    AgentContextRequest,
+    AgentContextResponse,
+    ContextResponse,
+    ErrorResponse,
+    GenerateContextRequest,
+)
 from app.models.errors import CogneeServiceError
 from app.services.cgc_service import CGCService
 from app.services.cognee_service import CogneeService
@@ -21,6 +26,7 @@ from app.services.indexing_service import IndexingService
 from app.services.intent_parser import IntentParserService
 from app.services.llm_provider_service import LLMProviderService
 from app.services.repository_summary import RepositorySummaryGenerator
+from app.services.source_search_service import SourceSearchService
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +46,7 @@ class ContextUseCases:
         context_cache: ContextCacheEngine,
         context_gen_lock: asyncio.Lock,
         ensure_services_fn: Callable[[], None],
+        source_search: Optional[SourceSearchService] = None,
     ) -> None:
         self._context_service = context_service
         self._cognee_service = cognee_service
@@ -51,6 +58,7 @@ class ContextUseCases:
         self._cache = context_cache
         self._lock = context_gen_lock
         self._ensure_services = ensure_services_fn
+        self._source_search = source_search or SourceSearchService()
 
     async def generate_context(
         self,
@@ -82,7 +90,7 @@ class ContextUseCases:
             package = await self._context_service.generate_context_package(
                 task=request.task,
                 datasets=request.datasets,
-                top_k=request.top_k,
+                top_k=request.top_k or 20,
             )
 
             response = ContextResponse(
@@ -146,7 +154,7 @@ class ContextUseCases:
 
         try:
             self._ensure_services()
-            if self._indexing_service is None or self._cognee_service is None:
+            if self._indexing_service is None or self._cognee_service is None or self._context_service is None:
                 raise CogneeServiceError("Backend services not initialized.")
 
             if self._lock.locked():
@@ -228,15 +236,12 @@ class ContextUseCases:
                     return None
 
                 async def _generate_package():
-                    ctx_svc = ContextService(
-                        cognee_service=self._cognee_service,
-                        repository_summary=repo_summary,
-                        target_tokens=target_tokens,
-                    )
-                    return await ctx_svc.generate_context_package(
+                    return await self._context_service.generate_context_package(
                         task=request.task_prompt,
                         datasets=[dataset_name],
                         top_k=15,
+                        repository_summary=repo_summary,
+                        target_tokens=target_tokens,
                     )
 
                 structural_res, package = await asyncio.gather(
@@ -247,51 +252,16 @@ class ContextUseCases:
 
                 # 3. Direct AST & symbol relevance search across repository files (Ranking Stage)
                 t_rank_start = time.perf_counter()
-                relevant_snippets = []
-                search_terms = list(set(
-                    [w for w in request.task_prompt.split() if len(w) > 3 and w.lower() not in ("where", "what", "find", "how", "with", "from", "this", "that")]
-                    + intent.extracted_symbols
-                    + intent.relevant_file_hints
-                ))
-
-                matched_files = set()
-                term_lowers = [t.lower() for t in search_terms[:8]]
-                if term_lowers:
-                    for fpath in indexed_files:
-                        try:
-                            rel = str(fpath.relative_to(repo_path))
-                            rel_lower = rel.lower()
-                            # Match filename first (zero I/O)
-                            if any(t in rel_lower for t in term_lowers):
-                                matched_files.add((rel, fpath))
-                            elif fpath.stat().st_size < 256_000:
-                                content = fpath.read_text(errors="replace").lower()
-                                if any(t in content for t in term_lowers):
-                                    matched_files.add((rel, fpath))
-                            if len(matched_files) >= 8:
-                                break
-                        except Exception:
-                            pass
-
-                # Extract focused code snippets for matched files
-                for rel_path, full_path in list(matched_files)[:5]:
-                    try:
-                        text = full_path.read_text(errors="replace")
-                        lines = text.splitlines()
-                        matching_indices = [
-                            i for i, line in enumerate(lines)
-                            if any(t.lower() in line.lower() for t in search_terms)
-                        ]
-                        if matching_indices:
-                            first_idx = max(0, matching_indices[0] - 4)
-                            last_idx = min(len(lines), matching_indices[0] + 25)
-                            snippet = "\n".join(lines[first_idx:last_idx])
-                            relevant_snippets.append(
-                                f"### `{rel_path}` (Lines {first_idx+1}-{last_idx})\n```\n{snippet}\n```"
-                            )
-                    except Exception:
-                        pass
-
+                search_terms = self._source_search.build_search_terms(
+                    task_prompt=request.task_prompt,
+                    extracted_symbols=intent.extracted_symbols,
+                    relevant_file_hints=intent.relevant_file_hints,
+                )
+                relevant_snippets, matched_file_rels = self._source_search.extract_relevant_snippets(
+                    repo_path=repo_path,
+                    indexed_files=indexed_files,
+                    search_terms=search_terms,
+                )
                 ranking_time_ms = int((time.perf_counter() - t_rank_start) * 1000)
 
                 # 4. Merge snippets and structural graph into Markdown output (Synthesis Stage)
@@ -311,7 +281,7 @@ class ContextUseCases:
                 elapsed_ms = int((time.monotonic() - start) * 1000)
 
                 all_related = list(dict.fromkeys(
-                    [r[0] for r in matched_files] + (structural_res.related_files if structural_res else [])
+                    matched_file_rels + (structural_res.related_files if structural_res else [])
                 ))
 
                 response = AgentContextResponse(

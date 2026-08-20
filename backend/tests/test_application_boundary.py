@@ -3,7 +3,15 @@
 Verifies:
 1. Direct use case execution with constructor-injected dependencies.
 2. Application container factory wiring and dependency injection.
-3. AST static verification enforcing that app.application does NOT import inbound adapters (FastAPI, CLI, server) or infrastructure persistence drivers.
+3. AST static verification enforcing that app.application does NOT import:
+   - app.api
+   - fastapi / starlette
+   - app.server
+   - app.cli
+   - kuzu / lancedb / cognee.api.v1
+4. Use cases contain no direct filesystem persistence (Path.write_text / json.loads on repo store).
+5. Use cases do not instantiate services inline.
+6. Application DTOs can be imported in complete isolation.
 """
 
 import ast
@@ -12,7 +20,8 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 import pytest
 
-from app.api.schemas import (
+from app.application.container import ApplicationContainer
+from app.application.dto import (
     CognifyRequest,
     ContextPackageAppendRequest,
     ContextPackageSaveRequest,
@@ -23,7 +32,6 @@ from app.api.schemas import (
     IndexRepositoryRequest,
     RepositoryCreateRequest,
 )
-from app.application.container import ApplicationContainer
 from app.application.use_cases.benchmarks import BenchmarkUseCases
 from app.application.use_cases.context import ContextUseCases
 from app.application.use_cases.context_packages import PackageUseCases
@@ -40,7 +48,9 @@ from app.models.responses import (
     PackageSection,
 )
 from app.services.context_cache import ContextCacheEngine
+from app.services.repository_metadata_store import JsonRepositoryMetadataStore
 from app.services.repository_summary import RepositorySummaryGenerator
+from app.services.source_search_service import SourceSearchService
 
 
 @pytest.fixture
@@ -54,6 +64,7 @@ def mock_container(tmp_path):
     container.llm_provider = AsyncMock()
     container.intent_parser = MagicMock()
     container.cgc_service = MagicMock()
+    container.metadata_store = JsonRepositoryMetadataStore(store_path=tmp_path / "store.json")
     return container
 
 
@@ -100,6 +111,7 @@ class TestContextUseCases:
             context_cache=ContextCacheEngine(),
             context_gen_lock=asyncio.Lock(),
             ensure_services_fn=lambda: None,
+            source_search=SourceSearchService(),
         )
 
         req = GenerateContextRequest(task="Add feature", datasets=["my-repo"])
@@ -124,6 +136,7 @@ class TestContextUseCases:
             context_cache=ContextCacheEngine(),
             context_gen_lock=asyncio.Lock(),
             ensure_services_fn=lambda: None,
+            source_search=SourceSearchService(),
         )
 
         with pytest.raises(ValueError, match="must not be empty"):
@@ -144,7 +157,7 @@ class TestIndexingUseCases:
             indexing_lock=lock,
             ensure_services_fn=lambda: None,
             summary_generator=RepositorySummaryGenerator(),
-            repo_store_path=tmp_path / "store.json",
+            metadata_store=JsonRepositoryMetadataStore(store_path=tmp_path / "store.json"),
         )
 
         req = IndexRepositoryRequest(repository_path=str(repo_dir), dataset_name="repo")
@@ -177,7 +190,7 @@ class TestIndexingUseCases:
             indexing_lock=asyncio.Lock(),
             ensure_services_fn=lambda: None,
             summary_generator=RepositorySummaryGenerator(),
-            repo_store_path=tmp_path / "store.json",
+            metadata_store=JsonRepositoryMetadataStore(store_path=tmp_path / "store.json"),
         )
 
         req = IndexRepositoryRequest(repository_path=str(repo_dir), dataset_name="repo")
@@ -207,7 +220,7 @@ class TestRepositoryUseCases:
             indexing_service=MagicMock(),
             llm_provider=AsyncMock(),
             summary_generator=RepositorySummaryGenerator(),
-            repo_store_path=tmp_path / "store.json",
+            metadata_store=JsonRepositoryMetadataStore(store_path=tmp_path / "store.json"),
         )
 
         # List
@@ -312,10 +325,12 @@ class TestApplicationContainerWiring:
 
 
 class TestArchitecturalBoundaryInvariants:
-    """Verifies that app.application strictly depends inward on models/services, never outward on server/CLI."""
+    """Verifies that app.application strictly depends inward on models/services, never outward on API, server, or CLI."""
 
     FORBIDDEN_IMPORTS = {
+        "app.api",
         "fastapi",
+        "starlette",
         "app.server",
         "app.cli",
         "kuzu",
@@ -324,9 +339,10 @@ class TestArchitecturalBoundaryInvariants:
     }
 
     def test_application_layer_ast_purity(self):
+        """Verify no Python file in app/application imports any forbidden package."""
         app_dir = Path(__file__).resolve().parent.parent / "app" / "application"
         py_files = list(app_dir.rglob("*.py"))
-        assert len(py_files) >= 7, "Expected at least 7 Python files under app/application"
+        assert len(py_files) >= 10, f"Expected at least 10 Python files under app/application, found {len(py_files)}"
 
         for file_path in py_files:
             tree = ast.parse(file_path.read_text(encoding="utf-8"), filename=str(file_path))
@@ -345,3 +361,34 @@ class TestArchitecturalBoundaryInvariants:
                             f"Boundary violation in {file_path.name}: "
                             f"forbidden 'from {mod} import ...'"
                         )
+
+    def test_no_direct_persistence_in_use_cases(self):
+        """Verify use cases do not perform raw JSON file operations."""
+        use_cases_dir = Path(__file__).resolve().parent.parent / "app" / "application" / "use_cases"
+        for file_path in use_cases_dir.glob("*.py"):
+            content = file_path.read_text(encoding="utf-8")
+            assert "write_text" not in content, (
+                f"Direct filesystem write found in use case {file_path.name}"
+            )
+            assert "_load_repo_store" not in content, (
+                f"Legacy raw persistence helper found in use case {file_path.name}"
+            )
+
+    def test_no_inline_context_service_construction(self):
+        """Verify ContextUseCases does not instantiate ContextService inline."""
+        ctx_file = Path(__file__).resolve().parent.parent / "app" / "application" / "use_cases" / "context.py"
+        tree = ast.parse(ctx_file.read_text(encoding="utf-8"), filename=str(ctx_file))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Call):
+                if isinstance(node.func, ast.Name) and node.func.id == "ContextService":
+                    # Allowed only in __init__ type hints or default args, not in method body
+                    pytest.fail("Inline construction of ContextService found in context.py use case!")
+
+    def test_dto_isolation_and_independence(self):
+        """Verify application DTOs can be imported in isolation without importing app.api."""
+        import importlib
+        dto_mod = importlib.import_module("app.application.dto")
+        assert hasattr(dto_mod, "ContextResponse")
+        assert hasattr(dto_mod, "IndexRepositoryRequest")
+        assert hasattr(dto_mod, "BenchmarkSuiteResponse")
+        assert hasattr(dto_mod, "HealthResponse")

@@ -10,7 +10,7 @@ from pathlib import Path
 import time
 from typing import Any, Optional
 
-from app.api.schemas import (
+from app.application.dto import (
     ErrorResponse,
     RepositoryCreateRequest,
     RepositoryListResponse,
@@ -22,6 +22,10 @@ from app.services.cognee_service import CogneeService
 from app.services.indexing_service import IndexingService
 from app.services.llm_provider_service import LLMProviderService
 from app.services.repository_manager import RepositoryManager
+from app.services.repository_metadata_store import (
+    JsonRepositoryMetadataStore,
+    RepositoryMetadataStore,
+)
 from app.services.repository_summary import RepositorySummaryGenerator
 
 logger = logging.getLogger(__name__)
@@ -37,35 +41,14 @@ class RepositoryUseCases:
         llm_provider: Optional[LLMProviderService],
         summary_generator: RepositorySummaryGenerator,
         cognee_service: Optional[CogneeService] = None,
-        repo_store_path: Optional[Path] = None,
-        legacy_repo_store_path: Optional[Path] = None,
+        metadata_store: Optional[RepositoryMetadataStore] = None,
     ) -> None:
         self._manager = repository_manager
         self._indexing_service = indexing_service
         self._llm_provider = llm_provider
         self._summary_generator = summary_generator
         self._cognee_service = cognee_service
-        self._repo_store_path = repo_store_path or (Path.home() / ".retrack" / "indexed_repos.json")
-        self._legacy_repo_store_path = legacy_repo_store_path or (Path.home() / ".andes" / "indexed_repos.json")
-
-    def _load_repo_store(self) -> dict:
-        """Load the indexed repos store from disk."""
-        if self._repo_store_path.exists():
-            try:
-                return json.loads(self._repo_store_path.read_text())
-            except Exception:
-                return {}
-        if self._legacy_repo_store_path.exists():
-            try:
-                return json.loads(self._legacy_repo_store_path.read_text())
-            except Exception:
-                return {}
-        return {"repositories": []}
-
-    def _save_repo_store(self, data: dict) -> None:
-        """Persist the indexed repos store to disk."""
-        self._repo_store_path.parent.mkdir(parents=True, exist_ok=True)
-        self._repo_store_path.write_text(json.dumps(data, indent=2))
+        self._metadata_store = metadata_store or JsonRepositoryMetadataStore()
 
     def _repo_to_response(self, repo: Repository) -> RepositoryResponse:
         """Convert a Repository dataclass to a Pydantic response model with full AST and metadata."""
@@ -93,7 +76,7 @@ class RepositoryUseCases:
         # Fallback to indexed repo store if not in repo.metadata
         if not call_graph_nodes:
             try:
-                store = self._load_repo_store()
+                store = self._metadata_store.load()
                 for r in store.get("repositories", []):
                     if r.get("path") == repo.local_path or r.get("name") == repo.name or r.get("id") == repo.id:
                         if r.get("call_graph_nodes"):
@@ -237,11 +220,11 @@ class RepositoryUseCases:
                     message=f"Repository {repo_id} not found",
                 )
 
-            # Clean from repo store
-            store = self._load_repo_store()
+            # Clean from repo store using metadata store abstraction
+            store = self._metadata_store.load()
             repos = store.get("repositories", [])
             store["repositories"] = [r for r in repos if str(r.get("id")) != repo_id and r.get("name") != dataset_name]
-            self._save_repo_store(store)
+            self._metadata_store.save(store)
 
             # Optionally clean dataset from Cognee
             if dataset_name and self._cognee_service and self._cognee_service.is_initialized:
@@ -337,17 +320,13 @@ class RepositoryUseCases:
                         f"Discovered Classes & Symbols: {symbols_str or 'Core codebase'}\n\n"
                         "Generate 4-5 focused developer questions or implementation tasks referencing these exact symbols."
                     )
-                    from app.models.provider import CompletionRequest
-                    req = CompletionRequest(
-                        messages=[
-                            {"role": "system", "content": system_prompt},
-                            {"role": "user", "content": user_prompt},
-                        ],
+                    raw = await self._llm_provider.generate_completion(
+                        prompt=user_prompt,
+                        system_prompt=system_prompt,
                         temperature=0.2,
                         max_tokens=500,
                     )
-                    resp = await self._llm_provider.complete(req)
-                    raw = resp.content.strip()
+                    raw = raw.strip()
                     if raw.startswith("```"):
                         raw = raw.strip("`").removeprefix("json").strip()
                     parsed = json.loads(raw)

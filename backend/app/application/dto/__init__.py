@@ -1,30 +1,31 @@
-"""Request and response schemas for RE:Track (RefinedEngine Track) API commands.
+"""Application DTOs (Data Transfer Objects) for RE:Track.
 
-Backward-compatibility facade: Re-exports application-owned DTOs from app.application.dto.
-All new application logic and use cases must import directly from app.application.dto.
+This package defines transport-independent request and response data contracts
+owned by the application layer.
 """
 
-from app.application.dto import (
-    # Common
-    ErrorResponse,
-    # Context
+from app.application.dto.common import ErrorResponse
+from app.application.dto.context import (
     AgentContextRequest,
     AgentContextResponse,
     ContextResponse,
     GenerateContextRequest,
-    # Indexing
+)
+from app.application.dto.indexing import (
     IndexRepositoryRequest,
     IndexRepositoryResponse,
     IndexedRepositoryListResponse,
     RepoArchInfo,
     RepoComponentInfo,
     RepositorySummaryInfo,
-    # Repositories
+)
+from app.application.dto.repositories import (
     RepositoryCreateRequest,
     RepositoryListResponse,
     RepositoryResponse,
     ScanResultResponse,
-    # Memory
+)
+from app.application.dto.memory import (
     CognifyRequest,
     CognifyResponse,
     DashboardStats,
@@ -40,37 +41,45 @@ from app.application.dto import (
     MemoryStatsResponse,
     MemoryVectorsResponse,
     VectorDatasetInfo,
-    # Packages
+)
+from app.application.dto.packages import (
     ContextPackageAppendRequest,
     ContextPackageListResponse,
     ContextPackageResponse,
     ContextPackageSaveRequest,
-    # System
+)
+from app.application.dto.system import (
     AppSettingsResponse,
     BackendStatusResponse,
     CogneeSettingsRequest,
     HealthResponse,
-    # Benchmarks
+)
+from app.application.dto.benchmarks import (
     BenchmarkResultItem,
     BenchmarkSuiteResponse,
 )
 
 __all__ = [
+    # Common
     "ErrorResponse",
+    # Context
     "GenerateContextRequest",
     "ContextResponse",
     "AgentContextRequest",
     "AgentContextResponse",
+    # Indexing
     "IndexRepositoryRequest",
     "IndexRepositoryResponse",
     "RepoArchInfo",
     "RepoComponentInfo",
     "RepositorySummaryInfo",
     "IndexedRepositoryListResponse",
+    # Repositories
     "RepositoryCreateRequest",
     "RepositoryResponse",
     "RepositoryListResponse",
     "ScanResultResponse",
+    # Memory
     "ForgetDatasetRequest",
     "ForgetDatasetResponse",
     "DatasetInfo",
@@ -86,14 +95,17 @@ __all__ = [
     "CognifyResponse",
     "MemoryStatsResponse",
     "DashboardStats",
+    # Packages
     "ContextPackageSaveRequest",
     "ContextPackageResponse",
     "ContextPackageListResponse",
     "ContextPackageAppendRequest",
+    # System
     "HealthResponse",
     "BackendStatusResponse",
     "CogneeSettingsRequest",
     "AppSettingsResponse",
+    # Benchmarks
     "BenchmarkResultItem",
     "BenchmarkSuiteResponse",
 ]

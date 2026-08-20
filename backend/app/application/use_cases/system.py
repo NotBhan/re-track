@@ -9,7 +9,7 @@ from pathlib import Path
 import time
 from typing import Any, Callable, Coroutine, Optional
 
-from app.api.schemas import (
+from app.application.dto import (
     AppSettingsResponse,
     BackendStatusResponse,
     CogneeSettingsRequest,

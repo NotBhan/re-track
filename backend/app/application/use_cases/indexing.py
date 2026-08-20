@@ -5,23 +5,27 @@ All dependencies are explicitly injected via constructor.
 """
 
 import asyncio
-import json
+from datetime import datetime, timezone
 import logging
 from pathlib import Path
 import time
 from typing import Callable, Optional
 
-from app.api.schemas import (
+from app.application.dto import (
     ErrorResponse,
     IndexRepositoryRequest,
     IndexRepositoryResponse,
+    IndexedRepositoryListResponse,
     RepoArchInfo,
     RepoComponentInfo,
-    RepositoryListResponse,
     RepositorySummaryInfo,
 )
 from app.models.errors import CogneeServiceError
 from app.services.indexing_service import IndexingService
+from app.services.repository_metadata_store import (
+    JsonRepositoryMetadataStore,
+    RepositoryMetadataStore,
+)
 from app.services.repository_summary import RepositorySummaryGenerator
 
 logger = logging.getLogger(__name__)
@@ -36,34 +40,13 @@ class IndexingUseCases:
         indexing_lock: asyncio.Lock,
         ensure_services_fn: Callable[[], None],
         summary_generator: RepositorySummaryGenerator,
-        repo_store_path: Optional[Path] = None,
-        legacy_repo_store_path: Optional[Path] = None,
+        metadata_store: Optional[RepositoryMetadataStore] = None,
     ) -> None:
         self._indexing_service = indexing_service
         self._lock = indexing_lock
         self._ensure_services = ensure_services_fn
         self._summary_generator = summary_generator
-        self._repo_store_path = repo_store_path or (Path.home() / ".retrack" / "indexed_repos.json")
-        self._legacy_repo_store_path = legacy_repo_store_path or (Path.home() / ".andes" / "indexed_repos.json")
-
-    def _load_repo_store(self) -> dict:
-        """Load the indexed repos store from disk."""
-        if self._repo_store_path.exists():
-            try:
-                return json.loads(self._repo_store_path.read_text())
-            except Exception:
-                return {}
-        if self._legacy_repo_store_path.exists():
-            try:
-                return json.loads(self._legacy_repo_store_path.read_text())
-            except Exception:
-                return {}
-        return {"repositories": []}
-
-    def _save_repo_store(self, data: dict) -> None:
-        """Persist the indexed repos store to disk."""
-        self._repo_store_path.parent.mkdir(parents=True, exist_ok=True)
-        self._repo_store_path.write_text(json.dumps(data, indent=2))
+        self._metadata_store = metadata_store or JsonRepositoryMetadataStore()
 
     async def index_repository(
         self,
@@ -107,8 +90,8 @@ class IndexingUseCases:
                     force_reindex=request.force_reindex,
                 )
 
-                # Persist repository metadata to disk
-                store = self._load_repo_store()
+                # Persist repository metadata using abstracted metadata store
+                store = self._metadata_store.load()
                 repos = store.get("repositories", [])
 
                 # Extract languages, purpose, architecture, and components from summary generator
@@ -142,7 +125,6 @@ class IndexingUseCases:
                     (r for r in repos if r.get("path") == str(repo_path)),
                     None,
                 )
-                from datetime import datetime, timezone
                 repo_entry = {
                     "id": existing["id"] if existing else str(len(repos) + 1),
                     "name": request.dataset_name or repo_path.name,
@@ -164,7 +146,7 @@ class IndexingUseCases:
                     repos.append(repo_entry)
 
                 store["repositories"] = repos
-                self._save_repo_store(store)
+                self._metadata_store.save(store)
 
                 response = IndexRepositoryResponse(
                     success=progress.failed_files == 0,
@@ -205,13 +187,13 @@ class IndexingUseCases:
                 message=f"Indexing failed: {e}",
             )
 
-    async def get_repository_summaries(self) -> RepositoryListResponse | ErrorResponse:
+    async def get_repository_summaries(self) -> IndexedRepositoryListResponse | ErrorResponse:
         """Return list of all indexed repositories with metadata for UI cards."""
         start = time.monotonic()
         logger.info("use_case: get_repository_summaries()")
 
         try:
-            store = self._load_repo_store()
+            store = self._metadata_store.load()
             repos_data = store.get("repositories", [])
             repos: list[RepositorySummaryInfo] = []
 
@@ -242,7 +224,7 @@ class IndexingUseCases:
                     )
                 )
 
-            response = RepositoryListResponse(
+            response = IndexedRepositoryListResponse(
                 success=True,
                 repositories=repos,
                 total_count=len(repos),
