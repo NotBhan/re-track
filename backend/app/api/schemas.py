@@ -182,7 +182,10 @@ class MemoryVectorsResponse(BaseModel):
     embedding_dimensions: int = Field(default=768, description="Embedding vector dimensions")
     total_datasets: int = Field(default=0, description="Total datasets count")
     total_files: int = Field(default=0, description="Total source files indexed")
+    total_vectors: int = Field(default=0, description="Total vector embedding rows in database")
+    tables: list[dict[str, Any]] = Field(default_factory=list, description="Active LanceDB tables information")
     datasets: list[VectorDatasetInfo] = Field(default_factory=list, description="Vector datasets list")
+    message: str = Field(default="", description="Truthful vector index status explanation")
 
 
 class MemoryDataItem(BaseModel):
@@ -206,6 +209,23 @@ class DatasetDataItemsResponse(BaseModel):
     dataset_name: str = Field(description="Dataset name")
     items: list[MemoryDataItem] = Field(default_factory=list, description="Stored data items")
     total_count: int = Field(default=0, description="Total items count")
+
+
+class CognifyRequest(BaseModel):
+    """Request to extract memory vectors and knowledge graph for a dataset."""
+
+    dataset_name: Optional[str] = Field(default=None, description="Dataset name to cognify (or all datasets if omitted)")
+
+
+class CognifyResponse(BaseModel):
+    """Response for Cognee cognify extraction operation."""
+
+    success: bool = Field(description="Whether operation succeeded")
+    dataset_name: Optional[str] = Field(default=None, description="Cognified dataset name")
+    total_vectors: int = Field(default=0, description="Total vector embeddings generated")
+    total_nodes: int = Field(default=0, description="Total knowledge graph entities extracted")
+    total_edges: int = Field(default=0, description="Total knowledge graph relationships extracted")
+    message: str = Field(default="", description="Extraction status message")
 
 
 # --- Repository Summary Schemas ---

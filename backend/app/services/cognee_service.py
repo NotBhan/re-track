@@ -380,6 +380,61 @@ class CogneeService:
             logger.warning("get_dataset_data_items failed: %s", e)
             return []
 
+    async def get_vector_stats(self) -> dict[str, Any]:
+        """Query LanceDB vector engine for active tables, rows, and vector metadata.
+
+        Returns:
+            Dict with keys: tables, total_vectors, embedding_model, embedding_dimensions.
+        """
+        self._ensure_initialized()
+        try:
+            from cognee.infrastructure.databases.vector.get_vector_engine import get_vector_engine
+            v_engine = get_vector_engine()
+            if asyncio.iscoroutine(v_engine):
+                v_engine = await v_engine
+
+            conn = await v_engine.get_connection()
+            table_names = await conn.table_names() if hasattr(conn, "table_names") else []
+            if asyncio.iscoroutine(table_names):
+                table_names = await table_names
+
+            tables_info: list[dict[str, Any]] = []
+            total_vectors = 0
+
+            for tname in table_names:
+                try:
+                    tbl = await conn.open_table(tname)
+                    cnt = await tbl.count_rows() if hasattr(tbl, "count_rows") else 0
+                    if asyncio.iscoroutine(cnt):
+                        cnt = await cnt
+                    total_vectors += cnt
+                    tables_info.append({"table_name": tname, "row_count": cnt})
+                except Exception as e_tbl:
+                    logger.warning("Could not query table %s: %s", tname, e_tbl)
+
+            emb_model = self.settings.ollama.embedding_model or os.getenv("EMBEDDING_MODEL") or "nomic-embed-text"
+            emb_dim = 768
+            try:
+                emb_dim = int(os.getenv("EMBEDDING_DIMENSIONS", "768"))
+            except ValueError:
+                emb_dim = 768
+
+            return {
+                "tables": tables_info,
+                "total_vectors": total_vectors,
+                "embedding_model": emb_model,
+                "embedding_dimensions": emb_dim,
+            }
+        except Exception as e:
+            logger.warning("get_vector_stats() failed: %s", e)
+            emb_model = self.settings.ollama.embedding_model or os.getenv("EMBEDDING_MODEL") or "nomic-embed-text"
+            return {
+                "tables": [],
+                "total_vectors": 0,
+                "embedding_model": emb_model,
+                "embedding_dimensions": 768,
+            }
+
     async def get_graph_stats(self) -> dict[str, int]:
         """Get graph engine statistics from Cognee graph engine.
 
@@ -411,6 +466,39 @@ class CogneeService:
         except Exception as e:
             logger.warning("get_graph_data() failed: %s", e)
             return [], []
+
+    async def cognify(self, dataset_name: Optional[str] = None) -> dict[str, Any]:
+        """Run Cognee cognify pipeline on a dataset (or all datasets) to generate vectors and extract knowledge graph.
+
+        Args:
+            dataset_name: Optional dataset name to cognify.
+
+        Returns:
+            Dict containing extraction results: total_vectors, total_nodes, total_edges.
+        """
+        self._ensure_initialized()
+        try:
+            import cognee
+            logger.info("Starting Cognee cognify pipeline | dataset=%s", dataset_name)
+            if dataset_name:
+                await cognee.cognify(datasets=[dataset_name])
+            else:
+                await cognee.cognify()
+
+            v_stats = await self.get_vector_stats()
+            g_stats = await self.get_graph_stats()
+
+            return {
+                "success": True,
+                "dataset_name": dataset_name,
+                "total_vectors": v_stats.get("total_vectors", 0),
+                "total_nodes": g_stats.get("graph_nodes", 0),
+                "total_edges": g_stats.get("graph_edges", 0),
+                "message": f"Successfully extracted memory index for {dataset_name or 'all datasets'}",
+            }
+        except Exception as e:
+            logger.error("Cognify failed for dataset %s: %s", dataset_name, e)
+            raise CogneeServiceError(f"Extraction failed: {e}") from e
 
     def _ensure_initialized(self) -> None:
         """Raise if service is not initialized."""

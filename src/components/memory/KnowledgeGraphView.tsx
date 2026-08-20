@@ -13,11 +13,14 @@ import {
   CheckCircle2,
   AlertCircle,
   Hash,
+  X,
+  ChevronRight,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useMemoryStore } from "@/stores/memory-store";
+import { cn } from "@/lib/utils";
 import type { MemoryGraphNode } from "@/lib/api";
 
 interface GraphLayoutNode extends MemoryGraphNode {
@@ -31,8 +34,14 @@ export function KnowledgeGraphView() {
     datasets,
     loadingGraph,
     fetchMemoryGraph,
+    selectedDatasetId,
+    selectDataset,
     selectedNodeId,
     setSelectedNodeId,
+    cognifyActiveDataset,
+    cognifying,
+    cognifyingDataset,
+    cognifyError,
   } = useMemoryStore();
 
   const [selectedKindFilter, setSelectedKindFilter] = useState<string>("all");
@@ -42,9 +51,14 @@ export function KnowledgeGraphView() {
   const [isPanning, setIsPanning] = useState(false);
   const panStartRef = useRef<{ x: number; y: number } | null>(null);
 
+  // Selected dataset object
+  const activeSelectedDataset = useMemo(() => {
+    return datasets.find((d) => d.id === selectedDatasetId) || null;
+  }, [datasets, selectedDatasetId]);
+
   useEffect(() => {
-    fetchMemoryGraph();
-  }, [fetchMemoryGraph]);
+    fetchMemoryGraph(activeSelectedDataset ? activeSelectedDataset.name : undefined);
+  }, [fetchMemoryGraph, activeSelectedDataset]);
 
   // Compute node layout positions using circular/grid distribution
   const layoutNodes: GraphLayoutNode[] = useMemo(() => {
@@ -120,9 +134,50 @@ export function KnowledgeGraphView() {
   };
 
   const isExtracted = graph && graph.status === "extracted" && graph.nodes.length > 0;
+  const isCurrentlyCognifying = cognifying && (cognifyingDataset === (activeSelectedDataset?.name || "all"));
 
   return (
     <div className="flex flex-col gap-4">
+      {/* Active Dataset Context Banner */}
+      {activeSelectedDataset && (
+        <div className="p-2.5 bg-[#0d0d0d] border border-[#222222] rounded-lg flex items-center justify-between gap-3 text-xs font-mono">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="text-neutral-500">Active Target:</span>
+            <span className="font-semibold text-white truncate">{activeSelectedDataset.name}</span>
+            <Badge variant="outline" className="text-[9px] uppercase border-purple-500/30 text-purple-400 bg-purple-500/10">
+              {graph?.total_nodes || 0} Entities • {graph?.total_edges || 0} Relations
+            </Badge>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => cognifyActiveDataset(activeSelectedDataset.name)}
+              disabled={cognifying}
+              className="px-2.5 py-1 text-[11px] rounded bg-purple-500/10 text-purple-300 border border-purple-500/30 hover:bg-purple-500/20 transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+            >
+              <Sparkles className={cn("w-3 h-3 text-purple-400", isCurrentlyCognifying && "animate-spin")} />
+              <span>{isCurrentlyCognifying ? "Extracting Graph..." : "Extract Graph for Dataset"}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => selectDataset(null)}
+              className="text-neutral-500 hover:text-white p-1 rounded hover:bg-[#1f1f1f] cursor-pointer"
+              title="Show All Datasets"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Error Alert */}
+      {cognifyError && (
+        <div className="p-3 bg-red-950/30 border border-red-800/40 rounded-lg flex items-center gap-2.5 text-xs text-red-300 font-mono">
+          <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+          <span className="flex-1">{cognifyError}</span>
+        </div>
+      )}
+
       {/* Top Telemetry Strip */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 font-mono">
         <div className="bg-[#0a0a0a] border border-[#1e1e1e] rounded-lg p-3">
@@ -149,26 +204,30 @@ export function KnowledgeGraphView() {
           <div className="text-sm font-semibold text-white">
             {graph?.total_nodes ?? 0}
           </div>
-          <div className="text-[10px] text-neutral-500 mt-0.5">Semantic entity nodes</div>
+          <div className="text-[10px] text-neutral-500 mt-0.5">
+            {activeSelectedDataset ? `in "${activeSelectedDataset.name}"` : "Authoritative graph nodes"}
+          </div>
         </div>
 
         <div className="bg-[#0a0a0a] border border-[#1e1e1e] rounded-lg p-3">
           <div className="text-[10px] text-neutral-500 flex items-center gap-1 mb-1">
-            <Sparkles className="w-3 h-3 text-neutral-400" />
+            <Hash className="w-3 h-3 text-neutral-400" />
             <span>Relationships</span>
           </div>
           <div className="text-sm font-semibold text-white">
             {graph?.total_edges ?? 0}
           </div>
-          <div className="text-[10px] text-neutral-500 mt-0.5">Typed semantic edges</div>
+          <div className="text-[10px] text-neutral-500 mt-0.5">
+            {activeSelectedDataset ? `in "${activeSelectedDataset.name}"` : "Directed semantic edges"}
+          </div>
         </div>
 
         <div className="bg-[#0a0a0a] border border-[#1e1e1e] rounded-lg p-3">
           <div className="text-[10px] text-neutral-500 flex items-center gap-1 mb-1">
-            <Info className="w-3 h-3 text-neutral-400" />
-            <span>Extraction State</span>
+            <Sparkles className="w-3 h-3 text-neutral-400" />
+            <span>KG Status</span>
           </div>
-          <div className="text-xs font-semibold capitalize flex items-center gap-1">
+          <div className="text-xs font-semibold flex items-center gap-1">
             {isExtracted ? (
               <>
                 <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
@@ -176,27 +235,45 @@ export function KnowledgeGraphView() {
               </>
             ) : (
               <>
-                <AlertCircle className="w-3.5 h-3.5 text-amber-400" />
-                <span className="text-amber-400">Not Extracted</span>
+                <AlertCircle className="w-3.5 h-3.5 text-neutral-500" />
+                <span className="text-neutral-400 capitalize">
+                  {graph?.status || "Not Extracted"}
+                </span>
               </>
             )}
           </div>
           <div className="text-[10px] text-neutral-500 mt-0.5 truncate">
-            {isExtracted ? "Active topology" : "Vector store active"}
+            {isExtracted ? "Active Ladybug triples" : "Ready for extraction"}
           </div>
         </div>
       </div>
 
-      {/* Main Canvas + Inspector */}
+      {/* Main Canvas & Inspector Area */}
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 items-start">
-        {/* Canvas Pane */}
+        {/* Graph Canvas Container */}
         <div className="bg-[#0a0a0a] border border-[#1e1e1e] rounded-lg overflow-hidden flex flex-col h-[560px] relative select-none">
           {/* Controls Bar */}
-          <div className="p-3 border-b border-[#1a1a1a] bg-[#080808] flex flex-wrap items-center justify-between gap-2.5 z-10">
+          <div className="p-3 border-b border-[#1a1a1a] bg-[#080808] flex flex-wrap items-center justify-between gap-2.5 z-10 font-mono">
             <div className="flex items-center gap-2 flex-wrap">
-              {/* Kind Filter */}
+              {/* Dataset Filter */}
               <div className="flex items-center gap-1 bg-black p-1 rounded-md border border-[#222222]">
                 <Filter className="w-3 h-3 text-neutral-500 ml-1" />
+                <select
+                  value={selectedDatasetId || "all"}
+                  onChange={(e) => selectDataset(e.target.value === "all" ? null : e.target.value)}
+                  className="bg-transparent text-xs text-neutral-300 focus:outline-none cursor-pointer pr-2 py-0.5 font-mono"
+                >
+                  <option value="all" className="bg-[#0a0a0a]">All Datasets ({datasets.length})</option>
+                  {datasets.map((d) => (
+                    <option key={d.id} value={d.id} className="bg-[#0a0a0a]">
+                      {d.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Entity Kind Filter */}
+              <div className="flex items-center gap-1 bg-black p-1 rounded-md border border-[#222222]">
                 <select
                   value={selectedKindFilter}
                   onChange={(e) => setSelectedKindFilter(e.target.value)}
@@ -223,32 +300,47 @@ export function KnowledgeGraphView() {
               </div>
             </div>
 
-            {/* Canvas Actions */}
-            <div className="flex items-center gap-1 bg-black p-0.5 rounded-md border border-[#222222]">
+            {/* Actions & Canvas Controls */}
+            <div className="flex items-center gap-2">
               <button
-                onClick={() => setZoom((z) => Math.max(z - 0.2, 0.4))}
-                className="p-1 rounded text-neutral-400 hover:text-white hover:bg-[#1f1f1f] cursor-pointer"
-                title="Zoom Out"
+                type="button"
+                onClick={() => cognifyActiveDataset(activeSelectedDataset?.name)}
+                disabled={cognifying}
+                className="px-2.5 py-1 text-xs rounded bg-purple-500/10 text-purple-300 border border-purple-500/30 hover:bg-purple-500/20 transition-colors flex items-center gap-1.5 cursor-pointer font-mono disabled:opacity-50"
               >
-                <ZoomOut className="w-3.5 h-3.5" />
+                <Sparkles className={cn("w-3 h-3 text-purple-400", isCurrentlyCognifying && "animate-spin")} />
+                <span>{isCurrentlyCognifying ? "Extracting..." : "Extract Graph"}</span>
               </button>
-              <span className="text-[10px] font-mono text-neutral-400 px-1">
-                {Math.round(zoom * 100)}%
-              </span>
-              <button
-                onClick={() => setZoom((z) => Math.min(z + 0.2, 2.5))}
-                className="p-1 rounded text-neutral-400 hover:text-white hover:bg-[#1f1f1f] cursor-pointer"
-                title="Zoom In"
-              >
-                <ZoomIn className="w-3.5 h-3.5" />
-              </button>
-              <button
-                onClick={resetView}
-                className="p-1 rounded text-neutral-400 hover:text-white hover:bg-[#1f1f1f] cursor-pointer"
-                title="Reset View"
-              >
-                <Maximize2 className="w-3.5 h-3.5" />
-              </button>
+
+              <div className="flex items-center gap-1 bg-black p-0.5 rounded-md border border-[#222222]">
+                <button
+                  type="button"
+                  onClick={() => setZoom((z) => Math.max(z - 0.2, 0.4))}
+                  className="p-1 rounded text-neutral-400 hover:text-white hover:bg-[#1f1f1f] cursor-pointer"
+                  title="Zoom Out"
+                >
+                  <ZoomOut className="w-3.5 h-3.5" />
+                </button>
+                <span className="text-[10px] font-mono text-neutral-400 px-1">
+                  {Math.round(zoom * 100)}%
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setZoom((z) => Math.min(z + 0.2, 2.5))}
+                  className="p-1 rounded text-neutral-400 hover:text-white hover:bg-[#1f1f1f] cursor-pointer"
+                  title="Zoom In"
+                >
+                  <ZoomIn className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={resetView}
+                  className="p-1 rounded text-neutral-400 hover:text-white hover:bg-[#1f1f1f] cursor-pointer"
+                  title="Reset View"
+                >
+                  <Maximize2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
             </div>
           </div>
 
@@ -280,8 +372,8 @@ export function KnowledgeGraphView() {
                 <span className="text-xs font-mono text-neutral-400">Loading knowledge graph...</span>
               </div>
             ) : !isExtracted ? (
-              /* Truthful State Banner */
-              <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center z-10 pointer-events-none">
+              /* Truthful State Banner with Extraction Trigger */
+              <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center z-10">
                 <div className="w-12 h-12 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center mb-3 text-purple-400">
                   <Share2 className="w-6 h-6" />
                 </div>
@@ -289,14 +381,32 @@ export function KnowledgeGraphView() {
                   Knowledge Graph Not Extracted
                 </h4>
                 <p className="text-xs text-neutral-400 max-w-md mt-1.5 leading-relaxed font-sans">
-                  Raw vector ingestion is active in LanceDB. Knowledge graph entity extraction is an optional semantic enrichment phase that generates entity-relation triples from cognitive memory.
+                  {activeSelectedDataset
+                    ? `Entity extraction for "${activeSelectedDataset.name}" has not been run yet. Trigger extraction below to build entity-relation triples in Kùzu.`
+                    : "Raw vector ingestion is active in LanceDB. Knowledge graph entity extraction is an optional semantic enrichment phase that generates entity-relation triples in Kùzu."}
                 </p>
-                <div className="mt-4 flex items-center gap-2 font-mono text-[11px] text-neutral-500 bg-[#0d0d0d] border border-[#222222] px-3 py-1.5 rounded-md">
-                  <span className="w-2 h-2 rounded-full bg-emerald-400" />
-                  <span>Vector Index: Active</span>
-                  <span className="text-neutral-700">|</span>
-                  <span className="w-2 h-2 rounded-full bg-amber-400" />
-                  <span>KG Triples: 0</span>
+
+                <div className="mt-4 flex flex-col items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      cognifyActiveDataset(activeSelectedDataset?.name);
+                    }}
+                    disabled={cognifying}
+                    className="px-4 py-2 rounded-md bg-purple-600 text-white hover:bg-purple-500 transition-colors flex items-center gap-2 text-xs font-medium cursor-pointer shadow-lg shadow-purple-900/20 disabled:opacity-50"
+                  >
+                    <Sparkles className={cn("w-4 h-4", isCurrentlyCognifying && "animate-spin")} />
+                    <span>{isCurrentlyCognifying ? "Extracting Knowledge Graph..." : `Extract Knowledge Graph for ${activeSelectedDataset ? `"${activeSelectedDataset.name}"` : "All Datasets"}`}</span>
+                  </button>
+
+                  <div className="flex items-center gap-2 font-mono text-[11px] text-neutral-500 bg-[#0d0d0d] border border-[#222222] px-3 py-1.5 rounded-md">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                    <span>Vector Index: Active</span>
+                    <span className="text-neutral-700">|</span>
+                    <span className="w-2 h-2 rounded-full bg-amber-400" />
+                    <span>KG Triples: 0</span>
+                  </div>
                 </div>
               </div>
             ) : null}
@@ -348,41 +458,58 @@ export function KnowledgeGraphView() {
                   {/* Nodes */}
                   {filteredNodes.map((node) => {
                     const isSelected = selectedNodeId === node.id;
+
                     return (
                       <g
                         key={node.id}
+                        transform={`translate(${node.x}, ${node.y})`}
                         onClick={(e) => {
                           e.stopPropagation();
-                          setSelectedNodeId(node.id);
+                          setSelectedNodeId(isSelected ? null : node.id);
                         }}
-                        className="cursor-pointer transition-transform duration-150"
-                        transform={`translate(${node.x}, ${node.y})`}
+                        className="cursor-pointer group"
                       >
                         {isSelected && (
                           <circle
-                            r={18}
+                            r="20"
                             fill="none"
                             stroke="#a855f7"
-                            strokeWidth="1.5"
+                            strokeWidth="2"
+                            strokeOpacity="0.4"
                             className="animate-pulse"
                           />
                         )}
                         <circle
-                          r={10}
-                          fill="#18181b"
-                          stroke={isSelected ? "#c084fc" : "#52525b"}
-                          strokeWidth={isSelected ? 2 : 1}
+                          r="10"
+                          fill={isSelected ? "#9333ea" : "#1f1f1f"}
+                          stroke={isSelected ? "#c084fc" : "#444444"}
+                          strokeWidth="1.5"
+                          className="transition-colors group-hover:stroke-purple-400"
                         />
                         <text
-                          y={20}
+                          y="18"
                           textAnchor="middle"
-                          fill={isSelected ? "#ffffff" : "#a1a1aa"}
+                          fill={isSelected ? "#ffffff" : "#a3a3a3"}
                           fontSize="9"
                           fontFamily="monospace"
-                          fontWeight={isSelected ? "bold" : "normal"}
+                          className="pointer-events-none select-none font-medium"
                         >
-                          {node.label}
+                          {node.label.length > 16
+                            ? `${node.label.slice(0, 14)}...`
+                            : node.label}
                         </text>
+                        {node.type && (
+                          <text
+                            y="27"
+                            textAnchor="middle"
+                            fill="#737373"
+                            fontSize="7"
+                            fontFamily="monospace"
+                            className="pointer-events-none select-none"
+                          >
+                            {node.type}
+                          </text>
+                        )}
                       </g>
                     );
                   })}
@@ -390,18 +517,18 @@ export function KnowledgeGraphView() {
               </svg>
             )}
 
-            {/* Canvas Legend */}
+            {/* Bottom Legend Overlay */}
             <div className="absolute bottom-3 left-3 bg-[#0a0a0a]/90 backdrop-blur-xs border border-[#222222] rounded-md px-3 py-1.5 flex items-center gap-3 text-[10px] font-mono text-neutral-400 z-10">
               <div className="flex items-center gap-1.5">
                 <span className="w-2 h-2 rounded-full bg-purple-400" />
-                <span>Entity Nodes</span>
+                <span>Kùzu Engine</span>
               </div>
               <div className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-neutral-500" />
-                <span>Kùzu Relations</span>
+                <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                <span>{filteredNodes.length} Visible Entities</span>
               </div>
               <span className="text-neutral-600">|</span>
-              <span>{filteredNodes.length} entities visible</span>
+              <span>{graph?.total_edges ?? 0} Relations</span>
             </div>
           </div>
         </div>
@@ -410,70 +537,100 @@ export function KnowledgeGraphView() {
         <div className="bg-[#0a0a0a] border border-[#1e1e1e] rounded-lg p-4 flex flex-col gap-3 font-mono">
           <div className="flex items-center justify-between border-b border-[#1a1a1a] pb-2.5">
             <span className="text-xs font-semibold text-white flex items-center gap-1.5">
-              <Hash className="w-3.5 h-3.5 text-neutral-400" />
+              <Info className="w-3.5 h-3.5 text-neutral-400" />
               <span>Entity Inspector</span>
             </span>
             {selectedNode ? (
               <Badge variant="outline" className="text-[9px] uppercase border-purple-500/30 text-purple-400 bg-purple-500/10">
-                Selected
+                {selectedNode.kind}
               </Badge>
             ) : (
               <Badge variant="outline" className="text-[9px] uppercase text-neutral-500">
-                Status
+                Idle
               </Badge>
             )}
           </div>
 
           {selectedNode ? (
             <div className="space-y-3">
-              <div className="bg-[#050505] p-2.5 rounded border border-[#1a1a1a] space-y-1">
+              {/* Node Summary Card */}
+              <div className="bg-[#050505] p-2.5 rounded border border-[#1a1a1a] space-y-1.5">
                 <div className="text-[10px] text-neutral-500 uppercase">Entity Label</div>
                 <div className="text-xs font-semibold text-white break-all">
                   {selectedNode.label}
                 </div>
                 <div className="text-[10px] text-neutral-400 flex items-center gap-1">
-                  <span>Kind:</span>
-                  <span className="text-purple-300 uppercase">{selectedNode.kind}</span>
-                </div>
-              </div>
-
-              <div className="space-y-2 text-xs">
-                <div className="flex items-center justify-between">
-                  <span className="text-neutral-500">Entity ID:</span>
-                  <span className="text-neutral-300 truncate max-w-[140px]" title={selectedNode.id}>
+                  <span>ID:</span>
+                  <span className="text-neutral-200 truncate" title={selectedNode.id}>
                     {selectedNode.id}
                   </span>
                 </div>
-                {selectedNode.type && (
-                  <div className="flex items-center justify-between">
-                    <span className="text-neutral-500">Type:</span>
-                    <span className="text-neutral-300">{selectedNode.type}</span>
-                  </div>
-                )}
-                <div className="flex items-center justify-between">
-                  <span className="text-neutral-500">Inbound Relations:</span>
-                  <span className="text-neutral-300">{relatedEdges.inbound.length}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-neutral-500">Outbound Relations:</span>
-                  <span className="text-neutral-300">{relatedEdges.outbound.length}</span>
-                </div>
               </div>
 
-              {/* Properties */}
-              {selectedNode.properties && Object.keys(selectedNode.properties).length > 0 && (
-                <div className="space-y-1.5 pt-2 border-t border-[#1a1a1a]">
-                  <div className="text-[10px] text-neutral-500 uppercase">Attributes</div>
-                  <div className="bg-[#050505] p-2 rounded border border-[#1a1a1a] max-h-28 overflow-y-auto space-y-1 text-[10px]">
+              {/* Node Properties */}
+              <div className="space-y-1.5">
+                <div className="text-[10px] text-neutral-500 uppercase">Properties</div>
+                {selectedNode.properties && Object.keys(selectedNode.properties).length > 0 ? (
+                  <div className="space-y-1 bg-[#050505] p-2 rounded border border-[#1a1a1a] text-[11px]">
                     {Object.entries(selectedNode.properties).map(([k, v]) => (
-                      <div key={k} className="flex items-start justify-between gap-2">
+                      <div key={k} className="flex items-start justify-between gap-2 py-0.5">
                         <span className="text-neutral-500 shrink-0">{k}:</span>
-                        <span className="text-neutral-300 break-all">{v}</span>
+                        <span className="text-neutral-300 text-right break-all">{v}</span>
                       </div>
                     ))}
                   </div>
+                ) : (
+                  <div className="text-[11px] text-neutral-500 italic p-2 bg-[#050505] rounded border border-[#1a1a1a]">
+                    No custom metadata properties attached.
+                  </div>
+                )}
+              </div>
+
+              {/* Connected Relationships */}
+              <div className="space-y-1.5">
+                <div className="text-[10px] text-neutral-500 uppercase">Relationships</div>
+                <div className="space-y-1 text-[11px]">
+                  {relatedEdges.outbound.length > 0 && (
+                    <div className="space-y-1">
+                      <div className="text-[10px] text-purple-400">Outbound:</div>
+                      {relatedEdges.outbound.map((e, idx) => (
+                        <div
+                          key={`out-${idx}`}
+                          className="p-1.5 rounded bg-[#050505] border border-[#1a1a1a] flex items-center justify-between"
+                        >
+                          <span className="text-neutral-400">{e.relationship_type || e.kind}</span>
+                          <span className="text-neutral-200 font-mono text-[10px] truncate max-w-[120px]">
+                            → {e.target}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {relatedEdges.inbound.length > 0 && (
+                    <div className="space-y-1 pt-1">
+                      <div className="text-[10px] text-blue-400">Inbound:</div>
+                      {relatedEdges.inbound.map((e, idx) => (
+                        <div
+                          key={`in-${idx}`}
+                          className="p-1.5 rounded bg-[#050505] border border-[#1a1a1a] flex items-center justify-between"
+                        >
+                          <span className="text-neutral-200 font-mono text-[10px] truncate max-w-[120px]">
+                            ← {e.source}
+                          </span>
+                          <span className="text-neutral-400">{e.relationship_type || e.kind}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {relatedEdges.inbound.length === 0 && relatedEdges.outbound.length === 0 && (
+                    <div className="text-[11px] text-neutral-500 italic p-2 bg-[#050505] rounded border border-[#1a1a1a]">
+                      Isolated entity node.
+                    </div>
+                  )}
                 </div>
-              )}
+              </div>
 
               <div className="pt-2 border-t border-[#1a1a1a]">
                 <Button
@@ -481,7 +638,7 @@ export function KnowledgeGraphView() {
                   variant="outline"
                   size="sm"
                   onClick={() => setSelectedNodeId(null)}
-                  className="w-full text-xs h-7 border-[#262626] text-neutral-400 hover:text-white"
+                  className="w-full text-xs h-7 border-[#262626] text-neutral-400 hover:text-white cursor-pointer"
                 >
                   Clear Selection
                 </Button>
@@ -490,31 +647,26 @@ export function KnowledgeGraphView() {
           ) : (
             <div className="space-y-3">
               <p className="text-[11px] text-neutral-400 leading-relaxed font-sans">
-                {isExtracted
-                  ? "Select any entity node on the canvas to inspect its semantic properties, entity kind, and inbound/outbound relations."
-                  : "Knowledge Graph extraction is synchronized with Cognee's entity-relation pipeline. In RE:Track, vector embeddings handle instant semantic search while the AST Call Graph provides deterministic code topology."}
+                Select any entity node from the canvas to inspect its semantic type, custom attributes, and connected relationships.
               </p>
 
-              <div className="p-2.5 rounded bg-[#050505] border border-[#1a1a1a] space-y-2">
-                <div className="text-[10px] text-neutral-500 uppercase font-semibold">
-                  Memory Topology Layers
-                </div>
-                <div className="space-y-1.5 text-[11px]">
-                  <div className="flex items-center justify-between text-neutral-400">
-                    <span>1. Ingested Files:</span>
-                    <span className="text-white font-medium">{datasets.length} datasets</span>
+              <div className="space-y-2 pt-2 border-t border-[#1a1a1a]">
+                <div className="text-[10px] text-neutral-500 uppercase">Available Datasets</div>
+                {datasets.map((ds) => (
+                  <div
+                    key={ds.id}
+                    onClick={() => selectDataset(ds.id)}
+                    className="p-2 rounded border border-[#1a1a1a] bg-[#050505] hover:border-[#333333] transition-colors cursor-pointer flex items-center justify-between"
+                  >
+                    <div className="min-w-0 pr-2">
+                      <div className="text-xs text-white truncate font-semibold">{ds.name}</div>
+                      <div className="text-[10px] text-neutral-500">
+                        {ds.file_count || 0} source documents
+                      </div>
+                    </div>
+                    <ChevronRight className="w-3.5 h-3.5 text-neutral-500 shrink-0" />
                   </div>
-                  <div className="flex items-center justify-between text-neutral-400">
-                    <span>2. Vector Index:</span>
-                    <span className="text-emerald-400 font-medium">LanceDB Active</span>
-                  </div>
-                  <div className="flex items-center justify-between text-neutral-400">
-                    <span>3. Knowledge Graph:</span>
-                    <span className="text-amber-400 font-medium">
-                      {graph?.status === "extracted" ? "Extracted" : "Not Extracted"}
-                    </span>
-                  </div>
-                </div>
+                ))}
               </div>
             </div>
           )}

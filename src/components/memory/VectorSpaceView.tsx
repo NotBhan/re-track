@@ -13,24 +13,17 @@ import {
   Activity,
   ChevronRight,
   Filter,
+  FileCode,
+  Sparkles,
+  AlertCircle,
+  X,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useMemoryStore } from "@/stores/memory-store";
 import { cn } from "@/lib/utils";
-
-interface VectorPoint {
-  id: string;
-  datasetName: string;
-  name: string;
-  size: number;
-  x: number;
-  y: number;
-  cluster: number;
-  status: string;
-  hash: string;
-}
+import type { VectorDatasetInfo } from "@/lib/api";
 
 export function VectorSpaceView() {
   const {
@@ -38,76 +31,58 @@ export function VectorSpaceView() {
     datasets,
     loadingVectors,
     fetchMemoryVectors,
+    selectedDatasetId,
     selectDataset,
+    cognifyActiveDataset,
+    cognifying,
+    cognifyingDataset,
+    cognifyError,
   } = useMemoryStore();
 
-  const [selectedDatasetFilter, setSelectedDatasetFilter] = useState<string>("all");
   const [localSearch, setLocalSearch] = useState("");
-  const [selectedPoint, setSelectedPoint] = useState<VectorPoint | null>(null);
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
   const panStartRef = useRef<{ x: number; y: number } | null>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     fetchMemoryVectors();
   }, [fetchMemoryVectors]);
 
-  // Compute deterministic 2D projection points from authoritative datasets & files
-  const vectorPoints: VectorPoint[] = useMemo(() => {
-    const pts: VectorPoint[] = [];
-    if (!vectors || !vectors.datasets) return pts;
+  // Selected dataset object if one is actively chosen in the store
+  const activeSelectedDataset = useMemo(() => {
+    return datasets.find((d) => d.id === selectedDatasetId) || null;
+  }, [datasets, selectedDatasetId]);
 
-    const activeDatasets =
-      selectedDatasetFilter === "all"
-        ? vectors.datasets
-        : vectors.datasets.filter(
-            (d) => d.name === selectedDatasetFilter || d.id === selectedDatasetFilter
-          );
-
-    const totalClusters = Math.max(activeDatasets.length, 1);
-
-    activeDatasets.forEach((ds, dIdx) => {
-      const clusterAngle = (dIdx / totalClusters) * 2 * Math.PI;
-      const clusterRadius = totalClusters > 1 ? 160 : 0;
-      const centerX = 360 + Math.cos(clusterAngle) * clusterRadius;
-      const centerY = 240 + Math.sin(clusterAngle) * clusterRadius;
-
-      const count = Math.max(ds.file_count, 1);
-      for (let i = 0; i < count; i++) {
-        // Deterministic angle & spread based on dataset name hash + index
-        const hashSeed = (ds.name.charCodeAt(i % ds.name.length) || 42) + i * 37;
-        const angle = (i / count) * 2 * Math.PI + (hashSeed % 10) * 0.1;
-        const dist = 25 + ((hashSeed * 17) % 65);
-
-        pts.push({
-          id: `${ds.id}-pt-${i}`,
-          datasetName: ds.name,
-          name: ds.file_count > 0 ? `${ds.name}/item_${i + 1}.txt` : `${ds.name} (partition root)`,
-          size: Math.max(Math.round(ds.size_bytes / Math.max(ds.file_count, 1)), 512),
-          x: Math.round(centerX + Math.cos(angle) * dist),
-          y: Math.round(centerY + Math.sin(angle) * dist),
-          cluster: dIdx,
-          status: ds.vector_status,
-          hash: ds.id.slice(0, 8),
-        });
-      }
-    });
-
-    return pts;
-  }, [vectors, selectedDatasetFilter]);
-
-  const filteredPoints = useMemo(() => {
-    if (!localSearch.trim()) return vectorPoints;
-    const q = localSearch.toLowerCase();
-    return vectorPoints.filter(
-      (p) =>
-        p.name.toLowerCase().includes(q) ||
-        p.datasetName.toLowerCase().includes(q) ||
-        p.hash.toLowerCase().includes(q)
+  // Active dataset partition list: filtered by global selectedDatasetId unless "all"
+  const activeDatasets: VectorDatasetInfo[] = useMemo(() => {
+    if (!vectors || !vectors.datasets) return [];
+    if (!selectedDatasetId) return vectors.datasets;
+    return vectors.datasets.filter(
+      (d) => d.id === selectedDatasetId || (activeSelectedDataset && d.name === activeSelectedDataset.name)
     );
-  }, [vectorPoints, localSearch]);
+  }, [vectors, selectedDatasetId, activeSelectedDataset]);
+
+  const filteredDatasets = useMemo(() => {
+    if (!localSearch.trim()) return activeDatasets;
+    const q = localSearch.toLowerCase();
+    return activeDatasets.filter(
+      (d) =>
+        d.name.toLowerCase().includes(q) ||
+        d.id.toLowerCase().includes(q) ||
+        d.vector_status.toLowerCase().includes(q)
+    );
+  }, [activeDatasets, localSearch]);
+
+  const totalSourceFiles = useMemo(() => {
+    if (activeSelectedDataset) {
+      return activeSelectedDataset.file_count || 0;
+    }
+    if (vectors?.total_files !== undefined && vectors.total_files > 0) {
+      return vectors.total_files;
+    }
+    return datasets.reduce((acc, d) => acc + (d.file_count || 0), 0);
+  }, [activeSelectedDataset, vectors, datasets]);
 
   const handleMouseDown = (e: React.MouseEvent) => {
     if (e.button !== 0) return;
@@ -131,19 +106,60 @@ export function VectorSpaceView() {
   const resetView = () => {
     setZoom(1);
     setPan({ x: 0, y: 0 });
-    setSelectedPoint(null);
   };
 
-  const clusterColors = [
-    { fill: "#10b981", stroke: "#059669", ring: "rgba(16, 185, 129, 0.2)" },
-    { fill: "#3b82f6", stroke: "#2563eb", ring: "rgba(59, 130, 246, 0.2)" },
-    { fill: "#8b5cf6", stroke: "#7c3aed", ring: "rgba(139, 92, 246, 0.2)" },
-    { fill: "#f59e0b", stroke: "#d97706", ring: "rgba(245, 158, 11, 0.2)" },
-    { fill: "#ec4899", stroke: "#db2777", ring: "rgba(236, 72, 153, 0.2)" },
-  ];
+  const formatBytes = (bytes: number) => {
+    if (!bytes) return "0 B";
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
+  const hasVectorTables = (vectors?.total_vectors ?? 0) > 0;
+  const isCurrentlyCognifying = cognifying && (cognifyingDataset === (activeSelectedDataset?.name || "all"));
 
   return (
     <div className="flex flex-col gap-4">
+      {/* Active Dataset Context Banner */}
+      {activeSelectedDataset && (
+        <div className="p-2.5 bg-[#0d0d0d] border border-[#222222] rounded-lg flex items-center justify-between gap-3 text-xs font-mono">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="text-neutral-500">Active Target:</span>
+            <span className="font-semibold text-white truncate">{activeSelectedDataset.name}</span>
+            <Badge variant="outline" className="text-[9px] uppercase border-emerald-500/30 text-emerald-400 bg-emerald-500/10">
+              {activeSelectedDataset.file_count || 0} Files
+            </Badge>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => cognifyActiveDataset(activeSelectedDataset.name)}
+              disabled={cognifying}
+              className="px-2.5 py-1 text-[11px] rounded bg-purple-500/10 text-purple-300 border border-purple-500/30 hover:bg-purple-500/20 transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+            >
+              <Sparkles className={cn("w-3 h-3 text-purple-400", isCurrentlyCognifying && "animate-spin")} />
+              <span>{isCurrentlyCognifying ? "Indexing Vectors..." : "Index Active Dataset"}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => selectDataset(null)}
+              className="text-neutral-500 hover:text-white p-1 rounded hover:bg-[#1f1f1f] cursor-pointer"
+              title="Show All Datasets"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Error Alert */}
+      {cognifyError && (
+        <div className="p-3 bg-red-950/30 border border-red-800/40 rounded-lg flex items-center gap-2.5 text-xs text-red-300 font-mono">
+          <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+          <span className="flex-1">{cognifyError}</span>
+        </div>
+      )}
+
       {/* Top Telemetry Strip */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 font-mono">
         <div className="bg-[#0a0a0a] border border-[#1e1e1e] rounded-lg p-3">
@@ -159,7 +175,7 @@ export function VectorSpaceView() {
           <div className="text-sm font-semibold text-white uppercase">
             {vectors?.vector_db_provider || "LanceDB"}
           </div>
-          <div className="text-[10px] text-neutral-500 mt-0.5">Local columnar vector table</div>
+          <div className="text-[10px] text-neutral-500 mt-0.5">Local columnar vector engine</div>
         </div>
 
         <div className="bg-[#0a0a0a] border border-[#1e1e1e] rounded-lg p-3">
@@ -178,106 +194,130 @@ export function VectorSpaceView() {
         <div className="bg-[#0a0a0a] border border-[#1e1e1e] rounded-lg p-3">
           <div className="text-[10px] text-neutral-500 flex items-center gap-1 mb-1">
             <Layers className="w-3 h-3 text-neutral-400" />
-            <span>Indexed Datasets</span>
+            <span>{activeSelectedDataset ? "Active Target" : "Partitions"}</span>
           </div>
-          <div className="text-sm font-semibold text-white">
-            {vectors?.total_datasets || datasets.length || 0}
+          <div className="text-sm font-semibold text-white truncate">
+            {activeSelectedDataset ? activeSelectedDataset.name : `${vectors?.total_datasets || datasets.length || 0} datasets`}
           </div>
           <div className="text-[10px] text-neutral-500 mt-0.5">
-            {vectors?.total_files || 0} source documents
+            {totalSourceFiles} source {totalSourceFiles === 1 ? "document" : "documents"}
           </div>
         </div>
 
         <div className="bg-[#0a0a0a] border border-[#1e1e1e] rounded-lg p-3">
           <div className="text-[10px] text-neutral-500 flex items-center gap-1 mb-1">
             <Activity className="w-3 h-3 text-neutral-400" />
-            <span>Index Status</span>
+            <span>Vector Index Status</span>
           </div>
-          <div className="text-sm font-semibold text-emerald-400 flex items-center gap-1">
-            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-            <span>Synchronized</span>
+          <div className="text-xs font-semibold flex items-center gap-1">
+            {hasVectorTables ? (
+              <>
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                <span className="text-emerald-400">{vectors?.total_vectors} vectors</span>
+              </>
+            ) : (
+              <>
+                <CheckCircle2 className="w-3.5 h-3.5 text-blue-400" />
+                <span className="text-blue-400">Staged In Memory</span>
+              </>
+            )}
           </div>
-          <div className="text-[10px] text-neutral-500 mt-0.5">Ready for retrieval recall</div>
+          <div className="text-[10px] text-neutral-500 mt-0.5 truncate">
+            {hasVectorTables ? "LanceDB indexed" : "Ready for vector indexing"}
+          </div>
         </div>
       </div>
 
-      {/* Main Vector Space Interactive Explorer & Partition Detail */}
+      {/* Main Vector Space Area & Vector Inspector */}
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 items-start">
-        {/* Vector Canvas Container */}
+        {/* Vector Canvas / Partitions View Container */}
         <div className="bg-[#0a0a0a] border border-[#1e1e1e] rounded-lg overflow-hidden flex flex-col h-[560px] relative select-none">
-          {/* Canvas Controls Bar */}
-          <div className="p-3 border-b border-[#1a1a1a] bg-[#080808] flex flex-wrap items-center justify-between gap-2.5 z-10">
+          {/* Controls Bar */}
+          <div className="p-3 border-b border-[#1a1a1a] bg-[#080808] flex flex-wrap items-center justify-between gap-2.5 z-10 font-mono">
             <div className="flex items-center gap-2 flex-wrap">
-              {/* Dataset Filter */}
+              {/* Dataset Partition Filter (Synchronized with global memory store) */}
               <div className="flex items-center gap-1 bg-black p-1 rounded-md border border-[#222222]">
                 <Filter className="w-3 h-3 text-neutral-500 ml-1" />
                 <select
-                  value={selectedDatasetFilter}
-                  onChange={(e) => setSelectedDatasetFilter(e.target.value)}
+                  value={selectedDatasetId || "all"}
+                  onChange={(e) => selectDataset(e.target.value === "all" ? null : e.target.value)}
                   className="bg-transparent text-xs text-neutral-300 focus:outline-none cursor-pointer pr-2 py-0.5 font-mono"
                 >
-                  <option value="all" className="bg-[#0a0a0a]">All Vector Spaces</option>
+                  <option value="all" className="bg-[#0a0a0a]">All Partitions ({datasets.length})</option>
                   {datasets.map((d) => (
-                    <option key={d.id} value={d.name} className="bg-[#0a0a0a]">
-                      {d.name}
+                    <option key={d.id} value={d.id} className="bg-[#0a0a0a]">
+                      {d.name} ({d.file_count || 0} files)
                     </option>
                   ))}
                 </select>
               </div>
 
-              {/* Point Search */}
-              <div className="relative w-40 sm:w-48">
+              {/* Point / Dataset Search */}
+              <div className="relative w-44 sm:w-52">
                 <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-neutral-500" />
                 <Input
                   type="text"
                   value={localSearch}
                   onChange={(e) => setLocalSearch(e.target.value)}
-                  placeholder="Filter vector embeddings..."
+                  placeholder="Filter partitions..."
                   className="h-7 pl-7 pr-2 text-xs bg-black border-[#222222] text-white placeholder:text-neutral-500 font-mono rounded"
                 />
               </div>
             </div>
 
-            {/* Zoom / Pan Controls */}
-            <div className="flex items-center gap-1 bg-black p-0.5 rounded-md border border-[#222222]">
+            {/* Action & Zoom / Pan Controls */}
+            <div className="flex items-center gap-2">
               <button
-                onClick={() => setZoom((z) => Math.max(z - 0.2, 0.4))}
-                className="p-1 rounded text-neutral-400 hover:text-white hover:bg-[#1f1f1f] cursor-pointer"
-                title="Zoom Out"
+                type="button"
+                onClick={() => cognifyActiveDataset(activeSelectedDataset?.name)}
+                disabled={cognifying}
+                className="px-2.5 py-1 text-xs rounded bg-purple-500/10 text-purple-300 border border-purple-500/30 hover:bg-purple-500/20 transition-colors flex items-center gap-1.5 cursor-pointer font-mono disabled:opacity-50"
               >
-                <ZoomOut className="w-3.5 h-3.5" />
+                <Sparkles className={cn("w-3 h-3 text-purple-400", cognifying && "animate-spin")} />
+                <span>{cognifying ? "Indexing..." : "Index Vectors"}</span>
               </button>
-              <span className="text-[10px] font-mono text-neutral-400 px-1">
-                {Math.round(zoom * 100)}%
-              </span>
-              <button
-                onClick={() => setZoom((z) => Math.min(z + 0.2, 2.5))}
-                className="p-1 rounded text-neutral-400 hover:text-white hover:bg-[#1f1f1f] cursor-pointer"
-                title="Zoom In"
-              >
-                <ZoomIn className="w-3.5 h-3.5" />
-              </button>
-              <button
-                onClick={resetView}
-                className="p-1 rounded text-neutral-400 hover:text-white hover:bg-[#1f1f1f] cursor-pointer"
-                title="Reset View"
-              >
-                <Maximize2 className="w-3.5 h-3.5" />
-              </button>
+
+              <div className="flex items-center gap-1 bg-black p-0.5 rounded-md border border-[#222222]">
+                <button
+                  type="button"
+                  onClick={() => setZoom((z) => Math.max(z - 0.2, 0.4))}
+                  className="p-1 rounded text-neutral-400 hover:text-white hover:bg-[#1f1f1f] cursor-pointer"
+                  title="Zoom Out"
+                >
+                  <ZoomOut className="w-3.5 h-3.5" />
+                </button>
+                <span className="text-[10px] font-mono text-neutral-400 px-1">
+                  {Math.round(zoom * 100)}%
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setZoom((z) => Math.min(z + 0.2, 2.5))}
+                  className="p-1 rounded text-neutral-400 hover:text-white hover:bg-[#1f1f1f] cursor-pointer"
+                  title="Zoom In"
+                >
+                  <ZoomIn className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={resetView}
+                  className="p-1 rounded text-neutral-400 hover:text-white hover:bg-[#1f1f1f] cursor-pointer"
+                  title="Reset View"
+                >
+                  <Maximize2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
             </div>
           </div>
 
-          {/* SVG Vector Map */}
+          {/* Canvas or Staged Partitions Container */}
           <div
-            ref={containerRef}
             onMouseDown={handleMouseDown}
             onMouseMove={handleMouseMove}
             onMouseUp={handleMouseUp}
             onMouseLeave={handleMouseUp}
-            onClick={() => setSelectedPoint(null)}
             className="flex-1 w-full h-full relative cursor-grab active:cursor-grabbing bg-radial from-[#0e0e0e] to-black overflow-hidden"
           >
-            {/* Background Grid */}
+            {/* Background Grid Pattern */}
             <svg
               className="absolute inset-0 w-full h-full pointer-events-none opacity-20"
               xmlns="http://www.w3.org/2000/svg"
@@ -293,193 +333,186 @@ export function VectorSpaceView() {
             {loadingVectors ? (
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/60 z-20">
                 <RefreshCw className="w-5 h-5 text-neutral-400 animate-spin" />
-                <span className="text-xs font-mono text-neutral-400">Loading vector partitions...</span>
+                <span className="text-xs font-mono text-neutral-400">Reading LanceDB vector space...</span>
               </div>
-            ) : filteredPoints.length === 0 ? (
+            ) : filteredDatasets.length === 0 ? (
               <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center z-10 pointer-events-none">
                 <div className="w-10 h-10 rounded-lg bg-[#141414] border border-[#262626] flex items-center justify-center mb-2.5 text-neutral-400">
                   <Database className="w-5 h-5" />
                 </div>
-                <h4 className="text-xs font-semibold text-white">No Vector Embeddings in Space</h4>
-                <p className="text-[11px] text-neutral-500 max-w-xs mt-1">
-                  {datasets.length === 0
-                    ? "Index a repository from Workspaces to generate LanceDB semantic vector clusters."
-                    : "No vector points match the active filter or search query."}
+                <h4 className="text-xs font-semibold text-white font-mono">No Partitions Found</h4>
+                <p className="text-[11px] text-neutral-500 max-w-xs mt-1 font-sans">
+                  {activeSelectedDataset ? `Dataset "${activeSelectedDataset.name}" has no vector records yet.` : "Index a repository from Workspaces to populate Cognee memory partitions."}
                 </p>
               </div>
-            ) : null}
+            ) : (
+              /* Authoritative Partition Cards Display */
+              <div
+                className="absolute inset-0 p-6 overflow-auto flex flex-col items-center justify-center"
+                style={{
+                  transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+                  transformOrigin: "center center",
+                }}
+              >
+                <div className="w-full max-w-lg space-y-3 font-mono">
+                  {/* Status Banner */}
+                  <div className="p-3 bg-[#0d0d0d] border border-[#222222] rounded-lg text-center space-y-1">
+                    <div className="flex items-center justify-center gap-2 text-xs font-semibold text-white">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                      <span>{totalSourceFiles} Source Documents Staged in Memory</span>
+                    </div>
+                    <p className="text-[11px] text-neutral-400 font-sans">
+                      {vectors?.message || "Source documents are stored in Cognee SQLite memory. Vector embeddings are generated for semantic recall."}
+                    </p>
+                  </div>
 
-            {/* Transform Container */}
-            <svg
-              className="w-full h-full"
-              viewBox="0 0 720 480"
-              preserveAspectRatio="xMidYMid meet"
-            >
-              <g transform={`translate(${pan.x}, ${pan.y}) scale(${zoom})`}>
-                {/* Cluster Density Hull Circles */}
-                {vectors?.datasets?.map((ds, idx) => {
-                  const total = Math.max(vectors.datasets.length, 1);
-                  const angle = (idx / total) * 2 * Math.PI;
-                  const rad = total > 1 ? 160 : 0;
-                  const cx = 360 + Math.cos(angle) * rad;
-                  const cy = 240 + Math.sin(angle) * rad;
-                  const color = clusterColors[idx % clusterColors.length];
-
-                  return (
-                    <g key={ds.id} className="pointer-events-none opacity-40">
-                      <circle
-                        cx={cx}
-                        cy={cy}
-                        r={85}
-                        fill={color.ring}
-                        stroke={color.stroke}
-                        strokeWidth="1"
-                        strokeDasharray="4 4"
-                      />
-                      <text
-                        x={cx}
-                        y={cy - 95}
-                        textAnchor="middle"
-                        fill="#888888"
-                        fontSize="10"
-                        fontFamily="monospace"
-                      >
-                        {ds.name} ({ds.file_count} items)
-                      </text>
-                    </g>
-                  );
-                })}
-
-                {/* Vector Points */}
-                {filteredPoints.map((pt) => {
-                  const isSelected = selectedPoint?.id === pt.id;
-                  const color = clusterColors[pt.cluster % clusterColors.length];
-
-                  return (
-                    <g
-                      key={pt.id}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setSelectedPoint(pt);
-                        const match = datasets.find((d) => d.name === pt.datasetName);
-                        if (match) selectDataset(match.id);
-                      }}
-                      className="cursor-pointer transition-transform duration-150"
-                      transform={`translate(${pt.x}, ${pt.y})`}
-                    >
-                      {/* Highlight Outer Ring */}
-                      {isSelected && (
-                        <circle
-                          r={14}
-                          fill="none"
-                          stroke={color.fill}
-                          strokeWidth="1.5"
-                          className="animate-pulse"
-                        />
-                      )}
-
-                      {/* Main Vector Glyph */}
-                      <circle
-                        r={isSelected ? 6.5 : 4.5}
-                        fill={color.fill}
-                        stroke="#ffffff"
-                        strokeWidth={isSelected ? 1.5 : 0.75}
-                        opacity={isSelected ? 1 : 0.85}
-                      />
-
-                      {/* Label if selected */}
-                      {isSelected && (
-                        <text
-                          y={-10}
-                          textAnchor="middle"
-                          fill="#ffffff"
-                          fontSize="9"
-                          fontFamily="monospace"
-                          fontWeight="bold"
-                          className="drop-shadow-md"
+                  {/* Partition Cards */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    {filteredDatasets.map((ds) => {
+                      const isSelected = selectedDatasetId === ds.id;
+                      return (
+                        <div
+                          key={ds.id}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            selectDataset(isSelected ? null : ds.id);
+                          }}
+                          className={cn(
+                            "p-3 rounded-lg border border-[#1e1e1e] bg-[#070707] hover:border-[#333333] transition-all cursor-pointer space-y-2",
+                            isSelected && "border-emerald-500/50 bg-[#111111] shadow-md ring-1 ring-emerald-500/20"
+                          )}
                         >
-                          {pt.name.split("/").pop()}
-                        </text>
-                      )}
-                    </g>
-                  );
-                })}
-              </g>
-            </svg>
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <div className="text-xs font-semibold text-white truncate" title={ds.name}>
+                                {ds.name}
+                              </div>
+                              <div className="text-[10px] text-neutral-500 truncate" title={ds.id}>
+                                ID: {ds.id.slice(0, 12)}...
+                              </div>
+                            </div>
+                            <Badge
+                              variant="outline"
+                              className="text-[9px] uppercase border-emerald-500/30 text-emerald-400 bg-emerald-500/10 shrink-0 py-0"
+                            >
+                              {ds.vector_status}
+                            </Badge>
+                          </div>
+
+                          <div className="flex items-center justify-between text-[10px] text-neutral-400 pt-1 border-t border-[#161616]">
+                            <span className="flex items-center gap-1">
+                              <FileCode className="w-3 h-3 text-neutral-500" />
+                              <span>{ds.file_count} {ds.file_count === 1 ? "file" : "files"}</span>
+                            </span>
+                            <span>{formatBytes(ds.size_bytes)}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Bottom Legend Overlay */}
             <div className="absolute bottom-3 left-3 bg-[#0a0a0a]/90 backdrop-blur-xs border border-[#222222] rounded-md px-3 py-1.5 flex items-center gap-3 text-[10px] font-mono text-neutral-400 z-10">
               <div className="flex items-center gap-1.5">
                 <span className="w-2 h-2 rounded-full bg-emerald-400" />
-                <span>LanceDB Vectors</span>
+                <span>LanceDB Provider</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <span className="w-2 h-2 rounded-full bg-blue-400" />
-                <span>768-Dim Dense Space</span>
+                <span>{vectors?.embedding_dimensions || 768}-Dim Config</span>
               </div>
               <span className="text-neutral-600">|</span>
-              <span>{filteredPoints.length} points plotted</span>
+              <span>{filteredDatasets.length} {filteredDatasets.length === 1 ? "partition" : "partitions"}</span>
             </div>
           </div>
         </div>
 
-        {/* Selected Vector Point / Dataset Inspector Sidebar */}
+        {/* Vector Inspector Sidebar */}
         <div className="bg-[#0a0a0a] border border-[#1e1e1e] rounded-lg p-4 flex flex-col gap-3 font-mono">
           <div className="flex items-center justify-between border-b border-[#1a1a1a] pb-2.5">
             <span className="text-xs font-semibold text-white flex items-center gap-1.5">
               <Hash className="w-3.5 h-3.5 text-neutral-400" />
               <span>Vector Inspector</span>
             </span>
-            {selectedPoint ? (
+            {activeSelectedDataset ? (
               <Badge variant="outline" className="text-[9px] uppercase border-emerald-500/30 text-emerald-400 bg-emerald-500/10">
-                Selected
+                Target Selected
               </Badge>
             ) : (
               <Badge variant="outline" className="text-[9px] uppercase text-neutral-500">
-                Overview
+                Telemetry
               </Badge>
             )}
           </div>
 
-          {selectedPoint ? (
+          {activeSelectedDataset ? (
             <div className="space-y-3">
               <div className="bg-[#050505] p-2.5 rounded border border-[#1a1a1a] space-y-1.5">
-                <div className="text-[10px] text-neutral-500 uppercase">Target Item</div>
+                <div className="text-[10px] text-neutral-500 uppercase">Selected Target</div>
                 <div className="text-xs font-semibold text-white break-all">
-                  {selectedPoint.name}
+                  {activeSelectedDataset.name}
                 </div>
                 <div className="text-[10px] text-neutral-400 flex items-center gap-1">
-                  <span>Dataset:</span>
-                  <span className="text-neutral-200">{selectedPoint.datasetName}</span>
+                  <span>UUID:</span>
+                  <span className="text-neutral-200 truncate" title={activeSelectedDataset.id}>
+                    {activeSelectedDataset.id}
+                  </span>
                 </div>
               </div>
 
               <div className="space-y-2 text-xs">
                 <div className="flex items-center justify-between">
                   <span className="text-neutral-500">Vector Status:</span>
-                  <span className="text-emerald-400 font-medium">{selectedPoint.status}</span>
+                  <span className="text-emerald-400 font-medium capitalize">
+                    {activeSelectedDataset.file_count > 0 ? "Staged / Ready" : "Empty"}
+                  </span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-neutral-500">Estimated Size:</span>
-                  <span className="text-neutral-300">{selectedPoint.size.toLocaleString()} B</span>
+                  <span className="text-neutral-500">Source Files:</span>
+                  <span className="text-neutral-300 font-medium">
+                    {activeSelectedDataset.file_count || 0} files
+                  </span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-neutral-500">Space Coordinates:</span>
-                  <span className="text-neutral-300">[{selectedPoint.x}, {selectedPoint.y}]</span>
+                  <span className="text-neutral-500">Partition Size:</span>
+                  <span className="text-neutral-300">{formatBytes(activeSelectedDataset.size_bytes || 0)}</span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-neutral-500">Cluster Index:</span>
-                  <span className="text-neutral-300">#{selectedPoint.cluster}</span>
+                  <span className="text-neutral-500">Embedding Model:</span>
+                  <span className="text-neutral-300 truncate max-w-[130px]" title={vectors?.embedding_model}>
+                    {vectors?.embedding_model || "nomic-embed-text"}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-neutral-500">Dimensions:</span>
+                  <span className="text-neutral-300">{vectors?.embedding_dimensions || 768}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-neutral-500">Vector Engine:</span>
+                  <span className="text-neutral-300 uppercase">{vectors?.vector_db_provider || "LanceDB"}</span>
                 </div>
               </div>
 
-              <div className="pt-2 border-t border-[#1a1a1a]">
+              <div className="pt-2 border-t border-[#1a1a1a] space-y-2">
+                <button
+                  type="button"
+                  onClick={() => cognifyActiveDataset(activeSelectedDataset.name)}
+                  disabled={cognifying}
+                  className="w-full py-1.5 text-xs rounded bg-purple-600 text-white hover:bg-purple-500 transition-colors flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 font-medium"
+                >
+                  <Sparkles className={cn("w-3.5 h-3.5", isCurrentlyCognifying && "animate-spin")} />
+                  <span>{isCurrentlyCognifying ? "Generating Vectors..." : "Index this Dataset"}</span>
+                </button>
+
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
-                  onClick={() => setSelectedPoint(null)}
-                  className="w-full text-xs h-7 border-[#262626] text-neutral-400 hover:text-white"
+                  onClick={() => selectDataset(null)}
+                  className="w-full text-xs h-7 border-[#262626] text-neutral-400 hover:text-white cursor-pointer"
                 >
                   Clear Selection
                 </Button>
@@ -487,27 +520,23 @@ export function VectorSpaceView() {
             </div>
           ) : (
             <div className="space-y-3">
-              <p className="text-[11px] text-neutral-400 leading-relaxed">
-                Click any vector embedding point on the map to inspect its dataset partition, coordinate projection, and storage status.
+              <p className="text-[11px] text-neutral-400 leading-relaxed font-sans">
+                Select any memory partition card or choose a target from the dropdown to inspect its storage metrics, vector schema, and trigger vector indexing.
               </p>
 
               <div className="space-y-2 pt-2 border-t border-[#1a1a1a]">
-                <div className="text-[10px] text-neutral-500 uppercase">Partitions Summary</div>
-                {vectors?.datasets?.map((ds) => (
+                <div className="text-[10px] text-neutral-500 uppercase">Available Partitions</div>
+                {datasets.map((ds) => (
                   <div
                     key={ds.id}
-                    onClick={() => {
-                      setSelectedDatasetFilter(ds.name);
-                      selectDataset(ds.id);
-                    }}
-                    className={cn(
-                      "p-2 rounded border border-[#1a1a1a] bg-[#050505] hover:border-[#333333] transition-colors cursor-pointer flex items-center justify-between",
-                      selectedDatasetFilter === ds.name && "border-white/40 bg-[#111111]"
-                    )}
+                    onClick={() => selectDataset(ds.id)}
+                    className="p-2 rounded border border-[#1a1a1a] bg-[#050505] hover:border-[#333333] transition-colors cursor-pointer flex items-center justify-between"
                   >
                     <div className="min-w-0 pr-2">
                       <div className="text-xs text-white truncate font-semibold">{ds.name}</div>
-                      <div className="text-[10px] text-neutral-500">{ds.file_count} items indexed</div>
+                      <div className="text-[10px] text-neutral-500">
+                        {ds.file_count || 0} files ({formatBytes(ds.size_bytes || 0)})
+                      </div>
                     </div>
                     <ChevronRight className="w-3.5 h-3.5 text-neutral-500 shrink-0" />
                   </div>

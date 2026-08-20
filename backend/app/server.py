@@ -20,6 +20,7 @@ from app.api.commands import (
     get_memory_graph,
     get_memory_vectors,
     get_dataset_items,
+    cognify_dataset,
     index_repository,
     generate_context,
     forget_dataset,
@@ -45,6 +46,7 @@ from app.api.commands import (
 from app.models.agent_context import AgentContextRequest
 from app.api.schemas import (
     CogneeSettingsRequest,
+    CognifyRequest,
     ContextPackageAppendRequest,
     ContextPackageSaveRequest,
     ErrorResponse,
@@ -190,6 +192,15 @@ async def memory_vectors_endpoint():
 async def dataset_items_endpoint(dataset_id: str):
     """Get stored/ingested files for a dataset."""
     result = await get_dataset_items(dataset_id)
+    if isinstance(result, ErrorResponse):
+        raise HTTPException(status_code=500, detail=result.model_dump())
+    return result.model_dump()
+
+
+@app.post("/memory/cognify")
+async def memory_cognify_endpoint(request: CognifyRequest):
+    """Extract memory vectors in LanceDB and build knowledge graph in Kùzu."""
+    result = await cognify_dataset(request)
     if isinstance(result, ErrorResponse):
         raise HTTPException(status_code=500, detail=result.model_dump())
     return result.model_dump()

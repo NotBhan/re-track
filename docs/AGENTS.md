@@ -57,4 +57,4 @@ Verify documentation remains synchronized with implementation after every milest
 
 # Child DOX Index
 
-No child DOX documents exist under docs/. All files are direct children.
+- `docs/architecture/` — Architectural baseline, current system specifications, refactoring roadmap, and decision records (Phase 0).

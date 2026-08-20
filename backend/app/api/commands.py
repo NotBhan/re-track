@@ -38,6 +38,8 @@ from app.api.schemas import (
     MemoryVectorsResponse,
     MemoryDataItem,
     DatasetDataItemsResponse,
+    CognifyRequest,
+    CognifyResponse,
     RepoArchInfo,
     RepoComponentInfo,
     RepositoryCreateRequest,
@@ -446,13 +448,19 @@ async def list_datasets() -> DatasetListResponse | ErrorResponse:
             return DatasetListResponse(success=True, datasets=[], total_count=0)
 
         raw_datasets = await cognee.list_datasets()
+        store = _load_repo_store()
+        repos = store.get("repositories", [])
+        repo_map = {r.get("name"): r.get("path") for r in repos if r.get("name")}
 
         datasets = [
             DatasetInfo(
                 id=ds["id"],
                 name=ds["name"],
-                created_at=ds["created_at"],
-                file_count=ds["file_count"],
+                type="repository",
+                size_bytes=ds.get("size_bytes", 0),
+                created_at=ds.get("created_at"),
+                file_count=ds.get("file_count", 0),
+                source_path=repo_map.get(ds["name"]) or ds.get("source_path") or f"Cognee Memory Partition: {ds['name']}",
             )
             for ds in raw_datasets
         ]
@@ -1301,14 +1309,20 @@ async def get_memory_vectors() -> MemoryVectorsResponse | ErrorResponse:
         datasets_list: list[VectorDatasetInfo] = []
         total_files = 0
 
+        v_stats = await cognee.get_vector_stats() if cognee and cognee.is_initialized else {
+            "tables": [],
+            "total_vectors": 0,
+            "embedding_model": settings.ollama.embedding_model,
+            "embedding_dimensions": 768,
+        }
+
         if cognee and cognee.is_initialized:
             raw_datasets = await cognee.list_datasets()
             for ds in raw_datasets:
                 fc = ds.get("file_count", 0)
                 sz = ds.get("size_bytes", 0)
                 total_files += fc
-                v_status = "ready" if fc > 0 else "empty"
-                # Estimate chunks based on file count / size
+                v_status = "staged" if fc > 0 else "empty"
                 chunk_est = max(fc, 1) if fc > 0 else 0
 
                 datasets_list.append(VectorDatasetInfo(
@@ -1321,18 +1335,32 @@ async def get_memory_vectors() -> MemoryVectorsResponse | ErrorResponse:
                     chunk_count=chunk_est,
                 ))
 
+        total_vecs = v_stats.get("total_vectors", 0)
+        tables_list = v_stats.get("tables", [])
+        emb_model = v_stats.get("embedding_model") or settings.ollama.embedding_model or "nomic-embed-text"
+        emb_dim = v_stats.get("embedding_dimensions", 768)
+
+        msg = (
+            f"Active LanceDB vector tables: {len(tables_list)} with {total_vecs} indexed vector embeddings."
+            if total_vecs > 0
+            else f"{total_files} source files stored and staged in Cognee memory. Vector embedding chunks are generated during semantic indexing."
+        )
+
         response = MemoryVectorsResponse(
             success=True,
             vector_db_provider=settings.storage.vector_db,
-            embedding_model=settings.ollama.embedding_model,
-            embedding_dimensions=768,
+            embedding_model=emb_model,
+            embedding_dimensions=emb_dim,
             total_datasets=len(datasets_list),
             total_files=total_files,
+            total_vectors=total_vecs,
+            tables=tables_list,
             datasets=datasets_list,
+            message=msg,
         )
 
         elapsed = time.monotonic() - start
-        logger.info("command: get_memory_vectors() complete | datasets=%d | files=%d | %.2fs", len(datasets_list), total_files, elapsed)
+        logger.info("command: get_memory_vectors() complete | datasets=%d | files=%d | vectors=%d | %.2fs", len(datasets_list), total_files, total_vecs, elapsed)
         return response
 
     except Exception as e:
@@ -1386,6 +1414,60 @@ async def get_dataset_items(dataset_id: str) -> DatasetDataItemsResponse | Error
         return ErrorResponse(
             error=type(e).__name__,
             message=f"Failed to get dataset items: {e}",
+        )
+
+
+async def cognify_dataset(
+    request: CognifyRequest,
+) -> CognifyResponse | ErrorResponse:
+    """Execute Cognee cognify pipeline on a dataset (or all datasets).
+
+    Extracts vector embeddings in LanceDB and builds knowledge graph triples in Kùzu.
+    """
+    start = time.monotonic()
+    logger.info("command: cognify_dataset() | dataset=%s", request.dataset_name)
+
+    try:
+        _ensure_services()
+        cognee = _cognee_service
+        if cognee is None or not cognee.is_initialized:
+            raise RuntimeError("Cognee service is not initialized")
+
+        if _indexing_lock.locked():
+            logger.warning("command: cognify_dataset() rejected | indexing already in progress")
+            return ErrorResponse(
+                error="ConcurrencyError",
+                message="An indexing or extraction job is already in progress. Please wait for it to complete.",
+            )
+
+        async with _indexing_lock:
+            result = await cognee.cognify(request.dataset_name)
+
+            elapsed = time.monotonic() - start
+            logger.info(
+                "command: cognify_dataset() complete | dataset=%s | vectors=%d | nodes=%d | edges=%d | %.2fs",
+                request.dataset_name,
+                result.get("total_vectors", 0),
+                result.get("total_nodes", 0),
+                result.get("total_edges", 0),
+                elapsed,
+            )
+
+            return CognifyResponse(
+                success=True,
+                dataset_name=request.dataset_name,
+                total_vectors=result.get("total_vectors", 0),
+                total_nodes=result.get("total_nodes", 0),
+                total_edges=result.get("total_edges", 0),
+                message=result.get("message", f"Cognify completed for {request.dataset_name or 'all'}"),
+            )
+
+    except Exception as e:
+        elapsed = time.monotonic() - start
+        logger.error("command: cognify_dataset() failed | %.2fs | %s", elapsed, e)
+        return ErrorResponse(
+            error=type(e).__name__,
+            message=f"Extraction failed: {e}",
         )
 
 

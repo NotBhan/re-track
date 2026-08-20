@@ -245,7 +245,10 @@ export interface MemoryVectorsResponse {
   embedding_dimensions: number;
   total_datasets: number;
   total_files: number;
+  total_vectors?: number;
+  tables?: Array<{ table_name: string; row_count: number }>;
   datasets: VectorDatasetInfo[];
+  message?: string;
 }
 
 export interface MemoryDataItem {
@@ -265,6 +268,15 @@ export interface DatasetDataItemsResponse {
   dataset_name: string;
   items: MemoryDataItem[];
   total_count: number;
+}
+
+export interface CognifyResponse {
+  success: boolean;
+  dataset_name?: string | null;
+  total_vectors: number;
+  total_nodes: number;
+  total_edges: number;
+  message: string;
 }
 
 export interface BenchmarkResultItem {
@@ -476,6 +488,15 @@ export async function getMemoryVectors(): Promise<MemoryVectorsResponse> {
  */
 export async function getDatasetItems(datasetId: string): Promise<DatasetDataItemsResponse> {
   return invoke<DatasetDataItemsResponse>("get_dataset_items", { datasetId });
+}
+
+/**
+ * Extract memory vectors in LanceDB and build knowledge graph in Kùzu.
+ */
+export async function cognifyDataset(
+  request: { dataset_name?: string } = {}
+): Promise<CognifyResponse> {
+  return invoke<CognifyResponse>("cognify_dataset", { request });
 }
 
 /**

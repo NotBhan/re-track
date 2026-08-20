@@ -270,6 +270,11 @@ async fn get_dataset_items(dataset_id: String) -> Result<serde_json::Value, Stri
 }
 
 #[tauri::command]
+async fn cognify_dataset(request: serde_json::Value) -> Result<serde_json::Value, String> {
+    http_post("/memory/cognify", &request).await
+}
+
+#[tauri::command]
 async fn update_cognee_settings(request: serde_json::Value) -> Result<serde_json::Value, String> {
     http_post("/settings/cognee", &request).await
 }
@@ -516,6 +521,7 @@ pub fn run() {
             get_memory_graph,
             get_memory_vectors,
             get_dataset_items,
+            cognify_dataset,
             run_benchmark,
             list_repositories,
             create_repository,
