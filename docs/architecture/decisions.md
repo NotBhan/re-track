@@ -14,6 +14,7 @@
 - [ADR-004: Deterministic AST & Graph Analysis as Core Domain](#adr-004-deterministic-ast--graph-analysis-as-core-domain) *(Status: Accepted / Baseline)*
 - [ADR-005: Truth Boundary Guarantee Between Backend & Frontend](#adr-005-truth-boundary-guarantee-between-backend--frontend) *(Status: Accepted / Baseline)*
 - [ADR-006: Hexagonal Ports & Adapters Architecture for Infrastructure](#adr-006-hexagonal-ports--adapters-architecture-for-infrastructure) *(Status: Proposed)*
+- [ADR-007: Application & Use-Case Layer Boundary](#adr-007-application--use-case-layer-boundary) *(Status: Accepted / Implemented in Phase 1)*
 
 ---
 
@@ -120,3 +121,34 @@ Adopt Hexagonal Architecture (Ports and Adapters) for the backend:
 ### Consequences
 - **Positive**: Clean separation of concerns, high testability, modular pluggability of providers.
 - **Negative**: Introduces boilerplate DTOs and interface abstractions.
+
+---
+
+## ADR-007: Application & Use-Case Layer Boundary
+
+### Status
+**Accepted / Implemented (Phase 1)**
+
+### Context
+`backend/app/api/commands.py` had accumulated 2,158 lines containing HTTP response shaping, concurrency locks, caching, prompt heuristics, file store operations, and service coordination. To allow CLI and future MCP adapters to invoke workflows cleanly, business orchestration needed to be separated from inbound transport logic.
+
+### Decision
+Extract all business workflows into explicit use case classes under `backend/app/application/use_cases/`:
+- `ContextUseCases`: Context generation (`generate_context`), agent context synthesis (`get_agent_context`), and LRU cache orchestration.
+- `IndexingUseCases`: Incremental indexing (`index_repository`), concurrency locking, and summary listing (`get_repository_summaries`).
+- `RepositoryUseCases`: Repository CRUD, AST scanning, progress polling, deletion, and AST-grounded prompt suggestions.
+- `MemoryUseCases`: Dataset listing, document data items, cognify extraction, memory statistics, graph introspection, vector introspection, and dashboard telemetry.
+- `PackageUseCases`: Context Package CRUD and append operations.
+- `SystemUseCases`: Health checks, hardware telemetry (RAM/CPU/GPU), app settings, and provider hot-reloading.
+- `BenchmarkUseCases`: Authoritative benchmark suite execution.
+
+All use cases receive their dependencies explicitly via constructors. `backend/app/application/container.py` acts as the composition root. `commands.py` is maintained as a thin backward-compatibility facade to ensure existing tests and callers continue working without modification.
+
+### Consequences
+- **Positive**:
+  - Clear architectural boundary: application layer does not import FastAPI, CLI, or low-level storage drivers.
+  - Testability: All use cases can be directly instantiated and tested in isolation with mocked dependencies.
+  - Zero behavioral change: All 25 HTTP endpoints, CLI commands, and test suites run unchanged.
+- **Negative**:
+  - Requires maintaining the `commands.py` facade until all callers are migrated to use case interfaces in subsequent phases.
+

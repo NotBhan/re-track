@@ -37,6 +37,7 @@ from app.api.commands import (
     list_context_packages,
     get_context_package,
     delete_context_package,
+    append_context_package,
     get_agent_context,
     get_repository_progress,
     generate_suggested_prompts,
