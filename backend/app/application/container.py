@@ -250,11 +250,39 @@ class ApplicationContainer:
             benchmark_runner=bench_service,
         )
 
+    @classmethod
+    def create(cls, settings: Optional[Settings] = None) -> "ApplicationContainer":
+        """Factory method to construct an uninitialized application container."""
+        return cls(settings=settings)
 
-# Global default container instance (transitional composition root for legacy entrypoints)
-_container = ApplicationContainer()
+
+# Composition root container reference (lazy, not instantiated at module import time)
+_container: Optional[ApplicationContainer] = None
 
 
-def get_container() -> ApplicationContainer:
-    """Get the active application container instance."""
+def get_container(settings: Optional[Settings] = None) -> ApplicationContainer:
+    """Get or lazily construct the active application container instance.
+
+    Restricted to composition-root boundaries (FastAPI lifespan, API routers, CLI facade).
+    Must NEVER be called inside application use cases, domain entities, or ports.
+    """
+    global _container
+    if _container is None:
+        _container = ApplicationContainer.create(settings=settings)
     return _container
+
+
+def set_container(container: Optional[ApplicationContainer]) -> None:
+    """Explicitly set the active application container instance.
+
+    Used by application lifespan handlers and isolated test fixtures.
+    """
+    global _container
+    _container = container
+
+
+def reset_container() -> None:
+    """Reset the active application container reference to None for test isolation."""
+    global _container
+    _container = None
+

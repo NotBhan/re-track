@@ -299,3 +299,46 @@ Following the stabilization of application boundaries in Phase 3 and storage com
 - **Negative**:
   - Additional domain model classes to maintain in the domain package.
 
+---
+
+## ADR-012: Composition Root Lifecycle & FastAPI Route Modularization (Phase 6)
+
+### Status
+**Accepted / Implemented (Phase 6)**
+
+### Context
+In earlier phases, `ApplicationContainer` was eagerly instantiated as a module-level global singleton (`_container = ApplicationContainer()`) upon importing `app.application.container` (DEBT-003). This created hidden side effects during module load, coupled unit tests to global runtime state, and obscured dependency graph construction. Concurrently, `app/server.py` had accumulated 384 lines containing monolithic route definitions, inline HTTP logic, CORS configuration, and lifespan management.
+
+### Decision
+1. **Composition Root Lifecycle & Isolation (DEBT-003 Resolution)**:
+   - Eliminate eager module-level container instantiation. `_container` is initialized to `None` at import time.
+   - Introduce explicit factory method `ApplicationContainer.create(settings: Optional[Settings] = None) -> ApplicationContainer`.
+   - Provide `get_container()`, `set_container()`, and `reset_container()` scoped strictly to composition, API, CLI, and test boundaries.
+   - Enforce via AST verification that domain models, application use cases, and ports NEVER import `get_container()` or use it as a service locator.
+2. **FastAPI Route Modularization**:
+   - Split monolithic `server.py` into cohesive domain routers under `app/api/routers/`:
+     - `system.py`: `/health`, `/status`, `/dashboard/stats`, `/provider/update`
+     - `repositories.py`: `/repos`, `/repos` (POST), `/repos/{repo_id}/scan`, `/repos/{repo_id}/progress`, `/repos/{repo_id}` (DELETE), `/repos/{repo_id}/prompts`, `/repositories`
+     - `context.py`: `/index`, `/context`, `/api/v1/context`
+     - `memory.py`: `/datasets`, `/datasets/{dataset_id}/items`, `/forget`, `/memory/stats`, `/memory/graph`, `/memory/vectors`, `/memory/cognify`
+     - `packages.py`: `/packages`, `/packages` (POST), `/packages/{package_id}`, `/packages/{package_id}` (DELETE), `/packages/{package_id}/append`
+     - `benchmarks.py`: `/benchmarks/run`
+     - `settings.py`: `/settings`, `/settings/cognee`
+     - `__init__.py`: Router package exports and `register_routers(app: FastAPI)` helper.
+3. **Application Server Assembly**:
+   - Simplify `app/server.py` to a clean assembly file (< 80 lines) configuring lifespan management, CORS middleware, and `register_routers()`.
+4. **Backward Compatibility Preservation**:
+   - Retain `app.api.commands` as a backward-compatible CLI facade dynamically resolving the active container without global state leaks.
+   - Maintain 100% parity across all 29 HTTP operations (status codes, response schemas, error formatting, path parameters).
+
+### Consequences
+- **Positive**:
+   - Zero import-time side effects when loading `container.py` or application modules.
+   - Clean separation between HTTP transport routing and core application use cases.
+   - High modularity for API maintenance with independent, cohesive router files.
+   - Full test isolation through `set_container()` and `reset_container()`.
+   - Comprehensive test suite (14 dedicated Phase 6 tests, 356 total passed).
+- **Negative**:
+   - Additional routing files requiring coordinated updates when introducing new endpoints.
+
+
