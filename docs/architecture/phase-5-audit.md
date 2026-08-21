@@ -79,4 +79,3 @@ All architectural boundaries, AST purity constraints, and Phase 4 storage compat
 
 - **DEBT-003**: Global module-level `_container` singleton in `container.py` (deferred to Phase 6 composition root overhaul).
 - **FastAPI Router Modularization**: Splitting `server.py` into distinct sub-routers under `app/api/routers/` (Phase 6).
-`
