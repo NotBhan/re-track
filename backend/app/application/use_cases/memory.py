@@ -8,6 +8,14 @@ import logging
 import time
 from typing import Callable, Optional
 
+from app.application.domain.memory import (
+    MemoryDataItemRecord,
+    MemoryDatasetRecord,
+    MemoryGraphEdgeRecord,
+    MemoryGraphNodeRecord,
+    MemoryGraphRecord,
+    MemoryVectorStatsRecord,
+)
 from app.application.domain.repository import IndexedRepositoryRecord
 from app.application.dto import (
     CognifyRequest,
@@ -67,13 +75,13 @@ class MemoryUseCases:
             raw_datasets = await self._cognee.list_datasets()
             datasets = [
                 DatasetInfo(
-                    id=ds.get("id", ""),
-                    name=ds.get("name", ""),
-                    type=ds.get("type", "repository"),
-                    size_bytes=ds.get("size_bytes"),
-                    created_at=ds.get("created_at"),
-                    file_count=ds.get("file_count", 0),
-                    source_path=ds.get("source_path"),
+                    id=ds.id if isinstance(ds, MemoryDatasetRecord) else ds.get("id", ""),
+                    name=ds.name if isinstance(ds, MemoryDatasetRecord) else ds.get("name", ""),
+                    type=ds.type if isinstance(ds, MemoryDatasetRecord) else ds.get("type", "repository"),
+                    size_bytes=ds.size_bytes if isinstance(ds, MemoryDatasetRecord) else ds.get("size_bytes"),
+                    created_at=ds.created_at if isinstance(ds, MemoryDatasetRecord) else ds.get("created_at"),
+                    file_count=ds.file_count if isinstance(ds, MemoryDatasetRecord) else ds.get("file_count", 0),
+                    source_path=ds.source_path if isinstance(ds, MemoryDatasetRecord) else ds.get("source_path"),
                 )
                 for ds in raw_datasets
             ]
@@ -105,14 +113,14 @@ class MemoryUseCases:
             items_raw = await self._cognee.get_dataset_data(dataset_id)
             items = [
                 MemoryDataItem(
-                    id=it.get("id", ""),
-                    name=it.get("name", ""),
-                    mime_type=it.get("mime_type", "text/plain"),
-                    data_size=it.get("data_size", 0),
-                    created_at=it.get("created_at"),
-                    extension=it.get("extension", ""),
-                    content_hash=it.get("content_hash", ""),
-                    pipeline_status=it.get("pipeline_status", {}),
+                    id=it.id if isinstance(it, MemoryDataItemRecord) else it.get("id", ""),
+                    name=it.name if isinstance(it, MemoryDataItemRecord) else it.get("name", ""),
+                    mime_type=it.mime_type if isinstance(it, MemoryDataItemRecord) else it.get("mime_type", "text/plain"),
+                    data_size=it.data_size if isinstance(it, MemoryDataItemRecord) else it.get("data_size", 0),
+                    created_at=it.created_at if isinstance(it, MemoryDataItemRecord) else it.get("created_at"),
+                    extension=it.extension if isinstance(it, MemoryDataItemRecord) else it.get("extension", ""),
+                    content_hash=it.content_hash if isinstance(it, MemoryDataItemRecord) else it.get("content_hash", ""),
+                    pipeline_status=it.pipeline_status if isinstance(it, MemoryDataItemRecord) else it.get("pipeline_status", {}),
                 )
                 for it in items_raw
             ]
@@ -197,8 +205,15 @@ class MemoryUseCases:
             if hasattr(self._cognee, "get_graph"):
                 try:
                     graph = await self._cognee.get_graph(dataset_name=request.dataset_name)
-                    nodes_count = len(graph.get("nodes", [])) if isinstance(graph, dict) else len(getattr(graph, "nodes", []))
-                    edges_count = len(graph.get("edges", [])) if isinstance(graph, dict) else len(getattr(graph, "edges", []))
+                    if isinstance(graph, MemoryGraphRecord):
+                        nodes_count = len(graph.nodes)
+                        edges_count = len(graph.edges)
+                    elif isinstance(graph, dict):
+                        nodes_count = len(graph.get("nodes", []))
+                        edges_count = len(graph.get("edges", []))
+                    else:
+                        nodes_count = len(getattr(graph, "nodes", []))
+                        edges_count = len(getattr(graph, "edges", []))
                 except Exception:
                     pass
 
@@ -206,7 +221,12 @@ class MemoryUseCases:
             if hasattr(self._cognee, "get_vectors"):
                 try:
                     v_stats = await self._cognee.get_vectors()
-                    v_count = v_stats.get("total_vectors", 0) if isinstance(v_stats, dict) else getattr(v_stats, "total_vectors", 0)
+                    if isinstance(v_stats, MemoryVectorStatsRecord):
+                        v_count = v_stats.total_vectors
+                    elif isinstance(v_stats, dict):
+                        v_count = v_stats.get("total_vectors", 0)
+                    else:
+                        v_count = getattr(v_stats, "total_vectors", 0)
                 except Exception:
                     pass
 
@@ -243,7 +263,10 @@ class MemoryUseCases:
                 raise CogneeServiceError("CogneeService is not initialized.")
 
             raw_datasets = await self._cognee.list_datasets() if hasattr(self._cognee, "list_datasets") else []
-            total_files = sum(ds.get("file_count", 0) for ds in raw_datasets if isinstance(ds, dict))
+            total_files = sum(
+                ds.file_count if isinstance(ds, MemoryDatasetRecord) else ds.get("file_count", 0)
+                for ds in raw_datasets
+            )
 
             kg_status = "not_extracted"
             graph_nodes = None
@@ -251,8 +274,15 @@ class MemoryUseCases:
             if hasattr(self._cognee, "get_graph"):
                 try:
                     graph = await self._cognee.get_graph()
-                    nodes = graph.get("nodes", []) if isinstance(graph, dict) else getattr(graph, "nodes", [])
-                    edges = graph.get("edges", []) if isinstance(graph, dict) else getattr(graph, "edges", [])
+                    if isinstance(graph, MemoryGraphRecord):
+                        nodes = graph.nodes
+                        edges = graph.edges
+                    elif isinstance(graph, dict):
+                        nodes = graph.get("nodes", [])
+                        edges = graph.get("edges", [])
+                    else:
+                        nodes = getattr(graph, "nodes", [])
+                        edges = getattr(graph, "edges", [])
                     if nodes:
                         kg_status = "extracted"
                         graph_nodes = len(nodes)
@@ -290,25 +320,35 @@ class MemoryUseCases:
                 raise CogneeServiceError("CogneeService is not initialized.")
 
             raw_graph = await self._cognee.get_graph(dataset_name=dataset_name) if hasattr(self._cognee, "get_graph") else {}
+            if isinstance(raw_graph, MemoryGraphRecord):
+                raw_nodes = raw_graph.nodes
+                raw_edges = raw_graph.edges
+            elif isinstance(raw_graph, dict):
+                raw_nodes = raw_graph.get("nodes", [])
+                raw_edges = raw_graph.get("edges", [])
+            else:
+                raw_nodes = getattr(raw_graph, "nodes", [])
+                raw_edges = getattr(raw_graph, "edges", [])
+
             nodes = [
                 MemoryGraphNode(
-                    id=n.get("id", ""),
-                    label=n.get("label", ""),
-                    kind=n.get("kind", "entity"),
-                    type=n.get("type"),
-                    properties=n.get("properties", {}),
+                    id=n.id if isinstance(n, MemoryGraphNodeRecord) else n.get("id", ""),
+                    label=n.label if isinstance(n, MemoryGraphNodeRecord) else n.get("label", ""),
+                    kind=n.kind if isinstance(n, MemoryGraphNodeRecord) else n.get("kind", "entity"),
+                    type=n.type if isinstance(n, MemoryGraphNodeRecord) else n.get("type"),
+                    properties=n.properties if isinstance(n, MemoryGraphNodeRecord) else n.get("properties", {}),
                 )
-                for n in (raw_graph.get("nodes", []) if isinstance(raw_graph, dict) else getattr(raw_graph, "nodes", []))
+                for n in raw_nodes
             ]
             edges = [
                 MemoryGraphEdge(
-                    source=e.get("source", ""),
-                    target=e.get("target", ""),
-                    kind=e.get("kind", "relates_to"),
-                    relationship_type=e.get("relationship_type"),
-                    properties=e.get("properties", {}),
+                    source=e.source if isinstance(e, MemoryGraphEdgeRecord) else e.get("source", ""),
+                    target=e.target if isinstance(e, MemoryGraphEdgeRecord) else e.get("target", ""),
+                    kind=e.kind if isinstance(e, MemoryGraphEdgeRecord) else e.get("kind", "relates_to"),
+                    relationship_type=e.relationship_type if isinstance(e, MemoryGraphEdgeRecord) else e.get("relationship_type"),
+                    properties=e.properties if isinstance(e, MemoryGraphEdgeRecord) else e.get("properties", {}),
                 )
-                for e in (raw_graph.get("edges", []) if isinstance(raw_graph, dict) else getattr(raw_graph, "edges", []))
+                for e in raw_edges
             ]
 
             status = "extracted" if len(nodes) > 0 else "not_extracted"
@@ -356,26 +396,41 @@ class MemoryUseCases:
             if self._cognee and self._cognee.is_initialized:
                 raw_datasets = await self._cognee.list_datasets()
                 for ds in raw_datasets:
-                    fc = ds.get("file_count", 0)
-                    sz = ds.get("size_bytes", 0)
+                    fc = ds.file_count if isinstance(ds, MemoryDatasetRecord) else ds.get("file_count", 0)
+                    sz = ds.size_bytes if isinstance(ds, MemoryDatasetRecord) else ds.get("size_bytes", 0)
                     total_files += fc
                     v_status = "staged" if fc > 0 else "empty"
                     chunk_est = max(fc, 1) if fc > 0 else 0
 
+                    ds_id = ds.id if isinstance(ds, MemoryDatasetRecord) else ds.get("id", "")
+                    ds_name = ds.name if isinstance(ds, MemoryDatasetRecord) else ds.get("name", "")
+                    created_at = ds.created_at if isinstance(ds, MemoryDatasetRecord) else ds.get("created_at")
+
                     datasets_list.append(VectorDatasetInfo(
-                        id=ds.get("id", ""),
-                        name=ds.get("name", ""),
+                        id=ds_id,
+                        name=ds_name,
                         file_count=fc,
                         size_bytes=sz,
-                        created_at=ds.get("created_at"),
+                        created_at=created_at,
                         vector_status=v_status,
                         chunk_count=chunk_est,
                     ))
 
-            total_vecs = v_stats.get("total_vectors", 0)
-            tables_list = v_stats.get("tables", [])
-            emb_model = v_stats.get("embedding_model") or settings.ollama.embedding_model or "nomic-embed-text"
-            emb_dim = v_stats.get("embedding_dimensions", 768)
+            if isinstance(v_stats, MemoryVectorStatsRecord):
+                total_vecs = v_stats.total_vectors
+                raw_tables = v_stats.tables
+                emb_model = v_stats.embedding_model or settings.ollama.embedding_model or "nomic-embed-text"
+                emb_dim = v_stats.embedding_dimensions
+            else:
+                total_vecs = v_stats.get("total_vectors", 0)
+                raw_tables = v_stats.get("tables", [])
+                emb_model = v_stats.get("embedding_model") or settings.ollama.embedding_model or "nomic-embed-text"
+                emb_dim = v_stats.get("embedding_dimensions", 768)
+
+            tables_list = [
+                t if isinstance(t, dict) else {"table_name": str(t), "row_count": 0}
+                for t in raw_tables
+            ]
 
             msg = (
                 f"Active LanceDB vector tables: {len(tables_list)} with {total_vecs} indexed vector embeddings."
@@ -416,7 +471,10 @@ class MemoryUseCases:
             if self._cognee and self._cognee.is_initialized:
                 try:
                     v_stats = await self._cognee.get_vectors() if hasattr(self._cognee, "get_vectors") else {}
-                    total_embeddings = v_stats.get("total_vectors", 0)
+                    if isinstance(v_stats, MemoryVectorStatsRecord):
+                        total_embeddings = v_stats.total_vectors
+                    else:
+                        total_embeddings = v_stats.get("total_vectors", 0)
                 except Exception:
                     pass
 

@@ -217,3 +217,85 @@ Phase 1 established the Application Use-Case boundary, and Phase 2 established A
   - Zero behavioral regressions; all API routes, CLI commands, and test suites remain 100% compatible.
 - **Negative**:
   - Increased number of protocol definitions requiring maintenance as capability contracts evolve.
+
+---
+
+## ADR-010: Storage Compatibility & Non-Destructive Legacy Fallback Architecture (Phase 4)
+
+### Status
+**Accepted / Implemented (Phase 4)**
+
+### Context
+RE:Track evolved from a predecessor named Andes, which persisted data under `~/.andes/`. To guarantee seamless backward compatibility without data loss or corruption, RE:Track requires a strictly enforced dual-path storage policy across user-level configuration, repository metadata, context packages, manifests, and cloned repository working trees. Furthermore, importing `app.services` previously loaded heavyweight vendor frameworks eagerly due to eager top-level imports in `app/services/__init__.py` (DEBT-004).
+
+### Decision
+1. **Canonical vs Legacy Storage Domains**:
+   - `~/.retrack/` is the **canonical writable storage** location for all user application state (`indexed_repos.json`, `repositories.json`, `context_packages.json`, `settings.json`, `manifests/`, `repos/`).
+   - `~/.andes/` is a **strictly read-only legacy compatibility fallback**.
+   - `<repo>/.retrack/` is the canonical repository-local metadata directory, with `<repo>/.andes/` as read-only fallback.
+2. **Read/Write Operations Contract**:
+   - **Read Precedence**: Check canonical storage first. If absent, fall back to legacy storage. If both are absent, return clean empty defaults.
+   - **Write Exclusivity**: All new writes, updates, and deletions target canonical storage exclusively.
+   - **Legacy Immutability**: Legacy storage is observationally read-only. Legacy files and working trees must never be deleted, renamed, overwritten, mutated, or silently migrated into canonical storage.
+3. **Atomic Persistence**:
+   - Implement temporary file (`.tmp`) + flush + `fsync` + atomic replace for all JSON storage adapters (`JsonRepositoryMetadataStore`, `RepositoryManager`, `JsonContextPackageRepository`, `Settings`, `ManifestService`).
+4. **Clone Safety**:
+   - New GitHub clones target `~/.retrack/repos/`.
+   - Existing legacy clones in `~/.andes/repos/` are treated as read-only inspection targets. Scanning and AST analysis execute non-mutating file walks and `git rev-parse` only (no `git pull`, `git checkout`, or directory writes against legacy trees).
+   - Deleting a repository registration removes it from canonical metadata JSON only; it never deletes clone directories on disk.
+5. **DEBT-004 Packaging Cleanup**:
+   - Replace eager imports in `app/services/__init__.py` with dynamic `__getattr__` exports so importing `app.services` or individual adapters does not eagerly load `cognee`, `fastapi`, or `starlette`.
+
+### Consequences
+- **Positive**:
+  - 100% data preservation and transparent compatibility for existing users with legacy `.andes` state.
+  - Zero side-effect legacy fallback (verified by byte-for-byte SHA256 immutability tests).
+  - Clean service package import isolation without transitive web-framework loading.
+  - Complete test isolation in isolated unit tests.
+- **Negative**:
+  - Persistence adapters maintain explicit dual-path fallback logic until legacy format support is deprecated in future major versions.
+
+---
+
+## ADR-011: Domain Model Refinement & Memory Port Capability Segregation
+
+### Status
+Accepted (Phase 5)
+
+### Context
+Following the stabilization of application boundaries in Phase 3 and storage compatibility in Phase 4, three debts remained in the domain and port models:
+1. **DEBT-005**: `MemoryPort` exposed an overly broad interface (13 methods) returning unstructured, dynamic dictionaries (`dict[str, Any]` and `list[dict[str, Any]]`), forcing use cases to know the internal dictionary keys returned by the Cognee infrastructure service.
+2. **DEBT-006**: `IndexedRepositoryRecord` contained untyped `architecture: list[dict[str, Any]]` and `components: list[dict[str, Any]]` collections, weakening domain type guarantees while interacting with JSON metadata stores.
+3. **DEBT-007**: `IntentParserPort` contained `@staticmethod def rule_based_fallback` directly on the Protocol interface, and `ContextUseCases` duplicated regex and keyword parsing in a private helper.
+
+### Decision
+1. **Memory Capability Segregation**:
+   - Decompose `MemoryPort` into five focused capability protocols in `app/application/ports/memory.py`:
+     - `MemoryLifecyclePort`: `is_initialized`, `initialize()`
+     - `MemoryIngestionPort`: `add()`, `remember()`
+     - `MemoryRetrievalPort`: `recall()`
+     - `MemoryDatasetPort`: `list_datasets()`, `get_dataset_data()`, `forget()`, `forget_data_item()`
+     - `MemoryTopologyPort`: `cognify()`, `get_stats()`, `get_graph()`, `get_vectors()`
+   - Maintain a composite `MemoryPort` inheriting from the capability protocols to preserve complete backwards compatibility.
+   - Refactor use cases (`SystemUseCases`, `RepositoryUseCases`) to depend on the narrowest capability protocol required.
+2. **Typed Memory Domain Entities**:
+   - Define typed domain dataclasses in `app/application/domain/memory.py`: `MemoryDatasetRecord`, `MemoryDataItemRecord`, `MemoryGraphNodeRecord`, `MemoryGraphEdgeRecord`, `MemoryGraphRecord`, and `MemoryVectorStatsRecord`.
+   - Ensure use cases and adapters support both typed domain records and dict fallbacks polymorphically.
+3. **Typed Repository Substructures**:
+   - Define `ArchitectureLayerRecord` (`icon: str = "Layers"`, `label: str = ""`) and `ComponentRecord` (`path: str = ""`, `centrality: str = "core"`) in `app/application/domain/repository.py`.
+   - Update `IndexedRepositoryRecord` to type `architecture: list[ArchitectureLayerRecord]` and `components: list[ComponentRecord]`.
+   - Implement tolerant `from_dict()` and `to_dict()` methods that seamlessly parse legacy format inputs (strings or dicts) without migration or schema breakages.
+4. **Pure Heuristic Intent Extraction**:
+   - Define `ParsedIntentRecord` in `app/application/domain/intent.py`.
+   - Define `parse_intent_heuristics(prompt: str) -> ParsedIntentRecord` as a pure, deterministic, side-effect-free domain function.
+   - Remove static method from `IntentParserPort` protocol and remove duplicated fallback logic from `ContextUseCases`.
+
+### Consequences
+- **Positive**:
+  - Application use cases depend on fine-grained, cohesive capability contracts rather than monolithic ports.
+  - Domain records guarantee strong type safety for repository metadata, intent extraction, and memory structures.
+  - 100% backward compatibility preserved for historical `indexed_repos.json` and `.andes` fallback data.
+  - Zero framework dependencies inside `app.application.domain` and `app.application.ports`.
+- **Negative**:
+  - Additional domain model classes to maintain in the domain package.
+

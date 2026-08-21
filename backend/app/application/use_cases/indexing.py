@@ -11,7 +11,11 @@ from pathlib import Path
 import time
 from typing import Callable, Optional
 
-from app.application.domain.repository import IndexedRepositoryRecord
+from app.application.domain.repository import (
+    ArchitectureLayerRecord,
+    ComponentRecord,
+    IndexedRepositoryRecord,
+)
 from app.application.dto import (
     ErrorResponse,
     IndexRepositoryRequest,
@@ -165,8 +169,8 @@ class IndexingUseCases:
                             memory_size=mem_size,
                             last_indexed=datetime.now(timezone.utc).isoformat(),
                             purpose=purpose,
-                            architecture=arch_list,
-                            components=comp_list,
+                            architecture=[ArchitectureLayerRecord.from_dict(a) for a in arch_list],
+                            components=[ComponentRecord.from_dict(c) for c in comp_list],
                             call_graph_status=call_graph_status,
                             call_graph_error=call_graph_error,
                         )
@@ -224,11 +228,17 @@ class IndexingUseCases:
 
             for r in records:
                 arch_objs = [
-                    RepoArchInfo(icon=a.get("icon", "Layers"), label=a.get("label", ""))
+                    RepoArchInfo(
+                        icon=a.icon if isinstance(a, ArchitectureLayerRecord) else a.get("icon", "Layers"),
+                        label=a.label if isinstance(a, ArchitectureLayerRecord) else a.get("label", ""),
+                    )
                     for a in r.architecture
                 ]
                 comp_objs = [
-                    RepoComponentInfo(path=c.get("path", ""), centrality=c.get("centrality", "core"))
+                    RepoComponentInfo(
+                        path=c.path if isinstance(c, ComponentRecord) else c.get("path", ""),
+                        centrality=c.centrality if isinstance(c, ComponentRecord) else c.get("centrality", "core"),
+                    )
                     for c in r.components
                 ]
 

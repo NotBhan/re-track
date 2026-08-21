@@ -23,7 +23,8 @@ logger = logging.getLogger(__name__)
 _BACKEND_ROOT = Path(__file__).resolve().parent.parent.parent
 DEFAULT_DATA_ROOT = _BACKEND_ROOT / ".cognee_data"
 DEFAULT_SYSTEM_ROOT = _BACKEND_ROOT / ".cognee_system"
-DEFAULT_SETTINGS_STORE_PATH = Path.home() / ".andes" / "settings.json"
+DEFAULT_SETTINGS_STORE_PATH = Path.home() / ".retrack" / "settings.json"
+DEFAULT_LEGACY_SETTINGS_STORE_PATH = Path.home() / ".andes" / "settings.json"
 
 
 class OllamaConfig(BaseSettings):
@@ -95,6 +96,7 @@ class Settings(BaseSettings):
     storage: StorageConfig = Field(default_factory=StorageConfig)
     service: ServiceConfig = Field(default_factory=ServiceConfig)
     settings_store_path: Path = Field(default_factory=lambda: DEFAULT_SETTINGS_STORE_PATH)
+    legacy_settings_store_path: Path = Field(default_factory=lambda: DEFAULT_LEGACY_SETTINGS_STORE_PATH)
 
     model_config = {
         "env_prefix": "",
@@ -103,15 +105,27 @@ class Settings(BaseSettings):
         "extra": "ignore",
     }
 
-    def load_persisted_settings(self, store_path: Path | None = None) -> None:
-        """Load user-customized settings from persistent JSON file if present."""
+    def load_persisted_settings(
+        self,
+        store_path: Path | None = None,
+        legacy_store_path: Path | None = None,
+    ) -> None:
+        """Load user-customized settings from persistent JSON file if present (canonical first, then legacy)."""
         path = store_path or self.settings_store_path
-        if not path.exists():
+        legacy_path = legacy_store_path or self.legacy_settings_store_path
+
+        target_path: Optional[Path] = None
+        if path.exists():
+            target_path = path
+        elif legacy_path.exists():
+            target_path = legacy_path
+
+        if not target_path:
             return
 
         try:
             import json
-            data = json.loads(path.read_text(encoding="utf-8"))
+            data = json.loads(target_path.read_text(encoding="utf-8"))
             if not isinstance(data, dict):
                 return
 
@@ -142,15 +156,16 @@ class Settings(BaseSettings):
                 self.ollama.port = int(data["llm_port"])
 
             logger.info("Loaded persistent settings from %s (vector_db=%s, graph_db=%s, kg=%s)",
-                        path, self.storage.vector_db, self.storage.graph_db, self.storage.enable_kg_extraction)
+                        target_path, self.storage.vector_db, self.storage.graph_db, self.storage.enable_kg_extraction)
         except Exception as e:
-            logger.warning("Failed to load persistent settings from %s: %s", path, e)
+            logger.warning("Failed to load persistent settings from %s: %s", target_path, e)
 
     def save_persisted_settings(self, store_path: Path | None = None) -> None:
-        """Save current user-customized settings to persistent JSON file."""
+        """Save current user-customized settings atomically to canonical persistent JSON file."""
         path = store_path or self.settings_store_path
         try:
             import json
+            import os
             path.parent.mkdir(parents=True, exist_ok=True)
             data = {
                 "vector_db": self.storage.vector_db,
@@ -164,8 +179,13 @@ class Settings(BaseSettings):
                 "llm_host": self.ollama.host,
                 "llm_port": self.ollama.port,
             }
-            path.write_text(json.dumps(data, indent=2), encoding="utf-8")
-            logger.info("Saved persistent settings to %s", path)
+            tmp_path = path.with_suffix(".tmp")
+            with open(tmp_path, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2)
+                f.flush()
+                os.fsync(f.fileno())
+            tmp_path.replace(path)
+            logger.info("Saved persistent settings atomically to %s", path)
         except Exception as e:
             logger.error("Failed to save persistent settings to %s: %s", path, e)
 

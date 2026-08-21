@@ -49,22 +49,38 @@ class JsonContextPackageRepository(ContextPackageRepository):
     for thread safety. Default path: ~/.andes/context_packages.json
     """
 
-    def __init__(self, store_path: str | Path | None = None):
+    def __init__(
+        self,
+        store_path: str | Path | None = None,
+        legacy_store_path: str | Path | None = None,
+    ):
         if store_path is None:
-            store_path = Path.home() / ".andes" / "context_packages.json"
-        self._store_path = Path(store_path)
+            self._store_path = Path.home() / ".retrack" / "context_packages.json"
+            self._legacy_store_path = Path(legacy_store_path) if legacy_store_path is not None else (Path.home() / ".andes" / "context_packages.json")
+        else:
+            self._store_path = Path(store_path)
+            self._legacy_store_path = Path(legacy_store_path) if legacy_store_path is not None else None
 
     def _load(self) -> dict[str, dict]:
-        if not self._store_path.exists():
-            return {}
-        try:
-            with open(self._store_path, "r") as f:
-                data = json.load(f)
-                if not isinstance(data, dict):
-                    return {}
-                return data
-        except (json.JSONDecodeError, OSError):
-            return {}
+        if self._store_path.exists():
+            try:
+                with open(self._store_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    if isinstance(data, dict):
+                        return data
+            except (json.JSONDecodeError, OSError):
+                pass
+
+        if self._legacy_store_path is not None and self._legacy_store_path.exists():
+            try:
+                with open(self._legacy_store_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    if isinstance(data, dict):
+                        return data
+            except (json.JSONDecodeError, OSError):
+                pass
+
+        return {}
 
     def _save_all(self, packages: dict[str, dict]) -> None:
         self._store_path.parent.mkdir(parents=True, exist_ok=True)

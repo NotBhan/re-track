@@ -82,11 +82,17 @@ class IndexDelta:
 class ManifestService:
     """Stores and computes file-level diff manifests for repositories."""
 
-    def __init__(self, storage_dir: Optional[Path] = None) -> None:
+    def __init__(
+        self,
+        storage_dir: Optional[Path] = None,
+        legacy_storage_dir: Optional[Path] = None,
+    ) -> None:
         if storage_dir is None:
             self._storage_dir = Path.home() / ".retrack" / "manifests"
+            self._legacy_storage_dir = Path(legacy_storage_dir) if legacy_storage_dir is not None else (Path.home() / ".andes" / "manifests")
         else:
             self._storage_dir = Path(storage_dir)
+            self._legacy_storage_dir = Path(legacy_storage_dir) if legacy_storage_dir is not None else None
         self._storage_dir.mkdir(parents=True, exist_ok=True)
 
     def _get_manifest_path(self, repo_path: Path) -> Path:
@@ -94,27 +100,49 @@ class ManifestService:
         repo_id = hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:16]
         return self._storage_dir / f"{repo_id}.json"
 
+    def _get_legacy_manifest_path(self, repo_path: Path) -> Optional[Path]:
+        if self._legacy_storage_dir is None:
+            return None
+        canonical = str(repo_path.resolve())
+        repo_id = hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:16]
+        return self._legacy_storage_dir / f"{repo_id}.json"
+
     def load_manifest(self, repo_path: Path) -> Optional[RepositoryManifest]:
-        """Load manifest from disk if it exists."""
+        """Load manifest from disk if it exists (canonical first, then legacy)."""
         manifest_file = self._get_manifest_path(repo_path)
-        if not manifest_file.exists():
-            return None
-        try:
-            with open(manifest_file, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            return RepositoryManifest.from_dict(data)
-        except Exception as e:
-            logger.warning("Failed to read manifest %s: %s", manifest_file, e)
-            return None
+        if manifest_file.exists():
+            try:
+                with open(manifest_file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                return RepositoryManifest.from_dict(data)
+            except Exception as e:
+                logger.warning("Failed to read canonical manifest %s: %s", manifest_file, e)
+
+        legacy_manifest_file = self._get_legacy_manifest_path(repo_path)
+        if legacy_manifest_file is not None and legacy_manifest_file.exists():
+            try:
+                with open(legacy_manifest_file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                return RepositoryManifest.from_dict(data)
+            except Exception as e:
+                logger.warning("Failed to read legacy manifest %s: %s", legacy_manifest_file, e)
+
+        return None
 
     def save_manifest(self, manifest: RepositoryManifest) -> None:
-        """Persist manifest to disk."""
+        """Persist manifest to canonical disk atomically."""
         manifest_file = self._get_manifest_path(Path(manifest.repo_path))
         manifest.updated_at = time.time()
         try:
-            with open(manifest_file, "w", encoding="utf-8") as f:
+            self._storage_dir.mkdir(parents=True, exist_ok=True)
+            tmp_path = manifest_file.with_suffix(".tmp")
+            with open(tmp_path, "w", encoding="utf-8") as f:
                 json.dump(manifest.to_dict(), f, indent=2)
-            logger.debug("Saved manifest to %s", manifest_file)
+                f.flush()
+                import os
+                os.fsync(f.fileno())
+            tmp_path.replace(manifest_file)
+            logger.debug("Saved manifest atomically to %s", manifest_file)
         except Exception as e:
             logger.error("Failed to write manifest %s: %s", manifest_file, e)
 

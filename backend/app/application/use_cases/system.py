@@ -20,7 +20,7 @@ from app.application.ports.hardware_telemetry import (
     HardwareTelemetryPort,
 )
 from app.application.ports.llm_provider import LLMProviderPort
-from app.application.ports.memory import MemoryPort
+from app.application.ports.memory import MemoryLifecyclePort
 from app.config.settings import Settings
 from app.models.errors import CogneeServiceError
 from app.models.provider import ProviderType
@@ -34,7 +34,7 @@ class SystemUseCases:
     def __init__(
         self,
         settings_getter: Callable[[], Settings],
-        cognee_service_getter: Callable[[], Optional[MemoryPort]],
+        cognee_service_getter: Callable[[], Optional[MemoryLifecyclePort]],
         llm_provider_getter: Callable[[], Optional[LLMProviderPort]],
         provider_updater_fn: Callable[[str, str, str, str], Coroutine[Any, Any, dict | ErrorResponse]],
         telemetry_port: Optional[HardwareTelemetryPort] = None,

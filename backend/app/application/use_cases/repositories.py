@@ -19,7 +19,7 @@ from app.application.dto import (
 )
 from app.application.ports.indexing_service import IndexingServicePort
 from app.application.ports.llm_provider import LLMProviderPort
-from app.application.ports.memory import MemoryPort
+from app.application.ports.memory import MemoryDatasetPort
 from app.application.ports.repository_manager import RepositoryManagerPort
 from app.application.ports.repository_metadata import RepositoryMetadataPort
 from app.application.ports.summary_generator import SummaryGeneratorPort
@@ -37,7 +37,7 @@ class RepositoryUseCases:
         indexing_service: Optional[IndexingServicePort],
         llm_provider: Optional[LLMProviderPort],
         summary_generator: SummaryGeneratorPort,
-        cognee_service: Optional[MemoryPort] = None,
+        cognee_service: Optional[MemoryDatasetPort] = None,
         metadata_store: Optional[RepositoryMetadataPort] = None,
     ) -> None:
         self._manager = repository_manager

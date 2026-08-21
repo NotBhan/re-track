@@ -26,8 +26,12 @@ class JsonRepositoryMetadataStore:
         store_path: Optional[Path] = None,
         legacy_store_path: Optional[Path] = None,
     ) -> None:
-        self._store_path = store_path or (Path.home() / ".retrack" / "indexed_repos.json")
-        self._legacy_store_path = legacy_store_path or (Path.home() / ".andes" / "indexed_repos.json")
+        if store_path is None:
+            self._store_path = Path.home() / ".retrack" / "indexed_repos.json"
+            self._legacy_store_path = legacy_store_path or (Path.home() / ".andes" / "indexed_repos.json")
+        else:
+            self._store_path = store_path
+            self._legacy_store_path = legacy_store_path
 
     @property
     def store_path(self) -> Path:
@@ -42,7 +46,7 @@ class JsonRepositoryMetadataStore:
                 logger.warning("Failed to load repo store from %s: %s", self._store_path, e)
                 return {"repositories": []}
 
-        if self._legacy_store_path.exists():
+        if self._legacy_store_path is not None and self._legacy_store_path.exists():
             try:
                 return json.loads(self._legacy_store_path.read_text(encoding="utf-8"))
             except Exception as e:
@@ -55,7 +59,13 @@ class JsonRepositoryMetadataStore:
         """Persist the raw indexed repos store dict to disk atomically."""
         try:
             self._store_path.parent.mkdir(parents=True, exist_ok=True)
-            self._store_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+            tmp_path = self._store_path.with_suffix(".tmp")
+            with open(tmp_path, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2)
+                f.flush()
+                import os
+                os.fsync(f.fileno())
+            tmp_path.replace(self._store_path)
         except Exception as e:
             logger.error("Failed to save repo store to %s: %s", self._store_path, e)
             raise

@@ -89,10 +89,27 @@ FRAMEWORK_MARKERS: dict[str, str] = {
 class RepositoryManager:
     """Manages repository CRUD, import, scan, and metadata persistence."""
 
-    def __init__(self, store_path: str | Path | None = None) -> None:
+    def __init__(
+        self,
+        store_path: str | Path | None = None,
+        legacy_store_path: str | Path | None = None,
+        repos_dir: str | Path | None = None,
+        legacy_repos_dir: str | Path | None = None,
+    ) -> None:
         if store_path is None:
-            store_path = Path.home() / ".andes" / "repositories.json"
-        self._store_path = Path(store_path)
+            self._store_path = Path.home() / ".retrack" / "repositories.json"
+            self._legacy_store_path = Path(legacy_store_path) if legacy_store_path is not None else (Path.home() / ".andes" / "repositories.json")
+        else:
+            self._store_path = Path(store_path)
+            self._legacy_store_path = Path(legacy_store_path) if legacy_store_path is not None else None
+
+        if repos_dir is None:
+            self._repos_dir = Path.home() / ".retrack" / "repos"
+            self._legacy_repos_dir = Path(legacy_repos_dir) if legacy_repos_dir is not None else (Path.home() / ".andes" / "repos")
+        else:
+            self._repos_dir = Path(repos_dir)
+            self._legacy_repos_dir = Path(legacy_repos_dir) if legacy_repos_dir is not None else None
+
         self._repositories: dict[str, dict[str, Any]] = {}
         self._active_progress: dict[str, dict[str, Any]] = {}
         self._load()
@@ -101,13 +118,32 @@ class RepositoryManager:
 
     def _load(self) -> None:
         if self._store_path.exists():
-            data = json.loads(self._store_path.read_text())
-            if isinstance(data, dict):
-                self._repositories = data
+            try:
+                data = json.loads(self._store_path.read_text(encoding="utf-8"))
+                if isinstance(data, dict):
+                    self._repositories = data
+                    return
+            except Exception:
+                pass
+
+        if self._legacy_store_path is not None and self._legacy_store_path.exists():
+            try:
+                data = json.loads(self._legacy_store_path.read_text(encoding="utf-8"))
+                if isinstance(data, dict):
+                    self._repositories = data
+                    return
+            except Exception:
+                pass
 
     def _save(self) -> None:
         self._store_path.parent.mkdir(parents=True, exist_ok=True)
-        self._store_path.write_text(json.dumps(self._repositories, indent=2))
+        tmp_path = self._store_path.with_suffix(".tmp")
+        with open(tmp_path, "w", encoding="utf-8") as f:
+            json.dump(self._repositories, f, indent=2)
+            f.flush()
+            import os
+            os.fsync(f.fileno())
+        tmp_path.replace(self._store_path)
 
     @staticmethod
     def _repo_to_dict(repo: Repository) -> dict[str, Any]:
@@ -223,7 +259,7 @@ class RepositoryManager:
         if source_type == "github":
             if not source_url:
                 raise ValueError("source_url required for github source")
-            workspace = Path.home() / ".andes" / "repos"
+            workspace = self._repos_dir
             source = GitHubSource(url=source_url, workspace=workspace)
             local_path_resolved = str(source.import_to())
             branch, commit_hash = self._get_git_info(local_path_resolved)

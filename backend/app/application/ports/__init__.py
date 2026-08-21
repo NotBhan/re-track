@@ -16,7 +16,14 @@ from app.application.ports.hardware_telemetry import (
 from app.application.ports.indexing_service import IndexingServicePort
 from app.application.ports.intent_parser import IntentParserPort
 from app.application.ports.llm_provider import LLMProviderPort
-from app.application.ports.memory import MemoryPort
+from app.application.ports.memory import (
+    MemoryDatasetPort,
+    MemoryIngestionPort,
+    MemoryLifecyclePort,
+    MemoryPort,
+    MemoryRetrievalPort,
+    MemoryTopologyPort,
+)
 from app.application.ports.repository_manager import RepositoryManagerPort
 from app.application.ports.repository_metadata import RepositoryMetadataPort
 from app.application.ports.source_search import SourceSearchPort
@@ -34,7 +41,12 @@ __all__ = [
     "IndexingServicePort",
     "IntentParserPort",
     "LLMProviderPort",
+    "MemoryDatasetPort",
+    "MemoryIngestionPort",
+    "MemoryLifecyclePort",
     "MemoryPort",
+    "MemoryRetrievalPort",
+    "MemoryTopologyPort",
     "RepositoryManagerPort",
     "RepositoryMetadataPort",
     "SourceSearchPort",

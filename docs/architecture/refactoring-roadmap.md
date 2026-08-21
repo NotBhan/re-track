@@ -137,58 +137,79 @@ Define explicit abstraction interfaces (Ports) for all external systems (Memory/
 
 ---
 
-## Phase 4: Standalone CLI
+## Phase 4: Storage Compatibility & DEBT-004 Packaging Cleanup (Completed)
+
+> **Status**: Completed (2026-08-21) — 327 backend tests passing, 14 dedicated storage compatibility tests passing, 0 framework leaks on service import.
 
 ### Objective
-Ensure RE:Track operates as a fully functional, headless command-line interface that can index repos, query graphs, and generate Context Packages without launching FastAPI or Tauri.
+Standardize all persistence adapters around a non-negotiable dual-path architecture where `~/.retrack/` is canonical writable storage and `~/.andes/` is strictly read-only legacy fallback. Resolve DEBT-004 to eliminate eager framework loading from `app.services`.
 
 ### Affected Components
-- `backend/app/cli/main.py`
-- `backend/app/cli/commands/` (Subcommand modules: `index`, `context`, `agent_context`, `memory`, `status`, `health`)
+- `backend/app/services/repository_metadata_store.py` (Dual-path + atomic writes with fsync)
+- `backend/app/services/repository_manager.py` (Dual-path + clone workspace isolation + atomic writes)
+- `backend/app/services/context_package_repository.py` (Dual-path + atomic writes)
+- `backend/app/config/settings.py` (Dual-path settings store + atomic writes)
+- `backend/app/services/manifest_service.py` (Dual-path manifests + atomic writes)
+- `backend/app/application/use_cases/context.py` (Dual-path repo-local manifest check)
+- `backend/app/services/__init__.py` (Resolved DEBT-004 using lazy `__getattr__` exports)
+- `backend/tests/test_storage_compatibility.py` (Dedicated comprehensive regression test suite)
 
 ### Migration Strategy
-1. Refactor `app/cli/main.py` to instantiate application use cases directly with infrastructure adapters.
-2. Add support for outputting raw Markdown, JSON context packages, or stdout streaming.
-3. Expose the agent context middleware directly via CLI: `retrack agent-context --prompt "..." --repo "."`.
-
-### Risks
-- CLI cold-start latency when initializing adapters.
-- Output formatting differences between CLI and API responses.
+1. Implemented canonical-first reads and legacy fallbacks across all 5 JSON persistence adapters.
+2. Enforced write exclusivity: all new writes target `~/.retrack/` only; legacy `~/.andes/` is never mutated, deleted, or renamed.
+3. Implemented atomic file writes with `.tmp` staging and `os.fsync`.
+4. Guaranteed clone safety: new clones target `~/.retrack/repos/`; existing legacy clones in `~/.andes/repos/` are treated as read-only inspection targets.
+5. Replaced eager imports in `app/services/__init__.py` with dynamic `__getattr__` resolution.
+6. Added 14 dedicated regression tests covering Scenarios A–I with SHA256 immutability assertions.
 
 ### Acceptance Criteria
-- [ ] `retrack --help` displays all commands.
-- [ ] `retrack index . -d test` indexes the current repository without running a web server.
-- [ ] `retrack context -q "How does X work?" -d test` generates a complete Markdown Context Package to stdout.
-- [ ] `test_cli.py` tests pass 100%.
+- [x] `~/.retrack/` is canonical writable storage; `~/.andes/` is strictly read-only fallback.
+- [x] Reading legacy files produces 0 write-backs or modifications (verified by SHA256 before/after checks).
+- [x] Legacy clones remain usable and are never mutated by scan/indexing operations.
+- [x] DEBT-004 resolved: `import app.services` does not load `fastapi`, `cognee`, or `starlette`.
+- [x] 100% backend tests pass (327 passed, 2 skipped, 0 failed).
+- [x] 100% boundary tests pass (18 passed).
+- [x] 100% AST integrity tests pass (4 passed).
+- [x] Frontend production build succeeds (`npm run build`).
 
 ---
 
-## Phase 5: FastAPI as an Interface Adapter
+## Phase 5: Domain Model & Port Refinement (Completed)
 
 ### Objective
-Treat FastAPI as a pure ingress adapter that translates HTTP requests into application use case calls and converts domain results into HTTP responses.
+Resolve deferred architectural debts (DEBT-005, DEBT-006, DEBT-007) by segmenting `MemoryPort` into cohesive capability protocols, typing repository metadata substructures, and extracting a pure heuristic intent parsing domain entity.
 
 ### Affected Components
-- `backend/app/server.py`
-- `backend/app/api/routers/` (Split routes into domain routers: `repositories.py`, `context.py`, `memory.py`, `benchmarks.py`, `settings.py`)
+- `backend/app/application/domain/repository.py` (New: `ArchitectureLayerRecord`, `ComponentRecord`; typed `IndexedRepositoryRecord`)
+- `backend/app/application/domain/intent.py` (New: `ParsedIntentRecord`, pure `parse_intent_heuristics`)
+- `backend/app/application/domain/memory.py` (New: `MemoryDatasetRecord`, `MemoryDataItemRecord`, `MemoryGraphNodeRecord`, `MemoryGraphEdgeRecord`, `MemoryGraphRecord`, `MemoryVectorStatsRecord`)
+- `backend/app/application/ports/memory.py` (Decomposed: `MemoryLifecyclePort`, `MemoryIngestionPort`, `MemoryRetrievalPort`, `MemoryDatasetPort`, `MemoryTopologyPort`, `MemoryPort`)
+- `backend/app/application/ports/intent_parser.py` (Cleaned Protocol interface returning `ParsedIntentRecord`)
+- `backend/app/application/use_cases/` (`system.py`, `repositories.py`, `indexing.py`, `context.py`, `memory.py` adapted to narrow capability ports and typed records)
+- `backend/app/services/intent_parser.py` (Delegates to domain `parse_intent_heuristics`)
+- `backend/tests/test_domain_refinement.py` (New: 15 dedicated Phase 5 tests)
 
 ### Migration Strategy
-1. Break `server.py` into distinct FastAPI `APIRouter` modules under `app/api/routers/`.
-2. Ensure route handlers only validate request payloads, invoke the relevant use case, and return response models.
-3. Fix missing imports (e.g. `append_context_package`).
-
-### Risks
-- Route URL pattern mismatches causing frontend 404s.
-- FastAPI dependency injection lifecycle errors.
+1. Defined `ArchitectureLayerRecord` and `ComponentRecord` domain models; updated `IndexedRepositoryRecord` with backward-compatible `from_dict()` / `to_dict()`.
+2. Created `ParsedIntentRecord` and pure domain function `parse_intent_heuristics(prompt)`; cleaned `IntentParserPort` protocol and eliminated duplicate private fallback from `ContextUseCases`.
+3. Created typed memory domain models (`MemoryDatasetRecord`, `MemoryDataItemRecord`, etc.) and decomposed `MemoryPort` into 5 cohesive capability protocols.
+4. Refactored use cases to consume narrowest capability ports (`SystemUseCases` $\to$ `MemoryLifecyclePort`, `RepositoryUseCases` $\to$ `MemoryDatasetPort`).
+5. Verified 100% backward compatibility for historical JSON and dual-path fallback.
 
 ### Acceptance Criteria
-- [ ] `server.py` is under 80 lines and only mounts routers, middleware, and lifespan.
-- [ ] Every REST endpoint continues to serve the exact same schema and status codes.
-- [ ] `test_api.py` passes 100%.
+- [x] DEBT-005 resolved: `MemoryPort` split into 5 capability protocols; typed memory domain records created.
+- [x] DEBT-006 resolved: `IndexedRepositoryRecord` substructures typed; 100% backward compatible with historical JSON.
+- [x] DEBT-007 resolved: Pure `parse_intent_heuristics` extracted; `IntentParserPort` cleaned.
+- [x] 100% of backend tests pass (342 passed, 2 skipped, 0 failed).
+- [x] 100% boundary tests pass (18 passed).
+- [x] 100% AST integrity tests pass (4 passed).
+- [x] 100% storage compatibility tests pass (14 passed).
+- [x] 100% Phase 5 domain refinement tests pass (15 passed).
+- [x] Frontend production build succeeds (`npm run build`).
 
 ---
 
-## Phase 6: GUI Migration to Public Application Interface
+## Phase 6: FastAPI Route Modularization & Ingress Adapter Cleanup
 
 ### Objective
 Align frontend stores and Tauri bridge directly with the cleaned API schema contracts and streamline backend lifecycle management.

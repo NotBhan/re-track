@@ -27,43 +27,10 @@ from app.application.ports.llm_provider import LLMProviderPort
 from app.application.ports.memory import MemoryPort
 from app.application.ports.source_search import SourceSearchPort
 from app.application.ports.summary_generator import SummaryGeneratorPort
+from app.application.domain.intent import parse_intent_heuristics
 from app.models.errors import CogneeServiceError
 
 logger = logging.getLogger(__name__)
-
-
-def _rule_based_fallback_intent(prompt: str):
-    """Fast, LLM-free rule-based intent parser for zero-hallucination fallback."""
-    from pydantic import BaseModel, Field
-
-    class _FallbackIntent(BaseModel):
-        task_summary: str
-        category: str = "general"
-        extracted_symbols: list[str] = Field(default_factory=list)
-        relevant_file_hints: list[str] = Field(default_factory=list)
-        is_vague: bool = False
-
-    lowered = prompt.lower()
-    category = "general"
-    if any(w in lowered for w in ["fix", "bug", "error", "issue", "fail", "crash"]):
-        category = "bug_fix"
-    elif any(w in lowered for w in ["add", "create", "implement", "build", "new"]):
-        category = "feature_addition"
-    elif any(w in lowered for w in ["refactor", "clean", "structure", "rename", "move"]):
-        category = "refactoring"
-
-    # Extract symbols with backticks or identifiers
-    import re
-    backticked = re.findall(r"`([a-zA-Z_][a-zA-Z0-9_\.]*)`", prompt)
-    hints = re.findall(r"([a-zA-Z0-9_\-\./]+\.[a-zA-Z0-9]+)", prompt)
-
-    return _FallbackIntent(
-        task_summary=prompt.strip().split("\n")[0][:120],
-        category=category,
-        extracted_symbols=list(dict.fromkeys(backticked)),
-        relevant_file_hints=list(dict.fromkeys(hints)),
-        is_vague=len(prompt.split()) < 5,
-    )
 
 
 class ContextUseCases:
@@ -211,15 +178,27 @@ class ContextUseCases:
 
                 # 0. Check in-memory context synthesis cache (< 5ms hit)
                 manifest_hash = ""
-                manifest_file = repo_path / ".andes" / "manifest.json"
-                if self._fs and self._fs.exists(manifest_file):
+                manifest_file = repo_path / ".retrack" / "manifest.json"
+                legacy_manifest_file = repo_path / ".andes" / "manifest.json"
+
+                target_manifest = None
+                if self._fs:
+                    if self._fs.exists(manifest_file):
+                        target_manifest = manifest_file
+                    elif self._fs.exists(legacy_manifest_file):
+                        target_manifest = legacy_manifest_file
+                else:
+                    if manifest_file.exists():
+                        target_manifest = manifest_file
+                    elif legacy_manifest_file.exists():
+                        target_manifest = legacy_manifest_file
+
+                if target_manifest:
                     try:
-                        manifest_hash = str(self._fs.get_mtime(manifest_file))
-                    except Exception:
-                        pass
-                elif manifest_file.exists():
-                    try:
-                        manifest_hash = str(manifest_file.stat().st_mtime)
+                        if self._fs:
+                            manifest_hash = str(self._fs.get_mtime(target_manifest))
+                        else:
+                            manifest_hash = str(target_manifest.stat().st_mtime)
                     except Exception:
                         pass
 
@@ -242,7 +221,7 @@ class ContextUseCases:
                 async def _get_intent():
                     if self._intent_parser:
                         return await self._intent_parser.parse_intent(request.task_prompt)
-                    return _rule_based_fallback_intent(request.task_prompt)
+                    return parse_intent_heuristics(request.task_prompt)
 
                 async def _get_repo_summary():
                     raw_files = self._indexing_service.discover_files(repo_path)
