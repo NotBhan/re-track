@@ -18,9 +18,22 @@ Every feature should ultimately improve this outcome.
 
 ---
 
-# Verified Achievements (v0.1 Release)
+# Verified Achievements (Phase 8C Production Hardened)
 
-The following have been verified through end-to-end implementation and automated test suites (294 backend tests + frontend TypeScript build):
+The following have been verified through end-to-end implementation and automated test suites (415 backend tests + frontend TypeScript build):
+
+## Model Context Protocol (MCP) Server
+- Inbound driving adapter exposing 5 tools over stdio (`get_agent_context`, `get_repository_summary`, `get_ast_call_graph`, `search_repository_code`, `list_indexed_repositories`)
+- Process-scoped shared `BoundedConcurrencyGuard` (`max_concurrent=1`, `max_queue=5`, `timeout=30.0s`)
+- 100% clean JSON-RPC stdout framing with all logging isolated to stderr
+- Graceful stdio EOF, SIGINT, and SIGTERM termination (< 0.15s)
+- Deterministic tools operational independently of LLM provider; automatic same-process recovery on provider restoration
+
+## Defense-in-Depth Trust Boundary & Dataset Isolation
+- Workspace authorization boundary (`WorkspaceAuthorizationService`) restricting access to registered repos and `RETRACK_WORKSPACE_ROOTS`
+- Symlink containment and path traversal protection
+- Collision-proof dataset identity isolation (`derive_dataset_name`: `{name}_{path_sha256_10hex}`)
+- MCP exception isolation boundary with structured, sanitized error responses
 
 ## Deterministic AST Call Graph Engine
 - 2-pass Python AST visitor + React/TS regex import scanner
@@ -39,29 +52,29 @@ The following have been verified through end-to-end implementation and automated
 - Line-boundary token compression and priority tier budgeting
 - Discrete latency decomposition: retrieval, ranking, synthesis, total
 
-## Reproducible Benchmark Suite
+## Reproducible Benchmark Suite & Golden Dataset
+- Canonical golden task dataset (`benchmarks/retrack/golden_tasks.json`, 20 tasks across 4 categories)
+- Pure deterministic evaluation engine (`tests/evaluation/evaluator.py`) measuring Precision@K, Recall@K, Critical Evidence Coverage, and Noise Ratio
 - Exact source code baseline tokenization against target repository
-- Deterministic compression ratios and prompt token savings calculations
 - Immutable execution metadata recording (Git SHA, active model, device, cache state)
 
 ## Test Coverage
-- 294 backend unit tests passing (`backend/tests/`)
-- AST integrity test suite (`backend/tests/test_ast_integrity.py`)
+- 415 backend unit, integration, and security tests passing across 28 suites (`backend/tests/`)
 - Frontend TypeScript type check (`tsc --noEmit`) and production bundle build (`vite build`) passing with 0 errors.
 
 ---
 
 # Functional Success Criteria
 
-The MVP should allow a developer to:
+The system allows a developer to:
 
-- Create a workspace. (planned)
-- Import a repository. ✅
+- Import and register a repository. ✅
 - Build persistent project memory. ✅
 - Ask a development question. ✅
 - Generate a Context Package. ✅
-- Use the package with an AI coding assistant. (planned)
-- Continue development without repeatedly explaining the project. (planned)
+- Connect an external AI coding assistant via MCP (Claude Code, Cursor, Antigravity, Gemini CLI). ✅
+- Enforce strict workspace authorization and symlink containment. ✅
+- Continue development without repeatedly explaining the project. ✅
 
 ---
 

@@ -27,3 +27,13 @@ class SourceSearchPort(Protocol):
     ) -> tuple[list[str], list[str]]:
         """Scan repository files for search terms and return matching relative paths and formatted snippets."""
         ...
+
+    def search(
+        self,
+        repo_path: Path,
+        indexed_files: Sequence[Path],
+        query: str,
+        limit: int = 10,
+    ) -> list[dict]:
+        """Search repository code for query terms and return ranked candidates with matched symbols and snippets."""
+        ...

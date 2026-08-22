@@ -80,11 +80,11 @@ After meaningful changes:
 Before completing work:
 
 ```bash
-# Backend unit tests (294 passed)
-cd backend && pytest tests/ -q
+# Backend unit & integration tests (415 passed)
+cd backend && uv run pytest tests/ -q
 
 # AST integrity tests
-cd backend && pytest tests/test_ast_integrity.py -v
+cd backend && uv run pytest tests/test_ast_integrity.py -v
 
 # Frontend TypeScript & build check
 npm run build

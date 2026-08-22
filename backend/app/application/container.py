@@ -25,8 +25,9 @@ from app.application.ports.repository_manager import RepositoryManagerPort
 from app.application.ports.repository_metadata import RepositoryMetadataPort
 from app.application.ports.source_search import SourceSearchPort
 from app.application.ports.summary_generator import SummaryGeneratorPort
+from app.application.ports.workspace_authorization import WorkspaceAuthorizationPort
 from app.application.use_cases.benchmarks import BenchmarkUseCases
-from app.application.use_cases.context import ContextUseCases
+from app.application.use_cases.context import BoundedConcurrencyGuard, ContextUseCases
 from app.application.use_cases.context_packages import PackageUseCases
 from app.application.use_cases.indexing import IndexingUseCases
 from app.application.use_cases.memory import MemoryUseCases
@@ -54,6 +55,7 @@ from app.services.repository_metadata_store import (
 )
 from app.services.repository_summary import RepositorySummaryGenerator
 from app.services.source_search_service import SourceSearchService
+from app.services.workspace_authorization_service import WorkspaceAuthorizationService
 
 logger = logging.getLogger(__name__)
 
@@ -78,10 +80,18 @@ class ApplicationContainer:
         self.filesystem: FileSystemPort = LocalFileSystemAdapter()
         self.telemetry: HardwareTelemetryPort = LocalHardwareTelemetryAdapter()
         self.source_search: SourceSearchPort = SourceSearchService(filesystem=self.filesystem)
+        self.workspace_auth: WorkspaceAuthorizationPort = WorkspaceAuthorizationService(
+            metadata_store=self.metadata_store
+        )
 
-        # Concurrency locks
+        # Concurrency locks and guards
         self.indexing_lock: asyncio.Lock = asyncio.Lock()
         self.context_gen_lock: asyncio.Lock = asyncio.Lock()
+        self.concurrency_guard: BoundedConcurrencyGuard = BoundedConcurrencyGuard(
+            max_concurrent=1,
+            max_queue=5,
+            timeout=30.0,
+        )
 
     def ensure_services(self) -> None:
         """Raise if core services are not initialized."""
@@ -194,6 +204,8 @@ class ApplicationContainer:
             ensure_services_fn=self.ensure_services,
             source_search=self.source_search,
             filesystem=self.filesystem,
+            workspace_auth=self.workspace_auth,
+            concurrency_guard=self.concurrency_guard,
         )
 
     def get_indexing_use_cases(self) -> IndexingUseCases:
@@ -204,6 +216,7 @@ class ApplicationContainer:
             summary_generator=self.summary_generator,
             metadata_store=self.metadata_store,
             filesystem=self.filesystem,
+            workspace_auth=self.workspace_auth,
         )
 
     def get_repository_use_cases(self) -> RepositoryUseCases:
@@ -214,6 +227,8 @@ class ApplicationContainer:
             summary_generator=self.summary_generator,
             cognee_service=self.cognee_service,
             metadata_store=self.metadata_store,
+            filesystem=self.filesystem,
+            workspace_auth=self.workspace_auth,
         )
 
     def get_memory_use_cases(self) -> MemoryUseCases:

@@ -210,77 +210,73 @@ A milestone is considered complete when:
 - AGENTS.md has been checked.
 - No known critical issues remain.
 
+# Milestone 6 — Hexagonal Architecture & Modular Routing ✅
+
+## Goal
+
+Decouple business use cases from transport frameworks and enforce strict dependency inversion.
+
+### Deliverables
+
+- Inbound Driving Adapters (FastAPI routers, Headless CLI, MCP stdio server).
+- Application Use Cases (`ContextUseCases`, `IndexingUseCases`, `RepositoryUseCases`, `MemoryUseCases`, `PackageUseCases`, `SystemUseCases`).
+- Pure Domain Ports (`MemoryPort`, `SourceSearchPort`, `WorkspaceAuthorizationPort`, `MetadataStorePort`, `FileSystemPort`, `HardwareTelemetryPort`).
+- Centralized composition root (`ApplicationContainer`) with lifespan hooks and zero global singletons.
+- Modular domain routers under `backend/app/api/routers/`.
+
+Status: **Completed**
+
+---
+
+# Milestone 7 — Empirical Benchmarking & Ground Truth Evaluation ✅
+
+## Goal
+
+Establish reproducible ground truth benchmarks and evaluate Context Engine retrieval quality.
+
+### Deliverables
+
+- Golden task dataset (`benchmarks/retrack/golden_tasks.json`, 20 curated tasks).
+- Pure evaluation engine (`tests/evaluation/evaluator.py`) measuring Precision@K, Recall@K, Critical Evidence Coverage, and Noise Ratio.
+- Automated evaluation runner & reporting suite (`tests/evaluation/test_context_engine_eval.py`).
+- Phase 7E controlled retrieval experiments (proven AST indexing, intent priors, fingerprint caching; CGC subprocess prohibited on hot path).
+
+Status: **Completed**
+
+---
+
+# Milestone 8 — Model Context Protocol (MCP) Server & Operational Hardening ✅
+
+## Goal
+
+Provide high-precision repository memory, AST call graphs, and context packages to external AI coding agents over standardized stdio transport with strict security and operational boundaries.
+
+### Deliverables
+
+- **Phase 8A (MCP Inbound Adapter)**: FastMCP stdio server (`backend/app/mcp/`) exposing 5 tools (`get_agent_context`, `get_repository_summary`, `get_ast_call_graph`, `search_repository_code`, `list_indexed_repositories`).
+- **Phase 8B (Security & Trust Boundary Hardening)**: Workspace authorization boundary (`WorkspaceAuthorizationService`), symlink containment, collision-proof dataset identity isolation (`derive_dataset_name`), bounded context concurrency guard, and sanitized exception isolation.
+- **Phase 8C (Operational Lifecycle & Reliability Hardening)**: Process-scoped shared concurrency guard, stderr-only logging isolation, clean stdio EOF/signal termination (< 0.15s), and verified automatic same-process LLM provider recovery.
+
+Status: **Completed (Production Ready)**
+
 ---
 
 # Current Status
 
-Current Milestone: **Milestone 6 — Polish**
+Current Phase: **Phase 8C Completed — Production Ready**
 
-Completed services:
-
-- CogneeService ✅
-- IndexingService (delta + .gitignore filtering) ✅
-- ContextService ✅
-- PackageBuilder ✅
-- BudgetManager ✅
-- MarkdownRenderer ✅
-- RepositorySummaryGenerator (Depth-2.5 + call graph) ✅
-- CallGraphExtractor (embedded, Python AST + React/TS) ✅
-- Pipeline stages (dedup, rank, compress, categorize, references) ✅
-- StatsLogger ✅
-- API layer (commands + schemas) ✅
-- React frontend (Dashboard, Memory, Benchmarks, Settings) ✅
-- CallGraphView (interactive force-directed SVG) ✅
-
----
-
-# Development Workflow
-
-Every implementation task should follow this workflow:
-
-```
-Plan
-
-↓
-
-Implement
-
-↓
-
-Review
-
-↓
-
-Test
-
-↓
-
-Update Documentation
-
-↓
-
-Commit
-```
-
----
-
-# Current Status
-
-Current Milestone:
-
-**Milestone 3 — Frontend Foundation**
-
-Current Objective:
-
-Expose the backend through a desktop interface with React + Tauri.
-
-Completed:
-
-- CogneeService ✅
-- IndexingService ✅
-- ContextService ✅
-- Backend structure ✅
-- Cognee integration verified ✅
-- End-to-end pipeline tested ✅
-- API layer (commands + schemas) ✅
-- API test suite ✅
+Completed Components:
+- `ApplicationContainer` (Composition Root) ✅
+- `ContextUseCases` & `BoundedConcurrencyGuard` ✅
+- `IndexingUseCases` & `IndexingService` ✅
+- `RepositoryUseCases` & `RepositoryManager` ✅
+- `MemoryUseCases` & `CogneeMemoryAdapter` ✅
+- `PackageUseCases` & `ContextPackageRepository` ✅
+- `SystemUseCases` & Hardware Telemetry ✅
+- `WorkspaceAuthorizationService` (Filesystem & Symlink Containment) ✅
+- `RepositorySummaryGenerator` (2-Pass Deterministic AST Resolver) ✅
+- `SourceSearchService` (In-Process Fast Symbol & Keyword Search) ✅
+- `MCPServer` & 5 Standardized MCP Tools ✅
+- React + Vite + Tauri Frontend (Context Studio, Knowledge Explorer, Memory, Benchmarks, Settings) ✅
+- 415 passing backend unit, integration, and security tests ✅
+- Clean frontend TypeScript compile & Vite build ✅

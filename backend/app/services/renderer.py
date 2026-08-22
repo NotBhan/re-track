@@ -116,8 +116,8 @@ class MarkdownRenderer:
 
         if summary.key_components:
             comps = "\n".join(
-                f"- **{c.name}**: {c.responsibilities}"
-                for c in summary.key_components[:5]
+                f"- **{c.name}** (`{c.path}`): {c.responsibilities}" if getattr(c, "path", None) else f"- **{c.name}**: {c.responsibilities}"
+                for c in summary.key_components[:8]
             )
             parts.append(f"**Key Components**:\n{comps}")
 

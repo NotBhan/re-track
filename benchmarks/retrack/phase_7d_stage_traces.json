@@ -1,0 +1,4629 @@
+{
+  "metadata": {
+    "phase": "Phase 7D \u2014 Retrieval Diagnostics, Failure Attribution & Decision Gate",
+    "timestamp": "2026-08-21T15:22:17Z",
+    "total_tasks": 20,
+    "indexed_files_count": 302,
+    "ast_nodes_count": 120,
+    "ast_edges_count": 63
+  },
+  "experiments": {
+    "exp1_lexical_path_only": {
+      "total_tasks": 20,
+      "passed_tasks": 8,
+      "pass_rate": 0.4,
+      "mean_precision_at_k": 0.217,
+      "mean_recall_at_k": 0.48,
+      "mean_critical_coverage": 0.525,
+      "mean_noise_ratio": 0.006
+    },
+    "exp2_lexical_plus_content": {
+      "total_tasks": 20,
+      "passed_tasks": 8,
+      "pass_rate": 0.4,
+      "mean_precision_at_k": 0.217,
+      "mean_recall_at_k": 0.48,
+      "mean_critical_coverage": 0.525,
+      "mean_noise_ratio": 0.006
+    },
+    "exp3_staged_with_ast_top8": {
+      "total_tasks": 20,
+      "passed_tasks": 8,
+      "pass_rate": 0.4,
+      "mean_precision_at_k": 0.217,
+      "mean_recall_at_k": 0.48,
+      "mean_critical_coverage": 0.525,
+      "mean_noise_ratio": 0.006
+    },
+    "exp4_staged_with_ast_top15": {
+      "total_tasks": 20,
+      "passed_tasks": 8,
+      "pass_rate": 0.4,
+      "mean_precision_at_k": 0.198,
+      "mean_recall_at_k": 0.499,
+      "mean_critical_coverage": 0.533,
+      "mean_noise_ratio": 0.005
+    }
+  },
+  "candidate_distribution": {
+    "source_code": {
+      "count": 147,
+      "percentage": 75.8
+    },
+    "tests": {
+      "count": 24,
+      "percentage": 12.4
+    },
+    "documentation": {
+      "count": 11,
+      "percentage": 5.7
+    },
+    "benchmark_data": {
+      "count": 6,
+      "percentage": 3.1
+    },
+    "config_or_other": {
+      "count": 6,
+      "percentage": 3.1
+    }
+  },
+  "ast_coverage_audit": [
+    {
+      "task_id": "TASK-ARCH-01",
+      "category": "architecture",
+      "expected_files_ast": [
+        {
+          "file": "backend/app/application/container.py",
+          "node_count": 0,
+          "outgoing_call_edges": 0,
+          "incoming_call_edges": 0,
+          "has_ast_representation": false
+        },
+        {
+          "file": "backend/app/server.py",
+          "node_count": 2,
+          "outgoing_call_edges": 0,
+          "incoming_call_edges": 0,
+          "has_ast_representation": true
+        },
+        {
+          "file": "backend/app/application/use_cases/context.py",
+          "node_count": 0,
+          "outgoing_call_edges": 0,
+          "incoming_call_edges": 0,
+          "has_ast_representation": false
+        },
+        {
+          "file": "backend/app/application/use_cases/indexing.py",
+          "node_count": 0,
+          "outgoing_call_edges": 0,
+          "incoming_call_edges": 0,
+          "has_ast_representation": false
+        },
+        {
+          "file": "backend/app/config/settings.py",
+          "node_count": 16,
+          "outgoing_call_edges": 4,
+          "incoming_call_edges": 3,
+          "has_ast_representation": true
+        }
+      ]
+    },
+    {
+      "task_id": "TASK-ARCH-02",
+      "category": "architecture",
+      "expected_files_ast": [
+        {
+          "file": "backend/app/services/repository_metadata_store.py",
+          "node_count": 0,
+          "outgoing_call_edges": 0,
+          "incoming_call_edges": 0,
+          "has_ast_representation": false
+        },
+        {
+          "file": "backend/app/services/repository_manager.py",
+          "node_count": 0,
+          "outgoing_call_edges": 0,
+          "incoming_call_edges": 0,
+          "has_ast_representation": false
+        },
+        {
+          "file": "backend/app/services/context_package_repository.py",
+          "node_count": 0,
+          "outgoing_call_edges": 0,
+          "incoming_call_edges": 0,
+          "has_ast_representation": false
+        },
+        {
+          "file": "backend/app/services/manifest_service.py",
+          "node_count": 0,
+          "outgoing_call_edges": 0,
+          "incoming_call_edges": 0,
+          "has_ast_representation": false
+        },
+        {
+          "file": "backend/app/config/settings.py",
+          "node_count": 16,
+          "outgoing_call_edges": 4,
+          "incoming_call_edges": 3,
+          "has_ast_representation": true
+        }
+      ]
+    },
+    {
+      "task_id": "TASK-ARCH-03",
+      "category": "architecture",
+      "expected_files_ast": [
+        {
+          "file": "backend/app/application/ports/memory.py",
+          "node_count": 0,
+          "outgoing_call_edges": 0,
+          "incoming_call_edges": 0,
+          "has_ast_representation": false
+        },
+        {
+          "file": "backend/app/application/domain/memory.py",
+          "node_count": 0,
+          "outgoing_call_edges": 0,
+          "incoming_call_edges": 0,
+          "has_ast_representation": false
+        },
+        {
+          "file": "backend/app/services/cognee_service.py",
+          "node_count": 0,
+          "outgoing_call_edges": 0,
+          "incoming_call_edges": 0,
+          "has_ast_representation": false
+        },
+        {
+          "file": "backend/app/application/use_cases/memory.py",
+          "node_count": 0,
+          "outgoing_call_edges": 0,
+          "incoming_call_edges": 0,
+          "has_ast_representation": false
+        }
+      ]
+    },
+    {
+      "task_id": "TASK-ARCH-04",
+      "category": "architecture",
+      "expected_files_ast": [
+        {
+          "file": "backend/app/api/routers/__init__.py",
+          "node_count": 0,
+          "outgoing_call_edges": 0,
+          "incoming_call_edges": 0,
+          "has_ast_representation": false
+        },
+        {
+          "file": "backend/app/api/routers/context.py",
+          "node_count": 5,
+          "outgoing_call_edges": 0,
+          "incoming_call_edges": 0,
+          "has_ast_representation": true
+        },
+        {
+          "file": "backend/app/api/routers/repositories.py",
+          "node_count": 9,
+          "outgoing_call_edges": 0,
+          "incoming_call_edges": 0,
+          "has_ast_representation": true
+        },
+        {
+          "file": "backend/app/api/routers/memory.py",
+          "node_count": 8,
+          "outgoing_call_edges": 0,
+          "incoming_call_edges": 0,
+          "has_ast_representation": true
+        },
+        {
+          "file": "backend/app/application/container.py",
+          "node_count": 0,
+          "outgoing_call_edges": 0,
+          "incoming_call_edges": 0,
+          "has_ast_representation": false
+        },
+        {
+          "file": "backend/app/server.py",
+          "node_count": 2,
+          "outgoing_call_edges": 0,
+          "incoming_call_edges": 0,
+          "has_ast_representation": true
+        }
+      ]
+    },
+    {
+      "task_id": "TASK-ARCH-05",
+      "category": "architecture",
+      "expected_files_ast": [
+        {
+          "file": "backend/app/services/indexing_service.py",
+          "node_count": 0,
+          "outgoing_call_edges": 0,
+          "incoming_call_edges": 0,
+          "has_ast_representation": false
+        },
+        {
+          "file": "backend/app/services/context_service.py",
+          "node_count": 0,
+          "outgoing_call_edges": 0,
+          "incoming_call_edges": 0,
+          "has_ast_representation": false
+        },
+        {
+          "file": "backend/app/services/package_builder.py",
+          "node_count": 0,
+          "outgoing_call_edges": 0,
+          "incoming_call_edges": 0,
+          "has_ast_representation": false
+        },
+        {
+          "file": "backend/app/services/cognee_service.py",
+          "node_count": 0,
+          "outgoing_call_edges": 0,
+          "incoming_call_edges": 0,
+          "has_ast_representation": false
+        },
+        {
+          "file": "backend/app/application/use_cases/context.py",
+          "node_count": 0,
+          "outgoing_call_edges": 0,
+          "incoming_call_edges": 0,
+          "has_ast_representation": false
+        }
+      ]
+    },
+    {
+      "task_id": "TASK-BUG-01",
+      "category": "bug_localization",
+      "expected_files_ast": [
+        {
+          "file": "backend/app/services/repository_manager.py",
+          "node_count": 0,
+          "outgoing_call_edges": 0,
+          "incoming_call_edges": 0,
+          "has_ast_representation": false
+        },
+        {
+          "file": "backend/app/services/repository_metadata_store.py",
+          "node_count": 0,
+          "outgoing_call_edges": 0,
+          "incoming_call_edges": 0,
+          "has_ast_representation": false
+        }
+      ]
+    },
+    {
+      "task_id": "TASK-BUG-02",
+      "category": "bug_localization",
+      "expected_files_ast": [
+        {
+          "file": "backend/app/services/context_cache.py",
+          "node_count": 0,
+          "outgoing_call_edges": 0,
+          "incoming_call_edges": 0,
+          "has_ast_representation": false
+        },
+        {
+          "file": "backend/app/application/use_cases/context.py",
+          "node_count": 0,
+          "outgoing_call_edges": 0,
+          "incoming_call_edges": 0,
+          "has_ast_representation": false
+        },
+        {
+          "file": "backend/app/services/manifest_service.py",
+          "node_count": 0,
+          "outgoing_call_edges": 0,
+          "incoming_call_edges": 0,
+          "has_ast_representation": false
+        }
+      ]
+    },
+    {
+      "task_id": "TASK-BUG-03",
+      "category": "bug_localization",
+      "expected_files_ast": [
+        {
+          "file": "backend/app/services/budget_manager.py",
+          "node_count": 0,
+          "outgoing_call_edges": 0,
+          "incoming_call_edges": 0,
+          "has_ast_representation": false
+        },
+        {
+          "file": "backend/app/services/package_builder.py",
+          "node_count": 0,
+          "outgoing_call_edges": 0,
+          "incoming_call_edges": 0,
+          "has_ast_representation": false
+        }
+      ]
+    },
+    {
+      "task_id": "TASK-BUG-04",
+      "category": "bug_localization",
+      "expected_files_ast": [
+        {
+          "file": "backend/app/application/use_cases/context.py",
+          "node_count": 0,
+          "outgoing_call_edges": 0,
+          "incoming_call_edges": 0,
+          "has_ast_representation": false
+        },
+        {
+          "file": "backend/app/application/container.py",
+          "node_count": 0,
+          "outgoing_call_edges": 0,
+          "incoming_call_edges": 0,
+          "has_ast_representation": false
+        }
+      ]
+    },
+    {
+      "task_id": "TASK-BUG-05",
+      "category": "bug_localization",
+      "expected_files_ast": [
+        {
+          "file": "backend/app/services/llm_provider_service.py",
+          "node_count": 0,
+          "outgoing_call_edges": 0,
+          "incoming_call_edges": 0,
+          "has_ast_representation": false
+        },
+        {
+          "file": "backend/app/application/use_cases/context.py",
+          "node_count": 0,
+          "outgoing_call_edges": 0,
+          "incoming_call_edges": 0,
+          "has_ast_representation": false
+        },
+        {
+          "file": "backend/app/services/context_service.py",
+          "node_count": 0,
+          "outgoing_call_edges": 0,
+          "incoming_call_edges": 0,
+          "has_ast_representation": false
+        }
+      ]
+    },
+    {
+      "task_id": "TASK-FEAT-01",
+      "category": "feature_addition",
+      "expected_files_ast": [
+        {
+          "file": "backend/app/application/ports/__init__.py",
+          "node_count": 0,
+          "outgoing_call_edges": 0,
+          "incoming_call_edges": 0,
+          "has_ast_representation": false
+        },
+        {
+          "file": "backend/app/application/container.py",
+          "node_count": 0,
+          "outgoing_call_edges": 0,
+          "incoming_call_edges": 0,
+          "has_ast_representation": false
+        },
+        {
+          "file": "backend/app/application/use_cases/context.py",
+          "node_count": 0,
+          "outgoing_call_edges": 0,
+          "incoming_call_edges": 0,
+          "has_ast_representation": false
+        }
+      ]
+    },
+    {
+      "task_id": "TASK-FEAT-02",
+      "category": "feature_addition",
+      "expected_files_ast": [
+        {
+          "file": "backend/app/services/indexing_service.py",
+          "node_count": 0,
+          "outgoing_call_edges": 0,
+          "incoming_call_edges": 0,
+          "has_ast_representation": false
+        }
+      ]
+    },
+    {
+      "task_id": "TASK-FEAT-03",
+      "category": "feature_addition",
+      "expected_files_ast": [
+        {
+          "file": "backend/app/services/pipeline/categorization.py",
+          "node_count": 0,
+          "outgoing_call_edges": 0,
+          "incoming_call_edges": 0,
+          "has_ast_representation": false
+        },
+        {
+          "file": "backend/app/services/package_builder.py",
+          "node_count": 0,
+          "outgoing_call_edges": 0,
+          "incoming_call_edges": 0,
+          "has_ast_representation": false
+        }
+      ]
+    },
+    {
+      "task_id": "TASK-FEAT-04",
+      "category": "feature_addition",
+      "expected_files_ast": [
+        {
+          "file": "backend/app/application/domain/intent.py",
+          "node_count": 0,
+          "outgoing_call_edges": 0,
+          "incoming_call_edges": 0,
+          "has_ast_representation": false
+        },
+        {
+          "file": "backend/app/services/intent_parser.py",
+          "node_count": 0,
+          "outgoing_call_edges": 0,
+          "incoming_call_edges": 0,
+          "has_ast_representation": false
+        }
+      ]
+    },
+    {
+      "task_id": "TASK-FEAT-05",
+      "category": "feature_addition",
+      "expected_files_ast": [
+        {
+          "file": "backend/app/api/routers/packages.py",
+          "node_count": 6,
+          "outgoing_call_edges": 0,
+          "incoming_call_edges": 0,
+          "has_ast_representation": true
+        },
+        {
+          "file": "backend/app/application/use_cases/context_packages.py",
+          "node_count": 0,
+          "outgoing_call_edges": 0,
+          "incoming_call_edges": 0,
+          "has_ast_representation": false
+        },
+        {
+          "file": "backend/app/services/context_package_repository.py",
+          "node_count": 0,
+          "outgoing_call_edges": 0,
+          "incoming_call_edges": 0,
+          "has_ast_representation": false
+        },
+        {
+          "file": "backend/app/application/dto/packages.py",
+          "node_count": 0,
+          "outgoing_call_edges": 0,
+          "incoming_call_edges": 0,
+          "has_ast_representation": false
+        }
+      ]
+    },
+    {
+      "task_id": "TASK-REFAC-01",
+      "category": "refactoring",
+      "expected_files_ast": [
+        {
+          "file": "backend/app/application/container.py",
+          "node_count": 0,
+          "outgoing_call_edges": 0,
+          "incoming_call_edges": 0,
+          "has_ast_representation": false
+        },
+        {
+          "file": "backend/app/server.py",
+          "node_count": 2,
+          "outgoing_call_edges": 0,
+          "incoming_call_edges": 0,
+          "has_ast_representation": true
+        },
+        {
+          "file": "backend/app/api/commands.py",
+          "node_count": 36,
+          "outgoing_call_edges": 37,
+          "incoming_call_edges": 36,
+          "has_ast_representation": true
+        }
+      ]
+    },
+    {
+      "task_id": "TASK-REFAC-02",
+      "category": "refactoring",
+      "expected_files_ast": [
+        {
+          "file": "backend/app/application/dto/__init__.py",
+          "node_count": 0,
+          "outgoing_call_edges": 0,
+          "incoming_call_edges": 0,
+          "has_ast_representation": false
+        },
+        {
+          "file": "backend/app/application/dto/context.py",
+          "node_count": 0,
+          "outgoing_call_edges": 0,
+          "incoming_call_edges": 0,
+          "has_ast_representation": false
+        },
+        {
+          "file": "backend/app/api/schemas.py",
+          "node_count": 0,
+          "outgoing_call_edges": 0,
+          "incoming_call_edges": 0,
+          "has_ast_representation": false
+        },
+        {
+          "file": "backend/app/application/use_cases/context.py",
+          "node_count": 0,
+          "outgoing_call_edges": 0,
+          "incoming_call_edges": 0,
+          "has_ast_representation": false
+        }
+      ]
+    },
+    {
+      "task_id": "TASK-REFAC-03",
+      "category": "refactoring",
+      "expected_files_ast": [
+        {
+          "file": "backend/app/services/repository_summary.py",
+          "node_count": 0,
+          "outgoing_call_edges": 0,
+          "incoming_call_edges": 0,
+          "has_ast_representation": false
+        },
+        {
+          "file": "backend/app/services/cgc_service.py",
+          "node_count": 0,
+          "outgoing_call_edges": 0,
+          "incoming_call_edges": 0,
+          "has_ast_representation": false
+        },
+        {
+          "file": "backend/app/models/responses.py",
+          "node_count": 5,
+          "outgoing_call_edges": 0,
+          "incoming_call_edges": 0,
+          "has_ast_representation": true
+        }
+      ]
+    },
+    {
+      "task_id": "TASK-REFAC-04",
+      "category": "refactoring",
+      "expected_files_ast": [
+        {
+          "file": "backend/app/services/package_builder.py",
+          "node_count": 0,
+          "outgoing_call_edges": 0,
+          "incoming_call_edges": 0,
+          "has_ast_representation": false
+        },
+        {
+          "file": "backend/app/services/pipeline/dedup.py",
+          "node_count": 0,
+          "outgoing_call_edges": 0,
+          "incoming_call_edges": 0,
+          "has_ast_representation": false
+        },
+        {
+          "file": "backend/app/services/pipeline/ranking.py",
+          "node_count": 0,
+          "outgoing_call_edges": 0,
+          "incoming_call_edges": 0,
+          "has_ast_representation": false
+        },
+        {
+          "file": "backend/app/services/pipeline/compression.py",
+          "node_count": 0,
+          "outgoing_call_edges": 0,
+          "incoming_call_edges": 0,
+          "has_ast_representation": false
+        },
+        {
+          "file": "backend/app/services/pipeline/categorization.py",
+          "node_count": 0,
+          "outgoing_call_edges": 0,
+          "incoming_call_edges": 0,
+          "has_ast_representation": false
+        },
+        {
+          "file": "backend/app/services/budget_manager.py",
+          "node_count": 0,
+          "outgoing_call_edges": 0,
+          "incoming_call_edges": 0,
+          "has_ast_representation": false
+        },
+        {
+          "file": "backend/app/services/pipeline/references.py",
+          "node_count": 0,
+          "outgoing_call_edges": 0,
+          "incoming_call_edges": 0,
+          "has_ast_representation": false
+        },
+        {
+          "file": "backend/app/services/renderer.py",
+          "node_count": 0,
+          "outgoing_call_edges": 0,
+          "incoming_call_edges": 0,
+          "has_ast_representation": false
+        }
+      ]
+    },
+    {
+      "task_id": "TASK-REFAC-05",
+      "category": "refactoring",
+      "expected_files_ast": [
+        {
+          "file": "backend/app/services/hardware_telemetry.py",
+          "node_count": 0,
+          "outgoing_call_edges": 0,
+          "incoming_call_edges": 0,
+          "has_ast_representation": false
+        },
+        {
+          "file": "backend/app/application/ports/hardware_telemetry.py",
+          "node_count": 0,
+          "outgoing_call_edges": 0,
+          "incoming_call_edges": 0,
+          "has_ast_representation": false
+        },
+        {
+          "file": "backend/app/application/use_cases/system.py",
+          "node_count": 0,
+          "outgoing_call_edges": 0,
+          "incoming_call_edges": 0,
+          "has_ast_representation": false
+        }
+      ]
+    }
+  ],
+  "per_task_traces": [
+    {
+      "task_id": "TASK-ARCH-01",
+      "category": "architecture",
+      "prompt": "How is the backend structured and how does the composition root initialize use cases and infrastructure services?",
+      "verdict": "FAIL",
+      "precision_at_k": 0.3,
+      "recall_at_k": 0.6,
+      "critical_coverage": 0.0,
+      "noise_ratio": 0.0,
+      "failure_category": "Ranking Failure (expected files generated in S1 but ranked below cutoff)",
+      "failure_reasons": [
+        "Missing critical files: ['backend/app/application/container.py', 'backend/app/server.py']",
+        "Missing critical symbols: ['ApplicationContainer', 'create']"
+      ],
+      "latency_breakdown_ms": {
+        "intent_extraction": 0.56,
+        "term_normalization": 0.1,
+        "stage1_metadata_scoring": 16.39,
+        "stage2_content_inspection": 58.71,
+        "stage3_confidence_filtering": 0.0,
+        "stage4_ast_expansion": 0.21,
+        "total_e2e_latency": 576.39
+      },
+      "intent_extracted_symbols": [],
+      "intent_file_hints": [],
+      "search_terms": [
+        "structur",
+        "structure",
+        "composi",
+        "composite",
+        "cas",
+        "servic",
+        "backend",
+        "structured",
+        "composition",
+        "root",
+        "initialize",
+        "use",
+        "cases",
+        "infrastructure",
+        "services"
+      ],
+      "expected_file_traces": [
+        {
+          "expected_file": "backend/app/application/container.py",
+          "is_critical": true,
+          "in_s1_pool": true,
+          "s1_rank": 101,
+          "s1_score": 22.0,
+          "in_s1_top25": false,
+          "s2_rank": null,
+          "s2_score": 0.0,
+          "in_s3_filtered": false,
+          "in_s3_top8": false,
+          "in_s3_top15": false,
+          "in_ast_expanded": false,
+          "in_final_retrieved": false,
+          "loss_stage": "Stage 1 -> Stage 2 Truncation (Rank 101 > 25)"
+        },
+        {
+          "expected_file": "backend/app/server.py",
+          "is_critical": true,
+          "in_s1_pool": true,
+          "s1_rank": 107,
+          "s1_score": 22.0,
+          "in_s1_top25": false,
+          "s2_rank": null,
+          "s2_score": 0.0,
+          "in_s3_filtered": false,
+          "in_s3_top8": false,
+          "in_s3_top15": false,
+          "in_ast_expanded": false,
+          "in_final_retrieved": false,
+          "loss_stage": "Stage 1 -> Stage 2 Truncation (Rank 107 > 25)"
+        },
+        {
+          "expected_file": "backend/app/application/use_cases/context.py",
+          "is_critical": false,
+          "in_s1_pool": true,
+          "s1_rank": 2,
+          "s1_score": 94.0,
+          "in_s1_top25": true,
+          "s2_rank": 5,
+          "s2_score": 110.0,
+          "in_s3_filtered": true,
+          "in_s3_top8": true,
+          "in_s3_top15": true,
+          "in_ast_expanded": false,
+          "in_final_retrieved": true,
+          "loss_stage": "RETAINED"
+        },
+        {
+          "expected_file": "backend/app/application/use_cases/indexing.py",
+          "is_critical": false,
+          "in_s1_pool": true,
+          "s1_rank": 3,
+          "s1_score": 94.0,
+          "in_s1_top25": true,
+          "s2_rank": 8,
+          "s2_score": 102.0,
+          "in_s3_filtered": true,
+          "in_s3_top8": true,
+          "in_s3_top15": true,
+          "in_ast_expanded": false,
+          "in_final_retrieved": true,
+          "loss_stage": "RETAINED"
+        },
+        {
+          "expected_file": "backend/app/config/settings.py",
+          "is_critical": false,
+          "in_s1_pool": true,
+          "s1_rank": 89,
+          "s1_score": 22.0,
+          "in_s1_top25": false,
+          "s2_rank": null,
+          "s2_score": 0.0,
+          "in_s3_filtered": false,
+          "in_s3_top8": false,
+          "in_s3_top15": false,
+          "in_ast_expanded": false,
+          "in_final_retrieved": true,
+          "loss_stage": "RETAINED"
+        }
+      ],
+      "symbol_traces": [
+        {
+          "symbol": "ApplicationContainer",
+          "is_critical": true,
+          "in_intent": false,
+          "in_search_terms": false,
+          "in_ast_extracted": false,
+          "in_final_markdown": false
+        },
+        {
+          "symbol": "create",
+          "is_critical": true,
+          "in_intent": false,
+          "in_search_terms": false,
+          "in_ast_extracted": false,
+          "in_final_markdown": false
+        },
+        {
+          "symbol": "get_container",
+          "is_critical": false,
+          "in_intent": false,
+          "in_search_terms": false,
+          "in_ast_extracted": false,
+          "in_final_markdown": true
+        },
+        {
+          "symbol": "lifespan",
+          "is_critical": false,
+          "in_intent": false,
+          "in_search_terms": false,
+          "in_ast_extracted": false,
+          "in_final_markdown": false
+        }
+      ],
+      "competing_irrelevant_files": [
+        {
+          "file": "backend/tests/test_phase_6_composition_and_routers.py",
+          "type": "tests",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/app/services/benchmark_service.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/app/services/cognee_service.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/app/services/indexing_service.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/app/application/use_cases/__init__.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/app/application/use_cases/system.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/app/api/routers/system.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        }
+      ],
+      "retrieved_files": [
+        "backend/tests/test_phase_6_composition_and_routers.py",
+        "backend/app/services/benchmark_service.py",
+        "backend/app/services/cognee_service.py",
+        "backend/app/services/indexing_service.py",
+        "backend/app/application/use_cases/context.py",
+        "backend/app/application/use_cases/__init__.py",
+        "backend/app/application/use_cases/system.py",
+        "backend/app/application/use_cases/indexing.py",
+        "backend/app/api/routers/system.py",
+        "backend/app/config/settings.py"
+      ]
+    },
+    {
+      "task_id": "TASK-ARCH-02",
+      "category": "architecture",
+      "prompt": "How does RE:Track enforce the dual-path storage contract between canonical ~/.retrack/ and legacy read-only ~/.andes/?",
+      "verdict": "FAIL",
+      "precision_at_k": 0.1,
+      "recall_at_k": 0.2,
+      "critical_coverage": 0.5,
+      "noise_ratio": 0.0,
+      "failure_category": "Candidate Generation Failure (0 expected files generated in S1)",
+      "failure_reasons": [
+        "Missing critical files: ['backend/app/services/repository_metadata_store.py', 'backend/app/services/repository_manager.py']",
+        "Low recall (0.20 < 0.40)"
+      ],
+      "latency_breakdown_ms": {
+        "intent_extraction": 0.04,
+        "term_normalization": 0.03,
+        "stage1_metadata_scoring": 16.67,
+        "stage2_content_inspection": 28.44,
+        "stage3_confidence_filtering": 0.01,
+        "stage4_ast_expansion": 0.21,
+        "total_e2e_latency": 313.35
+      },
+      "intent_extracted_symbols": [],
+      "intent_file_hints": [],
+      "search_terms": [
+        "RE:Track",
+        "enforce",
+        "dual-path",
+        "storage",
+        "contract",
+        "between",
+        "canonical",
+        "retrack",
+        "legacy",
+        "read-only",
+        "andes"
+      ],
+      "expected_file_traces": [
+        {
+          "expected_file": "backend/app/services/repository_metadata_store.py",
+          "is_critical": true,
+          "in_s1_pool": false,
+          "s1_rank": null,
+          "s1_score": 0.0,
+          "in_s1_top25": false,
+          "s2_rank": null,
+          "s2_score": 0.0,
+          "in_s3_filtered": false,
+          "in_s3_top8": false,
+          "in_s3_top15": false,
+          "in_ast_expanded": false,
+          "in_final_retrieved": false,
+          "loss_stage": "Stage 1 Candidate Generation (Zero Path/Stem Match)"
+        },
+        {
+          "expected_file": "backend/app/services/repository_manager.py",
+          "is_critical": true,
+          "in_s1_pool": false,
+          "s1_rank": null,
+          "s1_score": 0.0,
+          "in_s1_top25": false,
+          "s2_rank": null,
+          "s2_score": 0.0,
+          "in_s3_filtered": false,
+          "in_s3_top8": false,
+          "in_s3_top15": false,
+          "in_ast_expanded": false,
+          "in_final_retrieved": false,
+          "loss_stage": "Stage 1 Candidate Generation (Zero Path/Stem Match)"
+        },
+        {
+          "expected_file": "backend/app/services/context_package_repository.py",
+          "is_critical": false,
+          "in_s1_pool": false,
+          "s1_rank": null,
+          "s1_score": 0.0,
+          "in_s1_top25": false,
+          "s2_rank": null,
+          "s2_score": 0.0,
+          "in_s3_filtered": false,
+          "in_s3_top8": false,
+          "in_s3_top15": false,
+          "in_ast_expanded": false,
+          "in_final_retrieved": false,
+          "loss_stage": "Stage 1 Candidate Generation (Zero Path/Stem Match)"
+        },
+        {
+          "expected_file": "backend/app/services/manifest_service.py",
+          "is_critical": false,
+          "in_s1_pool": false,
+          "s1_rank": null,
+          "s1_score": 0.0,
+          "in_s1_top25": false,
+          "s2_rank": null,
+          "s2_score": 0.0,
+          "in_s3_filtered": false,
+          "in_s3_top8": false,
+          "in_s3_top15": false,
+          "in_ast_expanded": false,
+          "in_final_retrieved": false,
+          "loss_stage": "Stage 1 Candidate Generation (Zero Path/Stem Match)"
+        },
+        {
+          "expected_file": "backend/app/config/settings.py",
+          "is_critical": false,
+          "in_s1_pool": false,
+          "s1_rank": null,
+          "s1_score": 0.0,
+          "in_s1_top25": false,
+          "s2_rank": null,
+          "s2_score": 0.0,
+          "in_s3_filtered": false,
+          "in_s3_top8": false,
+          "in_s3_top15": false,
+          "in_ast_expanded": false,
+          "in_final_retrieved": true,
+          "loss_stage": "RETAINED"
+        }
+      ],
+      "symbol_traces": [
+        {
+          "symbol": "RepositoryMetadataStore",
+          "is_critical": true,
+          "in_intent": false,
+          "in_search_terms": false,
+          "in_ast_extracted": false,
+          "in_final_markdown": true
+        },
+        {
+          "symbol": "RepositoryManager",
+          "is_critical": true,
+          "in_intent": false,
+          "in_search_terms": false,
+          "in_ast_extracted": false,
+          "in_final_markdown": true
+        },
+        {
+          "symbol": "_resolve_read_path",
+          "is_critical": false,
+          "in_intent": false,
+          "in_search_terms": false,
+          "in_ast_extracted": false,
+          "in_final_markdown": true
+        },
+        {
+          "symbol": "ensure_directories",
+          "is_critical": false,
+          "in_intent": false,
+          "in_search_terms": false,
+          "in_ast_extracted": false,
+          "in_final_markdown": true
+        }
+      ],
+      "competing_irrelevant_files": [
+        {
+          "file": "backend/tests/test_storage_compatibility.py",
+          "type": "tests",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "benchmarks/retrack/golden_tasks.json",
+          "type": "benchmark_data",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "benchmarks/retrack/expected_files.json",
+          "type": "benchmark_data",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "benchmarks/retrack/expected_symbols.json",
+          "type": "benchmark_data",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "src/components/settings/StorageSettings.tsx",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/retrack.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/app/api/routers/system.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/app/models/context_package.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/app/models/errors.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        }
+      ],
+      "retrieved_files": [
+        "backend/tests/test_storage_compatibility.py",
+        "benchmarks/retrack/golden_tasks.json",
+        "benchmarks/retrack/expected_files.json",
+        "benchmarks/retrack/expected_symbols.json",
+        "src/components/settings/StorageSettings.tsx",
+        "backend/retrack.py",
+        "backend/app/api/routers/system.py",
+        "backend/app/config/settings.py",
+        "backend/app/models/context_package.py",
+        "backend/app/models/errors.py"
+      ]
+    },
+    {
+      "task_id": "TASK-ARCH-03",
+      "category": "architecture",
+      "prompt": "How are MemoryPort capabilities segregated into granular protocols and what domain models represent memory datasets?",
+      "verdict": "PASS",
+      "precision_at_k": 0.3,
+      "recall_at_k": 0.75,
+      "critical_coverage": 1.0,
+      "noise_ratio": 0.0,
+      "failure_category": "PASS",
+      "failure_reasons": [],
+      "latency_breakdown_ms": {
+        "intent_extraction": 0.04,
+        "term_normalization": 0.13,
+        "stage1_metadata_scoring": 17.43,
+        "stage2_content_inspection": 54.57,
+        "stage3_confidence_filtering": 0.0,
+        "stage4_ast_expansion": 0.21,
+        "total_e2e_latency": 2367.69
+      },
+      "intent_extracted_symbols": [
+        "MemoryPort"
+      ],
+      "intent_file_hints": [],
+      "search_terms": [
+        "MemoryPort",
+        "Memory",
+        "Port",
+        "capability",
+        "segregat",
+        "segregate",
+        "protocol",
+        "model",
+        "dataset",
+        "capabilities",
+        "segregated",
+        "granular",
+        "protocols",
+        "domain",
+        "models",
+        "represent",
+        "memory",
+        "datasets"
+      ],
+      "expected_file_traces": [
+        {
+          "expected_file": "backend/app/application/ports/memory.py",
+          "is_critical": true,
+          "in_s1_pool": true,
+          "s1_rank": 3,
+          "s1_score": 67.0,
+          "in_s1_top25": true,
+          "s2_rank": 1,
+          "s2_score": 178.0,
+          "in_s3_filtered": true,
+          "in_s3_top8": true,
+          "in_s3_top15": true,
+          "in_ast_expanded": false,
+          "in_final_retrieved": true,
+          "loss_stage": "RETAINED"
+        },
+        {
+          "expected_file": "backend/app/application/domain/memory.py",
+          "is_critical": true,
+          "in_s1_pool": true,
+          "s1_rank": 2,
+          "s1_score": 67.0,
+          "in_s1_top25": true,
+          "s2_rank": 4,
+          "s2_score": 123.0,
+          "in_s3_filtered": true,
+          "in_s3_top8": true,
+          "in_s3_top15": true,
+          "in_ast_expanded": false,
+          "in_final_retrieved": true,
+          "loss_stage": "RETAINED"
+        },
+        {
+          "expected_file": "backend/app/services/cognee_service.py",
+          "is_critical": false,
+          "in_s1_pool": false,
+          "s1_rank": null,
+          "s1_score": 0.0,
+          "in_s1_top25": false,
+          "s2_rank": null,
+          "s2_score": 0.0,
+          "in_s3_filtered": false,
+          "in_s3_top8": false,
+          "in_s3_top15": false,
+          "in_ast_expanded": false,
+          "in_final_retrieved": false,
+          "loss_stage": "Stage 1 Candidate Generation (Zero Path/Stem Match)"
+        },
+        {
+          "expected_file": "backend/app/application/use_cases/memory.py",
+          "is_critical": false,
+          "in_s1_pool": true,
+          "s1_rank": 16,
+          "s1_score": 39.0,
+          "in_s1_top25": true,
+          "s2_rank": 6,
+          "s2_score": 111.0,
+          "in_s3_filtered": true,
+          "in_s3_top8": true,
+          "in_s3_top15": true,
+          "in_ast_expanded": false,
+          "in_final_retrieved": true,
+          "loss_stage": "RETAINED"
+        }
+      ],
+      "symbol_traces": [
+        {
+          "symbol": "MemoryLifecyclePort",
+          "is_critical": true,
+          "in_intent": false,
+          "in_search_terms": false,
+          "in_ast_extracted": false,
+          "in_final_markdown": true
+        },
+        {
+          "symbol": "MemoryIngestionPort",
+          "is_critical": false,
+          "in_intent": false,
+          "in_search_terms": false,
+          "in_ast_extracted": false,
+          "in_final_markdown": false
+        },
+        {
+          "symbol": "MemoryRetrievalPort",
+          "is_critical": false,
+          "in_intent": false,
+          "in_search_terms": false,
+          "in_ast_extracted": false,
+          "in_final_markdown": false
+        },
+        {
+          "symbol": "MemoryDatasetPort",
+          "is_critical": false,
+          "in_intent": false,
+          "in_search_terms": false,
+          "in_ast_extracted": false,
+          "in_final_markdown": true
+        },
+        {
+          "symbol": "MemoryTopologyPort",
+          "is_critical": false,
+          "in_intent": false,
+          "in_search_terms": false,
+          "in_ast_extracted": false,
+          "in_final_markdown": false
+        },
+        {
+          "symbol": "MemoryDatasetRecord",
+          "is_critical": true,
+          "in_intent": false,
+          "in_search_terms": false,
+          "in_ast_extracted": false,
+          "in_final_markdown": true
+        },
+        {
+          "symbol": "MemoryGraphRecord",
+          "is_critical": false,
+          "in_intent": false,
+          "in_search_terms": false,
+          "in_ast_extracted": false,
+          "in_final_markdown": true
+        }
+      ],
+      "competing_irrelevant_files": [
+        {
+          "file": "backend/tests/test_domain_refinement.py",
+          "type": "tests",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/tests/test_models.py",
+          "type": "tests",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "references/cognee/datasets.md",
+          "type": "config_or_other",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "src/components/memory/DatasetTable.tsx",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/app/models/responses.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/app/api/routers/system.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/app/config/settings.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        }
+      ],
+      "retrieved_files": [
+        "backend/app/application/ports/memory.py",
+        "backend/tests/test_domain_refinement.py",
+        "backend/tests/test_models.py",
+        "backend/app/application/domain/memory.py",
+        "references/cognee/datasets.md",
+        "backend/app/application/use_cases/memory.py",
+        "src/components/memory/DatasetTable.tsx",
+        "backend/app/models/responses.py",
+        "backend/app/api/routers/system.py",
+        "backend/app/config/settings.py"
+      ]
+    },
+    {
+      "task_id": "TASK-ARCH-04",
+      "category": "architecture",
+      "prompt": "How are FastAPI routes modularized and how do routers access application use cases without direct container coupling?",
+      "verdict": "FAIL",
+      "precision_at_k": 0.2,
+      "recall_at_k": 0.333,
+      "critical_coverage": 0.5,
+      "noise_ratio": 0.0,
+      "failure_category": "Partial Candidate Generation Failure (some expected files not generated in S1)",
+      "failure_reasons": [
+        "Missing critical files: ['backend/app/server.py']",
+        "Missing critical symbols: ['all_routers']",
+        "Low recall (0.33 < 0.40)"
+      ],
+      "latency_breakdown_ms": {
+        "intent_extraction": 0.03,
+        "term_normalization": 0.04,
+        "stage1_metadata_scoring": 18.21,
+        "stage2_content_inspection": 69.36,
+        "stage3_confidence_filtering": 0.01,
+        "stage4_ast_expansion": 0.26,
+        "total_e2e_latency": 2451.76
+      },
+      "intent_extracted_symbols": [
+        "FastAPI"
+      ],
+      "intent_file_hints": [],
+      "search_terms": [
+        "FastAPI",
+        "Fast",
+        "API",
+        "rout",
+        "modulariz",
+        "modularize",
+        "router",
+        "applica",
+        "applicate",
+        "cas",
+        "coupl",
+        "couple",
+        "routes",
+        "modularized",
+        "routers",
+        "access",
+        "application",
+        "use",
+        "cases",
+        "without",
+        "direct",
+        "container",
+        "coupling"
+      ],
+      "expected_file_traces": [
+        {
+          "expected_file": "backend/app/api/routers/__init__.py",
+          "is_critical": true,
+          "in_s1_pool": true,
+          "s1_rank": 16,
+          "s1_score": 94.0,
+          "in_s1_top25": true,
+          "s2_rank": 2,
+          "s2_score": 166.0,
+          "in_s3_filtered": true,
+          "in_s3_top8": true,
+          "in_s3_top15": true,
+          "in_ast_expanded": false,
+          "in_final_retrieved": true,
+          "loss_stage": "RETAINED"
+        },
+        {
+          "expected_file": "backend/app/api/routers/context.py",
+          "is_critical": false,
+          "in_s1_pool": true,
+          "s1_rank": 11,
+          "s1_score": 94.0,
+          "in_s1_top25": true,
+          "s2_rank": 9,
+          "s2_score": 142.0,
+          "in_s3_filtered": true,
+          "in_s3_top8": false,
+          "in_s3_top15": true,
+          "in_ast_expanded": false,
+          "in_final_retrieved": false,
+          "loss_stage": "Stage 3 Top-8 Rank Cutoff (S2 Rank 9 > 8)"
+        },
+        {
+          "expected_file": "backend/app/api/routers/repositories.py",
+          "is_critical": false,
+          "in_s1_pool": true,
+          "s1_rank": 10,
+          "s1_score": 94.0,
+          "in_s1_top25": true,
+          "s2_rank": 14,
+          "s2_score": 138.0,
+          "in_s3_filtered": true,
+          "in_s3_top8": false,
+          "in_s3_top15": true,
+          "in_ast_expanded": false,
+          "in_final_retrieved": false,
+          "loss_stage": "Stage 3 Top-8 Rank Cutoff (S2 Rank 14 > 8)"
+        },
+        {
+          "expected_file": "backend/app/api/routers/memory.py",
+          "is_critical": false,
+          "in_s1_pool": true,
+          "s1_rank": 12,
+          "s1_score": 94.0,
+          "in_s1_top25": true,
+          "s2_rank": 15,
+          "s2_score": 134.0,
+          "in_s3_filtered": true,
+          "in_s3_top8": false,
+          "in_s3_top15": true,
+          "in_ast_expanded": false,
+          "in_final_retrieved": false,
+          "loss_stage": "Stage 3 Top-8 Rank Cutoff (S2 Rank 15 > 8)"
+        },
+        {
+          "expected_file": "backend/app/application/container.py",
+          "is_critical": false,
+          "in_s1_pool": true,
+          "s1_rank": 18,
+          "s1_score": 89.0,
+          "in_s1_top25": true,
+          "s2_rank": 3,
+          "s2_score": 165.0,
+          "in_s3_filtered": true,
+          "in_s3_top8": true,
+          "in_s3_top15": true,
+          "in_ast_expanded": false,
+          "in_final_retrieved": true,
+          "loss_stage": "RETAINED"
+        },
+        {
+          "expected_file": "backend/app/server.py",
+          "is_critical": true,
+          "in_s1_pool": false,
+          "s1_rank": null,
+          "s1_score": 0.0,
+          "in_s1_top25": false,
+          "s2_rank": null,
+          "s2_score": 0.0,
+          "in_s3_filtered": false,
+          "in_s3_top8": false,
+          "in_s3_top15": false,
+          "in_ast_expanded": false,
+          "in_final_retrieved": false,
+          "loss_stage": "Stage 1 Candidate Generation (Zero Path/Stem Match)"
+        }
+      ],
+      "symbol_traces": [
+        {
+          "symbol": "all_routers",
+          "is_critical": true,
+          "in_intent": false,
+          "in_search_terms": false,
+          "in_ast_extracted": false,
+          "in_final_markdown": false
+        },
+        {
+          "symbol": "get_context_use_cases",
+          "is_critical": false,
+          "in_intent": false,
+          "in_search_terms": false,
+          "in_ast_extracted": false,
+          "in_final_markdown": false
+        },
+        {
+          "symbol": "get_indexing_use_cases",
+          "is_critical": false,
+          "in_intent": false,
+          "in_search_terms": false,
+          "in_ast_extracted": false,
+          "in_final_markdown": false
+        },
+        {
+          "symbol": "get_container",
+          "is_critical": true,
+          "in_intent": false,
+          "in_search_terms": false,
+          "in_ast_extracted": false,
+          "in_final_markdown": true
+        }
+      ],
+      "competing_irrelevant_files": [
+        {
+          "file": "backend/tests/test_phase_6_composition_and_routers.py",
+          "type": "tests",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/tests/test_application_boundary.py",
+          "type": "tests",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/app/application/use_cases/context.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/app/application/use_cases/__init__.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/app/application/use_cases/repositories.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/app/api/routers/system.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/app/config/settings.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/app/models/context_package.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        }
+      ],
+      "retrieved_files": [
+        "backend/tests/test_phase_6_composition_and_routers.py",
+        "backend/app/api/routers/__init__.py",
+        "backend/app/application/container.py",
+        "backend/tests/test_application_boundary.py",
+        "backend/app/application/use_cases/context.py",
+        "backend/app/application/use_cases/__init__.py",
+        "backend/app/application/use_cases/repositories.py",
+        "backend/app/api/routers/system.py",
+        "backend/app/config/settings.py",
+        "backend/app/models/context_package.py"
+      ]
+    },
+    {
+      "task_id": "TASK-ARCH-05",
+      "category": "architecture",
+      "prompt": "What is the complete data flow from repository indexing to multi-stage Context Package synthesis?",
+      "verdict": "FAIL",
+      "precision_at_k": 0.0,
+      "recall_at_k": 0.0,
+      "critical_coverage": 0.333,
+      "noise_ratio": 0.0,
+      "failure_category": "Partial Candidate Generation Failure (some expected files not generated in S1)",
+      "failure_reasons": [
+        "Missing critical files: ['backend/app/services/indexing_service.py', 'backend/app/services/context_service.py', 'backend/app/services/package_builder.py']",
+        "Missing critical symbols: ['PackageBuilder']",
+        "Low recall (0.00 < 0.40)"
+      ],
+      "latency_breakdown_ms": {
+        "intent_extraction": 0.05,
+        "term_normalization": 0.03,
+        "stage1_metadata_scoring": 17.68,
+        "stage2_content_inspection": 96.65,
+        "stage3_confidence_filtering": 0.01,
+        "stage4_ast_expansion": 0.28,
+        "total_e2e_latency": 478.01
+      },
+      "intent_extracted_symbols": [],
+      "intent_file_hints": [],
+      "search_terms": [
+        "index",
+        "indexe",
+        "synthesi",
+        "complete",
+        "data",
+        "flow",
+        "repository",
+        "indexing",
+        "multi-stage",
+        "Context",
+        "Package",
+        "synthesis"
+      ],
+      "expected_file_traces": [
+        {
+          "expected_file": "backend/app/services/indexing_service.py",
+          "is_critical": true,
+          "in_s1_pool": true,
+          "s1_rank": 9,
+          "s1_score": 64.0,
+          "in_s1_top25": true,
+          "s2_rank": 10,
+          "s2_score": 112.0,
+          "in_s3_filtered": true,
+          "in_s3_top8": false,
+          "in_s3_top15": true,
+          "in_ast_expanded": false,
+          "in_final_retrieved": false,
+          "loss_stage": "Stage 3 Top-8 Rank Cutoff (S2 Rank 10 > 8)"
+        },
+        {
+          "expected_file": "backend/app/services/context_service.py",
+          "is_critical": true,
+          "in_s1_pool": true,
+          "s1_rank": 36,
+          "s1_score": 29.0,
+          "in_s1_top25": false,
+          "s2_rank": null,
+          "s2_score": 0.0,
+          "in_s3_filtered": false,
+          "in_s3_top8": false,
+          "in_s3_top15": false,
+          "in_ast_expanded": false,
+          "in_final_retrieved": false,
+          "loss_stage": "Stage 1 -> Stage 2 Truncation (Rank 36 > 25)"
+        },
+        {
+          "expected_file": "backend/app/services/package_builder.py",
+          "is_critical": true,
+          "in_s1_pool": true,
+          "s1_rank": 37,
+          "s1_score": 29.0,
+          "in_s1_top25": false,
+          "s2_rank": null,
+          "s2_score": 0.0,
+          "in_s3_filtered": false,
+          "in_s3_top8": false,
+          "in_s3_top15": false,
+          "in_ast_expanded": false,
+          "in_final_retrieved": false,
+          "loss_stage": "Stage 1 -> Stage 2 Truncation (Rank 37 > 25)"
+        },
+        {
+          "expected_file": "backend/app/services/cognee_service.py",
+          "is_critical": false,
+          "in_s1_pool": false,
+          "s1_rank": null,
+          "s1_score": 0.0,
+          "in_s1_top25": false,
+          "s2_rank": null,
+          "s2_score": 0.0,
+          "in_s3_filtered": false,
+          "in_s3_top8": false,
+          "in_s3_top15": false,
+          "in_ast_expanded": false,
+          "in_final_retrieved": false,
+          "loss_stage": "Stage 1 Candidate Generation (Zero Path/Stem Match)"
+        },
+        {
+          "expected_file": "backend/app/application/use_cases/context.py",
+          "is_critical": false,
+          "in_s1_pool": true,
+          "s1_rank": 23,
+          "s1_score": 39.0,
+          "in_s1_top25": true,
+          "s2_rank": 16,
+          "s2_score": 91.0,
+          "in_s3_filtered": true,
+          "in_s3_top8": false,
+          "in_s3_top15": false,
+          "in_ast_expanded": false,
+          "in_final_retrieved": false,
+          "loss_stage": "Stage 3 Top-8 Rank Cutoff (S2 Rank 16 > 8)"
+        }
+      ],
+      "symbol_traces": [
+        {
+          "symbol": "IndexingService",
+          "is_critical": true,
+          "in_intent": false,
+          "in_search_terms": false,
+          "in_ast_extracted": false,
+          "in_final_markdown": true
+        },
+        {
+          "symbol": "ContextService",
+          "is_critical": true,
+          "in_intent": false,
+          "in_search_terms": false,
+          "in_ast_extracted": false,
+          "in_final_markdown": true
+        },
+        {
+          "symbol": "PackageBuilder",
+          "is_critical": true,
+          "in_intent": false,
+          "in_search_terms": false,
+          "in_ast_extracted": false,
+          "in_final_markdown": false
+        },
+        {
+          "symbol": "generate_context_package",
+          "is_critical": false,
+          "in_intent": false,
+          "in_search_terms": false,
+          "in_ast_extracted": false,
+          "in_final_markdown": false
+        },
+        {
+          "symbol": "remember",
+          "is_critical": false,
+          "in_intent": false,
+          "in_search_terms": false,
+          "in_ast_extracted": false,
+          "in_final_markdown": false
+        },
+        {
+          "symbol": "recall",
+          "is_critical": false,
+          "in_intent": false,
+          "in_search_terms": false,
+          "in_ast_extracted": false,
+          "in_final_markdown": false
+        }
+      ],
+      "competing_irrelevant_files": [
+        {
+          "file": "docs/compose/plans/2026-06-30-context-package-implementation.md",
+          "type": "documentation",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/app/application/ports/context_package_repository.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/app/services/context_package_repository.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "docs/compose/specs/2026-06-30-context-package-design.md",
+          "type": "documentation",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "src/components/repositories/CreateRepositoryIndexModal.tsx",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/app/application/use_cases/indexing.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "src/components/context-builder/ContextPackageOutputPanel.tsx",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/app/application/use_cases/context_packages.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/app/api/routers/system.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/app/config/settings.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        }
+      ],
+      "retrieved_files": [
+        "docs/compose/plans/2026-06-30-context-package-implementation.md",
+        "backend/app/application/ports/context_package_repository.py",
+        "backend/app/services/context_package_repository.py",
+        "docs/compose/specs/2026-06-30-context-package-design.md",
+        "src/components/repositories/CreateRepositoryIndexModal.tsx",
+        "backend/app/application/use_cases/indexing.py",
+        "src/components/context-builder/ContextPackageOutputPanel.tsx",
+        "backend/app/application/use_cases/context_packages.py",
+        "backend/app/api/routers/system.py",
+        "backend/app/config/settings.py"
+      ]
+    },
+    {
+      "task_id": "TASK-BUG-01",
+      "category": "bug_localization",
+      "prompt": "Where would a bug occur if a repository clone operation accidentally attempted to delete or overwrite legacy ~/.andes/repos/?",
+      "verdict": "FAIL",
+      "precision_at_k": 0.1,
+      "recall_at_k": 0.5,
+      "critical_coverage": 0.0,
+      "noise_ratio": 0.0,
+      "failure_category": "Ranking Failure (expected files generated in S1 but ranked below cutoff)",
+      "failure_reasons": [
+        "Missing critical files: ['backend/app/services/repository_manager.py']",
+        "Missing critical symbols: ['RepositoryManager']"
+      ],
+      "latency_breakdown_ms": {
+        "intent_extraction": 0.03,
+        "term_normalization": 0.04,
+        "stage1_metadata_scoring": 17.65,
+        "stage2_content_inspection": 21.52,
+        "stage3_confidence_filtering": 0.01,
+        "stage4_ast_expansion": 0.22,
+        "total_e2e_latency": 295.64
+      },
+      "intent_extracted_symbols": [],
+      "intent_file_hints": [],
+      "search_terms": [
+        "opera",
+        "operate",
+        "attempt",
+        "attempte",
+        "andes/repo",
+        "would",
+        "bug",
+        "occur",
+        "repository",
+        "clone",
+        "operation",
+        "accidentally",
+        "attempted",
+        "delete",
+        "overwrite",
+        "legacy",
+        "andes/repos"
+      ],
+      "expected_file_traces": [
+        {
+          "expected_file": "backend/app/services/repository_manager.py",
+          "is_critical": true,
+          "in_s1_pool": true,
+          "s1_rank": 8,
+          "s1_score": 29.0,
+          "in_s1_top25": true,
+          "s2_rank": 12,
+          "s2_score": 45.0,
+          "in_s3_filtered": true,
+          "in_s3_top8": false,
+          "in_s3_top15": true,
+          "in_ast_expanded": false,
+          "in_final_retrieved": false,
+          "loss_stage": "Stage 3 Top-8 Rank Cutoff (S2 Rank 12 > 8)"
+        },
+        {
+          "expected_file": "backend/app/services/repository_metadata_store.py",
+          "is_critical": false,
+          "in_s1_pool": true,
+          "s1_rank": 10,
+          "s1_score": 29.0,
+          "in_s1_top25": true,
+          "s2_rank": 1,
+          "s2_score": 73.0,
+          "in_s3_filtered": true,
+          "in_s3_top8": true,
+          "in_s3_top15": true,
+          "in_ast_expanded": false,
+          "in_final_retrieved": true,
+          "loss_stage": "RETAINED"
+        }
+      ],
+      "symbol_traces": [
+        {
+          "symbol": "RepositoryManager",
+          "is_critical": true,
+          "in_intent": false,
+          "in_search_terms": false,
+          "in_ast_extracted": false,
+          "in_final_markdown": false
+        },
+        {
+          "symbol": "delete_repository",
+          "is_critical": false,
+          "in_intent": false,
+          "in_search_terms": false,
+          "in_ast_extracted": false,
+          "in_final_markdown": false
+        },
+        {
+          "symbol": "create_repository",
+          "is_critical": false,
+          "in_intent": false,
+          "in_search_terms": false,
+          "in_ast_extracted": false,
+          "in_final_markdown": false
+        },
+        {
+          "symbol": "_is_legacy_path",
+          "is_critical": false,
+          "in_intent": false,
+          "in_search_terms": false,
+          "in_ast_extracted": false,
+          "in_final_markdown": false
+        }
+      ],
+      "competing_irrelevant_files": [
+        {
+          "file": "backend/app/application/ports/repository_metadata.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/app/application/ports/repository_manager.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/app/models/repository.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "src/types/repository.ts",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "src/components/repositories/RepositoryCard.tsx",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/app/application/domain/repository.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "src/stores/repository-store.ts",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/app/api/routers/system.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/app/config/settings.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        }
+      ],
+      "retrieved_files": [
+        "backend/app/services/repository_metadata_store.py",
+        "backend/app/application/ports/repository_metadata.py",
+        "backend/app/application/ports/repository_manager.py",
+        "backend/app/models/repository.py",
+        "src/types/repository.ts",
+        "src/components/repositories/RepositoryCard.tsx",
+        "backend/app/application/domain/repository.py",
+        "src/stores/repository-store.ts",
+        "backend/app/api/routers/system.py",
+        "backend/app/config/settings.py"
+      ]
+    },
+    {
+      "task_id": "TASK-BUG-02",
+      "category": "bug_localization",
+      "prompt": "Where would an agent context synthesis cache hit fail to invalidate after repository source files change?",
+      "verdict": "PASS",
+      "precision_at_k": 0.2,
+      "recall_at_k": 0.667,
+      "critical_coverage": 0.75,
+      "noise_ratio": 0.0,
+      "failure_category": "PASS",
+      "failure_reasons": [
+        "Missing critical symbols: ['ContextCache']"
+      ],
+      "latency_breakdown_ms": {
+        "intent_extraction": 0.03,
+        "term_normalization": 0.04,
+        "stage1_metadata_scoring": 17.78,
+        "stage2_content_inspection": 34.31,
+        "stage3_confidence_filtering": 0.01,
+        "stage4_ast_expansion": 0.27,
+        "total_e2e_latency": 333.83
+      },
+      "intent_extracted_symbols": [],
+      "intent_file_hints": [],
+      "search_terms": [
+        "synthesi",
+        "fil",
+        "would",
+        "agent",
+        "context",
+        "synthesis",
+        "cache",
+        "hit",
+        "fail",
+        "invalidate",
+        "after",
+        "repository",
+        "source",
+        "files",
+        "change"
+      ],
+      "expected_file_traces": [
+        {
+          "expected_file": "backend/app/services/context_cache.py",
+          "is_critical": true,
+          "in_s1_pool": true,
+          "s1_rank": 6,
+          "s1_score": 64.0,
+          "in_s1_top25": true,
+          "s2_rank": 3,
+          "s2_score": 116.0,
+          "in_s3_filtered": true,
+          "in_s3_top8": true,
+          "in_s3_top15": true,
+          "in_ast_expanded": false,
+          "in_final_retrieved": true,
+          "loss_stage": "RETAINED"
+        },
+        {
+          "expected_file": "backend/app/application/use_cases/context.py",
+          "is_critical": true,
+          "in_s1_pool": true,
+          "s1_rank": 15,
+          "s1_score": 39.0,
+          "in_s1_top25": true,
+          "s2_rank": 2,
+          "s2_score": 131.0,
+          "in_s3_filtered": true,
+          "in_s3_top8": true,
+          "in_s3_top15": true,
+          "in_ast_expanded": false,
+          "in_final_retrieved": true,
+          "loss_stage": "RETAINED"
+        },
+        {
+          "expected_file": "backend/app/services/manifest_service.py",
+          "is_critical": false,
+          "in_s1_pool": false,
+          "s1_rank": null,
+          "s1_score": 0.0,
+          "in_s1_top25": false,
+          "s2_rank": null,
+          "s2_score": 0.0,
+          "in_s3_filtered": false,
+          "in_s3_top8": false,
+          "in_s3_top15": false,
+          "in_ast_expanded": false,
+          "in_final_retrieved": false,
+          "loss_stage": "Stage 1 Candidate Generation (Zero Path/Stem Match)"
+        }
+      ],
+      "symbol_traces": [
+        {
+          "symbol": "ContextCache",
+          "is_critical": true,
+          "in_intent": false,
+          "in_search_terms": false,
+          "in_ast_extracted": false,
+          "in_final_markdown": false
+        },
+        {
+          "symbol": "make_key",
+          "is_critical": true,
+          "in_intent": false,
+          "in_search_terms": false,
+          "in_ast_extracted": false,
+          "in_final_markdown": true
+        },
+        {
+          "symbol": "get",
+          "is_critical": false,
+          "in_intent": false,
+          "in_search_terms": false,
+          "in_ast_extracted": false,
+          "in_final_markdown": true
+        },
+        {
+          "symbol": "set",
+          "is_critical": false,
+          "in_intent": false,
+          "in_search_terms": false,
+          "in_ast_extracted": false,
+          "in_final_markdown": true
+        },
+        {
+          "symbol": "manifest_hash",
+          "is_critical": false,
+          "in_intent": false,
+          "in_search_terms": false,
+          "in_ast_extracted": false,
+          "in_final_markdown": true
+        }
+      ],
+      "competing_irrelevant_files": [
+        {
+          "file": "benchmarks/retrack/expected_files.json",
+          "type": "benchmark_data",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/app/application/ports/context_cache.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/app/models/agent_context.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/app/application/ports/context_package_repository.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "src/components/dashboard/SynthesisModal.tsx",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/tests/test_context_cache.py",
+          "type": "tests",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/app/api/routers/system.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/app/config/settings.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        }
+      ],
+      "retrieved_files": [
+        "benchmarks/retrack/expected_files.json",
+        "backend/app/application/use_cases/context.py",
+        "backend/app/services/context_cache.py",
+        "backend/app/application/ports/context_cache.py",
+        "backend/app/models/agent_context.py",
+        "backend/app/application/ports/context_package_repository.py",
+        "src/components/dashboard/SynthesisModal.tsx",
+        "backend/tests/test_context_cache.py",
+        "backend/app/api/routers/system.py",
+        "backend/app/config/settings.py"
+      ]
+    },
+    {
+      "task_id": "TASK-BUG-03",
+      "category": "bug_localization",
+      "prompt": "If token budgeting drops critical task objectives or file references under tight token constraints, which component is responsible?",
+      "verdict": "FAIL",
+      "precision_at_k": 0.1,
+      "recall_at_k": 0.5,
+      "critical_coverage": 0.333,
+      "noise_ratio": 0.1,
+      "failure_category": "Partial Candidate Generation Failure (some expected files not generated in S1)",
+      "failure_reasons": [
+        "Missing critical symbols: ['BudgetManager', 'apply']"
+      ],
+      "latency_breakdown_ms": {
+        "intent_extraction": 0.06,
+        "term_normalization": 0.05,
+        "stage1_metadata_scoring": 17.97,
+        "stage2_content_inspection": 26.92,
+        "stage3_confidence_filtering": 0.01,
+        "stage4_ast_expansion": 0.21,
+        "total_e2e_latency": 519.87
+      },
+      "intent_extracted_symbols": [],
+      "intent_file_hints": [],
+      "search_terms": [
+        "budget",
+        "budgete",
+        "drop",
+        "objectiv",
+        "referenc",
+        "constraint",
+        "token",
+        "budgeting",
+        "drops",
+        "critical",
+        "task",
+        "objectives",
+        "file",
+        "references",
+        "under",
+        "tight",
+        "constraints",
+        "component",
+        "responsible"
+      ],
+      "expected_file_traces": [
+        {
+          "expected_file": "backend/app/services/budget_manager.py",
+          "is_critical": true,
+          "in_s1_pool": true,
+          "s1_rank": 17,
+          "s1_score": 29.0,
+          "in_s1_top25": true,
+          "s2_rank": 3,
+          "s2_score": 93.0,
+          "in_s3_filtered": true,
+          "in_s3_top8": true,
+          "in_s3_top15": true,
+          "in_ast_expanded": false,
+          "in_final_retrieved": true,
+          "loss_stage": "RETAINED"
+        },
+        {
+          "expected_file": "backend/app/services/package_builder.py",
+          "is_critical": false,
+          "in_s1_pool": false,
+          "s1_rank": null,
+          "s1_score": 0.0,
+          "in_s1_top25": false,
+          "s2_rank": null,
+          "s2_score": 0.0,
+          "in_s3_filtered": false,
+          "in_s3_top8": false,
+          "in_s3_top15": false,
+          "in_ast_expanded": false,
+          "in_final_retrieved": false,
+          "loss_stage": "Stage 1 Candidate Generation (Zero Path/Stem Match)"
+        }
+      ],
+      "symbol_traces": [
+        {
+          "symbol": "BudgetManager",
+          "is_critical": true,
+          "in_intent": false,
+          "in_search_terms": false,
+          "in_ast_extracted": false,
+          "in_final_markdown": false
+        },
+        {
+          "symbol": "apply",
+          "is_critical": true,
+          "in_intent": false,
+          "in_search_terms": false,
+          "in_ast_extracted": false,
+          "in_final_markdown": false
+        },
+        {
+          "symbol": "_CRITICAL",
+          "is_critical": false,
+          "in_intent": false,
+          "in_search_terms": false,
+          "in_ast_extracted": false,
+          "in_final_markdown": true
+        },
+        {
+          "symbol": "_HIGH",
+          "is_critical": false,
+          "in_intent": false,
+          "in_search_terms": false,
+          "in_ast_extracted": false,
+          "in_final_markdown": true
+        },
+        {
+          "symbol": "_MEDIUM",
+          "is_critical": false,
+          "in_intent": false,
+          "in_search_terms": false,
+          "in_ast_extracted": false,
+          "in_final_markdown": true
+        },
+        {
+          "symbol": "_LOW",
+          "is_critical": false,
+          "in_intent": false,
+          "in_search_terms": false,
+          "in_ast_extracted": false,
+          "in_final_markdown": true
+        }
+      ],
+      "competing_irrelevant_files": [
+        {
+          "file": "backend/app/services/pipeline/references.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "references/cognee/verified_notes.md",
+          "type": "config_or_other",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/tests/test_references.py",
+          "type": "tests",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "references/cognee/recall.md",
+          "type": "config_or_other",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "references/cognee/sdk_reference.md",
+          "type": "config_or_other",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/tests/test_budget_manager.py",
+          "type": "tests",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "references/cognee/remember.md",
+          "type": "config_or_other",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/app/api/routers/system.py",
+          "type": "source_code",
+          "is_known_irrelevant": true
+        },
+        {
+          "file": "backend/app/config/settings.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        }
+      ],
+      "retrieved_files": [
+        "backend/app/services/pipeline/references.py",
+        "references/cognee/verified_notes.md",
+        "backend/app/services/budget_manager.py",
+        "backend/tests/test_references.py",
+        "references/cognee/recall.md",
+        "references/cognee/sdk_reference.md",
+        "backend/tests/test_budget_manager.py",
+        "references/cognee/remember.md",
+        "backend/app/api/routers/system.py",
+        "backend/app/config/settings.py"
+      ]
+    },
+    {
+      "task_id": "TASK-BUG-04",
+      "category": "bug_localization",
+      "prompt": "Where is concurrent context generation prevented from overwhelming system VRAM/RAM during simultaneous agent requests?",
+      "verdict": "PASS",
+      "precision_at_k": 0.1,
+      "recall_at_k": 0.5,
+      "critical_coverage": 0.5,
+      "noise_ratio": 0.0,
+      "failure_category": "PASS",
+      "failure_reasons": [
+        "Missing critical symbols: ['context_gen_lock']"
+      ],
+      "latency_breakdown_ms": {
+        "intent_extraction": 0.05,
+        "term_normalization": 0.05,
+        "stage1_metadata_scoring": 18.11,
+        "stage2_content_inspection": 26.56,
+        "stage3_confidence_filtering": 0.01,
+        "stage4_ast_expansion": 0.22,
+        "total_e2e_latency": 2810.53
+      },
+      "intent_extracted_symbols": [
+        "VRAM",
+        "RAM"
+      ],
+      "intent_file_hints": [],
+      "search_terms": [
+        "VRAM",
+        "RAM",
+        "genera",
+        "generate",
+        "prevent",
+        "prevente",
+        "overwhelm",
+        "overwhelme",
+        "dur",
+        "dure",
+        "simultaneou",
+        "request",
+        "concurrent",
+        "context",
+        "generation",
+        "prevented",
+        "overwhelming",
+        "system",
+        "VRAM/RAM",
+        "during",
+        "simultaneous",
+        "agent",
+        "requests"
+      ],
+      "expected_file_traces": [
+        {
+          "expected_file": "backend/app/application/use_cases/context.py",
+          "is_critical": true,
+          "in_s1_pool": true,
+          "s1_rank": 5,
+          "s1_score": 39.0,
+          "in_s1_top25": true,
+          "s2_rank": 1,
+          "s2_score": 111.0,
+          "in_s3_filtered": true,
+          "in_s3_top8": true,
+          "in_s3_top15": true,
+          "in_ast_expanded": false,
+          "in_final_retrieved": true,
+          "loss_stage": "RETAINED"
+        },
+        {
+          "expected_file": "backend/app/application/container.py",
+          "is_critical": false,
+          "in_s1_pool": false,
+          "s1_rank": null,
+          "s1_score": 0.0,
+          "in_s1_top25": false,
+          "s2_rank": null,
+          "s2_score": 0.0,
+          "in_s3_filtered": false,
+          "in_s3_top8": false,
+          "in_s3_top15": false,
+          "in_ast_expanded": false,
+          "in_final_retrieved": false,
+          "loss_stage": "Stage 1 Candidate Generation (Zero Path/Stem Match)"
+        }
+      ],
+      "symbol_traces": [
+        {
+          "symbol": "context_gen_lock",
+          "is_critical": true,
+          "in_intent": false,
+          "in_search_terms": false,
+          "in_ast_extracted": false,
+          "in_final_markdown": false
+        },
+        {
+          "symbol": "ConcurrencyError",
+          "is_critical": false,
+          "in_intent": false,
+          "in_search_terms": false,
+          "in_ast_extracted": false,
+          "in_final_markdown": false
+        },
+        {
+          "symbol": "_lock",
+          "is_critical": false,
+          "in_intent": false,
+          "in_search_terms": false,
+          "in_ast_extracted": false,
+          "in_final_markdown": false
+        }
+      ],
+      "competing_irrelevant_files": [
+        {
+          "file": "backend/app/api/routers/context.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/app/models/agent_context.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/app/application/dto/context.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/app/application/dto/system.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/app/api/routers/system.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/app/application/use_cases/system.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/tests/evaluation/test_context_engine_eval.py",
+          "type": "tests",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/app/config/settings.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/app/models/context_package.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        }
+      ],
+      "retrieved_files": [
+        "backend/app/application/use_cases/context.py",
+        "backend/app/api/routers/context.py",
+        "backend/app/models/agent_context.py",
+        "backend/app/application/dto/context.py",
+        "backend/app/application/dto/system.py",
+        "backend/app/api/routers/system.py",
+        "backend/app/application/use_cases/system.py",
+        "backend/tests/evaluation/test_context_engine_eval.py",
+        "backend/app/config/settings.py",
+        "backend/app/models/context_package.py"
+      ]
+    },
+    {
+      "task_id": "TASK-BUG-05",
+      "category": "bug_localization",
+      "prompt": "If Ollama is unreachable or crashes during context generation, where is the health fallback handled without failing the entire request?",
+      "verdict": "FAIL",
+      "precision_at_k": 0.2,
+      "recall_at_k": 0.667,
+      "critical_coverage": 0.25,
+      "noise_ratio": 0.0,
+      "failure_category": "Partial Candidate Generation Failure (some expected files not generated in S1)",
+      "failure_reasons": [
+        "Missing critical files: ['backend/app/services/llm_provider_service.py']",
+        "Missing critical symbols: ['LLMProviderService', 'check_health']"
+      ],
+      "latency_breakdown_ms": {
+        "intent_extraction": 0.05,
+        "term_normalization": 0.07,
+        "stage1_metadata_scoring": 18.97,
+        "stage2_content_inspection": 42.22,
+        "stage3_confidence_filtering": 0.01,
+        "stage4_ast_expansion": 0.25,
+        "total_e2e_latency": 377.09
+      },
+      "intent_extracted_symbols": [],
+      "intent_file_hints": [],
+      "search_terms": [
+        "crash",
+        "dur",
+        "dure",
+        "genera",
+        "generate",
+        "handl",
+        "handle",
+        "fail",
+        "faile",
+        "Ollama",
+        "unreachable",
+        "crashes",
+        "during",
+        "context",
+        "generation",
+        "health",
+        "fallback",
+        "handled",
+        "without",
+        "failing",
+        "entire",
+        "request"
+      ],
+      "expected_file_traces": [
+        {
+          "expected_file": "backend/app/services/llm_provider_service.py",
+          "is_critical": true,
+          "in_s1_pool": false,
+          "s1_rank": null,
+          "s1_score": 0.0,
+          "in_s1_top25": false,
+          "s2_rank": null,
+          "s2_score": 0.0,
+          "in_s3_filtered": false,
+          "in_s3_top8": false,
+          "in_s3_top15": false,
+          "in_ast_expanded": false,
+          "in_final_retrieved": false,
+          "loss_stage": "Stage 1 Candidate Generation (Zero Path/Stem Match)"
+        },
+        {
+          "expected_file": "backend/app/application/use_cases/context.py",
+          "is_critical": false,
+          "in_s1_pool": true,
+          "s1_rank": 2,
+          "s1_score": 39.0,
+          "in_s1_top25": true,
+          "s2_rank": 1,
+          "s2_score": 103.0,
+          "in_s3_filtered": true,
+          "in_s3_top8": true,
+          "in_s3_top15": true,
+          "in_ast_expanded": false,
+          "in_final_retrieved": true,
+          "loss_stage": "RETAINED"
+        },
+        {
+          "expected_file": "backend/app/services/context_service.py",
+          "is_critical": true,
+          "in_s1_pool": true,
+          "s1_rank": 12,
+          "s1_score": 29.0,
+          "in_s1_top25": true,
+          "s2_rank": 8,
+          "s2_score": 57.0,
+          "in_s3_filtered": true,
+          "in_s3_top8": true,
+          "in_s3_top15": true,
+          "in_ast_expanded": false,
+          "in_final_retrieved": true,
+          "loss_stage": "RETAINED"
+        }
+      ],
+      "symbol_traces": [
+        {
+          "symbol": "LLMProviderService",
+          "is_critical": true,
+          "in_intent": false,
+          "in_search_terms": false,
+          "in_ast_extracted": false,
+          "in_final_markdown": false
+        },
+        {
+          "symbol": "check_health",
+          "is_critical": true,
+          "in_intent": false,
+          "in_search_terms": false,
+          "in_ast_extracted": false,
+          "in_final_markdown": false
+        },
+        {
+          "symbol": "quantization_warning",
+          "is_critical": false,
+          "in_intent": false,
+          "in_search_terms": false,
+          "in_ast_extracted": false,
+          "in_final_markdown": false
+        },
+        {
+          "symbol": "generate_context_package",
+          "is_critical": false,
+          "in_intent": false,
+          "in_search_terms": false,
+          "in_ast_extracted": false,
+          "in_final_markdown": false
+        }
+      ],
+      "competing_irrelevant_files": [
+        {
+          "file": "backend/app/api/routers/context.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/app/application/dto/context.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/tests/evaluation/test_context_engine_eval.py",
+          "type": "tests",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/app/application/use_cases/context_packages.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "src/components/settings/OllamaSettings.tsx",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/app/models/agent_context.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/app/api/routers/system.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/app/config/settings.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        }
+      ],
+      "retrieved_files": [
+        "backend/app/application/use_cases/context.py",
+        "backend/app/api/routers/context.py",
+        "backend/app/application/dto/context.py",
+        "backend/tests/evaluation/test_context_engine_eval.py",
+        "backend/app/application/use_cases/context_packages.py",
+        "src/components/settings/OllamaSettings.tsx",
+        "backend/app/models/agent_context.py",
+        "backend/app/services/context_service.py",
+        "backend/app/api/routers/system.py",
+        "backend/app/config/settings.py"
+      ]
+    },
+    {
+      "task_id": "TASK-FEAT-01",
+      "category": "feature_addition",
+      "prompt": "How do I implement a new capability port for external Model Context Protocol (MCP) server integration?",
+      "verdict": "FAIL",
+      "precision_at_k": 0.1,
+      "recall_at_k": 0.333,
+      "critical_coverage": 0.25,
+      "noise_ratio": 0.0,
+      "failure_category": "Partial Candidate Generation Failure (some expected files not generated in S1)",
+      "failure_reasons": [
+        "Missing critical files: ['backend/app/application/ports/__init__.py', 'backend/app/application/container.py']",
+        "Missing critical symbols: ['ApplicationContainer']",
+        "Low recall (0.33 < 0.40)"
+      ],
+      "latency_breakdown_ms": {
+        "intent_extraction": 0.04,
+        "term_normalization": 0.04,
+        "stage1_metadata_scoring": 20.48,
+        "stage2_content_inspection": 84.16,
+        "stage3_confidence_filtering": 0.01,
+        "stage4_ast_expansion": 0.21,
+        "total_e2e_latency": 1999.92
+      },
+      "intent_extracted_symbols": [
+        "MCP"
+      ],
+      "intent_file_hints": [],
+      "search_terms": [
+        "MCP",
+        "integra",
+        "integrate",
+        "implement",
+        "new",
+        "capability",
+        "port",
+        "external",
+        "Model",
+        "Context",
+        "Protocol",
+        "server",
+        "integration"
+      ],
+      "expected_file_traces": [
+        {
+          "expected_file": "backend/app/application/ports/__init__.py",
+          "is_critical": true,
+          "in_s1_pool": true,
+          "s1_rank": 49,
+          "s1_score": 22.0,
+          "in_s1_top25": false,
+          "s2_rank": null,
+          "s2_score": 0.0,
+          "in_s3_filtered": false,
+          "in_s3_top8": false,
+          "in_s3_top15": false,
+          "in_ast_expanded": false,
+          "in_final_retrieved": false,
+          "loss_stage": "Stage 1 -> Stage 2 Truncation (Rank 49 > 25)"
+        },
+        {
+          "expected_file": "backend/app/application/container.py",
+          "is_critical": true,
+          "in_s1_pool": false,
+          "s1_rank": null,
+          "s1_score": 0.0,
+          "in_s1_top25": false,
+          "s2_rank": null,
+          "s2_score": 0.0,
+          "in_s3_filtered": false,
+          "in_s3_top8": false,
+          "in_s3_top15": false,
+          "in_ast_expanded": false,
+          "in_final_retrieved": false,
+          "loss_stage": "Stage 1 Candidate Generation (Zero Path/Stem Match)"
+        },
+        {
+          "expected_file": "backend/app/application/use_cases/context.py",
+          "is_critical": false,
+          "in_s1_pool": true,
+          "s1_rank": 10,
+          "s1_score": 39.0,
+          "in_s1_top25": true,
+          "s2_rank": 8,
+          "s2_score": 67.0,
+          "in_s3_filtered": true,
+          "in_s3_top8": true,
+          "in_s3_top15": true,
+          "in_ast_expanded": false,
+          "in_final_retrieved": true,
+          "loss_stage": "RETAINED"
+        }
+      ],
+      "symbol_traces": [
+        {
+          "symbol": "Protocol",
+          "is_critical": true,
+          "in_intent": false,
+          "in_search_terms": true,
+          "in_ast_extracted": false,
+          "in_final_markdown": true
+        },
+        {
+          "symbol": "ApplicationContainer",
+          "is_critical": true,
+          "in_intent": false,
+          "in_search_terms": false,
+          "in_ast_extracted": false,
+          "in_final_markdown": false
+        }
+      ],
+      "competing_irrelevant_files": [
+        {
+          "file": "docs/compose/plans/2026-06-30-production-frontend-integration.md",
+          "type": "documentation",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "docs/compose/plans/2026-06-30-context-package-implementation.md",
+          "type": "documentation",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/app/application/ports/context_package_repository.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/app/application/ports/context_cache.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/app/application/ports/context_service.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/app/models/agent_context.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "docs/cognee_integration.md",
+          "type": "documentation",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/app/api/routers/system.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/app/config/settings.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        }
+      ],
+      "retrieved_files": [
+        "docs/compose/plans/2026-06-30-production-frontend-integration.md",
+        "docs/compose/plans/2026-06-30-context-package-implementation.md",
+        "backend/app/application/ports/context_package_repository.py",
+        "backend/app/application/ports/context_cache.py",
+        "backend/app/application/ports/context_service.py",
+        "backend/app/models/agent_context.py",
+        "docs/cognee_integration.md",
+        "backend/app/application/use_cases/context.py",
+        "backend/app/api/routers/system.py",
+        "backend/app/config/settings.py"
+      ]
+    },
+    {
+      "task_id": "TASK-FEAT-02",
+      "category": "feature_addition",
+      "prompt": "Where should new source file extension filters and directory ignore patterns be registered in the indexing service?",
+      "verdict": "PASS",
+      "precision_at_k": 0.1,
+      "recall_at_k": 1.0,
+      "critical_coverage": 1.0,
+      "noise_ratio": 0.0,
+      "failure_category": "PASS",
+      "failure_reasons": [],
+      "latency_breakdown_ms": {
+        "intent_extraction": 0.04,
+        "term_normalization": 0.04,
+        "stage1_metadata_scoring": 17.52,
+        "stage2_content_inspection": 44.38,
+        "stage3_confidence_filtering": 0.01,
+        "stage4_ast_expansion": 0.24,
+        "total_e2e_latency": 541.4
+      },
+      "intent_extracted_symbols": [],
+      "intent_file_hints": [],
+      "search_terms": [
+        "filter",
+        "pattern",
+        "register",
+        "registere",
+        "index",
+        "indexe",
+        "should",
+        "new",
+        "source",
+        "file",
+        "extension",
+        "filters",
+        "directory",
+        "ignore",
+        "patterns",
+        "registered",
+        "indexing",
+        "service"
+      ],
+      "expected_file_traces": [
+        {
+          "expected_file": "backend/app/services/indexing_service.py",
+          "is_critical": true,
+          "in_s1_pool": true,
+          "s1_rank": 2,
+          "s1_score": 93.0,
+          "in_s1_top25": true,
+          "s2_rank": 1,
+          "s2_score": 217.0,
+          "in_s3_filtered": true,
+          "in_s3_top8": true,
+          "in_s3_top15": true,
+          "in_ast_expanded": false,
+          "in_final_retrieved": true,
+          "loss_stage": "RETAINED"
+        }
+      ],
+      "symbol_traces": [
+        {
+          "symbol": "SUPPORTED_EXTENSIONS",
+          "is_critical": true,
+          "in_intent": false,
+          "in_search_terms": false,
+          "in_ast_extracted": false,
+          "in_final_markdown": true
+        },
+        {
+          "symbol": "IGNORED_DIRS",
+          "is_critical": true,
+          "in_intent": false,
+          "in_search_terms": false,
+          "in_ast_extracted": false,
+          "in_final_markdown": true
+        },
+        {
+          "symbol": "IGNORED_PATTERNS",
+          "is_critical": false,
+          "in_intent": false,
+          "in_search_terms": false,
+          "in_ast_extracted": false,
+          "in_final_markdown": false
+        },
+        {
+          "symbol": "IndexingService",
+          "is_critical": false,
+          "in_intent": false,
+          "in_search_terms": false,
+          "in_ast_extracted": false,
+          "in_final_markdown": false
+        }
+      ],
+      "competing_irrelevant_files": [
+        {
+          "file": "backend/app/application/ports/indexing_service.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/app/application/use_cases/indexing.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/app/application/dto/indexing.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/app/services/source_search_service.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "src/components/repositories/CreateRepositoryIndexModal.tsx",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/app/services/sources/local.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/app/services/local_filesystem.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/app/api/routers/system.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/app/config/settings.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        }
+      ],
+      "retrieved_files": [
+        "backend/app/services/indexing_service.py",
+        "backend/app/application/ports/indexing_service.py",
+        "backend/app/application/use_cases/indexing.py",
+        "backend/app/application/dto/indexing.py",
+        "backend/app/services/source_search_service.py",
+        "src/components/repositories/CreateRepositoryIndexModal.tsx",
+        "backend/app/services/sources/local.py",
+        "backend/app/services/local_filesystem.py",
+        "backend/app/api/routers/system.py",
+        "backend/app/config/settings.py"
+      ]
+    },
+    {
+      "task_id": "TASK-FEAT-03",
+      "category": "feature_addition",
+      "prompt": "How do I add a new rule-based categorization keyword set to classify configuration and infrastructure files into dedicated sections?",
+      "verdict": "PASS",
+      "precision_at_k": 0.1,
+      "recall_at_k": 0.5,
+      "critical_coverage": 1.0,
+      "noise_ratio": 0.1,
+      "failure_category": "PASS",
+      "failure_reasons": [],
+      "latency_breakdown_ms": {
+        "intent_extraction": 0.04,
+        "term_normalization": 0.04,
+        "stage1_metadata_scoring": 17.77,
+        "stage2_content_inspection": 37.02,
+        "stage3_confidence_filtering": 0.01,
+        "stage4_ast_expansion": 0.25,
+        "total_e2e_latency": 331.07
+      },
+      "intent_extracted_symbols": [],
+      "intent_file_hints": [],
+      "search_terms": [
+        "rule-bas",
+        "rule-base",
+        "categoriza",
+        "categorizate",
+        "configura",
+        "configurate",
+        "fil",
+        "dedicat",
+        "dedicate",
+        "section",
+        "add",
+        "new",
+        "rule-based",
+        "categorization",
+        "keyword",
+        "set",
+        "classify",
+        "configuration",
+        "infrastructure",
+        "files",
+        "dedicated",
+        "sections"
+      ],
+      "expected_file_traces": [
+        {
+          "expected_file": "backend/app/services/pipeline/categorization.py",
+          "is_critical": true,
+          "in_s1_pool": true,
+          "s1_rank": 1,
+          "s1_score": 74.0,
+          "in_s1_top25": true,
+          "s2_rank": 1,
+          "s2_score": 150.0,
+          "in_s3_filtered": true,
+          "in_s3_top8": true,
+          "in_s3_top15": true,
+          "in_ast_expanded": false,
+          "in_final_retrieved": true,
+          "loss_stage": "RETAINED"
+        },
+        {
+          "expected_file": "backend/app/services/package_builder.py",
+          "is_critical": false,
+          "in_s1_pool": false,
+          "s1_rank": null,
+          "s1_score": 0.0,
+          "in_s1_top25": false,
+          "s2_rank": null,
+          "s2_score": 0.0,
+          "in_s3_filtered": false,
+          "in_s3_top8": false,
+          "in_s3_top15": false,
+          "in_ast_expanded": false,
+          "in_final_retrieved": false,
+          "loss_stage": "Stage 1 Candidate Generation (Zero Path/Stem Match)"
+        }
+      ],
+      "symbol_traces": [
+        {
+          "symbol": "Categorizer",
+          "is_critical": true,
+          "in_intent": false,
+          "in_search_terms": false,
+          "in_ast_extracted": false,
+          "in_final_markdown": true
+        },
+        {
+          "symbol": "_ARCHITECTURE_KEYWORDS",
+          "is_critical": false,
+          "in_intent": false,
+          "in_search_terms": false,
+          "in_ast_extracted": false,
+          "in_final_markdown": false
+        },
+        {
+          "symbol": "_API_KEYWORDS",
+          "is_critical": false,
+          "in_intent": false,
+          "in_search_terms": false,
+          "in_ast_extracted": false,
+          "in_final_markdown": false
+        },
+        {
+          "symbol": "_CONVENTION_KEYWORDS",
+          "is_critical": false,
+          "in_intent": false,
+          "in_search_terms": false,
+          "in_ast_extracted": false,
+          "in_final_markdown": false
+        },
+        {
+          "symbol": "_DECISION_KEYWORDS",
+          "is_critical": false,
+          "in_intent": false,
+          "in_search_terms": false,
+          "in_ast_extracted": false,
+          "in_final_markdown": false
+        },
+        {
+          "symbol": "categorize",
+          "is_critical": true,
+          "in_intent": false,
+          "in_search_terms": false,
+          "in_ast_extracted": false,
+          "in_final_markdown": true
+        }
+      ],
+      "competing_irrelevant_files": [
+        {
+          "file": "benchmarks/retrack/expected_files.json",
+          "type": "benchmark_data",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "references/cognee/configuration.md",
+          "type": "config_or_other",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/tests/test_categorization.py",
+          "type": "tests",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "benchmarks/andescontext/expected_files.json",
+          "type": "benchmark_data",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/app/application/ports/filesystem.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/app/services/local_filesystem.py",
+          "type": "source_code",
+          "is_known_irrelevant": true
+        },
+        {
+          "file": "src/components/memory/DatasetTable.tsx",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/app/api/routers/system.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/app/config/settings.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        }
+      ],
+      "retrieved_files": [
+        "backend/app/services/pipeline/categorization.py",
+        "benchmarks/retrack/expected_files.json",
+        "references/cognee/configuration.md",
+        "backend/tests/test_categorization.py",
+        "benchmarks/andescontext/expected_files.json",
+        "backend/app/application/ports/filesystem.py",
+        "backend/app/services/local_filesystem.py",
+        "src/components/memory/DatasetTable.tsx",
+        "backend/app/api/routers/system.py",
+        "backend/app/config/settings.py"
+      ]
+    },
+    {
+      "task_id": "TASK-FEAT-04",
+      "category": "feature_addition",
+      "prompt": "Where would I add new deterministic intent heuristic rules for detecting database migration or test generation requests?",
+      "verdict": "PASS",
+      "precision_at_k": 0.2,
+      "recall_at_k": 1.0,
+      "critical_coverage": 0.667,
+      "noise_ratio": 0.0,
+      "failure_category": "PASS",
+      "failure_reasons": [
+        "Missing critical symbols: ['parse_intent_heuristics']"
+      ],
+      "latency_breakdown_ms": {
+        "intent_extraction": 0.04,
+        "term_normalization": 0.04,
+        "stage1_metadata_scoring": 17.69,
+        "stage2_content_inspection": 37.43,
+        "stage3_confidence_filtering": 0.01,
+        "stage4_ast_expansion": 0.21,
+        "total_e2e_latency": 345.06
+      },
+      "intent_extracted_symbols": [],
+      "intent_file_hints": [],
+      "search_terms": [
+        "rul",
+        "detect",
+        "detecte",
+        "migra",
+        "migrate",
+        "genera",
+        "generate",
+        "request",
+        "would",
+        "add",
+        "new",
+        "deterministic",
+        "intent",
+        "heuristic",
+        "rules",
+        "detecting",
+        "database",
+        "migration",
+        "test",
+        "generation",
+        "requests"
+      ],
+      "expected_file_traces": [
+        {
+          "expected_file": "backend/app/application/domain/intent.py",
+          "is_critical": true,
+          "in_s1_pool": true,
+          "s1_rank": 1,
+          "s1_score": 39.0,
+          "in_s1_top25": true,
+          "s2_rank": 2,
+          "s2_score": 71.0,
+          "in_s3_filtered": true,
+          "in_s3_top8": true,
+          "in_s3_top15": true,
+          "in_ast_expanded": false,
+          "in_final_retrieved": true,
+          "loss_stage": "RETAINED"
+        },
+        {
+          "expected_file": "backend/app/services/intent_parser.py",
+          "is_critical": false,
+          "in_s1_pool": true,
+          "s1_rank": 4,
+          "s1_score": 29.0,
+          "in_s1_top25": true,
+          "s2_rank": 7,
+          "s2_score": 53.0,
+          "in_s3_filtered": true,
+          "in_s3_top8": true,
+          "in_s3_top15": true,
+          "in_ast_expanded": false,
+          "in_final_retrieved": true,
+          "loss_stage": "RETAINED"
+        }
+      ],
+      "symbol_traces": [
+        {
+          "symbol": "ParsedIntentRecord",
+          "is_critical": true,
+          "in_intent": false,
+          "in_search_terms": false,
+          "in_ast_extracted": false,
+          "in_final_markdown": true
+        },
+        {
+          "symbol": "parse_intent_heuristics",
+          "is_critical": true,
+          "in_intent": false,
+          "in_search_terms": false,
+          "in_ast_extracted": false,
+          "in_final_markdown": false
+        }
+      ],
+      "competing_irrelevant_files": [
+        {
+          "file": "backend/tests/test_api.py",
+          "type": "tests",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/tests/evaluation/test_context_engine_eval.py",
+          "type": "tests",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/tests/test_models.py",
+          "type": "tests",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/tests/test_repository_summary.py",
+          "type": "tests",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/tests/test_stats_logger.py",
+          "type": "tests",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/tests/test_coding_llm_benchmark.py",
+          "type": "tests",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/app/api/routers/system.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/app/config/settings.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        }
+      ],
+      "retrieved_files": [
+        "backend/tests/test_api.py",
+        "backend/app/application/domain/intent.py",
+        "backend/tests/evaluation/test_context_engine_eval.py",
+        "backend/tests/test_models.py",
+        "backend/tests/test_repository_summary.py",
+        "backend/tests/test_stats_logger.py",
+        "backend/app/services/intent_parser.py",
+        "backend/tests/test_coding_llm_benchmark.py",
+        "backend/app/api/routers/system.py",
+        "backend/app/config/settings.py"
+      ]
+    },
+    {
+      "task_id": "TASK-FEAT-05",
+      "category": "feature_addition",
+      "prompt": "How do I add a new context package persistence endpoint to append follow-up prompt threads to an existing saved context package?",
+      "verdict": "FAIL",
+      "precision_at_k": 0.2,
+      "recall_at_k": 0.5,
+      "critical_coverage": 0.5,
+      "noise_ratio": 0.0,
+      "failure_category": "Ranking Failure (expected files generated in S1 but ranked below cutoff)",
+      "failure_reasons": [
+        "Missing critical files: ['backend/app/api/routers/packages.py']",
+        "Missing critical symbols: ['PackageUseCases']"
+      ],
+      "latency_breakdown_ms": {
+        "intent_extraction": 0.04,
+        "term_normalization": 0.04,
+        "stage1_metadata_scoring": 17.98,
+        "stage2_content_inspection": 79.37,
+        "stage3_confidence_filtering": 0.01,
+        "stage4_ast_expansion": 0.24,
+        "total_e2e_latency": 661.32
+      },
+      "intent_extracted_symbols": [],
+      "intent_file_hints": [],
+      "search_terms": [
+        "thread",
+        "exist",
+        "existe",
+        "sav",
+        "save",
+        "add",
+        "new",
+        "context",
+        "package",
+        "persistence",
+        "endpoint",
+        "append",
+        "follow-up",
+        "prompt",
+        "threads",
+        "existing",
+        "saved"
+      ],
+      "expected_file_traces": [
+        {
+          "expected_file": "backend/app/api/routers/packages.py",
+          "is_critical": true,
+          "in_s1_pool": true,
+          "s1_rank": 17,
+          "s1_score": 29.0,
+          "in_s1_top25": true,
+          "s2_rank": 11,
+          "s2_score": 85.0,
+          "in_s3_filtered": true,
+          "in_s3_top8": false,
+          "in_s3_top15": true,
+          "in_ast_expanded": false,
+          "in_final_retrieved": false,
+          "loss_stage": "Stage 3 Top-8 Rank Cutoff (S2 Rank 11 > 8)"
+        },
+        {
+          "expected_file": "backend/app/application/use_cases/context_packages.py",
+          "is_critical": true,
+          "in_s1_pool": true,
+          "s1_rank": 1,
+          "s1_score": 64.0,
+          "in_s1_top25": true,
+          "s2_rank": 3,
+          "s2_score": 144.0,
+          "in_s3_filtered": true,
+          "in_s3_top8": true,
+          "in_s3_top15": true,
+          "in_ast_expanded": false,
+          "in_final_retrieved": true,
+          "loss_stage": "RETAINED"
+        },
+        {
+          "expected_file": "backend/app/services/context_package_repository.py",
+          "is_critical": false,
+          "in_s1_pool": true,
+          "s1_rank": 4,
+          "s1_score": 64.0,
+          "in_s1_top25": true,
+          "s2_rank": 5,
+          "s2_score": 132.0,
+          "in_s3_filtered": true,
+          "in_s3_top8": true,
+          "in_s3_top15": true,
+          "in_ast_expanded": false,
+          "in_final_retrieved": true,
+          "loss_stage": "RETAINED"
+        },
+        {
+          "expected_file": "backend/app/application/dto/packages.py",
+          "is_critical": false,
+          "in_s1_pool": true,
+          "s1_rank": 18,
+          "s1_score": 29.0,
+          "in_s1_top25": true,
+          "s2_rank": 12,
+          "s2_score": 85.0,
+          "in_s3_filtered": true,
+          "in_s3_top8": false,
+          "in_s3_top15": true,
+          "in_ast_expanded": false,
+          "in_final_retrieved": false,
+          "loss_stage": "Stage 3 Top-8 Rank Cutoff (S2 Rank 12 > 8)"
+        }
+      ],
+      "symbol_traces": [
+        {
+          "symbol": "PackageUseCases",
+          "is_critical": true,
+          "in_intent": false,
+          "in_search_terms": false,
+          "in_ast_extracted": false,
+          "in_final_markdown": false
+        },
+        {
+          "symbol": "ContextPackageRepository",
+          "is_critical": true,
+          "in_intent": false,
+          "in_search_terms": false,
+          "in_ast_extracted": false,
+          "in_final_markdown": true
+        },
+        {
+          "symbol": "append_to_package",
+          "is_critical": false,
+          "in_intent": false,
+          "in_search_terms": false,
+          "in_ast_extracted": false,
+          "in_final_markdown": false
+        }
+      ],
+      "competing_irrelevant_files": [
+        {
+          "file": "backend/app/application/ports/context_package_repository.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "docs/compose/plans/2026-06-30-context-package-implementation.md",
+          "type": "documentation",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "src/components/context-builder/ContextPackageOutputPanel.tsx",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "src/pages/ContextPackages.tsx",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "docs/compose/specs/2026-06-30-context-package-design.md",
+          "type": "documentation",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/tests/test_context_packages.py",
+          "type": "tests",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/app/api/routers/system.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/app/config/settings.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        }
+      ],
+      "retrieved_files": [
+        "backend/app/application/ports/context_package_repository.py",
+        "docs/compose/plans/2026-06-30-context-package-implementation.md",
+        "backend/app/application/use_cases/context_packages.py",
+        "src/components/context-builder/ContextPackageOutputPanel.tsx",
+        "backend/app/services/context_package_repository.py",
+        "src/pages/ContextPackages.tsx",
+        "docs/compose/specs/2026-06-30-context-package-design.md",
+        "backend/tests/test_context_packages.py",
+        "backend/app/api/routers/system.py",
+        "backend/app/config/settings.py"
+      ]
+    },
+    {
+      "task_id": "TASK-REFAC-01",
+      "category": "refactoring",
+      "prompt": "How was DEBT-003 resolved in ApplicationContainer to eliminate eager module-level global construction?",
+      "verdict": "PASS",
+      "precision_at_k": 0.125,
+      "recall_at_k": 0.333,
+      "critical_coverage": 0.5,
+      "noise_ratio": 0.0,
+      "failure_category": "PASS",
+      "failure_reasons": [
+        "Missing critical symbols: ['create', 'get_container']",
+        "Low recall (0.33 < 0.40)"
+      ],
+      "latency_breakdown_ms": {
+        "intent_extraction": 0.04,
+        "term_normalization": 0.04,
+        "stage1_metadata_scoring": 17.52,
+        "stage2_content_inspection": 29.0,
+        "stage3_confidence_filtering": 0.01,
+        "stage4_ast_expansion": 0.2,
+        "total_e2e_latency": 2477.63
+      },
+      "intent_extracted_symbols": [
+        "DEBT",
+        "ApplicationContainer"
+      ],
+      "intent_file_hints": [],
+      "search_terms": [
+        "DEBT",
+        "ApplicationContainer",
+        "Application",
+        "Container",
+        "resolv",
+        "resolve",
+        "construc",
+        "constructe",
+        "was",
+        "DEBT-003",
+        "resolved",
+        "eliminate",
+        "eager",
+        "module-level",
+        "global",
+        "construction"
+      ],
+      "expected_file_traces": [
+        {
+          "expected_file": "backend/app/application/container.py",
+          "is_critical": true,
+          "in_s1_pool": true,
+          "s1_rank": 1,
+          "s1_score": 67.0,
+          "in_s1_top25": true,
+          "s2_rank": 1,
+          "s2_score": 133.0,
+          "in_s3_filtered": true,
+          "in_s3_top8": true,
+          "in_s3_top15": true,
+          "in_ast_expanded": false,
+          "in_final_retrieved": true,
+          "loss_stage": "RETAINED"
+        },
+        {
+          "expected_file": "backend/app/server.py",
+          "is_critical": false,
+          "in_s1_pool": false,
+          "s1_rank": null,
+          "s1_score": 0.0,
+          "in_s1_top25": false,
+          "s2_rank": null,
+          "s2_score": 0.0,
+          "in_s3_filtered": false,
+          "in_s3_top8": false,
+          "in_s3_top15": false,
+          "in_ast_expanded": false,
+          "in_final_retrieved": false,
+          "loss_stage": "Stage 1 Candidate Generation (Zero Path/Stem Match)"
+        },
+        {
+          "expected_file": "backend/app/api/commands.py",
+          "is_critical": false,
+          "in_s1_pool": false,
+          "s1_rank": null,
+          "s1_score": 0.0,
+          "in_s1_top25": false,
+          "s2_rank": null,
+          "s2_score": 0.0,
+          "in_s3_filtered": false,
+          "in_s3_top8": false,
+          "in_s3_top15": false,
+          "in_ast_expanded": false,
+          "in_final_retrieved": false,
+          "loss_stage": "Stage 1 Candidate Generation (Zero Path/Stem Match)"
+        }
+      ],
+      "symbol_traces": [
+        {
+          "symbol": "ApplicationContainer",
+          "is_critical": true,
+          "in_intent": true,
+          "in_search_terms": true,
+          "in_ast_extracted": false,
+          "in_final_markdown": true
+        },
+        {
+          "symbol": "_container",
+          "is_critical": false,
+          "in_intent": false,
+          "in_search_terms": false,
+          "in_ast_extracted": false,
+          "in_final_markdown": false
+        },
+        {
+          "symbol": "create",
+          "is_critical": true,
+          "in_intent": false,
+          "in_search_terms": false,
+          "in_ast_extracted": false,
+          "in_final_markdown": false
+        },
+        {
+          "symbol": "get_container",
+          "is_critical": true,
+          "in_intent": false,
+          "in_search_terms": false,
+          "in_ast_extracted": false,
+          "in_final_markdown": false
+        },
+        {
+          "symbol": "set_container",
+          "is_critical": false,
+          "in_intent": false,
+          "in_search_terms": false,
+          "in_ast_extracted": false,
+          "in_final_markdown": false
+        },
+        {
+          "symbol": "reset_container",
+          "is_critical": false,
+          "in_intent": false,
+          "in_search_terms": false,
+          "in_ast_extracted": false,
+          "in_final_markdown": false
+        }
+      ],
+      "competing_irrelevant_files": [
+        {
+          "file": "backend/tests/test_application_boundary.py",
+          "type": "tests",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/app/application/use_cases/context.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/app/application/use_cases/indexing.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/app/api/routers/system.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/app/config/settings.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/app/models/context_package.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/app/models/errors.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        }
+      ],
+      "retrieved_files": [
+        "backend/app/application/container.py",
+        "backend/tests/test_application_boundary.py",
+        "backend/app/application/use_cases/context.py",
+        "backend/app/application/use_cases/indexing.py",
+        "backend/app/api/routers/system.py",
+        "backend/app/config/settings.py",
+        "backend/app/models/context_package.py",
+        "backend/app/models/errors.py"
+      ]
+    },
+    {
+      "task_id": "TASK-REFAC-02",
+      "category": "refactoring",
+      "prompt": "How were application DTOs decoupled from API transport schemas to ensure headless use cases?",
+      "verdict": "FAIL",
+      "precision_at_k": 0.2,
+      "recall_at_k": 0.5,
+      "critical_coverage": 0.75,
+      "noise_ratio": 0.0,
+      "failure_category": "Ranking Failure (expected files generated in S1 but ranked below cutoff)",
+      "failure_reasons": [
+        "Missing critical files: ['backend/app/application/dto/__init__.py']"
+      ],
+      "latency_breakdown_ms": {
+        "intent_extraction": 0.04,
+        "term_normalization": 0.04,
+        "stage1_metadata_scoring": 18.59,
+        "stage2_content_inspection": 119.42,
+        "stage3_confidence_filtering": 0.01,
+        "stage4_ast_expansion": 0.24,
+        "total_e2e_latency": 2670.07
+      },
+      "intent_extracted_symbols": [
+        "DTOs",
+        "API"
+      ],
+      "intent_file_hints": [],
+      "search_terms": [
+        "DTOs",
+        "API",
+        "dto",
+        "applica",
+        "applicate",
+        "decoupl",
+        "decouple",
+        "schema",
+        "cas",
+        "application",
+        "decoupled",
+        "transport",
+        "schemas",
+        "ensure",
+        "headless",
+        "use",
+        "cases"
+      ],
+      "expected_file_traces": [
+        {
+          "expected_file": "backend/app/application/dto/__init__.py",
+          "is_critical": true,
+          "in_s1_pool": true,
+          "s1_rank": 18,
+          "s1_score": 72.0,
+          "in_s1_top25": true,
+          "s2_rank": 11,
+          "s2_score": 112.0,
+          "in_s3_filtered": true,
+          "in_s3_top8": false,
+          "in_s3_top15": true,
+          "in_ast_expanded": false,
+          "in_final_retrieved": false,
+          "loss_stage": "Stage 3 Top-8 Rank Cutoff (S2 Rank 11 > 8)"
+        },
+        {
+          "expected_file": "backend/app/application/dto/context.py",
+          "is_critical": false,
+          "in_s1_pool": true,
+          "s1_rank": 11,
+          "s1_score": 72.0,
+          "in_s1_top25": true,
+          "s2_rank": 16,
+          "s2_score": 76.0,
+          "in_s3_filtered": true,
+          "in_s3_top8": false,
+          "in_s3_top15": false,
+          "in_ast_expanded": false,
+          "in_final_retrieved": false,
+          "loss_stage": "Stage 3 Top-8 Rank Cutoff (S2 Rank 16 > 8)"
+        },
+        {
+          "expected_file": "backend/app/api/schemas.py",
+          "is_critical": true,
+          "in_s1_pool": true,
+          "s1_rank": 9,
+          "s1_score": 96.0,
+          "in_s1_top25": true,
+          "s2_rank": 7,
+          "s2_score": 144.0,
+          "in_s3_filtered": true,
+          "in_s3_top8": true,
+          "in_s3_top15": true,
+          "in_ast_expanded": false,
+          "in_final_retrieved": true,
+          "loss_stage": "RETAINED"
+        },
+        {
+          "expected_file": "backend/app/application/use_cases/context.py",
+          "is_critical": false,
+          "in_s1_pool": true,
+          "s1_rank": 2,
+          "s1_score": 116.0,
+          "in_s1_top25": true,
+          "s2_rank": 3,
+          "s2_score": 144.0,
+          "in_s3_filtered": true,
+          "in_s3_top8": true,
+          "in_s3_top15": true,
+          "in_ast_expanded": false,
+          "in_final_retrieved": true,
+          "loss_stage": "RETAINED"
+        }
+      ],
+      "symbol_traces": [
+        {
+          "symbol": "GenerateContextRequest",
+          "is_critical": true,
+          "in_intent": false,
+          "in_search_terms": false,
+          "in_ast_extracted": false,
+          "in_final_markdown": true
+        },
+        {
+          "symbol": "ContextResponse",
+          "is_critical": true,
+          "in_intent": false,
+          "in_search_terms": false,
+          "in_ast_extracted": false,
+          "in_final_markdown": true
+        },
+        {
+          "symbol": "AgentContextRequest",
+          "is_critical": false,
+          "in_intent": false,
+          "in_search_terms": false,
+          "in_ast_extracted": false,
+          "in_final_markdown": true
+        },
+        {
+          "symbol": "AgentContextResponse",
+          "is_critical": false,
+          "in_intent": false,
+          "in_search_terms": false,
+          "in_ast_extracted": false,
+          "in_final_markdown": true
+        }
+      ],
+      "competing_irrelevant_files": [
+        {
+          "file": "backend/app/application/use_cases/repositories.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/app/application/use_cases/__init__.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/app/application/use_cases/indexing.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/app/application/use_cases/memory.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/app/application/use_cases/system.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/tests/test_application_boundary.py",
+          "type": "tests",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/app/api/routers/system.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/app/config/settings.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        }
+      ],
+      "retrieved_files": [
+        "backend/app/application/use_cases/repositories.py",
+        "backend/app/application/use_cases/__init__.py",
+        "backend/app/application/use_cases/context.py",
+        "backend/app/application/use_cases/indexing.py",
+        "backend/app/application/use_cases/memory.py",
+        "backend/app/application/use_cases/system.py",
+        "backend/app/api/schemas.py",
+        "backend/tests/test_application_boundary.py",
+        "backend/app/api/routers/system.py",
+        "backend/app/config/settings.py"
+      ]
+    },
+    {
+      "task_id": "TASK-REFAC-03",
+      "category": "refactoring",
+      "prompt": "How is the AST call graph generated deterministically without invoking external LLM models?",
+      "verdict": "FAIL",
+      "precision_at_k": 0.1,
+      "recall_at_k": 0.333,
+      "critical_coverage": 0.25,
+      "noise_ratio": 0.0,
+      "failure_category": "Partial Candidate Generation Failure (some expected files not generated in S1)",
+      "failure_reasons": [
+        "Missing critical files: ['backend/app/services/repository_summary.py']",
+        "Missing critical symbols: ['CallNode', 'CallEdge']",
+        "Low recall (0.33 < 0.40)"
+      ],
+      "latency_breakdown_ms": {
+        "intent_extraction": 0.04,
+        "term_normalization": 0.04,
+        "stage1_metadata_scoring": 18.2,
+        "stage2_content_inspection": 48.66,
+        "stage3_confidence_filtering": 0.01,
+        "stage4_ast_expansion": 0.23,
+        "total_e2e_latency": 2545.24
+      },
+      "intent_extracted_symbols": [
+        "AST",
+        "LLM"
+      ],
+      "intent_file_hints": [],
+      "search_terms": [
+        "AST",
+        "LLM",
+        "generat",
+        "generate",
+        "invok",
+        "invoke",
+        "model",
+        "call",
+        "graph",
+        "generated",
+        "deterministically",
+        "without",
+        "invoking",
+        "external",
+        "models"
+      ],
+      "expected_file_traces": [
+        {
+          "expected_file": "backend/app/services/repository_summary.py",
+          "is_critical": true,
+          "in_s1_pool": false,
+          "s1_rank": null,
+          "s1_score": 0.0,
+          "in_s1_top25": false,
+          "s2_rank": null,
+          "s2_score": 0.0,
+          "in_s3_filtered": false,
+          "in_s3_top8": false,
+          "in_s3_top15": false,
+          "in_ast_expanded": false,
+          "in_final_retrieved": false,
+          "loss_stage": "Stage 1 Candidate Generation (Zero Path/Stem Match)"
+        },
+        {
+          "expected_file": "backend/app/services/cgc_service.py",
+          "is_critical": false,
+          "in_s1_pool": false,
+          "s1_rank": null,
+          "s1_score": 0.0,
+          "in_s1_top25": false,
+          "s2_rank": null,
+          "s2_score": 0.0,
+          "in_s3_filtered": false,
+          "in_s3_top8": false,
+          "in_s3_top15": false,
+          "in_ast_expanded": false,
+          "in_final_retrieved": false,
+          "loss_stage": "Stage 1 Candidate Generation (Zero Path/Stem Match)"
+        },
+        {
+          "expected_file": "backend/app/models/responses.py",
+          "is_critical": false,
+          "in_s1_pool": true,
+          "s1_rank": 7,
+          "s1_score": 50.0,
+          "in_s1_top25": true,
+          "s2_rank": 1,
+          "s2_score": 110.0,
+          "in_s3_filtered": true,
+          "in_s3_top8": true,
+          "in_s3_top15": true,
+          "in_ast_expanded": true,
+          "in_final_retrieved": true,
+          "loss_stage": "RETAINED"
+        }
+      ],
+      "symbol_traces": [
+        {
+          "symbol": "RepositorySummary",
+          "is_critical": true,
+          "in_intent": false,
+          "in_search_terms": false,
+          "in_ast_extracted": false,
+          "in_final_markdown": true
+        },
+        {
+          "symbol": "CallNode",
+          "is_critical": true,
+          "in_intent": false,
+          "in_search_terms": false,
+          "in_ast_extracted": false,
+          "in_final_markdown": false
+        },
+        {
+          "symbol": "CallEdge",
+          "is_critical": true,
+          "in_intent": false,
+          "in_search_terms": false,
+          "in_ast_extracted": false,
+          "in_final_markdown": false
+        },
+        {
+          "symbol": "_analyze_python_ast",
+          "is_critical": false,
+          "in_intent": false,
+          "in_search_terms": false,
+          "in_ast_extracted": false,
+          "in_final_markdown": false
+        },
+        {
+          "symbol": "_build_call_graph",
+          "is_critical": false,
+          "in_intent": false,
+          "in_search_terms": false,
+          "in_ast_extracted": false,
+          "in_final_markdown": false
+        }
+      ],
+      "competing_irrelevant_files": [
+        {
+          "file": "docs/repository_knowledge_model.md",
+          "type": "documentation",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/tests/test_models.py",
+          "type": "tests",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "src/components/repositories/CallGraphView.tsx",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/app/models/provider.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/app/services/llm_provider_service.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/tests/test_ast_integrity.py",
+          "type": "tests",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "docs/workspace_model.md",
+          "type": "documentation",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/app/api/routers/system.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/app/config/settings.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        }
+      ],
+      "retrieved_files": [
+        "backend/app/models/responses.py",
+        "docs/repository_knowledge_model.md",
+        "backend/tests/test_models.py",
+        "src/components/repositories/CallGraphView.tsx",
+        "backend/app/models/provider.py",
+        "backend/app/services/llm_provider_service.py",
+        "backend/tests/test_ast_integrity.py",
+        "docs/workspace_model.md",
+        "backend/app/api/routers/system.py",
+        "backend/app/config/settings.py"
+      ]
+    },
+    {
+      "task_id": "TASK-REFAC-04",
+      "category": "refactoring",
+      "prompt": "How does PackageBuilder compose the retrieval pipeline stages into a single cohesive assembly flow?",
+      "verdict": "FAIL",
+      "precision_at_k": 0.1,
+      "recall_at_k": 0.125,
+      "critical_coverage": 0.667,
+      "noise_ratio": 0.0,
+      "failure_category": "Partial Candidate Generation Failure (some expected files not generated in S1)",
+      "failure_reasons": [
+        "Missing critical symbols: ['build']",
+        "Low recall (0.12 < 0.40)"
+      ],
+      "latency_breakdown_ms": {
+        "intent_extraction": 0.03,
+        "term_normalization": 0.03,
+        "stage1_metadata_scoring": 17.63,
+        "stage2_content_inspection": 100.87,
+        "stage3_confidence_filtering": 0.01,
+        "stage4_ast_expansion": 0.23,
+        "total_e2e_latency": 2278.36
+      },
+      "intent_extracted_symbols": [
+        "PackageBuilder"
+      ],
+      "intent_file_hints": [],
+      "search_terms": [
+        "PackageBuilder",
+        "Package",
+        "Builder",
+        "stag",
+        "compose",
+        "retrieval",
+        "pipeline",
+        "stages",
+        "single",
+        "cohesive",
+        "assembly",
+        "flow"
+      ],
+      "expected_file_traces": [
+        {
+          "expected_file": "backend/app/services/package_builder.py",
+          "is_critical": true,
+          "in_s1_pool": true,
+          "s1_rank": 1,
+          "s1_score": 64.0,
+          "in_s1_top25": true,
+          "s2_rank": 2,
+          "s2_score": 143.0,
+          "in_s3_filtered": true,
+          "in_s3_top8": true,
+          "in_s3_top15": true,
+          "in_ast_expanded": false,
+          "in_final_retrieved": true,
+          "loss_stage": "RETAINED"
+        },
+        {
+          "expected_file": "backend/app/services/pipeline/dedup.py",
+          "is_critical": false,
+          "in_s1_pool": true,
+          "s1_rank": 24,
+          "s1_score": 22.0,
+          "in_s1_top25": true,
+          "s2_rank": 23,
+          "s2_score": 30.0,
+          "in_s3_filtered": false,
+          "in_s3_top8": false,
+          "in_s3_top15": false,
+          "in_ast_expanded": false,
+          "in_final_retrieved": false,
+          "loss_stage": "Stage 3 Confidence Threshold (Score 30.0 < Cutoff 44.9)"
+        },
+        {
+          "expected_file": "backend/app/services/pipeline/ranking.py",
+          "is_critical": false,
+          "in_s1_pool": true,
+          "s1_rank": 25,
+          "s1_score": 22.0,
+          "in_s1_top25": true,
+          "s2_rank": 19,
+          "s2_score": 34.0,
+          "in_s3_filtered": false,
+          "in_s3_top8": false,
+          "in_s3_top15": false,
+          "in_ast_expanded": false,
+          "in_final_retrieved": false,
+          "loss_stage": "Stage 3 Confidence Threshold (Score 34.0 < Cutoff 44.9)"
+        },
+        {
+          "expected_file": "backend/app/services/pipeline/compression.py",
+          "is_critical": false,
+          "in_s1_pool": true,
+          "s1_rank": 23,
+          "s1_score": 22.0,
+          "in_s1_top25": true,
+          "s2_rank": 22,
+          "s2_score": 30.0,
+          "in_s3_filtered": false,
+          "in_s3_top8": false,
+          "in_s3_top15": false,
+          "in_ast_expanded": false,
+          "in_final_retrieved": false,
+          "loss_stage": "Stage 3 Confidence Threshold (Score 30.0 < Cutoff 44.9)"
+        },
+        {
+          "expected_file": "backend/app/services/pipeline/categorization.py",
+          "is_critical": false,
+          "in_s1_pool": true,
+          "s1_rank": 22,
+          "s1_score": 22.0,
+          "in_s1_top25": true,
+          "s2_rank": 16,
+          "s2_score": 42.0,
+          "in_s3_filtered": false,
+          "in_s3_top8": false,
+          "in_s3_top15": false,
+          "in_ast_expanded": false,
+          "in_final_retrieved": false,
+          "loss_stage": "Stage 3 Confidence Threshold (Score 42.0 < Cutoff 44.9)"
+        },
+        {
+          "expected_file": "backend/app/services/budget_manager.py",
+          "is_critical": false,
+          "in_s1_pool": false,
+          "s1_rank": null,
+          "s1_score": 0.0,
+          "in_s1_top25": false,
+          "s2_rank": null,
+          "s2_score": 0.0,
+          "in_s3_filtered": false,
+          "in_s3_top8": false,
+          "in_s3_top15": false,
+          "in_ast_expanded": false,
+          "in_final_retrieved": false,
+          "loss_stage": "Stage 1 Candidate Generation (Zero Path/Stem Match)"
+        },
+        {
+          "expected_file": "backend/app/services/pipeline/references.py",
+          "is_critical": false,
+          "in_s1_pool": true,
+          "s1_rank": 26,
+          "s1_score": 22.0,
+          "in_s1_top25": false,
+          "s2_rank": null,
+          "s2_score": 0.0,
+          "in_s3_filtered": false,
+          "in_s3_top8": false,
+          "in_s3_top15": false,
+          "in_ast_expanded": false,
+          "in_final_retrieved": false,
+          "loss_stage": "Stage 1 -> Stage 2 Truncation (Rank 26 > 25)"
+        },
+        {
+          "expected_file": "backend/app/services/renderer.py",
+          "is_critical": false,
+          "in_s1_pool": false,
+          "s1_rank": null,
+          "s1_score": 0.0,
+          "in_s1_top25": false,
+          "s2_rank": null,
+          "s2_score": 0.0,
+          "in_s3_filtered": false,
+          "in_s3_top8": false,
+          "in_s3_top15": false,
+          "in_ast_expanded": false,
+          "in_final_retrieved": false,
+          "loss_stage": "Stage 1 Candidate Generation (Zero Path/Stem Match)"
+        }
+      ],
+      "symbol_traces": [
+        {
+          "symbol": "PackageBuilder",
+          "is_critical": true,
+          "in_intent": true,
+          "in_search_terms": true,
+          "in_ast_extracted": false,
+          "in_final_markdown": true
+        },
+        {
+          "symbol": "Deduplicator",
+          "is_critical": false,
+          "in_intent": false,
+          "in_search_terms": false,
+          "in_ast_extracted": false,
+          "in_final_markdown": false
+        },
+        {
+          "symbol": "Ranker",
+          "is_critical": false,
+          "in_intent": false,
+          "in_search_terms": false,
+          "in_ast_extracted": false,
+          "in_final_markdown": false
+        },
+        {
+          "symbol": "Compressor",
+          "is_critical": false,
+          "in_intent": false,
+          "in_search_terms": false,
+          "in_ast_extracted": false,
+          "in_final_markdown": false
+        },
+        {
+          "symbol": "Categorizer",
+          "is_critical": false,
+          "in_intent": false,
+          "in_search_terms": false,
+          "in_ast_extracted": false,
+          "in_final_markdown": false
+        },
+        {
+          "symbol": "BudgetManager",
+          "is_critical": false,
+          "in_intent": false,
+          "in_search_terms": false,
+          "in_ast_extracted": false,
+          "in_final_markdown": false
+        },
+        {
+          "symbol": "ReferenceResolver",
+          "is_critical": false,
+          "in_intent": false,
+          "in_search_terms": false,
+          "in_ast_extracted": false,
+          "in_final_markdown": false
+        },
+        {
+          "symbol": "MarkdownRenderer",
+          "is_critical": false,
+          "in_intent": false,
+          "in_search_terms": false,
+          "in_ast_extracted": false,
+          "in_final_markdown": false
+        },
+        {
+          "symbol": "build",
+          "is_critical": true,
+          "in_intent": false,
+          "in_search_terms": true,
+          "in_ast_extracted": false,
+          "in_final_markdown": false
+        }
+      ],
+      "competing_irrelevant_files": [
+        {
+          "file": "docs/compose/plans/2026-06-30-context-package-implementation.md",
+          "type": "documentation",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "docs/compose/specs/2026-06-30-context-package-design.md",
+          "type": "documentation",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/tests/test_package_builder.py",
+          "type": "tests",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "src/components/context-builder/ContextPackageOutputPanel.tsx",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "src/components/context-builder/ContextPipelineVisualization.tsx",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "src/components/context-builder/ContextPipelineInputs.tsx",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "src/pages/ContextBuilder.tsx",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/app/api/routers/system.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/app/config/settings.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        }
+      ],
+      "retrieved_files": [
+        "docs/compose/plans/2026-06-30-context-package-implementation.md",
+        "backend/app/services/package_builder.py",
+        "docs/compose/specs/2026-06-30-context-package-design.md",
+        "backend/tests/test_package_builder.py",
+        "src/components/context-builder/ContextPackageOutputPanel.tsx",
+        "src/components/context-builder/ContextPipelineVisualization.tsx",
+        "src/components/context-builder/ContextPipelineInputs.tsx",
+        "src/pages/ContextBuilder.tsx",
+        "backend/app/api/routers/system.py",
+        "backend/app/config/settings.py"
+      ]
+    },
+    {
+      "task_id": "TASK-REFAC-05",
+      "category": "refactoring",
+      "prompt": "How are hardware telemetry measurements and GPU presence detected without introducing vendor library hard dependencies?",
+      "verdict": "PASS",
+      "precision_at_k": 0.333,
+      "recall_at_k": 0.667,
+      "critical_coverage": 0.75,
+      "noise_ratio": 0.0,
+      "failure_category": "PASS",
+      "failure_reasons": [
+        "Missing critical symbols: ['HardwareTelemetryAdapter']"
+      ],
+      "latency_breakdown_ms": {
+        "intent_extraction": 0.06,
+        "term_normalization": 0.05,
+        "stage1_metadata_scoring": 21.24,
+        "stage2_content_inspection": 2.42,
+        "stage3_confidence_filtering": 0.0,
+        "stage4_ast_expansion": 0.16,
+        "total_e2e_latency": 1857.15
+      },
+      "intent_extracted_symbols": [
+        "GPU"
+      ],
+      "intent_file_hints": [],
+      "search_terms": [
+        "GPU",
+        "measurement",
+        "detect",
+        "detecte",
+        "introduc",
+        "introduce",
+        "dependency",
+        "hardware",
+        "telemetry",
+        "measurements",
+        "presence",
+        "detected",
+        "without",
+        "introducing",
+        "vendor",
+        "library",
+        "hard",
+        "dependencies"
+      ],
+      "expected_file_traces": [
+        {
+          "expected_file": "backend/app/services/hardware_telemetry.py",
+          "is_critical": true,
+          "in_s1_pool": true,
+          "s1_rank": 2,
+          "s1_score": 93.0,
+          "in_s1_top25": true,
+          "s2_rank": 1,
+          "s2_score": 133.0,
+          "in_s3_filtered": true,
+          "in_s3_top8": true,
+          "in_s3_top15": true,
+          "in_ast_expanded": false,
+          "in_final_retrieved": true,
+          "loss_stage": "RETAINED"
+        },
+        {
+          "expected_file": "backend/app/application/ports/hardware_telemetry.py",
+          "is_critical": true,
+          "in_s1_pool": true,
+          "s1_rank": 1,
+          "s1_score": 93.0,
+          "in_s1_top25": true,
+          "s2_rank": 2,
+          "s2_score": 117.0,
+          "in_s3_filtered": true,
+          "in_s3_top8": true,
+          "in_s3_top15": true,
+          "in_ast_expanded": false,
+          "in_final_retrieved": true,
+          "loss_stage": "RETAINED"
+        },
+        {
+          "expected_file": "backend/app/application/use_cases/system.py",
+          "is_critical": false,
+          "in_s1_pool": false,
+          "s1_rank": null,
+          "s1_score": 0.0,
+          "in_s1_top25": false,
+          "s2_rank": null,
+          "s2_score": 0.0,
+          "in_s3_filtered": false,
+          "in_s3_top8": false,
+          "in_s3_top15": false,
+          "in_ast_expanded": false,
+          "in_final_retrieved": false,
+          "loss_stage": "Stage 1 Candidate Generation (Zero Path/Stem Match)"
+        }
+      ],
+      "symbol_traces": [
+        {
+          "symbol": "HardwareTelemetryAdapter",
+          "is_critical": true,
+          "in_intent": false,
+          "in_search_terms": false,
+          "in_ast_extracted": false,
+          "in_final_markdown": false
+        },
+        {
+          "symbol": "HardwareTelemetryPort",
+          "is_critical": true,
+          "in_intent": false,
+          "in_search_terms": false,
+          "in_ast_extracted": false,
+          "in_final_markdown": true
+        },
+        {
+          "symbol": "get_hardware_metrics",
+          "is_critical": false,
+          "in_intent": false,
+          "in_search_terms": false,
+          "in_ast_extracted": false,
+          "in_final_markdown": false
+        },
+        {
+          "symbol": "detect_gpu",
+          "is_critical": false,
+          "in_intent": false,
+          "in_search_terms": false,
+          "in_ast_extracted": false,
+          "in_final_markdown": false
+        }
+      ],
+      "competing_irrelevant_files": [
+        {
+          "file": "backend/app/api/routers/system.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/app/config/settings.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/app/models/context_package.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        },
+        {
+          "file": "backend/app/models/errors.py",
+          "type": "source_code",
+          "is_known_irrelevant": false
+        }
+      ],
+      "retrieved_files": [
+        "backend/app/services/hardware_telemetry.py",
+        "backend/app/application/ports/hardware_telemetry.py",
+        "backend/app/api/routers/system.py",
+        "backend/app/config/settings.py",
+        "backend/app/models/context_package.py",
+        "backend/app/models/errors.py"
+      ]
+    }
+  ]
+}

@@ -12,9 +12,17 @@
 - [ADR-002: Cognee as an Infrastructure Adapter (MemoryPort)](#adr-002-cognee-as-an-infrastructure-adapter-memoryport) *(Status: Proposed)*
 - [ADR-003: Headless CLI Priority Before TUI](#adr-003-headless-cli-priority-before-tui) *(Status: Proposed)*
 - [ADR-004: Deterministic AST & Graph Analysis as Core Domain](#adr-004-deterministic-ast--graph-analysis-as-core-domain) *(Status: Accepted / Baseline)*
-- [ADR-005: Truth Boundary Guarantee Between Backend & Frontend](#adr-005-truth-boundary-guarantee-between-backend--frontend) *(Status: Accepted / Baseline)*
-- [ADR-006: Hexagonal Ports & Adapters Architecture for Infrastructure](#adr-006-hexagonal-ports--adapters-architecture-for-infrastructure) *(Status: Proposed)*
 - [ADR-007: Application & Use-Case Layer Boundary](#adr-007-application--use-case-layer-boundary) *(Status: Accepted / Implemented in Phase 1)*
+- [ADR-008: Inbound Boundary Stabilization](#adr-008-inbound-boundary-stabilization) *(Status: Accepted / Implemented in Phase 2)*
+- [ADR-009: Decoupled Outbound Adapters](#adr-009-decoupled-outbound-adapters) *(Status: Accepted / Implemented in Phase 3)*
+- [ADR-010: Canonical Storage Migration & Compatibility](#adr-010-canonical-storage-migration--compatibility) *(Status: Accepted / Implemented in Phase 4)*
+- [ADR-011: Domain Model Refinement & Port Segregation](#adr-011-domain-model-refinement--port-segregation) *(Status: Accepted / Implemented in Phase 5)*
+- [ADR-012: Composition Root Lifecycle & FastAPI Route Modularization](#adr-012-composition-root-lifecycle--fastapi-route-modularization-phase-6) *(Status: Accepted / Implemented in Phase 6)*
+- [ADR-013: Empirical Evaluation & Benchmark Ground Truth Standardization](#adr-013-empirical-evaluation--benchmark-ground-truth-standardization-phase-7) *(Status: Accepted / Implemented in Phase 7)*
+- [ADR-014: Controlled Retrieval Optimization Experiments](#adr-014-controlled-retrieval-optimization-experiments-phase-7e) *(Status: Accepted / Completed in Phase 7E)*
+- [ADR-015: MCP Server Inbound Driving Adapter](#adr-015-mcp-server-inbound-driving-adapter-phase-8a) *(Status: Accepted / Implemented in Phase 8A)*
+- [ADR-016: MCP Production Hardening & Trust Boundary Enforcement](#adr-016-mcp-production-hardening--trust-boundary-enforcement-phase-8b) *(Status: Accepted / Implemented in Phase 8B)*
+- [ADR-017: MCP Operational Lifecycle & Reliability Hardening](#adr-017-mcp-operational-lifecycle--reliability-hardening-phase-8c) *(Status: Accepted / Implemented in Phase 8C)*
 
 ---
 
@@ -341,4 +349,126 @@ In earlier phases, `ApplicationContainer` was eagerly instantiated as a module-l
 - **Negative**:
    - Additional routing files requiring coordinated updates when introducing new endpoints.
 
+---
 
+## ADR-013: Empirical Evaluation & Benchmark Ground Truth Standardization (Phase 7)
+
+### Status
+**Accepted / Implemented (Phase 7)**
+
+### Context
+Following the completion of structural refactoring in Phases 1–6, RE:Track needed a trustworthy, reproducible method to evaluate the retrieval quality, precision, recall, and evidence coverage of the Context Engine. Prior benchmarks suffered from path disconnects (`benchmarks/retrack` vs `benchmarks/andescontext`), synthetic mock data scoring that bypassed live components, and hardcoded placeholder accuracy summaries (`"Not evaluated (no ground truth set)"`).
+
+### Decision
+1. **Canonical Golden Task Benchmark Dataset**:
+   - Establish `benchmarks/retrack/golden_tasks.json` containing 20 high-quality tasks across four core categories (Architecture, Bug Localization, Feature Addition, Refactoring).
+   - Define exact ground-truth expected files, critical files, expected symbols, critical symbols, and negative/irrelevant files based on manual code inspection.
+   - Maintain `benchmarks/andescontext/` as a backward-compatible legacy fallback.
+2. **Pure Evaluation Engine**:
+   - Implement `tests/evaluation/evaluator.py` containing deterministic algorithms for Precision@K, Recall@K, Critical Evidence Coverage, Noise Ratio, and Token Compression.
+   - Zero dependencies on Cognee or heavy infrastructure in the evaluation math.
+3. **Automated Evaluation Test Suite**:
+   - Construct `tests/evaluation/test_context_engine_eval.py` and `reporter.py` to execute real Context Engine components without synthetic mock shortcuts, generating an empirical baseline scorecard (`benchmarks/retrack/context_engine_baseline_scorecard.md`).
+4. **Dynamic API Benchmark Reporting**:
+   - Update `BenchmarkService` in `app/services/benchmark_service.py` to dynamically load ground-truth tasks and calculate empirical critical evidence coverage rather than returning static placeholder strings.
+
+### Consequences
+- **Positive**:
+   - Empirical baseline established across 20 real tasks (Mean Compression: 19.73x, Mean Retrieval Latency: 15.0ms, Mean Noise: 0.013).
+   - 100% backend test pass rate (365 passed, 0 skipped, 0 failed).
+   - Transparent measurement of retrieval gaps to guide future retrieval optimizations.
+- **Negative**:
+   - Requires maintaining golden task ground truth alongside codebase evolutions.
+
+---
+
+## ADR-014: Controlled Retrieval Optimization Experiments (Phase 7E)
+
+### Status
+**Accepted / Completed (Phase 7E)**
+
+### Context
+Phase 7D diagnostic traces identified retrieval bottlenecks across the 20 golden tasks. Before implementing broad architectural changes or multi-hop AST resolvers, Phase 7E was commissioned to experimentally isolate 7 key hypotheses against the live `ContextUseCases.get_agent_context` production pipeline using `NullContextCache`.
+
+### Decision
+1. **Resolved Evaluation Metric Discrepancies**:
+   - Codified `tests/evaluation/evaluator.py` as the sole evaluation authority.
+   - Defined $K=10$ as the evaluation cut-off window.
+2. **Experimental Matrix Classifications**:
+   - **AST Complete File Indexing (500 Nodes)**: `PROVEN` (+10.4% Recall, +9.2% Critical Coverage, 259ms build time).
+   - **Deterministic Intent Priors**: `PROVEN` (Pass rate increased from 40% to 70%, Critical Coverage to 0.650 without LLM latency).
+   - **Repository Summary Fingerprint Caching**: `PROVEN` (9.3x speedup, 246ms -> 26.6ms).
+   - **Dynamic Candidate Trimming ($K < 10$)**: `REJECTED` (Degraded recall from 0.49 to 0.26).
+   - **Static Test-File Scoring Penalty**: `REJECTED` (Suppressed required test evidence in diagnostic tasks).
+   - **CGC Subprocess Architecture**: `PROVEN BOTTLENECK` (2135ms mean latency prohibits CLI subprocess in hot path).
+
+---
+
+## ADR-015: MCP Server Inbound Driving Adapter (Phase 8A)
+
+### Status
+**Accepted / Implemented (Phase 8A)**
+
+### Context
+External AI coding assistants require standardized access to RE:Track's persistent repository memory, deterministic AST call graphs, architectural summaries, and high-precision context packages via the Model Context Protocol (MCP) over stdio.
+
+### Decision
+1. **Hexagonal Driving Adapter Placement**:
+   - Implement MCP strictly as an inbound transport adapter in `backend/app/mcp/` (`server.py`, `tools.py`).
+   - The MCP layer depends exclusively on Application Use Cases, DTOs, and the composition root `ApplicationContainer`. Zero direct imports of databases or Cognee.
+2. **Standardized MVP Tool Surface (5 Tools)**:
+   - `get_agent_context`: Token-budgeted context synthesis with caller/callee graphs and symbol references.
+   - `get_repository_summary`: High-level architectural knowledge, tech stack, and key components.
+   - `get_ast_call_graph`: Deterministic AST call graph with optional path prefix filtering.
+   - `search_repository_code`: High-speed symbol and keyword search across repository source files.
+   - `list_indexed_repositories`: Lists all registered repositories with metadata and status.
+3. **No Subprocess Bottleneck Invariant**:
+   - Prohibit spawning external CLI subprocesses during retrieval.
+
+---
+
+## ADR-016: MCP Production Hardening & Trust Boundary Enforcement (Phase 8B)
+
+### Status
+**Accepted / Implemented (Phase 8B)**
+
+### Context
+A hostile production-boundary audit of Phase 8A identified security vulnerabilities and boundary gaps: arbitrary host directory scanning, symlink escapes, cross-repository dataset collision for matching directory basenames, eager concurrency rejection, and unhandled exception leaks across JSON-RPC.
+
+### Decision
+1. **Workspace Authorization Boundary**:
+   - Define `WorkspaceAuthorizationPort` and `WorkspaceAuthorizationService`.
+   - Restrict MCP access to explicitly registered repositories and configured `RETRACK_WORKSPACE_ROOTS`.
+   - Prohibit access to root filesystems (`/`, `C:\`), system directories (`/etc`, `/proc`, `/sys`), and credential stores (`~/.ssh`, `~/.gnupg`).
+   - Prune symlinks escaping the authorized repository boundary during discovery and indexing.
+2. **Dataset Identity & Memory Isolation**:
+   - Implement deterministic collision-proof dataset identifiers: `{sanitized_basename}_{path_sha256_10hex}` via `derive_dataset_name()`.
+   - Physically isolate memory across distinct repositories with identical folder basenames.
+3. **Bounded Concurrency & Queueing**:
+   - Implement `BoundedConcurrencyGuard` with `max_concurrent=1`, `max_queue=5`, and `timeout=30.0s`.
+   - Replace eager rejection with FIFO queueing; reject on queue saturation with retryable `BusyError`.
+4. **Exception Isolation Boundary**:
+   - Encapsulate all MCP tool handlers in exception boundaries mapping unexpected errors to sanitized, structured error DTOs (`ValidationError`, `AuthorizationError`, `ConnectionError`, `InternalError`).
+
+---
+
+## ADR-017: MCP Operational Lifecycle & Reliability Hardening (Phase 8C)
+
+### Status
+**Accepted / Implemented (Phase 8C)**
+
+### Context
+Operational reliability testing revealed that the concurrency guard was instantiated per-use-case factory call rather than shared across MCP requests, logging defaulted to stdout (risking JSON-RPC framing corruption), and stdin EOF handling needed graceful process termination.
+
+### Decision
+1. **Process-Scoped Shared Concurrency Guard**:
+   - Instantiated singleton `BoundedConcurrencyGuard` on `ApplicationContainer` and injected into `ContextUseCases`.
+   - Enforced single-worker execution with 5-slot FIFO queueing across all simultaneous MCP requests.
+2. **Stdio Protocol & Logging Separation**:
+   - Configured `setup_logging` to write strictly to `sys.stderr` across all modules (including Cognee and structlog).
+   - Dedicated `sys.stdout` exclusively to clean, uncorrupted JSON-RPC frames.
+3. **Graceful Stdio EOF & Signal Shutdown**:
+   - Hardened `run_mcp_stdio` to terminate cleanly within 0.15s on stdin EOF, `SIGINT`, `SIGTERM`, or asyncio task cancellation.
+4. **Verified Same-Process Automatic Provider Recovery**:
+   - Confirmed deterministic tools operate independently of LLM reachability.
+   - Proved that when a failed LLM provider is restored, subsequent context synthesis calls recover automatically in the same running MCP process without restart.

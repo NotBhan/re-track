@@ -1,0 +1,275 @@
+{
+  "TASK-ARCH-01": {
+    "question": "How is the backend structured and how does the composition root initialize use cases and infrastructure services?",
+    "expected_symbols": [
+      "ApplicationContainer",
+      "create",
+      "get_container",
+      "lifespan"
+    ],
+    "critical_symbols": [
+      "ApplicationContainer",
+      "create"
+    ]
+  },
+  "TASK-ARCH-02": {
+    "question": "How does RE:Track enforce the dual-path storage contract between canonical ~/.retrack/ and legacy read-only ~/.andes/?",
+    "expected_symbols": [
+      "RepositoryMetadataStore",
+      "RepositoryManager",
+      "_resolve_read_path",
+      "ensure_directories"
+    ],
+    "critical_symbols": [
+      "RepositoryMetadataStore",
+      "RepositoryManager"
+    ]
+  },
+  "TASK-ARCH-03": {
+    "question": "How are MemoryPort capabilities segregated into granular protocols and what domain models represent memory datasets?",
+    "expected_symbols": [
+      "MemoryLifecyclePort",
+      "MemoryIngestionPort",
+      "MemoryRetrievalPort",
+      "MemoryDatasetPort",
+      "MemoryTopologyPort",
+      "MemoryDatasetRecord",
+      "MemoryGraphRecord"
+    ],
+    "critical_symbols": [
+      "MemoryLifecyclePort",
+      "MemoryDatasetRecord"
+    ]
+  },
+  "TASK-ARCH-04": {
+    "question": "How are FastAPI routes modularized and how do routers access application use cases without direct container coupling?",
+    "expected_symbols": [
+      "all_routers",
+      "get_context_use_cases",
+      "get_indexing_use_cases",
+      "get_container"
+    ],
+    "critical_symbols": [
+      "all_routers",
+      "get_container"
+    ]
+  },
+  "TASK-ARCH-05": {
+    "question": "What is the complete data flow from repository indexing to multi-stage Context Package synthesis?",
+    "expected_symbols": [
+      "IndexingService",
+      "ContextService",
+      "PackageBuilder",
+      "generate_context_package",
+      "remember",
+      "recall"
+    ],
+    "critical_symbols": [
+      "IndexingService",
+      "ContextService",
+      "PackageBuilder"
+    ]
+  },
+  "TASK-BUG-01": {
+    "question": "Where would a bug occur if a repository clone operation accidentally attempted to delete or overwrite legacy ~/.andes/repos/?",
+    "expected_symbols": [
+      "RepositoryManager",
+      "delete_repository",
+      "create_repository",
+      "_is_legacy_path"
+    ],
+    "critical_symbols": [
+      "RepositoryManager"
+    ]
+  },
+  "TASK-BUG-02": {
+    "question": "Where would an agent context synthesis cache hit fail to invalidate after repository source files change?",
+    "expected_symbols": [
+      "ContextCache",
+      "make_key",
+      "get",
+      "set",
+      "manifest_hash"
+    ],
+    "critical_symbols": [
+      "ContextCache",
+      "make_key"
+    ]
+  },
+  "TASK-BUG-03": {
+    "question": "If token budgeting drops critical task objectives or file references under tight token constraints, which component is responsible?",
+    "expected_symbols": [
+      "BudgetManager",
+      "apply",
+      "_CRITICAL",
+      "_HIGH",
+      "_MEDIUM",
+      "_LOW"
+    ],
+    "critical_symbols": [
+      "BudgetManager",
+      "apply"
+    ]
+  },
+  "TASK-BUG-04": {
+    "question": "Where is concurrent context generation prevented from overwhelming system VRAM/RAM during simultaneous agent requests?",
+    "expected_symbols": [
+      "context_gen_lock",
+      "ConcurrencyError",
+      "_lock"
+    ],
+    "critical_symbols": [
+      "context_gen_lock"
+    ]
+  },
+  "TASK-BUG-05": {
+    "question": "If Ollama is unreachable or crashes during context generation, where is the health fallback handled without failing the entire request?",
+    "expected_symbols": [
+      "LLMProviderService",
+      "check_health",
+      "quantization_warning",
+      "generate_context_package"
+    ],
+    "critical_symbols": [
+      "LLMProviderService",
+      "check_health"
+    ]
+  },
+  "TASK-FEAT-01": {
+    "question": "How do I implement a new capability port for external Model Context Protocol (MCP) server integration?",
+    "expected_symbols": [
+      "Protocol",
+      "ApplicationContainer"
+    ],
+    "critical_symbols": [
+      "Protocol",
+      "ApplicationContainer"
+    ]
+  },
+  "TASK-FEAT-02": {
+    "question": "Where should new source file extension filters and directory ignore patterns be registered in the indexing service?",
+    "expected_symbols": [
+      "SUPPORTED_EXTENSIONS",
+      "IGNORED_DIRS",
+      "IGNORED_PATTERNS",
+      "IndexingService"
+    ],
+    "critical_symbols": [
+      "SUPPORTED_EXTENSIONS",
+      "IGNORED_DIRS"
+    ]
+  },
+  "TASK-FEAT-03": {
+    "question": "How do I add a new rule-based categorization keyword set to classify configuration and infrastructure files into dedicated sections?",
+    "expected_symbols": [
+      "Categorizer",
+      "_ARCHITECTURE_KEYWORDS",
+      "_API_KEYWORDS",
+      "_CONVENTION_KEYWORDS",
+      "_DECISION_KEYWORDS",
+      "categorize"
+    ],
+    "critical_symbols": [
+      "Categorizer",
+      "categorize"
+    ]
+  },
+  "TASK-FEAT-04": {
+    "question": "Where would I add new deterministic intent heuristic rules for detecting database migration or test generation requests?",
+    "expected_symbols": [
+      "ParsedIntentRecord",
+      "parse_intent_heuristics"
+    ],
+    "critical_symbols": [
+      "parse_intent_heuristics",
+      "ParsedIntentRecord"
+    ]
+  },
+  "TASK-FEAT-05": {
+    "question": "How do I add a new context package persistence endpoint to append follow-up prompt threads to an existing saved context package?",
+    "expected_symbols": [
+      "PackageUseCases",
+      "ContextPackageRepository",
+      "append_to_package"
+    ],
+    "critical_symbols": [
+      "PackageUseCases",
+      "ContextPackageRepository"
+    ]
+  },
+  "TASK-REFAC-01": {
+    "question": "How was DEBT-003 resolved in ApplicationContainer to eliminate eager module-level global construction?",
+    "expected_symbols": [
+      "ApplicationContainer",
+      "_container",
+      "create",
+      "get_container",
+      "set_container",
+      "reset_container"
+    ],
+    "critical_symbols": [
+      "ApplicationContainer",
+      "create",
+      "get_container"
+    ]
+  },
+  "TASK-REFAC-02": {
+    "question": "How were application DTOs decoupled from API transport schemas to ensure headless use cases?",
+    "expected_symbols": [
+      "GenerateContextRequest",
+      "ContextResponse",
+      "AgentContextRequest",
+      "AgentContextResponse"
+    ],
+    "critical_symbols": [
+      "GenerateContextRequest",
+      "ContextResponse"
+    ]
+  },
+  "TASK-REFAC-03": {
+    "question": "How is the AST call graph generated deterministically without invoking external LLM models?",
+    "expected_symbols": [
+      "RepositorySummary",
+      "CallNode",
+      "CallEdge",
+      "_analyze_python_ast",
+      "_build_call_graph"
+    ],
+    "critical_symbols": [
+      "RepositorySummary",
+      "CallNode",
+      "CallEdge"
+    ]
+  },
+  "TASK-REFAC-04": {
+    "question": "How does PackageBuilder compose the retrieval pipeline stages into a single cohesive assembly flow?",
+    "expected_symbols": [
+      "PackageBuilder",
+      "Deduplicator",
+      "Ranker",
+      "Compressor",
+      "Categorizer",
+      "BudgetManager",
+      "ReferenceResolver",
+      "MarkdownRenderer",
+      "build"
+    ],
+    "critical_symbols": [
+      "PackageBuilder",
+      "build"
+    ]
+  },
+  "TASK-REFAC-05": {
+    "question": "How are hardware telemetry measurements and GPU presence detected without introducing vendor library hard dependencies?",
+    "expected_symbols": [
+      "HardwareTelemetryAdapter",
+      "HardwareTelemetryPort",
+      "get_hardware_metrics",
+      "detect_gpu"
+    ],
+    "critical_symbols": [
+      "HardwareTelemetryAdapter",
+      "HardwareTelemetryPort"
+    ]
+  }
+}

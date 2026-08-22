@@ -126,15 +126,13 @@ class CGCService:
         related_files = set()
         relations = []
 
-        for symbol in target_symbols[:8]:
-            # Run Cypher query on code graph to retrieve CALLS and DEFINES relations
+        async def _query_symbol(symbol: str):
             query = (
                 f"MATCH (s)-[r:CALLS]->(t) "
                 f"WHERE s.name CONTAINS '{symbol}' OR t.name CONTAINS '{symbol}' "
                 f"RETURN s.name AS src, type(r) AS rel, t.name AS tgt, "
                 f"s.file_path AS s_file, t.file_path AS t_file LIMIT 15"
             )
-
             cmd = [self._cgc_bin, "query", query]
             try:
                 process = await asyncio.create_subprocess_exec(
@@ -143,7 +141,7 @@ class CGCService:
                     stderr=asyncio.subprocess.PIPE,
                     cwd=str(repo_path),
                 )
-                stdout, _ = await asyncio.wait_for(process.communicate(), timeout=8.0)
+                stdout, _ = await asyncio.wait_for(process.communicate(), timeout=3.0)
                 out_str = stdout.decode()
                 
                 # Parse stdout rows or matches
@@ -168,6 +166,8 @@ class CGCService:
                                 related_files.add(parts[3])
             except Exception as e:
                 logger.debug("CGC query error for symbol %s: %s", symbol, e)
+
+        await asyncio.gather(*[_query_symbol(s) for s in target_symbols[:6]])
 
         return StructuralContextResult(
             symbols_found=list(set(found_symbols)),

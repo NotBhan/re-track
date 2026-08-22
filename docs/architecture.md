@@ -10,131 +10,107 @@ Rather than directly exposing memory backends to the frontend, all interactions 
 
 ---
 
-# High-Level Architecture
+# # High-Level Architecture (Hexagonal / Ports & Adapters)
 
 ```text
-┌───────────────────────────────────────────────────────────────┐
-│                      RE:Track Desktop UI                      │
-├───────────────────────────────────────────────────────────────┤
-│                     React + Vite + Tauri                      │
-│                                                               │
-│  • Context Studio (Prompt Workbench, Provenance, Package)     │
-│  • Knowledge Explorer (5-State AST Topology & Call Graph)     │
-│  • Repositories (Catalog & Indexing Telemetry)                │
-│  • Memory (Multi-Tier Storage Inspector)                      │
-│  • Benchmarks (Deterministic Baseline Evaluation)             │
-│  • Settings (Provider Configuration & Telemetry)              │
-└──────────────────────────────┬────────────────────────────────┘
-                               │
-                           Tauri IPC
-                               │
-                               ▼
-┌───────────────────────────────────────────────────────────────┐
-│                      Python Backend (3.12)                    │
-├───────────────────────────────────────────────────────────────┤
-│                                                               │
-│  IndexingService           ✅ .gitignore-aware file discovery  │
-│  ManifestService           ✅ SHA256 file fingerprinting       │
-│  RepositorySummaryGenerator✅ 2-pass deterministic AST resolver│
-│  IntentParserService       ✅ Task intent & symbol extractor   │
-│  CogneeService             ✅ Cognee memory lifecycle wrapper  │
-│  ContextService            ✅ Discrete latency instrumentation │
-│  PackageBuilder            ✅ Dedup → Rank → Compress → Render │
-│  BudgetManager             ✅ Line-boundary token compression  │
-│  BenchmarkEngine           ✅ Source baseline token evaluator  │
-│  LLMProviderService        ✅ Multi-provider health manager    │
-│                                                               │
-└──────────────────────────────┬────────────────────────────────┘
-                               │
-                               ▼
-┌───────────────────────────────────────────────────────────────┐
-│                         Storage Layer                         │
-├───────────────────────────────────────────────────────────────┤
-│                                                               │
-│  • Ingested Source Files   → Local Filesystem & Manifest      │
-│  • Vector Semantic Index   → LanceDB (Embeddings)             │
-│  • Knowledge Graph Store   → Kùzu (Entities & Relationships)  │
-│  • Relational Metadata     → SQLite                           │
-│                                                               │
-└───────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────────────────────────────┐
+│                                INBOUND / DRIVING ADAPTERS                              │
+├──────────────────────────────┬──────────────────────────────┬──────────────────────────┤
+│      Desktop UI (Tauri)      │         Headless CLI         │   MCP Server (stdio)     │
+│    React + Vite + Tailwind   │      Typer / Argparse        │  FastMCP 5 Tools Surface │
+└──────────────┬───────────────┴──────────────┬───────────────┴─────────────┬────────────┘
+               │                              │                             │
+               ▼                              ▼                             ▼
+┌────────────────────────────────────────────────────────────────────────────────────────┐
+│                        COMPOSITION ROOT (ApplicationContainer)                         │
+├────────────────────────────────────────────────────────────────────────────────────────┤
+│                                 APPLICATION USE CASES                                  │
+│                                                                                        │
+│  • ContextUseCases           ✅ Retrieval, ranking, synthesis & BoundedConcurrencyGuard│
+│  • IndexingUseCases          ✅ Discovery, filtering, manifest fingerprinting, cognify │
+│  • RepositoryUseCases        ✅ Catalog CRUD, summary generation, AST call graph       │
+│  • MemoryUseCases            ✅ Dataset isolation, multi-tier inspection, forget       │
+│  • PackageUseCases           ✅ Versioned context package storage, export, comparison  │
+│  • SystemUseCases            ✅ Provider reachability & hardware telemetry              │
+└──────────────┬──────────────────────────────┬─────────────────────────────┬────────────┘
+               │                              │                             │
+               ▼                              ▼                             ▼
+┌────────────────────────────────────────────────────────────────────────────────────────┐
+│                             OUTBOUND PORTS (Domain Interfaces)                         │
+├──────────────────────────────┬──────────────────────────────┬──────────────────────────┤
+│    MemoryPort / Cognee       │  SourceSearch / AST Engine   │  WorkspaceAuthorization  │
+│  MetadataStore / Filesystem  │  ContextPackageRepository    │    HardwareTelemetry     │
+└──────────────┬───────────────┴──────────────┬───────────────┴─────────────┬────────────┘
+               │                              │                             │
+               ▼                              ▼                             ▼
+┌────────────────────────────────────────────────────────────────────────────────────────┐
+│                           DRIVEN / INFRASTRUCTURE ADAPTERS                             │
+├────────────────────────────────────────────────────────────────────────────────────────┤
+│  • CogneeMemoryAdapter       → LanceDB (Vectors) + Kùzu (Knowledge Graph) + SQLite     │
+│  • RepositorySummaryGenerator→ 2-Pass Deterministic AST Call Graph Resolver            │
+│  • SourceSearchService       → In-process regex/token source search & symbol matching  │
+│  • WorkspaceAuthorizationSvc → Path containment & symlink escape defense-in-depth      │
+│  • LocalFilesystemAdapter    → Canonical ~/.retrack/ & legacy metadata stores          │
+│  • HardwareTelemetryAdapter  → GPU detection (NVIDIA/ROCm/Apple) & RAM pressure meter  │
+└────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
 # Architectural Principles
 
-The architecture follows five primary principles:
+The architecture follows six primary principles:
 
-1. **Truth Boundary Authority**: The backend is the sole authority for repository analysis, graph identity, memory statistics, benchmark measurements, and hardware telemetry. The frontend never synthesizes fallback data or masks unknown states with fake zeroes.
-2. **Deterministic Static Certainty**: AST and call graph analysis prioritize static certainty over graph completeness. Unresolved or dynamic symbols produce no internal edge.
-3. **Local-First Execution**: All indexing, AST parsing, vector storage, and inference run locally on the developer's machine without external data transmission.
-4. **Explicit Memory Layering**: Ingested raw files, vector embeddings, and knowledge graph entities are separated into independent, inspectable storage tiers.
-5. **Token Budget Enforcement**: Context Packages enforce hard prompt token limits using line-boundary compression.
+1. **Truth Boundary Authority**: The backend is the sole authority for repository analysis, graph identity, memory statistics, benchmark measurements, and hardware telemetry. The frontend and MCP clients never synthesize fallback data or mask unknown states.
+2. **Hexagonal Driving Boundary**: Use cases are completely isolated from HTTP, CLI, and MCP transport concerns. Swapping or adding an inbound interface requires zero domain changes.
+3. **Defense-in-Depth Trust Boundary**: External MCP clients are restricted to registered repositories or configured workspace roots (`RETRACK_WORKSPACE_ROOTS`). System files and escaping symlinks are rejected.
+4. **Deterministic Static Certainty**: AST and call graph analysis prioritize static certainty over graph completeness. Ambiguous symbols produce no internal edge.
+5. **Collision-Proof Dataset Identity**: Context memory is partitioned via `{sanitized_name}_{path_sha256_10hex}` to physically prevent cross-repository memory pollution.
+6. **Token Budget Enforcement**: Context Packages enforce hard prompt token limits using line-boundary compression.
 
 ---
 
 # Layer Responsibilities
 
-## Frontend
+## 1. Inbound Driving Adapters
 
-Responsible for:
-- User interaction and prompt authoring
-- 5-state AST call graph rendering with force-directed physics
-- Connected path highlighting and Symbol Inspector drawer
-- Progressive markdown rendering for generated Context Packages
-- Multi-tier memory inspection and deterministic benchmark triggers
-- Hardware telemetry presentation (GPU presence vs active device, RAM pressure)
+- **FastAPI Modular Routers (`backend/app/api/routers/`)**: Exposes REST endpoints for the desktop Tauri interface across 7 domain modules.
+- **Headless CLI (`backend/app/cli/`)**: Standalone terminal interface for indexing, searching, and generating context packages.
+- **MCP Stdio Server (`backend/app/mcp/`)**: FastMCP stdio interface exposing 5 standardized tools with strict stderr logging and clean EOF/signal shutdown semantics.
 
-The frontend never communicates with Cognee or SQLite directly.
+## 2. Application Layer & Use Cases
 
----
+- **ContextUseCases**: Coordinates memory retrieval, AST topology injection, line-boundary compression, and markdown rendering under a shared `BoundedConcurrencyGuard` (`max_concurrent=1`, `max_queue=5`, `timeout=30.0s`).
+- **IndexingUseCases**: Traverses repository files, enforces `.gitignore`/`.agentignore`, creates SHA256 file fingerprints, and coordinates Cognee ingestion.
+- **RepositoryUseCases**: Manages repository registrations, status lifecycles, and triggers 2-pass deterministic AST summary generation.
+- **WorkspaceAuthorizationService**: Validates repository paths against registered roots and configured `RETRACK_WORKSPACE_ROOTS`, pruning symlink escapes.
 
-## Backend Services
+## 3. Driven Infrastructure Adapters
 
-### 1. RepositorySummaryGenerator (`backend/app/services/repository_summary.py`)
-- Traverses codebase files respecting `.gitignore` patterns dynamically.
-- Implements a 2-pass deterministic AST resolver:
-  - Pass 1: Registers module symbol tables, class definitions, function signatures, exported components, and import alias tables (`import X as Y`, `from A import B as C`, `@/` and `~/` path aliases).
-  - Pass 2: Resolves qualified names and function calls (`ast.Call`), class inheritance (`ast.ClassDef.bases`), and JSX renders (`<Component />`).
-- **Graph Integrity Invariant**: Every `CallEdge.source` and `CallEdge.target` strictly resolves to an existing `CallNode.id`. Ambiguous symbols produce zero edges.
-- Emits 5 explicit states: `"not_analyzed"`, `"analyzing"`, `"analyzed"`, `"zero_edges"`, `"failed"`.
-
-### 2. CogneeService (`backend/app/services/cognee_service.py`)
-- Encapsulates Cognee memory lifecycle: `remember()`, `recall()`, `improve()`, `forget()`.
-- Configures internal provider settings for LanceDB, Kùzu, and SQLite.
-
-### 3. ContextService & PackageBuilder (`backend/app/services/context_service.py`, `package_builder.py`)
-- Coordinates retrieval from vector and graph stores.
-- Instruments discrete latency timings: `retrieval_time_ms`, `ranking_time_ms`, `synthesis_time_ms`, `total_time_ms`.
-- Pipeline stages:
-  - **Deduplicator**: removes duplicate memories via normalized text comparison.
-  - **Ranker**: scores entries by semantic relevance, confidence, and type weights.
-  - **Compressor**: compresses redundant facts while preserving actionable code entities.
-  - **Categorizer**: groups facts into structured Markdown sections.
-  - **ReferenceResolver**: generates traceable source citations.
-
-### 4. BudgetManager (`backend/app/services/budget_manager.py`)
-- Enforces user-configured token budgets (e.g. 4,000 or 8,000 tokens).
-- Trims low-priority sections and compresses high-priority sections cleanly at line boundaries.
-
-### 5. BenchmarkEngine (`backend/app/api/benchmarks.py`)
-- Calculates deterministic baseline tokens across all eligible repository source files using the `character-4b-heuristic` tokenizer.
-- Computes `compression_ratio` and `token_savings_percent`.
-- Records immutable run metadata: repository path, Git commit SHA, eligible source file count, active model, execution device (`CPU`/`GPU`), and evaluation timestamp.
+- **RepositorySummaryGenerator**: Multi-language 2-pass AST call graph resolver (Python ClassDef/FunctionDef/Call, TypeScript/React JSX renders) with absolute graph integrity (`CallEdge.source/target` exist in `node_ids`).
+- **CogneeMemoryAdapter**: Bridges `MemoryPort` to Cognee memory lifecycle (`remember`, `recall`, `improve`, `forget`), LanceDB, and Kùzu.
+- **ContextPackageRepository**: Manages persistent JSON stores for synthesized context packages.
 
 ---
 
 # Verification & Test Coverage
 
-The system is validated through 294 automated unit tests:
+The system is validated through 415 automated unit, integration, security, and benchmark tests:
 
 ```bash
-# Full test suite
-cd backend && pytest tests/ -q
+# Full test suite (415 passed)
+cd backend && uv run pytest tests/ -q
+
+# MCP and Security regression suite
+cd backend && uv run pytest tests/test_workspace_authorization.py tests/test_dataset_identity_isolation.py tests/test_mcp_concurrency_lifecycle.py tests/test_mcp_stdio_shutdown.py tests/test_mcp_logging_integrity.py tests/test_mcp_provider_recovery.py tests/test_mcp_adapter.py -v
 
 # AST deterministic resolution tests
-cd backend && pytest tests/test_ast_integrity.py -v
+cd backend && uv run pytest tests/test_ast_integrity.py -v
+
+# Golden benchmark evaluation
+cd backend && uv run pytest tests/evaluation/ -v
 
 # Frontend typecheck & build
 npm run build
 ```
+

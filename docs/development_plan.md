@@ -37,10 +37,41 @@ This document tracks the phased development milestones and operational roadmap f
 - [x] Visual Token Budget comparison bar chart (Raw Repo vs RE:Track Context).
 - [x] Settings tab for dynamic LLM provider configuration and hot-reloading (`OllamaSettings.tsx`).
 
+### Phase 6: Hexagonal Architecture & Composition Root (Completed)
+- [x] Architectural separation into Inbound Driving Adapters, Application Use Cases, Outbound Ports, and Driven Infrastructure Adapters.
+- [x] Centralized composition root (`ApplicationContainer`) with container lifecycle management (`get_container()`, `reset_container()`).
+- [x] Modular FastAPI route architecture (`app/api/routers/`) separating system, repository, context, memory, packages, benchmarks, and settings.
+- [x] Canonical storage migration with backward-compatible legacy storage adapters.
+
+### Phase 7: Empirical Benchmarks & Retrieval Validation (Completed)
+- [x] Canonical golden task dataset (`benchmarks/retrack/golden_tasks.json`, 20 tasks across 4 categories).
+- [x] Pure deterministic evaluation engine (`tests/evaluation/evaluator.py`) measuring Precision@K, Recall@K, Critical Evidence Coverage, and Noise Ratio.
+- [x] Phase 7E controlled retrieval experiments (proven AST indexing, intent priors, fingerprint caching; CGC subprocess prohibited on hot path).
+
+### Phase 8A: MCP Server Inbound Driving Adapter (Completed)
+- [x] FastMCP stdio server (`backend/app/mcp/`) exposing 5 standardized tools: `get_agent_context`, `get_repository_summary`, `get_ast_call_graph`, `search_repository_code`, `list_indexed_repositories`.
+- [x] Pure Hexagonal boundary wiring directly to `ApplicationContainer` use cases without database or Cognee coupling.
+- [x] In-process AST and search execution avoiding subprocess bottlenecks.
+
+### Phase 8B: MCP Production Hardening & Trust Boundary Enforcement (Completed)
+- [x] Workspace authorization boundary (`WorkspaceAuthorizationPort` & `WorkspaceAuthorizationService`) restricting access to registered repos and `RETRACK_WORKSPACE_ROOTS`.
+- [x] Path containment and symlink escape pruning.
+- [x] Deterministic collision-proof dataset identity isolation (`derive_dataset_name`).
+- [x] Bounded context concurrency guard (`max_concurrent=1`, `max_queue=5`, `timeout=30.0s`) with retryable `BusyError`.
+- [x] MCP exception isolation boundary returning sanitized structured error responses.
+
+### Phase 8C: MCP Operational Lifecycle & Reliability Validation (Completed)
+- [x] Process-scoped shared concurrency guard lifecycle on `ApplicationContainer`.
+- [x] Stderr-only logging separation (`setup_logging(stream=sys.stderr)`) preserving clean JSON-RPC stdout frames.
+- [x] Clean stdio EOF, SIGINT, SIGTERM, and cancellation termination semantics (< 0.15s).
+- [x] Verified LLM provider failure resilience and automatic same-process recovery without server restart.
+
 ---
 
 ## 2. Quality & Verification Metrics
 
-- **Backend Pytest Suite:** 284 passing unit/integration tests (`backend/tests/`).
+- **Backend Pytest Suite:** 415 passing unit/integration/benchmark tests across 28 test files (`backend/tests/`).
 - **Frontend Build & Types:** 100% clean TypeScript compile and Vite production build (`npm run build`).
 - **Design System:** Vercel Geist aesthetic with dark mode canvas (`#000000`), micro-animations (`motion/react`), and high-contrast typography.
+- **Protocol Compliance:** 100% clean JSON-RPC framing on stdio; 0 unhandled exception leaks across MCP tools.
+

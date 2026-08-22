@@ -11,6 +11,7 @@ from pathlib import Path
 import time
 from typing import Callable, Optional
 
+from app.application.domain.dataset_identity import derive_dataset_name
 from app.application.domain.repository import (
     ArchitectureLayerRecord,
     ComponentRecord,
@@ -29,6 +30,7 @@ from app.application.ports.filesystem import FileSystemPort
 from app.application.ports.indexing_service import IndexingServicePort
 from app.application.ports.repository_metadata import RepositoryMetadataPort
 from app.application.ports.summary_generator import SummaryGeneratorPort
+from app.application.ports.workspace_authorization import WorkspaceAuthorizationPort
 from app.models.errors import CogneeServiceError
 
 logger = logging.getLogger(__name__)
@@ -45,6 +47,7 @@ class IndexingUseCases:
         summary_generator: SummaryGeneratorPort,
         metadata_store: Optional[RepositoryMetadataPort] = None,
         filesystem: Optional[FileSystemPort] = None,
+        workspace_auth: Optional[WorkspaceAuthorizationPort] = None,
     ) -> None:
         self._indexing_service = indexing_service
         self._lock = indexing_lock
@@ -52,6 +55,7 @@ class IndexingUseCases:
         self._summary_generator = summary_generator
         self._metadata_store = metadata_store
         self._fs = filesystem
+        self._workspace_auth = workspace_auth
 
     async def index_repository(
         self,
@@ -87,6 +91,9 @@ class IndexingUseCases:
                 if not repo_path.is_dir():
                     raise ValueError(f"Repository path is not a directory: {request.repository_path}")
 
+            if str(repo_path) in ("/", "\\", "C:\\", "C:/"):
+                raise ValueError("Scanning the filesystem root directory is prohibited")
+
             if self._lock.locked():
                 logger.warning("use_case: index_repository() rejected | another indexing job is in progress")
                 return ErrorResponse(
@@ -95,9 +102,10 @@ class IndexingUseCases:
                 )
 
             async with self._lock:
+                effective_dataset_name = derive_dataset_name(repo_path, request.dataset_name)
                 progress = await self._indexing_service.index_repository(
                     repo_path=repo_path,
-                    dataset_name=request.dataset_name,
+                    dataset_name=effective_dataset_name,
                     force_reindex=request.force_reindex,
                 )
 

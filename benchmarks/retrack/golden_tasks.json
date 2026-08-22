@@ -1,0 +1,603 @@
+{
+  "version": "1.0.0",
+  "name": "RE:Track Golden Task Benchmark Dataset",
+  "description": "Ground truth evaluation dataset for measuring Context Engine retrieval, ranking, and context assembly quality across real repository development tasks.",
+  "tasks": [
+    {
+      "id": "TASK-ARCH-01",
+      "category": "architecture",
+      "task_prompt": "How is the backend structured and how does the composition root initialize use cases and infrastructure services?",
+      "expected_files": [
+        "backend/app/application/container.py",
+        "backend/app/server.py",
+        "backend/app/application/use_cases/context.py",
+        "backend/app/application/use_cases/indexing.py",
+        "backend/app/config/settings.py"
+      ],
+      "critical_files": [
+        "backend/app/application/container.py",
+        "backend/app/server.py"
+      ],
+      "expected_symbols": [
+        "ApplicationContainer",
+        "create",
+        "get_container",
+        "lifespan"
+      ],
+      "critical_symbols": [
+        "ApplicationContainer",
+        "create"
+      ],
+      "known_irrelevant_files": [
+        "src/components/Sidebar.tsx",
+        "backend/app/services/hardware_telemetry.py",
+        "src/pages/Benchmarks.tsx"
+      ],
+      "rationale": "Composition root initialization is defined in container.py and wired into FastAPI lifespan in server.py."
+    },
+    {
+      "id": "TASK-ARCH-02",
+      "category": "architecture",
+      "task_prompt": "How does RE:Track enforce the dual-path storage contract between canonical ~/.retrack/ and legacy read-only ~/.andes/?",
+      "expected_files": [
+        "backend/app/services/repository_metadata_store.py",
+        "backend/app/services/repository_manager.py",
+        "backend/app/services/context_package_repository.py",
+        "backend/app/services/manifest_service.py",
+        "backend/app/config/settings.py"
+      ],
+      "critical_files": [
+        "backend/app/services/repository_metadata_store.py",
+        "backend/app/services/repository_manager.py"
+      ],
+      "expected_symbols": [
+        "RepositoryMetadataStore",
+        "RepositoryManager",
+        "_resolve_read_path",
+        "ensure_directories"
+      ],
+      "critical_symbols": [
+        "RepositoryMetadataStore",
+        "RepositoryManager"
+      ],
+      "known_irrelevant_files": [
+        "backend/app/services/pipeline/compression.py",
+        "src/components/benchmarks/LatencyChart.tsx"
+      ],
+      "rationale": "Dual-path fallback logic is implemented in repository metadata stores and repository manager."
+    },
+    {
+      "id": "TASK-ARCH-03",
+      "category": "architecture",
+      "task_prompt": "How are MemoryPort capabilities segregated into granular protocols and what domain models represent memory datasets?",
+      "expected_files": [
+        "backend/app/application/ports/memory.py",
+        "backend/app/application/domain/memory.py",
+        "backend/app/services/cognee_service.py",
+        "backend/app/application/use_cases/memory.py"
+      ],
+      "critical_files": [
+        "backend/app/application/ports/memory.py",
+        "backend/app/application/domain/memory.py"
+      ],
+      "expected_symbols": [
+        "MemoryLifecyclePort",
+        "MemoryIngestionPort",
+        "MemoryRetrievalPort",
+        "MemoryDatasetPort",
+        "MemoryTopologyPort",
+        "MemoryDatasetRecord",
+        "MemoryGraphRecord"
+      ],
+      "critical_symbols": [
+        "MemoryLifecyclePort",
+        "MemoryDatasetRecord"
+      ],
+      "known_irrelevant_files": [
+        "backend/app/cli/main.py",
+        "src/lib/api.ts"
+      ],
+      "rationale": "Memory port capabilities are segregated in ports/memory.py and domain models in domain/memory.py."
+    },
+    {
+      "id": "TASK-ARCH-04",
+      "category": "architecture",
+      "task_prompt": "How are FastAPI routes modularized and how do routers access application use cases without direct container coupling?",
+      "expected_files": [
+        "backend/app/api/routers/__init__.py",
+        "backend/app/api/routers/context.py",
+        "backend/app/api/routers/repositories.py",
+        "backend/app/api/routers/memory.py",
+        "backend/app/application/container.py",
+        "backend/app/server.py"
+      ],
+      "critical_files": [
+        "backend/app/api/routers/__init__.py",
+        "backend/app/server.py"
+      ],
+      "expected_symbols": [
+        "all_routers",
+        "get_context_use_cases",
+        "get_indexing_use_cases",
+        "get_container"
+      ],
+      "critical_symbols": [
+        "all_routers",
+        "get_container"
+      ],
+      "known_irrelevant_files": [
+        "backend/app/services/pipeline/dedup.py",
+        "src/types/repository.ts"
+      ],
+      "rationale": "Routers are assembled in routers/__init__.py and registered in server.py using FastAPI Depends."
+    },
+    {
+      "id": "TASK-ARCH-05",
+      "category": "architecture",
+      "task_prompt": "What is the complete data flow from repository indexing to multi-stage Context Package synthesis?",
+      "expected_files": [
+        "backend/app/services/indexing_service.py",
+        "backend/app/services/context_service.py",
+        "backend/app/services/package_builder.py",
+        "backend/app/services/cognee_service.py",
+        "backend/app/application/use_cases/context.py"
+      ],
+      "critical_files": [
+        "backend/app/services/indexing_service.py",
+        "backend/app/services/context_service.py",
+        "backend/app/services/package_builder.py"
+      ],
+      "expected_symbols": [
+        "IndexingService",
+        "ContextService",
+        "PackageBuilder",
+        "generate_context_package",
+        "remember",
+        "recall"
+      ],
+      "critical_symbols": [
+        "IndexingService",
+        "ContextService",
+        "PackageBuilder"
+      ],
+      "known_irrelevant_files": [
+        "backend/app/services/hardware_telemetry.py",
+        "src/App.tsx"
+      ],
+      "rationale": "Indexing discovers/batches files into Cognee and ContextService delegates to PackageBuilder pipeline."
+    },
+    {
+      "id": "TASK-BUG-01",
+      "category": "bug_localization",
+      "task_prompt": "Where would a bug occur if a repository clone operation accidentally attempted to delete or overwrite legacy ~/.andes/repos/?",
+      "expected_files": [
+        "backend/app/services/repository_manager.py",
+        "backend/app/services/repository_metadata_store.py"
+      ],
+      "critical_files": [
+        "backend/app/services/repository_manager.py"
+      ],
+      "expected_symbols": [
+        "RepositoryManager",
+        "delete_repository",
+        "create_repository",
+        "_is_legacy_path"
+      ],
+      "critical_symbols": [
+        "RepositoryManager"
+      ],
+      "known_irrelevant_files": [
+        "backend/app/services/renderer.py",
+        "src/components/layout/Sidebar.tsx"
+      ],
+      "rationale": "RepositoryManager governs clone creation, deletion, and prevents legacy mutation."
+    },
+    {
+      "id": "TASK-BUG-02",
+      "category": "bug_localization",
+      "task_prompt": "Where would an agent context synthesis cache hit fail to invalidate after repository source files change?",
+      "expected_files": [
+        "backend/app/services/context_cache.py",
+        "backend/app/application/use_cases/context.py",
+        "backend/app/services/manifest_service.py"
+      ],
+      "critical_files": [
+        "backend/app/services/context_cache.py",
+        "backend/app/application/use_cases/context.py"
+      ],
+      "expected_symbols": [
+        "ContextCache",
+        "make_key",
+        "get",
+        "set",
+        "manifest_hash"
+      ],
+      "critical_symbols": [
+        "ContextCache",
+        "make_key"
+      ],
+      "known_irrelevant_files": [
+        "backend/app/api/routers/benchmarks.py",
+        "src/pages/ContextBuilder.tsx"
+      ],
+      "rationale": "Context cache key generation in context_cache.py and manifest mtime checks in context use case."
+    },
+    {
+      "id": "TASK-BUG-03",
+      "category": "bug_localization",
+      "task_prompt": "If token budgeting drops critical task objectives or file references under tight token constraints, which component is responsible?",
+      "expected_files": [
+        "backend/app/services/budget_manager.py",
+        "backend/app/services/package_builder.py"
+      ],
+      "critical_files": [
+        "backend/app/services/budget_manager.py"
+      ],
+      "expected_symbols": [
+        "BudgetManager",
+        "apply",
+        "_CRITICAL",
+        "_HIGH",
+        "_MEDIUM",
+        "_LOW"
+      ],
+      "critical_symbols": [
+        "BudgetManager",
+        "apply"
+      ],
+      "known_irrelevant_files": [
+        "backend/app/services/cgc_service.py",
+        "backend/app/api/routers/system.py"
+      ],
+      "rationale": "BudgetManager enforces priority tier pruning and guarantees critical sections are retained."
+    },
+    {
+      "id": "TASK-BUG-04",
+      "category": "bug_localization",
+      "task_prompt": "Where is concurrent context generation prevented from overwhelming system VRAM/RAM during simultaneous agent requests?",
+      "expected_files": [
+        "backend/app/application/use_cases/context.py",
+        "backend/app/application/container.py"
+      ],
+      "critical_files": [
+        "backend/app/application/use_cases/context.py"
+      ],
+      "expected_symbols": [
+        "context_gen_lock",
+        "ConcurrencyError",
+        "_lock"
+      ],
+      "critical_symbols": [
+        "context_gen_lock"
+      ],
+      "known_irrelevant_files": [
+        "backend/app/services/renderer.py",
+        "src/types/settings.ts"
+      ],
+      "rationale": "Asyncio locks in container and context use case guard against concurrent synthesis overload."
+    },
+    {
+      "id": "TASK-BUG-05",
+      "category": "bug_localization",
+      "task_prompt": "If Ollama is unreachable or crashes during context generation, where is the health fallback handled without failing the entire request?",
+      "expected_files": [
+        "backend/app/services/llm_provider_service.py",
+        "backend/app/application/use_cases/context.py",
+        "backend/app/services/context_service.py"
+      ],
+      "critical_files": [
+        "backend/app/services/llm_provider_service.py",
+        "backend/app/services/context_service.py"
+      ],
+      "expected_symbols": [
+        "LLMProviderService",
+        "check_health",
+        "quantization_warning",
+        "generate_context_package"
+      ],
+      "critical_symbols": [
+        "LLMProviderService",
+        "check_health"
+      ],
+      "known_irrelevant_files": [
+        "backend/app/services/pipeline/categorization.py",
+        "src/components/layout/Header.tsx"
+      ],
+      "rationale": "Health checks in LLMProviderService and try/except recall fallbacks in ContextService protect availability."
+    },
+    {
+      "id": "TASK-FEAT-01",
+      "category": "feature_addition",
+      "task_prompt": "How do I implement a new capability port for external Model Context Protocol (MCP) server integration?",
+      "expected_files": [
+        "backend/app/application/ports/__init__.py",
+        "backend/app/application/container.py",
+        "backend/app/application/use_cases/context.py"
+      ],
+      "critical_files": [
+        "backend/app/application/ports/__init__.py",
+        "backend/app/application/container.py"
+      ],
+      "expected_symbols": [
+        "Protocol",
+        "ApplicationContainer"
+      ],
+      "critical_symbols": [
+        "Protocol",
+        "ApplicationContainer"
+      ],
+      "known_irrelevant_files": [
+        "backend/app/services/pipeline/ranking.py",
+        "src/pages/Memory.tsx"
+      ],
+      "rationale": "New ports are declared in app/application/ports/ and wired in container.py."
+    },
+    {
+      "id": "TASK-FEAT-02",
+      "category": "feature_addition",
+      "task_prompt": "Where should new source file extension filters and directory ignore patterns be registered in the indexing service?",
+      "expected_files": [
+        "backend/app/services/indexing_service.py"
+      ],
+      "critical_files": [
+        "backend/app/services/indexing_service.py"
+      ],
+      "expected_symbols": [
+        "SUPPORTED_EXTENSIONS",
+        "IGNORED_DIRS",
+        "IGNORED_PATTERNS",
+        "IndexingService"
+      ],
+      "critical_symbols": [
+        "SUPPORTED_EXTENSIONS",
+        "IGNORED_DIRS"
+      ],
+      "known_irrelevant_files": [
+        "backend/app/services/stats_logger.py",
+        "src/components/layout/Layout.tsx"
+      ],
+      "rationale": "File extension and directory filtering sets are centralized at module level in indexing_service.py."
+    },
+    {
+      "id": "TASK-FEAT-03",
+      "category": "feature_addition",
+      "task_prompt": "How do I add a new rule-based categorization keyword set to classify configuration and infrastructure files into dedicated sections?",
+      "expected_files": [
+        "backend/app/services/pipeline/categorization.py",
+        "backend/app/services/package_builder.py"
+      ],
+      "critical_files": [
+        "backend/app/services/pipeline/categorization.py"
+      ],
+      "expected_symbols": [
+        "Categorizer",
+        "_ARCHITECTURE_KEYWORDS",
+        "_API_KEYWORDS",
+        "_CONVENTION_KEYWORDS",
+        "_DECISION_KEYWORDS",
+        "categorize"
+      ],
+      "critical_symbols": [
+        "Categorizer",
+        "categorize"
+      ],
+      "known_irrelevant_files": [
+        "backend/app/services/local_filesystem.py",
+        "src/pages/Repositories.tsx"
+      ],
+      "rationale": "Keyword classification rules are defined in categorization.py and section mappings in package_builder.py."
+    },
+    {
+      "id": "TASK-FEAT-04",
+      "category": "feature_addition",
+      "task_prompt": "Where would I add new deterministic intent heuristic rules for detecting database migration or test generation requests?",
+      "expected_files": [
+        "backend/app/application/domain/intent.py",
+        "backend/app/services/intent_parser.py"
+      ],
+      "critical_files": [
+        "backend/app/application/domain/intent.py"
+      ],
+      "expected_symbols": [
+        "ParsedIntentRecord",
+        "parse_intent_heuristics"
+      ],
+      "critical_symbols": [
+        "parse_intent_heuristics",
+        "ParsedIntentRecord"
+      ],
+      "known_irrelevant_files": [
+        "backend/app/services/repository_summary.py",
+        "src/components/benchmarks/ThroughputChart.tsx"
+      ],
+      "rationale": "Pure regex-based heuristic parsing resides in domain/intent.py."
+    },
+    {
+      "id": "TASK-FEAT-05",
+      "category": "feature_addition",
+      "task_prompt": "How do I add a new context package persistence endpoint to append follow-up prompt threads to an existing saved context package?",
+      "expected_files": [
+        "backend/app/api/routers/packages.py",
+        "backend/app/application/use_cases/context_packages.py",
+        "backend/app/services/context_package_repository.py",
+        "backend/app/application/dto/packages.py"
+      ],
+      "critical_files": [
+        "backend/app/api/routers/packages.py",
+        "backend/app/application/use_cases/context_packages.py"
+      ],
+      "expected_symbols": [
+        "PackageUseCases",
+        "ContextPackageRepository",
+        "append_to_package"
+      ],
+      "critical_symbols": [
+        "PackageUseCases",
+        "ContextPackageRepository"
+      ],
+      "known_irrelevant_files": [
+        "backend/app/services/cgc_service.py",
+        "src/main.tsx"
+      ],
+      "rationale": "Package router dispatches to PackageUseCases and ContextPackageRepository manages persistence."
+    },
+    {
+      "id": "TASK-REFAC-01",
+      "category": "refactoring",
+      "task_prompt": "How was DEBT-003 resolved in ApplicationContainer to eliminate eager module-level global construction?",
+      "expected_files": [
+        "backend/app/application/container.py",
+        "backend/app/server.py",
+        "backend/app/api/commands.py"
+      ],
+      "critical_files": [
+        "backend/app/application/container.py"
+      ],
+      "expected_symbols": [
+        "ApplicationContainer",
+        "_container",
+        "create",
+        "get_container",
+        "set_container",
+        "reset_container"
+      ],
+      "critical_symbols": [
+        "ApplicationContainer",
+        "create",
+        "get_container"
+      ],
+      "known_irrelevant_files": [
+        "backend/app/services/pipeline/references.py",
+        "src/pages/Settings.tsx"
+      ],
+      "rationale": "Lazy factory instantiation and lifecycle accessors in container.py resolved DEBT-003."
+    },
+    {
+      "id": "TASK-REFAC-02",
+      "category": "refactoring",
+      "task_prompt": "How were application DTOs decoupled from API transport schemas to ensure headless use cases?",
+      "expected_files": [
+        "backend/app/application/dto/__init__.py",
+        "backend/app/application/dto/context.py",
+        "backend/app/api/schemas.py",
+        "backend/app/application/use_cases/context.py"
+      ],
+      "critical_files": [
+        "backend/app/application/dto/__init__.py",
+        "backend/app/api/schemas.py"
+      ],
+      "expected_symbols": [
+        "GenerateContextRequest",
+        "ContextResponse",
+        "AgentContextRequest",
+        "AgentContextResponse"
+      ],
+      "critical_symbols": [
+        "GenerateContextRequest",
+        "ContextResponse"
+      ],
+      "known_irrelevant_files": [
+        "backend/app/services/manifest_service.py",
+        "src/types/memory.ts"
+      ],
+      "rationale": "DTOs in app/application/dto/ own core contracts; api/schemas.py acts as a re-export layer."
+    },
+    {
+      "id": "TASK-REFAC-03",
+      "category": "refactoring",
+      "task_prompt": "How is the AST call graph generated deterministically without invoking external LLM models?",
+      "expected_files": [
+        "backend/app/services/repository_summary.py",
+        "backend/app/services/cgc_service.py",
+        "backend/app/models/responses.py"
+      ],
+      "critical_files": [
+        "backend/app/services/repository_summary.py"
+      ],
+      "expected_symbols": [
+        "RepositorySummary",
+        "CallNode",
+        "CallEdge",
+        "_analyze_python_ast",
+        "_build_call_graph"
+      ],
+      "critical_symbols": [
+        "RepositorySummary",
+        "CallNode",
+        "CallEdge"
+      ],
+      "known_irrelevant_files": [
+        "backend/app/services/pipeline/dedup.py",
+        "src/components/common/Header.tsx"
+      ],
+      "rationale": "Static 2-pass Python AST visitor and regex scanner in repository_summary.py build the call graph."
+    },
+    {
+      "id": "TASK-REFAC-04",
+      "category": "refactoring",
+      "task_prompt": "How does PackageBuilder compose the retrieval pipeline stages into a single cohesive assembly flow?",
+      "expected_files": [
+        "backend/app/services/package_builder.py",
+        "backend/app/services/pipeline/dedup.py",
+        "backend/app/services/pipeline/ranking.py",
+        "backend/app/services/pipeline/compression.py",
+        "backend/app/services/pipeline/categorization.py",
+        "backend/app/services/budget_manager.py",
+        "backend/app/services/pipeline/references.py",
+        "backend/app/services/renderer.py"
+      ],
+      "critical_files": [
+        "backend/app/services/package_builder.py"
+      ],
+      "expected_symbols": [
+        "PackageBuilder",
+        "Deduplicator",
+        "Ranker",
+        "Compressor",
+        "Categorizer",
+        "BudgetManager",
+        "ReferenceResolver",
+        "MarkdownRenderer",
+        "build"
+      ],
+      "critical_symbols": [
+        "PackageBuilder",
+        "build"
+      ],
+      "known_irrelevant_files": [
+        "backend/app/services/hardware_telemetry.py",
+        "src/components/benchmarks/BenchmarkTable.tsx"
+      ],
+      "rationale": "PackageBuilder coordinates the 8 discrete pipeline stages from recall results to final Markdown."
+    },
+    {
+      "id": "TASK-REFAC-05",
+      "category": "refactoring",
+      "task_prompt": "How are hardware telemetry measurements and GPU presence detected without introducing vendor library hard dependencies?",
+      "expected_files": [
+        "backend/app/services/hardware_telemetry.py",
+        "backend/app/application/ports/hardware_telemetry.py",
+        "backend/app/application/use_cases/system.py"
+      ],
+      "critical_files": [
+        "backend/app/services/hardware_telemetry.py",
+        "backend/app/application/ports/hardware_telemetry.py"
+      ],
+      "expected_symbols": [
+        "HardwareTelemetryAdapter",
+        "HardwareTelemetryPort",
+        "get_hardware_metrics",
+        "detect_gpu"
+      ],
+      "critical_symbols": [
+        "HardwareTelemetryAdapter",
+        "HardwareTelemetryPort"
+      ],
+      "known_irrelevant_files": [
+        "backend/app/services/context_package_repository.py",
+        "src/pages/KnowledgeExplorer.tsx"
+      ],
+      "rationale": "HardwareTelemetryAdapter reads sysfs, rocm-smi, nvidia-smi, and psutil cleanly behind the port."
+    }
+  ]
+}

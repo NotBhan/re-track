@@ -1,0 +1,406 @@
+{
+  "metadata": {
+    "phase": "Phase 7E \u2014 Controlled Retrieval Optimization Experiments",
+    "timestamp": "2026-08-21T15:41:37Z",
+    "baseline": {
+      "passed_tasks": 8,
+      "total_tasks": 20,
+      "pass_rate": 0.4,
+      "mean_precision_at_k": 0.15,
+      "mean_recall_at_k": 0.49,
+      "mean_critical_coverage": 0.525,
+      "mean_noise_ratio": 0.01,
+      "mean_compression_ratio": 14.36,
+      "latency_ms": {
+        "mean": 1204.3,
+        "p50": 593.3,
+        "p90": 2544.7,
+        "p95": 2576.0
+      },
+      "avg_candidates": 7.45,
+      "tasks_summary": [
+        {
+          "id": "TASK-ARCH-01",
+          "passed": false,
+          "p_at_k": 0.2,
+          "r_at_k": 0.4,
+          "crit_cov": 0.0,
+          "noise": 0.0
+        },
+        {
+          "id": "TASK-ARCH-02",
+          "passed": false,
+          "p_at_k": 0.1,
+          "r_at_k": 0.2,
+          "crit_cov": 0.5,
+          "noise": 0.0
+        },
+        {
+          "id": "TASK-ARCH-03",
+          "passed": true,
+          "p_at_k": 0.3,
+          "r_at_k": 0.75,
+          "crit_cov": 1.0,
+          "noise": 0.0
+        },
+        {
+          "id": "TASK-ARCH-04",
+          "passed": false,
+          "p_at_k": 0.2,
+          "r_at_k": 0.333,
+          "crit_cov": 0.5,
+          "noise": 0.0
+        },
+        {
+          "id": "TASK-ARCH-05",
+          "passed": false,
+          "p_at_k": 0.0,
+          "r_at_k": 0.0,
+          "crit_cov": 0.333,
+          "noise": 0.0
+        },
+        {
+          "id": "TASK-BUG-01",
+          "passed": false,
+          "p_at_k": 0.1,
+          "r_at_k": 0.5,
+          "crit_cov": 0.0,
+          "noise": 0.0
+        },
+        {
+          "id": "TASK-BUG-02",
+          "passed": true,
+          "p_at_k": 0.2,
+          "r_at_k": 0.667,
+          "crit_cov": 0.75,
+          "noise": 0.0
+        },
+        {
+          "id": "TASK-BUG-03",
+          "passed": false,
+          "p_at_k": 0.1,
+          "r_at_k": 0.5,
+          "crit_cov": 0.333,
+          "noise": 0.1
+        },
+        {
+          "id": "TASK-BUG-04",
+          "passed": true,
+          "p_at_k": 0.1,
+          "r_at_k": 0.5,
+          "crit_cov": 0.5,
+          "noise": 0.0
+        },
+        {
+          "id": "TASK-BUG-05",
+          "passed": false,
+          "p_at_k": 0.2,
+          "r_at_k": 0.667,
+          "crit_cov": 0.25,
+          "noise": 0.0
+        },
+        {
+          "id": "TASK-FEAT-01",
+          "passed": false,
+          "p_at_k": 0.1,
+          "r_at_k": 0.333,
+          "crit_cov": 0.25,
+          "noise": 0.0
+        },
+        {
+          "id": "TASK-FEAT-02",
+          "passed": true,
+          "p_at_k": 0.1,
+          "r_at_k": 1.0,
+          "crit_cov": 1.0,
+          "noise": 0.0
+        },
+        {
+          "id": "TASK-FEAT-03",
+          "passed": true,
+          "p_at_k": 0.1,
+          "r_at_k": 0.5,
+          "crit_cov": 1.0,
+          "noise": 0.1
+        },
+        {
+          "id": "TASK-FEAT-04",
+          "passed": true,
+          "p_at_k": 0.2,
+          "r_at_k": 1.0,
+          "crit_cov": 0.667,
+          "noise": 0.0
+        },
+        {
+          "id": "TASK-FEAT-05",
+          "passed": false,
+          "p_at_k": 0.2,
+          "r_at_k": 0.5,
+          "crit_cov": 0.5,
+          "noise": 0.0
+        },
+        {
+          "id": "TASK-REFAC-01",
+          "passed": true,
+          "p_at_k": 0.111,
+          "r_at_k": 0.333,
+          "crit_cov": 0.5,
+          "noise": 0.0
+        },
+        {
+          "id": "TASK-REFAC-02",
+          "passed": false,
+          "p_at_k": 0.2,
+          "r_at_k": 0.5,
+          "crit_cov": 0.75,
+          "noise": 0.0
+        },
+        {
+          "id": "TASK-REFAC-03",
+          "passed": false,
+          "p_at_k": 0.1,
+          "r_at_k": 0.333,
+          "crit_cov": 0.25,
+          "noise": 0.0
+        },
+        {
+          "id": "TASK-REFAC-04",
+          "passed": false,
+          "p_at_k": 0.1,
+          "r_at_k": 0.125,
+          "crit_cov": 0.667,
+          "noise": 0.0
+        },
+        {
+          "id": "TASK-REFAC-05",
+          "passed": true,
+          "p_at_k": 0.286,
+          "r_at_k": 0.667,
+          "crit_cov": 0.75,
+          "noise": 0.0
+        }
+      ]
+    },
+    "exp1_ast_coverage": {
+      "A: Baseline (40 py files, 120 nodes)": {
+        "parsed_files": 40,
+        "nodes_count": 120,
+        "edges_count": 64,
+        "build_time_ms": 173.9,
+        "pass_rate": 0.4,
+        "passed_tasks": 8,
+        "precision_at_k": 0.15,
+        "recall_at_k": 0.49,
+        "critical_coverage": 0.525,
+        "latency_ms": 1167.2
+      },
+      "B: All 85 py files, 120 node limit": {
+        "parsed_files": 85,
+        "nodes_count": 120,
+        "edges_count": 64,
+        "build_time_ms": 253.4,
+        "pass_rate": 0.4,
+        "passed_tasks": 8,
+        "precision_at_k": 0.15,
+        "recall_at_k": 0.49,
+        "critical_coverage": 0.525,
+        "latency_ms": 1274.6
+      },
+      "C: All 85 py files, 500 node limit": {
+        "parsed_files": 85,
+        "nodes_count": 500,
+        "edges_count": 362,
+        "build_time_ms": 259.1,
+        "pass_rate": 0.45,
+        "passed_tasks": 9,
+        "precision_at_k": 0.178,
+        "recall_at_k": 0.594,
+        "critical_coverage": 0.617,
+        "latency_ms": 1290.9
+      },
+      "D: Full eligible set (85 py, 1200 nodes, 3000 edges)": {
+        "parsed_files": 85,
+        "nodes_count": 557,
+        "edges_count": 372,
+        "build_time_ms": 271.8,
+        "pass_rate": 0.45,
+        "passed_tasks": 9,
+        "precision_at_k": 0.178,
+        "recall_at_k": 0.594,
+        "critical_coverage": 0.617,
+        "latency_ms": 1299.0
+      }
+    },
+    "exp2_candidate_sizing": {
+      "Fixed K=8": {
+        "avg_candidates": 7.7,
+        "pass_rate": 0.25,
+        "passed_tasks": 5,
+        "precision_at_k": 0.104,
+        "recall_at_k": 0.364,
+        "critical_coverage": 0.246,
+        "noise_ratio": 0.01
+      },
+      "Fixed K=5": {
+        "avg_candidates": 4.85,
+        "pass_rate": 0.2,
+        "passed_tasks": 4,
+        "precision_at_k": 0.101,
+        "recall_at_k": 0.325,
+        "critical_coverage": 0.208,
+        "noise_ratio": 0.01
+      },
+      "Fixed K=3": {
+        "avg_candidates": 2.95,
+        "pass_rate": 0.15,
+        "passed_tasks": 3,
+        "precision_at_k": 0.103,
+        "recall_at_k": 0.263,
+        "critical_coverage": 0.183,
+        "noise_ratio": 0.006
+      },
+      "Confidence Cutoff (>= 30% max)": {
+        "avg_candidates": 9.45,
+        "pass_rate": 0.25,
+        "passed_tasks": 5,
+        "precision_at_k": 0.134,
+        "recall_at_k": 0.446,
+        "critical_coverage": 0.267,
+        "noise_ratio": 0.005
+      },
+      "Score Gap Cutoff (>50% drop)": {
+        "avg_candidates": 9.15,
+        "pass_rate": 0.25,
+        "passed_tasks": 5,
+        "precision_at_k": 0.133,
+        "recall_at_k": 0.436,
+        "critical_coverage": 0.267,
+        "noise_ratio": 0.005
+      },
+      "Dynamic Bounded K in [3, 10]": {
+        "avg_candidates": 9.1,
+        "pass_rate": 0.25,
+        "passed_tasks": 5,
+        "precision_at_k": 0.136,
+        "recall_at_k": 0.446,
+        "critical_coverage": 0.267,
+        "noise_ratio": 0.005
+      }
+    },
+    "exp3_test_penalty": {
+      "1.00x (No penalty)": {
+        "pass_rate": 0.25,
+        "passed_tasks": 5,
+        "precision_at_k": 0.109,
+        "recall_at_k": 0.374,
+        "critical_coverage": 0.246
+      },
+      "0.85x Penalty": {
+        "pass_rate": 0.25,
+        "passed_tasks": 5,
+        "precision_at_k": 0.109,
+        "recall_at_k": 0.374,
+        "critical_coverage": 0.246
+      },
+      "0.70x Penalty": {
+        "pass_rate": 0.25,
+        "passed_tasks": 5,
+        "precision_at_k": 0.109,
+        "recall_at_k": 0.374,
+        "critical_coverage": 0.246
+      },
+      "0.65x Penalty": {
+        "pass_rate": 0.25,
+        "passed_tasks": 5,
+        "precision_at_k": 0.109,
+        "recall_at_k": 0.374,
+        "critical_coverage": 0.246
+      },
+      "0.50x Penalty": {
+        "pass_rate": 0.25,
+        "passed_tasks": 5,
+        "precision_at_k": 0.109,
+        "recall_at_k": 0.374,
+        "critical_coverage": 0.246
+      }
+    },
+    "exp4_pool_sizing": {
+      "Pool 25": {
+        "pool_size": 25,
+        "total_disk_reads": 0,
+        "pass_rate": 0.25,
+        "passed_tasks": 5,
+        "precision_at_k": 0.109,
+        "recall_at_k": 0.374,
+        "critical_coverage": 0.246,
+        "latency_ms": 1186.5
+      },
+      "Pool 35": {
+        "pool_size": 35,
+        "total_disk_reads": 0,
+        "pass_rate": 0.25,
+        "passed_tasks": 5,
+        "precision_at_k": 0.109,
+        "recall_at_k": 0.374,
+        "critical_coverage": 0.246,
+        "latency_ms": 1167.4
+      },
+      "Pool 50": {
+        "pool_size": 50,
+        "total_disk_reads": 0,
+        "pass_rate": 0.25,
+        "passed_tasks": 5,
+        "precision_at_k": 0.109,
+        "recall_at_k": 0.374,
+        "critical_coverage": 0.246,
+        "latency_ms": 1162.6
+      },
+      "Pool 75": {
+        "pool_size": 75,
+        "total_disk_reads": 0,
+        "pass_rate": 0.25,
+        "passed_tasks": 5,
+        "precision_at_k": 0.109,
+        "recall_at_k": 0.374,
+        "critical_coverage": 0.246,
+        "latency_ms": 1164.3
+      }
+    },
+    "exp5_artifact_priors": {
+      "passed_tasks": 14,
+      "pass_rate": 0.7,
+      "precision_at_k": 0.202,
+      "recall_at_k": 0.608,
+      "critical_coverage": 0.65
+    },
+    "exp6_summary_caching": {
+      "cold_ms": 246.1,
+      "warm_ms": 26.573,
+      "speedup": 9.3
+    },
+    "exp7_cgc_latency": {
+      "mean_ms": 2135.6,
+      "runs": [
+        2144.5,
+        2096.3,
+        2166.9,
+        2089.5,
+        2180.7
+      ]
+    },
+    "combined_best": {
+      "passed_tasks": 11,
+      "pass_rate": 0.55,
+      "precision_at_k": 0.193,
+      "recall_at_k": 0.561,
+      "critical_coverage": 0.508,
+      "noise_ratio": 0.005,
+      "latency_ms": {
+        "mean": 1236.0,
+        "p50": 534.2,
+        "p90": 2642.6,
+        "p95": 2663.2
+      }
+    }
+  }
+}

@@ -1,0 +1,244 @@
+{
+  "TASK-ARCH-01": {
+    "question": "How is the backend structured and how does the composition root initialize use cases and infrastructure services?",
+    "expected_files": [
+      "backend/app/application/container.py",
+      "backend/app/server.py",
+      "backend/app/application/use_cases/context.py",
+      "backend/app/application/use_cases/indexing.py",
+      "backend/app/config/settings.py"
+    ],
+    "critical_files": [
+      "backend/app/application/container.py",
+      "backend/app/server.py"
+    ]
+  },
+  "TASK-ARCH-02": {
+    "question": "How does RE:Track enforce the dual-path storage contract between canonical ~/.retrack/ and legacy read-only ~/.andes/?",
+    "expected_files": [
+      "backend/app/services/repository_metadata_store.py",
+      "backend/app/services/repository_manager.py",
+      "backend/app/services/context_package_repository.py",
+      "backend/app/services/manifest_service.py",
+      "backend/app/config/settings.py"
+    ],
+    "critical_files": [
+      "backend/app/services/repository_metadata_store.py",
+      "backend/app/services/repository_manager.py"
+    ]
+  },
+  "TASK-ARCH-03": {
+    "question": "How are MemoryPort capabilities segregated into granular protocols and what domain models represent memory datasets?",
+    "expected_files": [
+      "backend/app/application/ports/memory.py",
+      "backend/app/application/domain/memory.py",
+      "backend/app/services/cognee_service.py",
+      "backend/app/application/use_cases/memory.py"
+    ],
+    "critical_files": [
+      "backend/app/application/ports/memory.py",
+      "backend/app/application/domain/memory.py"
+    ]
+  },
+  "TASK-ARCH-04": {
+    "question": "How are FastAPI routes modularized and how do routers access application use cases without direct container coupling?",
+    "expected_files": [
+      "backend/app/api/routers/__init__.py",
+      "backend/app/api/routers/context.py",
+      "backend/app/api/routers/repositories.py",
+      "backend/app/api/routers/memory.py",
+      "backend/app/application/container.py",
+      "backend/app/server.py"
+    ],
+    "critical_files": [
+      "backend/app/api/routers/__init__.py",
+      "backend/app/server.py"
+    ]
+  },
+  "TASK-ARCH-05": {
+    "question": "What is the complete data flow from repository indexing to multi-stage Context Package synthesis?",
+    "expected_files": [
+      "backend/app/services/indexing_service.py",
+      "backend/app/services/context_service.py",
+      "backend/app/services/package_builder.py",
+      "backend/app/services/cognee_service.py",
+      "backend/app/application/use_cases/context.py"
+    ],
+    "critical_files": [
+      "backend/app/services/indexing_service.py",
+      "backend/app/services/context_service.py",
+      "backend/app/services/package_builder.py"
+    ]
+  },
+  "TASK-BUG-01": {
+    "question": "Where would a bug occur if a repository clone operation accidentally attempted to delete or overwrite legacy ~/.andes/repos/?",
+    "expected_files": [
+      "backend/app/services/repository_manager.py",
+      "backend/app/services/repository_metadata_store.py"
+    ],
+    "critical_files": [
+      "backend/app/services/repository_manager.py"
+    ]
+  },
+  "TASK-BUG-02": {
+    "question": "Where would an agent context synthesis cache hit fail to invalidate after repository source files change?",
+    "expected_files": [
+      "backend/app/services/context_cache.py",
+      "backend/app/application/use_cases/context.py",
+      "backend/app/services/manifest_service.py"
+    ],
+    "critical_files": [
+      "backend/app/services/context_cache.py",
+      "backend/app/application/use_cases/context.py"
+    ]
+  },
+  "TASK-BUG-03": {
+    "question": "If token budgeting drops critical task objectives or file references under tight token constraints, which component is responsible?",
+    "expected_files": [
+      "backend/app/services/budget_manager.py",
+      "backend/app/services/package_builder.py"
+    ],
+    "critical_files": [
+      "backend/app/services/budget_manager.py"
+    ]
+  },
+  "TASK-BUG-04": {
+    "question": "Where is concurrent context generation prevented from overwhelming system VRAM/RAM during simultaneous agent requests?",
+    "expected_files": [
+      "backend/app/application/use_cases/context.py",
+      "backend/app/application/container.py"
+    ],
+    "critical_files": [
+      "backend/app/application/use_cases/context.py"
+    ]
+  },
+  "TASK-BUG-05": {
+    "question": "If Ollama is unreachable or crashes during context generation, where is the health fallback handled without failing the entire request?",
+    "expected_files": [
+      "backend/app/services/llm_provider_service.py",
+      "backend/app/application/use_cases/context.py",
+      "backend/app/services/context_service.py"
+    ],
+    "critical_files": [
+      "backend/app/services/llm_provider_service.py",
+      "backend/app/services/context_service.py"
+    ]
+  },
+  "TASK-FEAT-01": {
+    "question": "How do I implement a new capability port for external Model Context Protocol (MCP) server integration?",
+    "expected_files": [
+      "backend/app/application/ports/__init__.py",
+      "backend/app/application/container.py",
+      "backend/app/application/use_cases/context.py"
+    ],
+    "critical_files": [
+      "backend/app/application/ports/__init__.py",
+      "backend/app/application/container.py"
+    ]
+  },
+  "TASK-FEAT-02": {
+    "question": "Where should new source file extension filters and directory ignore patterns be registered in the indexing service?",
+    "expected_files": [
+      "backend/app/services/indexing_service.py"
+    ],
+    "critical_files": [
+      "backend/app/services/indexing_service.py"
+    ]
+  },
+  "TASK-FEAT-03": {
+    "question": "How do I add a new rule-based categorization keyword set to classify configuration and infrastructure files into dedicated sections?",
+    "expected_files": [
+      "backend/app/services/pipeline/categorization.py",
+      "backend/app/services/package_builder.py"
+    ],
+    "critical_files": [
+      "backend/app/services/pipeline/categorization.py"
+    ]
+  },
+  "TASK-FEAT-04": {
+    "question": "Where would I add new deterministic intent heuristic rules for detecting database migration or test generation requests?",
+    "expected_files": [
+      "backend/app/application/domain/intent.py",
+      "backend/app/services/intent_parser.py"
+    ],
+    "critical_files": [
+      "backend/app/application/domain/intent.py"
+    ]
+  },
+  "TASK-FEAT-05": {
+    "question": "How do I add a new context package persistence endpoint to append follow-up prompt threads to an existing saved context package?",
+    "expected_files": [
+      "backend/app/api/routers/packages.py",
+      "backend/app/application/use_cases/context_packages.py",
+      "backend/app/services/context_package_repository.py",
+      "backend/app/application/dto/packages.py"
+    ],
+    "critical_files": [
+      "backend/app/api/routers/packages.py",
+      "backend/app/application/use_cases/context_packages.py"
+    ]
+  },
+  "TASK-REFAC-01": {
+    "question": "How was DEBT-003 resolved in ApplicationContainer to eliminate eager module-level global construction?",
+    "expected_files": [
+      "backend/app/application/container.py",
+      "backend/app/server.py",
+      "backend/app/api/commands.py"
+    ],
+    "critical_files": [
+      "backend/app/application/container.py"
+    ]
+  },
+  "TASK-REFAC-02": {
+    "question": "How were application DTOs decoupled from API transport schemas to ensure headless use cases?",
+    "expected_files": [
+      "backend/app/application/dto/__init__.py",
+      "backend/app/application/dto/context.py",
+      "backend/app/api/schemas.py",
+      "backend/app/application/use_cases/context.py"
+    ],
+    "critical_files": [
+      "backend/app/application/dto/__init__.py",
+      "backend/app/api/schemas.py"
+    ]
+  },
+  "TASK-REFAC-03": {
+    "question": "How is the AST call graph generated deterministically without invoking external LLM models?",
+    "expected_files": [
+      "backend/app/services/repository_summary.py",
+      "backend/app/services/cgc_service.py",
+      "backend/app/models/responses.py"
+    ],
+    "critical_files": [
+      "backend/app/services/repository_summary.py"
+    ]
+  },
+  "TASK-REFAC-04": {
+    "question": "How does PackageBuilder compose the retrieval pipeline stages into a single cohesive assembly flow?",
+    "expected_files": [
+      "backend/app/services/package_builder.py",
+      "backend/app/services/pipeline/dedup.py",
+      "backend/app/services/pipeline/ranking.py",
+      "backend/app/services/pipeline/compression.py",
+      "backend/app/services/pipeline/categorization.py",
+      "backend/app/services/budget_manager.py",
+      "backend/app/services/pipeline/references.py",
+      "backend/app/services/renderer.py"
+    ],
+    "critical_files": [
+      "backend/app/services/package_builder.py"
+    ]
+  },
+  "TASK-REFAC-05": {
+    "question": "How are hardware telemetry measurements and GPU presence detected without introducing vendor library hard dependencies?",
+    "expected_files": [
+      "backend/app/services/hardware_telemetry.py",
+      "backend/app/application/ports/hardware_telemetry.py",
+      "backend/app/application/use_cases/system.py"
+    ],
+    "critical_files": [
+      "backend/app/services/hardware_telemetry.py",
+      "backend/app/application/ports/hardware_telemetry.py"
+    ]
+  }
+}

@@ -123,43 +123,62 @@ class RepositorySummaryGenerator:
         return summary
 
     def _filter_ignored_files(self, repo_path: Path, files: list[Path]) -> list[Path]:
-        """Filter files using standard ignore rules and .gitignore patterns."""
+        """Filter files using standard ignore rules, .gitignore, .agentignore patterns, and symlink containment."""
         ignored_dir_names = {
             ".git", "node_modules", "dist", "build", "target", ".venv", "venv",
             "__pycache__", ".cache", ".next", ".nuxt", ".output", "coverage",
             ".turbo", ".idea", ".vscode", "tmp", ".parcel-cache",
         }
 
-        # Parse .gitignore if present
-        gitignore_patterns = set()
-        gi_file = repo_path / ".gitignore"
-        if gi_file.exists():
-            try:
-                for line in gi_file.read_text(errors="ignore").splitlines():
-                    line = line.strip()
-                    if line and not line.startswith("#"):
-                        pattern = line.rstrip("/").lstrip("/")
-                        if pattern:
-                            gitignore_patterns.add(pattern)
-            except Exception:
-                pass
+        # Parse .gitignore and .agentignore if present
+        ignore_patterns = set()
+        for ignore_name in (".gitignore", ".agentignore"):
+            ignore_file = repo_path / ignore_name
+            if ignore_file.exists():
+                try:
+                    for line in ignore_file.read_text(errors="ignore").splitlines():
+                        line = line.strip()
+                        if line and not line.startswith("#"):
+                            pattern = line.rstrip("/").lstrip("/")
+                            if pattern:
+                                ignore_patterns.add(pattern)
+                except Exception:
+                    pass
 
+        repo_canon = repo_path.resolve()
         valid_files = []
         for f in files:
-            parts = f.parts if isinstance(f, Path) else Path(f).parts
-            # Check ignored directory names
-            if any(p in ignored_dir_names for p in parts):
-                continue
-            if any(p.startswith(".agents") or p.startswith("__") for p in parts):
-                continue
-            # Check gitignore patterns
-            rel_str = str(f.relative_to(repo_path)) if f.is_relative_to(repo_path) else str(f)
-            if any(pat in rel_str or any(pat == p for p in parts) for pat in gitignore_patterns):
+            p_obj = f if isinstance(f, Path) else Path(f)
+            try:
+                p_canon = p_obj.resolve()
+                if not p_canon.is_relative_to(repo_canon):
+                    continue  # Symlink leaves repository boundary
+                if not p_canon.exists() or not p_canon.is_file():
+                    continue  # Broken symlink
+            except Exception:
                 continue
 
-            valid_files.append(f)
+            try:
+                rel = p_obj.relative_to(repo_canon)
+            except ValueError:
+                continue
 
-        return valid_files if valid_files else files
+            rel_parts = rel.parts
+            # Check ignored directory names in relative path
+            if any(p in ignored_dir_names for p in rel_parts[:-1]):
+                continue
+            if any(p.startswith(".agents") or p.startswith("__") or (p.startswith(".") and p != ".") for p in rel_parts[:-1]):
+                continue
+            if p_obj.name.startswith("."):
+                continue
+            # Check ignore patterns
+            rel_str = str(rel)
+            if any(pat in rel_str or any(pat == p for p in rel_parts) for pat in ignore_patterns):
+                continue
+
+            valid_files.append(p_obj)
+
+        return valid_files
 
     def _compute_fingerprint(self, files: list[Path]) -> str:
         """Compute a fingerprint from file paths."""

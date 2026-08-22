@@ -238,43 +238,66 @@ class IndexingService:
         return progress
 
     def discover_files(self, root: Path) -> list[Path]:
-        """Recursively discover all files under root with aggressive directory pruning.
+        """Recursively discover all files under root with aggressive directory pruning and symlink containment.
 
         Args:
             root: Directory to scan.
 
         Returns:
-            List of file paths found.
+            List of file paths found within repository boundary.
         """
+        root_canon = Path(root).resolve()
         files: list[Path] = []
-        gitignore_patterns: set[str] = set()
-        gi_file = root / ".gitignore"
-        if gi_file.exists():
-            try:
-                for line in gi_file.read_text(errors="ignore").splitlines():
-                    line = line.strip()
-                    if line and not line.startswith("#"):
-                        pattern = line.rstrip("/").lstrip("/")
-                        if pattern:
-                            gitignore_patterns.add(pattern)
-            except Exception:
-                pass
+        ignore_patterns: set[str] = set()
+
+        for ignore_filename in (".gitignore", ".agentignore"):
+            ignore_file = root / ignore_filename
+            if ignore_file.exists():
+                try:
+                    for line in ignore_file.read_text(errors="ignore").splitlines():
+                        line = line.strip()
+                        if line and not line.startswith("#"):
+                            pattern = line.rstrip("/").lstrip("/")
+                            if pattern:
+                                ignore_patterns.add(pattern)
+                except Exception:
+                    pass
 
         for cur_root, dirs, filenames in Path(root).walk():
-            # In-place directory pruning: do not traverse into ignored directories
-            dirs[:] = [
-                d for d in dirs
-                if d not in self._ignored_dirs
-                and not d.startswith(".agents")
-                and not d.startswith("__")
-                and d not in gitignore_patterns
-                and not any(pat == d or pat.rstrip("/") == d for pat in gitignore_patterns)
-            ]
+            # In-place directory pruning: do not traverse into ignored directories or external symlinks
+            valid_dirs = []
+            for d in dirs:
+                if d in self._ignored_dirs or d.startswith(".agents") or d.startswith("__"):
+                    continue
+                if d in ignore_patterns or any(pat == d or pat.rstrip("/") == d for pat in ignore_patterns):
+                    continue
+                dir_path = Path(cur_root) / d
+                try:
+                    resolved_dir = dir_path.resolve()
+                    if not resolved_dir.is_relative_to(root_canon):
+                        continue  # External directory symlink - do not traverse
+                    if not resolved_dir.exists() or not resolved_dir.is_dir():
+                        continue  # Broken or non-directory symlink
+                except Exception:
+                    continue
+                valid_dirs.append(d)
+            dirs[:] = valid_dirs
 
             for f in filenames:
+                if f.startswith("."):
+                    continue
                 p = Path(cur_root) / f
+                try:
+                    resolved_file = p.resolve()
+                    if not resolved_file.is_relative_to(root_canon):
+                        continue  # Symlink leaves repository boundary
+                    if not resolved_file.exists() or not resolved_file.is_file():
+                        continue  # Broken symlink
+                except Exception:
+                    continue
+
                 rel_p = str(p.relative_to(root)) if p.is_relative_to(root) else f
-                if any(pat in rel_p or pat == f for pat in gitignore_patterns):
+                if any(pat in rel_p or pat == f for pat in ignore_patterns):
                     continue
                 files.append(p)
 
@@ -285,7 +308,7 @@ class IndexingService:
         files: list[Path],
         root: Optional[Path] = None,
     ) -> list[Path]:
-        """Filter files by supported extensions and ignore rules.
+        """Filter files by supported extensions, ignore rules, and symlink containment.
 
         Args:
             files: List of file paths to filter.
@@ -295,11 +318,22 @@ class IndexingService:
             Filtered list of supported, non-ignored files.
         """
         result: list[Path] = []
+        root_canon = root.resolve() if root else None
+
         for f in files:
             if not self._is_supported(f):
                 continue
-            if root and self._is_ignored(f, root):
-                continue
+            if root_canon:
+                try:
+                    f_canon = f.resolve()
+                    if not f_canon.is_relative_to(root_canon):
+                        continue
+                    if not f_canon.exists() or not f_canon.is_file():
+                        continue
+                except Exception:
+                    continue
+                if self._is_ignored(f, root):
+                    continue
             result.append(f)
         return result
 
@@ -336,6 +370,8 @@ class IndexingService:
 
         for part in rel.parts:
             if part in self._ignored_dirs:
+                return True
+            if part.startswith("."):
                 return True
 
         name = path.name

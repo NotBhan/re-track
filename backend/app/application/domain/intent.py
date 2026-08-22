@@ -63,19 +63,33 @@ def parse_intent_heuristics(prompt: str) -> ParsedIntentRecord:
     elif any(w in lowered for w in ["how", "why", "what", "where", "explain"]):
         category = "explanation"
 
-    # Regex for potential symbol / function / path patterns (words with dots, underscores, camelCase)
+    # Regex for potential symbol / function / path patterns:
+    # 1. Dotted symbol paths (e.g. app.server, routers.packages)
+    # 2. PascalCase / CamelCase (e.g. ApplicationContainer, CGCService, makeKey)
+    # 3. snake_case identifiers (e.g. parse_intent_heuristics, context_gen_lock, get_container)
+    # 4. ALL_CAPS constants with underscore (e.g. SUPPORTED_EXTENSIONS, IGNORED_DIRS, DEBT_003)
     symbol_candidates = re.findall(
-        r"\b[a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)+\b|\b[a-z]+[A-Z][a-zA-Z0-9]*\b|\b[a-zA-Z_][a-zA-Z0-9_]*_[a-zA-Z0-9_]+\b",
+        r"\b[a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)+\b"
+        r"|\b(?:[A-Z]{2,}[a-z0-9]+[a-zA-Z0-9]*|[A-Z][a-z0-9]+[A-Z][a-zA-Z0-9]*|[a-z0-9]+[A-Z][a-zA-Z0-9]*)\b"
+        r"|\b[a-zA-Z_][a-zA-Z0-9_]*_[a-zA-Z0-9_]+\b"
+        r"|\b[A-Z][A-Z0-9_]{2,}\b",
         prompt,
     )
-    backticked = re.findall(r"`([a-zA-Z_][a-zA-Z0-9_\.]*)`", prompt)
-    all_symbols = list(dict.fromkeys(backticked + symbol_candidates))
-
+    backticked = re.findall(r"`([^`]+)`", prompt)
+    
     # File hints (words ending in standard file extensions)
     file_hints = re.findall(
-        r"\b[\w\-\/\\]+\.(?:py|ts|tsx|js|jsx|json|md|yaml|toml|rs|go|java|c|cpp|h)\b",
+        r"\b[\w\-\/\\]+\.(?:py|ts|tsx|js|jsx|json|md|yaml|yml|toml|rs|go|java|c|cpp|h|css|html)\b",
         prompt,
     )
+    file_hints_set = set(file_hints)
+
+    # Clean and deduplicate symbols, excluding full file hints
+    cleaned_symbols = []
+    for s in backticked + symbol_candidates:
+        s_clean = s.strip()
+        if s_clean and s_clean not in file_hints_set and s_clean not in cleaned_symbols:
+            cleaned_symbols.append(s_clean)
 
     # Check if prompt is very short or generic (vague)
     is_vague = len(prompt.split()) < 5 or any(
@@ -85,7 +99,7 @@ def parse_intent_heuristics(prompt: str) -> ParsedIntentRecord:
     return ParsedIntentRecord(
         task_summary=prompt.strip().split("\n")[0][:120],
         category=category,
-        extracted_symbols=all_symbols,
+        extracted_symbols=cleaned_symbols,
         relevant_file_hints=list(dict.fromkeys(file_hints)),
         is_vague=is_vague,
     )

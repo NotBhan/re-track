@@ -11,18 +11,22 @@ import time
 from typing import Any, Optional
 
 from app.application.dto import (
+    ASTCallGraphResponse,
     ErrorResponse,
     RepositoryCreateRequest,
     RepositoryListResponse,
     RepositoryResponse,
+    RepositorySummaryResponse,
     ScanResultResponse,
 )
+from app.application.ports.filesystem import FileSystemPort
 from app.application.ports.indexing_service import IndexingServicePort
 from app.application.ports.llm_provider import LLMProviderPort
 from app.application.ports.memory import MemoryDatasetPort
 from app.application.ports.repository_manager import RepositoryManagerPort
 from app.application.ports.repository_metadata import RepositoryMetadataPort
 from app.application.ports.summary_generator import SummaryGeneratorPort
+from app.application.ports.workspace_authorization import WorkspaceAuthorizationPort
 from app.models.repository import Repository
 
 logger = logging.getLogger(__name__)
@@ -39,6 +43,8 @@ class RepositoryUseCases:
         summary_generator: SummaryGeneratorPort,
         cognee_service: Optional[MemoryDatasetPort] = None,
         metadata_store: Optional[RepositoryMetadataPort] = None,
+        filesystem: Optional[FileSystemPort] = None,
+        workspace_auth: Optional[WorkspaceAuthorizationPort] = None,
     ) -> None:
         self._manager = repository_manager
         self._indexing_service = indexing_service
@@ -46,6 +52,8 @@ class RepositoryUseCases:
         self._summary_generator = summary_generator
         self._cognee_service = cognee_service
         self._metadata_store = metadata_store
+        self._fs = filesystem
+        self._workspace_auth = workspace_auth
 
     def _repo_to_response(self, repo: Any) -> RepositoryResponse:
         """Convert a Repository domain object to a response model with full AST and metadata."""
@@ -353,3 +361,209 @@ class RepositoryUseCases:
                 logger.debug("LLM prompt generation failed, falling back to heuristics: %s", e)
 
         return {"success": True, "prompts": heuristic_prompts[:5], "source": "heuristic"}
+
+    async def get_repository_summary(
+        self,
+        repository_path: str,
+    ) -> RepositorySummaryResponse | ErrorResponse:
+        """Extract or retrieve global repository architecture summary and tech stack."""
+        start = time.monotonic()
+        logger.info("use_case: get_repository_summary() | path=%s", repository_path)
+        try:
+            if self._workspace_auth:
+                is_auth, reason = self._workspace_auth.is_path_authorized(repository_path)
+                if not is_auth:
+                    return ErrorResponse(
+                        error="AuthorizationError",
+                        message=reason or f"Access denied to unauthorized repository path: {repository_path}",
+                    )
+
+            repo_path = Path(repository_path).resolve()
+            if not repo_path.exists():
+                return ErrorResponse(
+                    error="ValidationError",
+                    message=f"Repository path does not exist: {repository_path}",
+                )
+            if not repo_path.is_dir():
+                return ErrorResponse(
+                    error="ValidationError",
+                    message=f"Repository path is not a directory: {repository_path}",
+                )
+
+            # Discover and filter files
+            if self._indexing_service:
+                raw_files = self._indexing_service.discover_files(repo_path)
+                indexed_files = self._indexing_service.filter_files(raw_files, repo_path)
+            else:
+                repo_canon = repo_path.resolve()
+                indexed_files = [
+                    p for p in repo_path.rglob("*")
+                    if p.is_file() and not p.name.startswith(".")
+                    and p.resolve().is_relative_to(repo_canon)
+                ]
+
+            gen_result = self._summary_generator.generate(repo_path, indexed_files)
+            summary = await gen_result if hasattr(gen_result, "__await__") else gen_result
+
+            tech_stack = getattr(summary, "technology_stack", None)
+            arch = getattr(summary, "architecture", None)
+            conv = getattr(summary, "coding_conventions", None)
+
+            components_list = [
+                {
+                    "name": getattr(c, "name", ""),
+                    "responsibilities": getattr(c, "responsibilities", ""),
+                    "relationships": getattr(c, "relationships", []) or [],
+                }
+                for c in (getattr(summary, "key_components", []) or [])
+            ]
+            entry_points_list = [
+                {
+                    "name": getattr(e, "name", ""),
+                    "path": getattr(e, "path", ""),
+                    "type": getattr(e, "type", ""),
+                }
+                for e in (getattr(summary, "entry_points", []) or [])
+            ]
+            public_apis_list = [
+                {
+                    "name": getattr(a, "name", ""),
+                    "signature": getattr(a, "signature", ""),
+                    "description": getattr(a, "description", ""),
+                }
+                for a in (getattr(summary, "public_apis", []) or [])
+            ]
+            conventions_dict = {
+                "naming": getattr(conv, "naming", "") if conv else "",
+                "formatting": getattr(conv, "formatting", "") if conv else "",
+                "patterns": getattr(conv, "patterns", []) if conv else [],
+            }
+
+            elapsed = time.monotonic() - start
+            logger.info("use_case: get_repository_summary() complete | %.2fs", elapsed)
+
+            return RepositorySummaryResponse(
+                success=True,
+                repository_path=str(repo_path),
+                project_purpose=getattr(summary, "project_purpose", ""),
+                languages=getattr(tech_stack, "languages", []) if tech_stack else [],
+                frameworks=getattr(tech_stack, "frameworks", []) if tech_stack else [],
+                databases=getattr(tech_stack, "databases", []) if tech_stack else [],
+                dependencies=getattr(tech_stack, "dependencies", []) if tech_stack else [],
+                architecture_pattern=getattr(arch, "pattern", "") if arch else "",
+                architecture_layers=getattr(arch, "layers", []) if arch else [],
+                key_components=components_list,
+                entry_points=entry_points_list,
+                public_apis=public_apis_list,
+                coding_conventions=conventions_dict,
+                file_count=len(indexed_files),
+                call_graph_status=getattr(summary, "call_graph_status", "not_analyzed"),
+            )
+        except Exception as e:
+            elapsed = time.monotonic() - start
+            logger.error("use_case: get_repository_summary() failed | %.2fs | %s", elapsed, e)
+            return ErrorResponse(
+                error=type(e).__name__,
+                message=f"Failed to get repository summary: {e}",
+            )
+
+    async def get_ast_call_graph(
+        self,
+        repository_path: str,
+        file_filter: Optional[str] = None,
+        max_nodes: int = 150,
+    ) -> ASTCallGraphResponse | ErrorResponse:
+        """Extract deterministic AST call graph (nodes and directed edges)."""
+        start = time.monotonic()
+        logger.info("use_case: get_ast_call_graph() | path=%s | filter=%s", repository_path, file_filter)
+        try:
+            if self._workspace_auth:
+                is_auth, reason = self._workspace_auth.is_path_authorized(repository_path)
+                if not is_auth:
+                    return ErrorResponse(
+                        error="AuthorizationError",
+                        message=reason or f"Access denied to unauthorized repository path: {repository_path}",
+                    )
+
+            repo_path = Path(repository_path).resolve()
+            if not repo_path.exists():
+                return ErrorResponse(
+                    error="ValidationError",
+                    message=f"Repository path does not exist: {repository_path}",
+                )
+            if not repo_path.is_dir():
+                return ErrorResponse(
+                    error="ValidationError",
+                    message=f"Repository path is not a directory: {repository_path}",
+                )
+
+            if self._indexing_service:
+                raw_files = self._indexing_service.discover_files(repo_path)
+                indexed_files = self._indexing_service.filter_files(raw_files, repo_path)
+            else:
+                repo_canon = repo_path.resolve()
+                indexed_files = [
+                    p for p in repo_path.rglob("*")
+                    if p.is_file() and not p.name.startswith(".")
+                    and p.resolve().is_relative_to(repo_canon)
+                ]
+
+            gen_result = self._summary_generator.generate(repo_path, indexed_files)
+            summary = await gen_result if hasattr(gen_result, "__await__") else gen_result
+
+            raw_nodes = getattr(summary, "call_graph_nodes", []) or []
+            raw_edges = getattr(summary, "call_graph_edges", []) or []
+
+            nodes = [
+                {
+                    "id": getattr(n, "id", "") if hasattr(n, "id") else n.get("id", ""),
+                    "label": getattr(n, "label", "") if hasattr(n, "label") else n.get("label", ""),
+                    "file": getattr(n, "file", "") if hasattr(n, "file") else n.get("file", ""),
+                    "kind": getattr(n, "kind", "") if hasattr(n, "kind") else n.get("kind", ""),
+                    "line": getattr(n, "line", 0) if hasattr(n, "line") else n.get("line", 0),
+                }
+                for n in raw_nodes
+            ]
+            edges = [
+                {
+                    "source": getattr(e, "source", "") if hasattr(e, "source") else e.get("source", ""),
+                    "target": getattr(e, "target", "") if hasattr(e, "target") else e.get("target", ""),
+                    "kind": getattr(e, "kind", "") if hasattr(e, "kind") else e.get("kind", ""),
+                }
+                for e in raw_edges
+            ]
+
+            if file_filter:
+                norm_filter = file_filter.strip().lstrip("./")
+                nodes = [n for n in nodes if n["file"].startswith(norm_filter) or norm_filter in n["file"]]
+                node_ids = {n["id"] for n in nodes}
+                edges = [e for e in edges if e["source"] in node_ids or e["target"] in node_ids]
+
+            total_nodes = len(nodes)
+            total_edges = len(edges)
+
+            # Cap nodes to requested max_nodes
+            capped_nodes = nodes[:max_nodes]
+            capped_ids = {n["id"] for n in capped_nodes}
+            capped_edges = [e for e in edges if e["source"] in capped_ids and e["target"] in capped_ids]
+
+            elapsed = time.monotonic() - start
+            logger.info("use_case: get_ast_call_graph() complete | nodes=%d | edges=%d | %.2fs", total_nodes, total_edges, elapsed)
+
+            return ASTCallGraphResponse(
+                success=True,
+                repository_path=str(repo_path),
+                nodes=capped_nodes,
+                edges=capped_edges,
+                total_nodes=total_nodes,
+                total_edges=total_edges,
+                call_graph_status=getattr(summary, "call_graph_status", "analyzed"),
+                call_graph_error=getattr(summary, "call_graph_error", None),
+            )
+        except Exception as e:
+            elapsed = time.monotonic() - start
+            logger.error("use_case: get_ast_call_graph() failed | %.2fs | %s", elapsed, e)
+            return ErrorResponse(
+                error=type(e).__name__,
+                message=f"Failed to extract AST call graph: {e}",
+            )

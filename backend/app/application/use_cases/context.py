@@ -8,7 +8,7 @@ import asyncio
 import logging
 from pathlib import Path
 import time
-from typing import Callable, Optional
+from typing import Any, Callable, Optional
 
 from app.application.dto import (
     AgentContextRequest,
@@ -16,6 +16,27 @@ from app.application.dto import (
     ContextResponse,
     ErrorResponse,
     GenerateContextRequest,
+    SourceSearchResponse,
+    SourceSearchResultItem,
+)
+from app.application.ports.cgc_service import CGCServicePort
+from app.application.ports.context_cache import ContextCachePort
+from app.application.ports.context_service import ContextServicePort
+from app.application.ports.filesystem import FileSystemPort
+from app.application.ports.indexing_service import IndexingServicePort
+from app.application.ports.intent_parser import IntentParserPort
+from app.application.ports.llm_provider import LLMProviderPort
+from app.application.ports.memory import MemoryPort
+from app.application.domain.dataset_identity import derive_dataset_name
+from app.application.domain.intent import parse_intent_heuristics
+from app.application.dto import (
+    AgentContextRequest,
+    AgentContextResponse,
+    ContextResponse,
+    ErrorResponse,
+    GenerateContextRequest,
+    SourceSearchResponse,
+    SourceSearchResultItem,
 )
 from app.application.ports.cgc_service import CGCServicePort
 from app.application.ports.context_cache import ContextCachePort
@@ -27,10 +48,47 @@ from app.application.ports.llm_provider import LLMProviderPort
 from app.application.ports.memory import MemoryPort
 from app.application.ports.source_search import SourceSearchPort
 from app.application.ports.summary_generator import SummaryGeneratorPort
-from app.application.domain.intent import parse_intent_heuristics
+from app.application.ports.workspace_authorization import WorkspaceAuthorizationPort
 from app.models.errors import CogneeServiceError
 
 logger = logging.getLogger(__name__)
+
+
+class BoundedConcurrencyGuard:
+    """Explicit bounded concurrency queue with timeout, queue limits, and cancellation support."""
+
+    def __init__(self, max_concurrent: int = 1, max_queue: int = 5, timeout: float = 30.0) -> None:
+        self._semaphore = asyncio.Semaphore(max_concurrent)
+        self._max_queue = max_queue
+        self._timeout = timeout
+        self._waiting_count = 0
+        self._lock = asyncio.Lock()
+
+    @property
+    def waiting_count(self) -> int:
+        return self._waiting_count
+
+    async def acquire(self) -> tuple[bool, Optional[str]]:
+        """Attempt to acquire execution slot within queue limit and timeout."""
+        async with self._lock:
+            if self._waiting_count >= self._max_queue:
+                return False, "BusyError"
+            self._waiting_count += 1
+
+        try:
+            await asyncio.wait_for(self._semaphore.acquire(), timeout=self._timeout)
+            return True, None
+        except asyncio.TimeoutError:
+            return False, "TimeoutError"
+        except asyncio.CancelledError:
+            raise
+        finally:
+            async with self._lock:
+                self._waiting_count -= 1
+
+    def release(self) -> None:
+        """Release acquired execution slot."""
+        self._semaphore.release()
 
 
 class ContextUseCases:
@@ -46,10 +104,15 @@ class ContextUseCases:
         cgc_service: Optional[CGCServicePort],
         summary_generator: SummaryGeneratorPort,
         context_cache: ContextCachePort,
-        context_gen_lock: asyncio.Lock,
-        ensure_services_fn: Callable[[], None],
+        context_gen_lock: Optional[asyncio.Lock] = None,
+        ensure_services_fn: Optional[Callable[[], None]] = None,
         source_search: Optional[SourceSearchPort] = None,
         filesystem: Optional[FileSystemPort] = None,
+        workspace_auth: Optional[WorkspaceAuthorizationPort] = None,
+        concurrency_guard: Optional[BoundedConcurrencyGuard] = None,
+        max_concurrent: int = 1,
+        max_queue: int = 5,
+        queue_timeout: float = 30.0,
     ) -> None:
         self._context_service = context_service
         self._cognee_service = cognee_service
@@ -59,10 +122,15 @@ class ContextUseCases:
         self._cgc_service = cgc_service
         self._summary_generator = summary_generator
         self._cache = context_cache
-        self._lock = context_gen_lock
-        self._ensure_services = ensure_services_fn
+        self._ensure_services = ensure_services_fn or (lambda: None)
         self._source_search = source_search
         self._fs = filesystem
+        self._workspace_auth = workspace_auth
+        self._guard = concurrency_guard or BoundedConcurrencyGuard(
+            max_concurrent=max_concurrent,
+            max_queue=max_queue,
+            timeout=queue_timeout,
+        )
 
     async def generate_context(
         self,
@@ -160,20 +228,40 @@ class ContextUseCases:
         logger.info("use_case: get_agent_context() | prompt=%s", request.task_prompt[:80])
 
         try:
+            if self._workspace_auth:
+                is_auth, reason = self._workspace_auth.is_path_authorized(request.repository_path)
+                if not is_auth:
+                    return ErrorResponse(
+                        error="AuthorizationError",
+                        message=reason or f"Access denied to unauthorized repository path: {request.repository_path}",
+                    )
+
             self._ensure_services()
             if self._indexing_service is None or self._cognee_service is None or self._context_service is None:
                 raise CogneeServiceError("Backend services not initialized.")
 
-            if self._lock.locked():
-                logger.warning("use_case: get_agent_context() rejected | synthesis already in progress")
+            acquired, err = await self._guard.acquire()
+            if not acquired:
+                if err == "BusyError":
+                    logger.warning("use_case: get_agent_context() rejected | queue full")
+                    return ErrorResponse(
+                        error="BusyError",
+                        message="Context synthesis queue is full. Maximum concurrent requests reached. Please retry shortly.",
+                    )
+                elif err == "TimeoutError":
+                    logger.warning("use_case: get_agent_context() timed out waiting for queue slot")
+                    return ErrorResponse(
+                        error="TimeoutError",
+                        message="Context synthesis request timed out waiting for an execution slot.",
+                    )
                 return ErrorResponse(
                     error="ConcurrencyError",
-                    message="Context synthesis is already running for a task. Please wait a moment.",
+                    message="Context synthesis execution slot unavailable. Please wait a moment.",
                 )
 
-            async with self._lock:
+            try:
                 repo_path = Path(request.repository_path).resolve()
-                dataset_name = request.dataset_name or repo_path.name
+                dataset_name = derive_dataset_name(repo_path, request.dataset_name)
                 target_tokens = request.max_tokens or 8000
 
                 # 0. Check in-memory context synthesis cache (< 5ms hit)
@@ -271,8 +359,6 @@ class ContextUseCases:
                     _query_cgc(),
                     _generate_package(),
                 )
-                retrieval_time_ms = int((time.perf_counter() - t_retrieval_start) * 1000)
-
                 # 3. Direct AST & symbol relevance search across repository files (Ranking Stage)
                 t_rank_start = time.perf_counter()
                 relevant_snippets = []
@@ -289,6 +375,14 @@ class ContextUseCases:
                         search_terms=search_terms,
                     )
                 ranking_time_ms = int((time.perf_counter() - t_rank_start) * 1000)
+
+                if not (structural_res and getattr(structural_res, "symbols_found", None)) and repo_summary:
+                    structural_res = self._extract_ast_call_context(
+                        repo_summary=repo_summary,
+                        target_symbols=intent.extracted_symbols,
+                        relevant_file_hints=list(intent.relevant_file_hints) + matched_file_rels[:4],
+                    )
+                retrieval_time_ms = int((time.perf_counter() - t_retrieval_start) * 1000)
 
                 # 4. Merge snippets and structural graph into Markdown output (Synthesis Stage)
                 t_synth_start = time.perf_counter()
@@ -331,6 +425,8 @@ class ContextUseCases:
                 # Store in high-speed synthesis cache
                 self._cache.set(cache_key, response, repo_path=str(repo_path))
                 return response
+            finally:
+                self._guard.release()
 
         except Exception as e:
             elapsed = time.monotonic() - start
@@ -339,3 +435,196 @@ class ContextUseCases:
                 error=type(e).__name__,
                 message=f"Failed to generate agent context: {e}",
             )
+
+    async def search_repository_code(
+        self,
+        repository_path: str,
+        query: str,
+        limit: int = 10,
+    ) -> SourceSearchResponse | ErrorResponse:
+        """Search repository code for matching symbols and keywords with relevance ranking."""
+        start = time.monotonic()
+        logger.info("use_case: search_repository_code() | path=%s | query=%s", repository_path, query[:50])
+        try:
+            if self._workspace_auth:
+                is_auth, reason = self._workspace_auth.is_path_authorized(repository_path)
+                if not is_auth:
+                    return ErrorResponse(
+                        error="AuthorizationError",
+                        message=reason or f"Access denied to unauthorized repository path: {repository_path}",
+                    )
+
+            repo_path = Path(repository_path).resolve()
+            if not repo_path.exists():
+                return ErrorResponse(
+                    error="ValidationError",
+                    message=f"Repository path does not exist: {repository_path}",
+                )
+            if not repo_path.is_dir():
+                return ErrorResponse(
+                    error="ValidationError",
+                    message=f"Repository path is not a directory: {repository_path}",
+                )
+            if not query.strip():
+                return ErrorResponse(
+                    error="ValidationError",
+                    message="Search query must not be empty",
+                )
+
+            if self._indexing_service:
+                raw_files = self._indexing_service.discover_files(repo_path)
+                indexed_files = self._indexing_service.filter_files(raw_files, repo_path)
+            else:
+                repo_canon = repo_path.resolve()
+                indexed_files = [
+                    p for p in repo_path.rglob("*")
+                    if p.is_file() and not p.name.startswith(".")
+                    and p.resolve().is_relative_to(repo_canon)
+                ]
+
+            results: list[SourceSearchResultItem] = []
+            if self._source_search:
+                raw_results = self._source_search.search(
+                    repo_path=repo_path,
+                    indexed_files=indexed_files,
+                    query=query,
+                    limit=limit,
+                )
+                results = [
+                    SourceSearchResultItem(
+                        file_path=r["file_path"],
+                        score=r["score"],
+                        matched_symbols=r.get("matched_symbols", []),
+                        snippet=r.get("snippet", ""),
+                    )
+                    for r in raw_results
+                ]
+
+            elapsed = time.monotonic() - start
+            logger.info("use_case: search_repository_code() complete | results=%d | %.2fs", len(results), elapsed)
+
+            return SourceSearchResponse(
+                success=True,
+                repository_path=str(repo_path),
+                query=query,
+                results=results,
+                total_results=len(results),
+            )
+        except Exception as e:
+            elapsed = time.monotonic() - start
+            logger.error("use_case: search_repository_code() failed | %.2fs | %s", elapsed, e)
+            return ErrorResponse(
+                error=type(e).__name__,
+                message=f"Failed to search repository code: {e}",
+            )
+
+    @staticmethod
+    def _extract_ast_call_context(
+        repo_summary: Any,
+        target_symbols: list[str],
+        relevant_file_hints: list[str] = (),
+    ) -> Optional["_ASTStructuralContext"]:
+        """Extract callers, callees, and structurally coupled files from in-memory AST call graph."""
+        nodes = getattr(repo_summary, "call_graph_nodes", None)
+        if not nodes:
+            return None
+
+        symbols_found: list[str] = []
+        callers: list[str] = []
+        callees: list[str] = []
+        related_files: list[str] = []
+
+        nodes_by_id = {n.id: n for n in nodes}
+        nodes_by_label: dict[str, list[Any]] = {}
+        for n in nodes:
+            nodes_by_label.setdefault(n.label, []).append(n)
+            nodes_by_label.setdefault(n.label.lower(), []).append(n)
+
+        matched_nodes: list[Any] = []
+        for s in target_symbols:
+            s_low = s.lower()
+            if s_low in nodes_by_label:
+                for n in nodes_by_label[s_low]:
+                    if n not in matched_nodes:
+                        matched_nodes.append(n)
+                        if n.label not in symbols_found:
+                            symbols_found.append(n.label)
+
+        for hint in relevant_file_hints:
+            hint_clean = hint.lower().lstrip("./")
+            for n in nodes:
+                if getattr(n, "file", None) and (n.file.lower() == hint_clean or n.file.lower().endswith("/" + hint_clean)):
+                    if n not in matched_nodes and len(matched_nodes) < 10:
+                        matched_nodes.append(n)
+                        if n.label not in symbols_found:
+                            symbols_found.append(n.label)
+
+        matched_node_ids = {n.id for n in matched_nodes}
+
+        for n in matched_nodes:
+            if getattr(n, "file", None) and n.file not in related_files:
+                related_files.append(n.file)
+
+        edges = getattr(repo_summary, "call_graph_edges", None)
+        if edges:
+            for edge in edges:
+                if edge.target in matched_node_ids:
+                    src_node = nodes_by_id.get(edge.source)
+                    caller_label = src_node.label if src_node else edge.source
+                    if caller_label not in callers:
+                        callers.append(caller_label)
+                    if src_node and getattr(src_node, "file", None) and src_node.file not in related_files:
+                        related_files.append(src_node.file)
+
+                if edge.source in matched_node_ids:
+                    tgt_node = nodes_by_id.get(edge.target)
+                    callee_label = tgt_node.label if tgt_node else edge.target
+                    if callee_label not in callees:
+                        callees.append(callee_label)
+                    if tgt_node and getattr(tgt_node, "file", None) and tgt_node.file not in related_files:
+                        related_files.append(tgt_node.file)
+
+        if not symbols_found and not related_files:
+            return None
+
+        return _ASTStructuralContext(
+            symbols_found=symbols_found[:12],
+            callers=callers[:10],
+            callees=callees[:10],
+            related_files=related_files[:15],
+        )
+
+
+class _ASTStructuralContext:
+    """Internal AST structural context container."""
+
+    def __init__(
+        self,
+        symbols_found: list[str],
+        callers: list[str],
+        callees: list[str],
+        related_files: list[str],
+    ) -> None:
+        self.symbols_found = symbols_found
+        self.callers = callers
+        self.callees = callees
+        self.related_files = related_files
+
+    def to_markdown(self) -> str:
+        """Format structural AST relationships as compact Markdown."""
+        lines = []
+        if self.symbols_found:
+            lines.append(f"**Identified AST Symbols**: {', '.join(f'`{s}`' for s in self.symbols_found)}")
+        if self.callers:
+            lines.append("\n**Callers (Upstream Invocations)**:")
+            for c in self.callers[:10]:
+                lines.append(f"- `{c}`")
+        if self.callees:
+            lines.append("\n**Callees (Downstream Invocations)**:")
+            for c in self.callees[:10]:
+                lines.append(f"- `{c}`")
+        if self.related_files:
+            lines.append("\n**Structurally Coupled Files**:")
+            for f in self.related_files[:10]:
+                lines.append(f"- `{f}`")
+        return "\n".join(lines)

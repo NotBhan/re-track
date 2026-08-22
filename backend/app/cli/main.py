@@ -246,5 +246,12 @@ def forget_cmd(
     console.print("[green]Dataset forgotten successfully[/green]")
 
 
+@app.command("mcp")
+def mcp_cmd():
+    """Start the RE:Track Model Context Protocol (MCP) server over stdio."""
+    from app.mcp.server import run_mcp_stdio
+    _run(run_mcp_stdio())
+
+
 if __name__ == "__main__":
     app()

@@ -28,6 +28,7 @@ from app.application.ports.repository_manager import RepositoryManagerPort
 from app.application.ports.repository_metadata import RepositoryMetadataPort
 from app.application.ports.source_search import SourceSearchPort
 from app.application.ports.summary_generator import SummaryGeneratorPort
+from app.application.ports.workspace_authorization import WorkspaceAuthorizationPort
 
 __all__ = [
     "BenchmarkRunnerPort",
@@ -51,4 +52,5 @@ __all__ = [
     "RepositoryMetadataPort",
     "SourceSearchPort",
     "SummaryGeneratorPort",
+    "WorkspaceAuthorizationPort",
 ]

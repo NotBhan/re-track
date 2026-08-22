@@ -89,6 +89,30 @@ def get_git_revision(repo_path: Path) -> str | None:
         return None
 
 
+def _load_ground_truth_tasks() -> list[dict[str, Any]]:
+    """Load ground truth evaluation tasks with fallback."""
+    search_paths = [
+        Path.cwd() / "benchmarks" / "retrack" / "golden_tasks.json",
+        Path.cwd().parent / "benchmarks" / "retrack" / "golden_tasks.json",
+        Path(__file__).resolve().parent.parent.parent.parent / "benchmarks" / "retrack" / "golden_tasks.json",
+        Path(__file__).resolve().parent.parent.parent.parent / "benchmarks" / "andescontext" / "expected_files.json",
+    ]
+    for p in search_paths:
+        if p.exists():
+            try:
+                import json
+                data = json.loads(p.read_text(encoding="utf-8"))
+                if isinstance(data, dict) and "tasks" in data:
+                    return data["tasks"]
+                elif isinstance(data, list):
+                    return data
+                elif isinstance(data, dict):
+                    return [{"task_prompt": v.get("question", ""), **v} for v in data.values()]
+            except Exception:
+                pass
+    return []
+
+
 class BenchmarkService:
     """Service executing authoritative benchmark suites for context synthesis."""
 
@@ -110,59 +134,102 @@ class BenchmarkService:
         target_repo_path: str | None = None,
     ) -> BenchmarkSuiteResponse:
         """Run an authoritative benchmark suite measuring compression and latency."""
+        ground_truth_tasks = _load_ground_truth_tasks()
+
         if questions is None:
-            questions = [
-                "How does the authentication middleware work?",
-                "What is the repository structure and core components?",
-                "How do I add a new API endpoint or data model?",
-            ]
+            if ground_truth_tasks:
+                questions = [
+                    t.get("task_prompt", "") for t in ground_truth_tasks[:5]
+                    if t.get("task_prompt")
+                ]
+            if not questions:
+                questions = [
+                    "How is the backend structured and how does the composition root initialize use cases and infrastructure services?",
+                    "How does RE:Track enforce the dual-path storage contract between canonical ~/.retrack/ and legacy read-only ~/.andes/?",
+                    "How was the composition root refactored to eliminate eager module-level container instantiation?",
+                ]
 
         store = self._metadata_store.load()
         repos = store.get("repositories", []) if store else []
 
         # Determine target repo path for baseline calculation
-        selected_repo = None
         repo_path_obj = None
         if target_repo_path:
             repo_path_obj = Path(target_repo_path).resolve()
         elif repos:
             repo_path_obj = Path(repos[0].get("path", "")).resolve()
-            selected_repo = repos[0]
 
         baseline_tokens = 0
         eligible_file_count = 0
         git_rev = None
 
         if repo_path_obj and repo_path_obj.exists():
-            baseline_tokens, eligible_file_count = compute_baseline_tokens(repo_path_obj)
-            git_rev = get_git_revision(repo_path_obj)
+            eligible_file_count, baseline_tokens = _calculate_repository_baseline(repo_path_obj)
+            git_rev = _get_git_revision(repo_path_obj)
+        else:
+            baseline_tokens = 25000
+            eligible_file_count = 50
 
-        # If no repo on disk, use fallback minimum baseline
-        if baseline_tokens == 0:
-            baseline_tokens = 25_000
-
-        datasets = [selected_repo["name"]] if (selected_repo and "name" in selected_repo) else ["default"]
+        results: list[BenchmarkResultItem] = []
+        total_retrieval_ms = 0
+        total_time_ms = 0.0
+        evaluated_crit_scores = []
 
         # Gather system hardware metadata
         health_resp = await self._health()
         exec_device = getattr(health_resp, "execution_device", "CPU")
         gpu_presence = getattr(health_resp, "gpu_presence", "None")
 
-        results: list[BenchmarkResultItem] = []
-
         for q in questions:
-            start = time.monotonic()
+            t0 = time.perf_counter()
             try:
-                resp = await self._generate_context(GenerateContextRequest(
-                    task=q, datasets=datasets, top_k=20,
-                ))
-                total_latency = (time.monotonic() - start) * 1000
+                req = GenerateContextRequest(task=q)
+                resp = await self._generate_context(req)
+                total_latency = (time.perf_counter() - t0) * 1000
 
-                if isinstance(resp, ContextResponse) and resp.token_estimate > 0:
-                    ctx_tokens = resp.token_estimate
-                    retrieval_ms = getattr(resp, "retrieval_time_ms", round(total_latency * 0.4, 1))
+                if isinstance(resp, ContextResponse):
+                    ctx_tokens = max(1, len(resp.markdown) // 4)
+                    retrieval_ms = float(resp.retrieval_time_ms)
+                    total_retrieval_ms += resp.retrieval_time_ms
+                    total_time_ms += total_latency
+
                     comp_ratio = round(baseline_tokens / max(ctx_tokens, 1), 2)
                     token_savings = round(((baseline_tokens - ctx_tokens) / baseline_tokens) * 100, 1)
+
+                    # Match with ground truth if available
+                    matching_task = next(
+                        (t for t in ground_truth_tasks if t.get("task_prompt", "").strip().lower() == q.strip().lower() or t.get("question", "").strip().lower() == q.strip().lower()),
+                        None,
+                    )
+
+                    if matching_task:
+                        crit_files = matching_task.get("critical_files", [])
+                        crit_symbols = matching_task.get("critical_symbols", [])
+                        missing_crit = []
+                        md_text = resp.markdown
+
+                        for cf in crit_files:
+                            cf_clean = cf.replace("\\", "/").strip().lstrip("./")
+                            cf_name = Path(cf).name
+                            if cf_clean in md_text or f"`{cf_name}`" in md_text:
+                                continue
+                            missing_crit.append(cf_name)
+
+                        for cs in crit_symbols:
+                            if f"`{cs}`" in md_text or re.search(rf"\b{re.escape(cs)}\b", md_text):
+                                continue
+                            missing_crit.append(cs)
+
+                        tot_crit = max(1, len(crit_files) + len(crit_symbols))
+                        score = 1.0 - (len(missing_crit) / tot_crit)
+                        evaluated_crit_scores.append(score)
+
+                        if not missing_crit:
+                            acc_status = "Evaluated (All critical evidence retrieved)"
+                        else:
+                            acc_status = f"Evaluated (Missing: {', '.join(missing_crit[:3])})"
+                    else:
+                        acc_status = "Not evaluated (custom query outside ground truth set)"
 
                     results.append(BenchmarkResultItem(
                         question=q,
@@ -174,7 +241,7 @@ class BenchmarkService:
                         total_time_ms=round(total_latency, 1),
                         section_count=resp.section_count,
                         retrieved_memories=resp.retrieved_memories,
-                        accuracy_status="Not evaluated (requires ground truth set)",
+                        accuracy_status=acc_status,
                         passed=resp.section_count >= 1 and ctx_tokens > 0,
                     ))
                 else:
@@ -193,7 +260,7 @@ class BenchmarkService:
                     ))
             except Exception as e:
                 logger.debug("Benchmark error for query %s: %s", q, e)
-                total_latency = (time.monotonic() - start) * 1000
+                total_latency = (time.perf_counter() - t0) * 1000
                 results.append(BenchmarkResultItem(
                     question=q,
                     baseline_tokens=baseline_tokens,
@@ -217,6 +284,12 @@ class BenchmarkService:
         avg_savings = sum(r.token_savings_percent for r in valid_results) / n_valid if valid_results else 0.0
         avg_comp = sum(r.compression_ratio for r in valid_results) / n_valid if valid_results else 1.0
 
+        if evaluated_crit_scores:
+            mean_crit = sum(evaluated_crit_scores) / len(evaluated_crit_scores)
+            accuracy_summary = f"Evaluated ({len(evaluated_crit_scores)} matched | Mean Critical Coverage: {mean_crit*100:.1f}%)"
+        else:
+            accuracy_summary = "Not evaluated (queries outside ground truth set)"
+
         settings = self._get_settings()
         run_metadata = {
             "repository_path": str(repo_path_obj) if repo_path_obj else "unknown",
@@ -239,7 +312,7 @@ class BenchmarkService:
             avg_total_latency_ms=round(avg_total, 1),
             avg_token_savings_percent=round(avg_savings, 1),
             avg_compression_ratio=round(avg_comp, 2),
-            accuracy_summary="Not evaluated (no ground truth set)",
+            accuracy_summary=accuracy_summary,
             total_questions=len(results),
             run_metadata=run_metadata,
         )

@@ -20,10 +20,14 @@ from app.application.dto.indexing import (
     RepositorySummaryInfo,
 )
 from app.application.dto.repositories import (
+    ASTCallGraphResponse,
     RepositoryCreateRequest,
     RepositoryListResponse,
     RepositoryResponse,
+    RepositorySummaryResponse,
     ScanResultResponse,
+    SourceSearchResponse,
+    SourceSearchResultItem,
 )
 from app.application.dto.memory import (
     CognifyRequest,
@@ -79,6 +83,10 @@ __all__ = [
     "RepositoryResponse",
     "RepositoryListResponse",
     "ScanResultResponse",
+    "RepositorySummaryResponse",
+    "ASTCallGraphResponse",
+    "SourceSearchResultItem",
+    "SourceSearchResponse",
     # Memory
     "ForgetDatasetRequest",
     "ForgetDatasetResponse",
