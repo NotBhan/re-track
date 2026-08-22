@@ -63,9 +63,10 @@ The retrieval benchmark regression gate (`BenchmarkRegressionGate` in `app.evalu
 | **Mean Critical Evidence Coverage** | `0.496` | `-0.050` | `0.446` |
 | **Mean Noise Ratio** | `0.010` | `+0.040` | `<= 0.050` (Max) |
 
-### Mathematical Rationale for Tolerances
-- **Task Granularity**: With 20 discrete tasks in `golden_tasks.json`, a 1-task change in retrieved evidence produces a baseline perturbation of `1 / 20 = 0.050`.
-- **Zero Hallucination Tolerance**: The noise ratio threshold is capped at `0.050` (5% maximum noise), guaranteeing that unneeded file content cannot pollute context packages.
+### Mathematical Rationale & Release-Policy Classification
+- **Single-Task Step Size ($1/N$)**: With 20 discrete tasks in `golden_tasks.json`, a total collapse of a single task ($\Delta M = 1.0$) changes the suite mean by exactly $1.0 / 20 = 0.050$. A 50% drop across 2 tasks also produces a mean delta of $2 \times 0.50 / 20 = 0.050$.
+- **Release-Policy Threshold**: The tolerance of `0.050` is explicitly classified as a **calibrated release-policy threshold**. It permits minor single-task edge-case noise while strictly breaking the build if structural, multi-task regressions occur.
+- **Zero Hallucination Tolerance**: The noise ratio threshold is capped at `0.050` (5% maximum noise fraction), guaranteeing that unneeded file content cannot pollute context packages.
 - **Immutable Ground Truth**: `golden_tasks.json` and metric calculation formulas are frozen and never adjusted to fit implementation anomalies.
 
 ---

@@ -110,7 +110,7 @@ This document tracks the phased development milestones and operational roadmap f
   - Artifact-first package validation and clean-install outside repository (`test_packaging_validation.py`) verifying CLI and FastMCP stdio framing cleanliness.
   - Automated gate-protected release workflow (`.github/workflows/release.yml`) with SHA-256 checksum generation and supply-chain hardening.
   - 21 dedicated Phase 9D tests passing across 3 new test files (`test_version_authority.py`, `test_benchmark_baseline_contract.py`, `test_packaging_validation.py`).
-  - Phase 9D audit sign-off (`docs/architecture/phase-9d-audit.md`), CI guide (`docs/product/ci-and-release.md`), and release runbook (`docs/product/release-process.md`).
+  - Phase 9D audit sign-off (`docs/architecture/phase-9d-audit.md`, `docs/architecture/phase-9d-hosted-validation.md`), CI guide (`docs/product/ci-and-release.md`), and release runbook (`docs/product/release-process.md`).
 - [ ] **Phase 9E: Frontend Behavioral Verification & UX Hardening**
   - Automated component interaction and end-to-end user workflow tests.
   - Edge-case error state and offline banner hardening.
