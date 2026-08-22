@@ -73,14 +73,60 @@ This document tracks the phased development milestones and operational roadmap f
 - [x] Subprocess signal handling verification for SIGINT, SIGTERM, and EOF without zombie leaks.
 - [x] Dual entry point (`python mcp_server.py` and `python -m app.mcp`) and 7-turn realistic AI coding agent workload.
 
+### Phase 8E: Final Production Readiness Gate (Completed)
+- [x] Prolonged 3,000-operation multi-repository soak test with continuous mutation, 100-request telemetry profiling, 0 FD leaks, 0 thread leaks, and sub-3ms P99 latency.
+- [x] Real OS subprocess provider lifecycle with 5 live SIGKILL crash/restart cycles against TCP socket server (avg failure detect 38.42ms, avg recovery 20.41ms, zero container rebuild).
+- [x] 13-point host environment failure matrix (deleted/recreated repos, broken symlinks, syntax errors, binary blobs, corrupted manifests, unauthorized paths).
+- [x] 20-cycle real MCP `ClientSession` stdio reconnect interoperability test suite.
+- [x] 500-iteration cache & resource churn stability validation (+0.91MB RSS delta, zero leaks).
+- [x] Standalone and module deployment reproducibility verification.
+- [x] Comprehensive production readiness audit report (`docs/architecture/phase-8e-audit.md`) and definitive `PRODUCTION GRADE` certification.
+
+### Phase 9: Productization & Release Engineering (Active)
+- [x] **Phase 9A: Product Truth & Capability Contract Cleanup (Completed)**
+  - Canonical feature inventory (`docs/product/feature-inventory.md`).
+  - User-facing capability matrix (`docs/product/capability-matrix.md`).
+  - Release readiness audit and prioritized gap analysis (`docs/product/release-readiness.md`).
+  - Phase 9A audit sign-off (`docs/architecture/phase-9a-audit.md`).
+- [ ] **Phase 9B: Installation, Packaging & Update Workflow**
+  - Standard Python distribution build (`pyproject.toml` wheel build, `pip`/`uv` packaging).
+  - First-run initialization wizard for canonical `~/.retrack/` directory bootstrap.
+  - Data migration and reset CLI utilities.
+- [ ] **Phase 9C: Observability, Diagnostics & Supportability**
+  - Structured file-based log rotation and diagnostic export.
+  - In-app health and queue depth inspector in Settings.
+- [ ] **Phase 9D: CI Regression & Release Automation**
+  - Multi-platform GitHub Actions CI matrix (Linux, macOS, Windows).
+  - Automated benchmark regression gate on pull requests.
+  - Semantic Versioning automation and release asset packaging.
+- [ ] **Phase 9E: Frontend Behavioral Verification & UX Hardening**
+  - Automated component interaction and end-to-end user workflow tests.
+  - Edge-case error state and offline banner hardening.
+
+### Phase 10: Retrieval & Intelligence Evolution (Planned)
+- [ ] **Phase 10A: Incremental / Diff-Aware Indexing** (Git diff change detection and selective file re-indexing).
+- [ ] **Phase 10B: Improved TS/JS/JSX Structural Analysis** (Tree-sitter native WASM bindings for cross-file type resolution).
+- [ ] **Phase 10C: Expanded Retrieval Benchmarking** (Multi-repository complex cross-package golden tasks).
+- [ ] **Phase 10D: Adaptive Query-Aware Retrieval** (Task-type-specific token allocation profiles).
+- [ ] **Phase 10E: Agent Workflow Optimization** (Multi-turn conversational context caching).
+
+### Deferred Capabilities (Postponed Until Specific Demand)
+- **HTTP / Streamable MCP Transport**: Postponed (local stdio remains the primary standard for Claude and Cursor).
+- **Remote Git Repository Ingestion**: Postponed (local-first workstation scope prioritized).
+- **Cloud Multi-Tenancy**: Excluded by design (privacy-first local execution).
+- **Distributed Task Workers (Celery/Redis)**: Excluded by design (8GB RAM single-node target).
+
 ---
 
 ## 2. Quality & Verification Metrics
 
-- **Backend Pytest Suite:** 428 passing unit/integration/soak tests across 33 test files (`backend/tests/`).
+- **Backend Pytest Suite:** 440 passing unit/integration/soak tests across 39 test files (`backend/tests/`).
 - **AST Integrity:** 100% passing multi-language AST syntax and symbol resolution tests (`tests/test_ast_integrity.py`).
 - **Frontend Build & Types:** 100% clean TypeScript compile and Vite production build (`npm run build`).
 - **Design System:** Vercel Geist aesthetic with dark mode canvas (`#000000`), micro-animations (`motion/react`), and high-contrast typography.
 - **Protocol Compliance:** 100% clean JSON-RPC framing on stdio; 0 unhandled exception leaks across MCP tools.
+- **Production Status:** **PRODUCTION GRADE** certified.
+
+
 
 

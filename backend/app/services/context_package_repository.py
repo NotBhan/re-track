@@ -46,7 +46,7 @@ class JsonContextPackageRepository(ContextPackageRepository):
     """JSON file-backed implementation of ContextPackageRepository.
 
     Stores packages in a single JSON file with atomic writes and file locking
-    for thread safety. Default path: ~/.andes/context_packages.json
+    for thread safety. Canonical path: ~/.retrack/context_packages.json (legacy fallback: ~/.andes/context_packages.json)
     """
 
     def __init__(
