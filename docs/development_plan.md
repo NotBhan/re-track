@@ -66,12 +66,21 @@ This document tracks the phased development milestones and operational roadmap f
 - [x] Clean stdio EOF, SIGINT, SIGTERM, and cancellation termination semantics (< 0.15s).
 - [x] Verified LLM provider failure resilience and automatic same-process recovery without server restart.
 
+### Phase 8D: Production Readiness & Soak Validation (Completed)
+- [x] 520-iteration prolonged soak validation measuring bounded RSS growth (< 25MB delta), zero leaked FDs (28 baseline/final), and zero leaked threads.
+- [x] Failure recovery matrix with 5 isolated fault injection scenarios (LLM down/up cycles, active worker crashes, cancellation slot preservation, auth violations, malformed inputs).
+- [x] Official MCP `ClientSession` stdio interoperability with 5 consecutive reconnect cycles.
+- [x] Subprocess signal handling verification for SIGINT, SIGTERM, and EOF without zombie leaks.
+- [x] Dual entry point (`python mcp_server.py` and `python -m app.mcp`) and 7-turn realistic AI coding agent workload.
+
 ---
 
 ## 2. Quality & Verification Metrics
 
-- **Backend Pytest Suite:** 415 passing unit/integration/benchmark tests across 28 test files (`backend/tests/`).
+- **Backend Pytest Suite:** 428 passing unit/integration/soak tests across 33 test files (`backend/tests/`).
+- **AST Integrity:** 100% passing multi-language AST syntax and symbol resolution tests (`tests/test_ast_integrity.py`).
 - **Frontend Build & Types:** 100% clean TypeScript compile and Vite production build (`npm run build`).
 - **Design System:** Vercel Geist aesthetic with dark mode canvas (`#000000`), micro-animations (`motion/react`), and high-contrast typography.
 - **Protocol Compliance:** 100% clean JSON-RPC framing on stdio; 0 unhandled exception leaks across MCP tools.
+
 
