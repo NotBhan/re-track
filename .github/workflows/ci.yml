@@ -1,0 +1,212 @@
+name: RE:Track CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint_and_static_validation:
+    name: Lint & Static Validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: |
+          cd backend
+          uv sync --frozen || uv sync
+
+      - name: Run version authority and boundary tests
+        run: |
+          cd backend
+          uv run pytest tests/test_version_authority.py tests/test_application_boundary.py -v
+
+  frontend_build:
+    name: Frontend Production Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm"
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build frontend distribution
+        run: npm run build
+
+  ast_and_fast_backend_tests:
+    name: AST Integrity & Core Backend Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: |
+          cd backend
+          uv sync --frozen || uv sync
+
+      - name: Run AST integrity tests
+        run: |
+          cd backend
+          uv run pytest tests/test_ast_integrity.py -v
+
+      - name: Run structured logging & observability tests
+        run: |
+          cd backend
+          uv run pytest tests/test_structured_logging.py tests/test_log_rotation.py tests/test_health_observability.py tests/test_observability_security.py -v
+
+  golden_benchmark_regression:
+    name: Deterministic Golden Benchmark Gate
+    runs-on: ubuntu-latest
+    needs: [lint_and_static_validation, ast_and_fast_backend_tests]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: |
+          cd backend
+          uv sync --frozen || uv sync
+
+      - name: Execute benchmark baseline & regression gate tests
+        run: |
+          cd backend
+          uv run pytest tests/test_benchmark_baseline_contract.py tests/evaluation/test_context_engine_eval.py -v
+
+      - name: Save benchmark scorecard artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-scorecard
+          path: benchmarks/retrack/context_engine_baseline_scorecard.md
+          if-no-files-found: ignore
+
+  cross_platform_matrix:
+    name: Matrix Tests (${{ matrix.os }} - Python ${{ matrix.python-version }})
+    runs-on: ${{ matrix.os }}
+    needs: [lint_and_static_validation]
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python-version: ["3.11", "3.12", "3.13"]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          cd backend
+          uv sync --frozen || uv sync
+
+      - name: Run cross-platform test suite
+        shell: bash
+        run: |
+          cd backend
+          uv run pytest tests/test_version_authority.py tests/test_ast_integrity.py tests/test_structured_logging.py tests/test_log_rotation.py tests/test_diagnostics_export.py -v
+
+  package_build_and_clean_install:
+    name: Package Build & Clean-Install Outside Repo
+    runs-on: ubuntu-latest
+    needs: [lint_and_static_validation, frontend_build, ast_and_fast_backend_tests]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install build tool
+        run: |
+          cd backend
+          uv sync
+
+      - name: Build wheel and source distribution
+        run: |
+          cd backend
+          uv build --out-dir dist
+
+      - name: Run packaging validation & clean install tests
+        run: |
+          cd backend
+          uv run pytest tests/test_packaging_validation.py -v
+
+      - name: Generate SHA-256 Checksums
+        run: |
+          cd backend/dist
+          sha256sum *.whl *.tar.gz > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Upload built distribution artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: retrack-release-artifacts
+          path: |
+            backend/dist/*.whl
+            backend/dist/*.tar.gz
+            backend/dist/SHA256SUMS.txt

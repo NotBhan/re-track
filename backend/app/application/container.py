@@ -252,6 +252,7 @@ class ApplicationContainer:
             llm_provider_getter=lambda: self.llm_provider,
             provider_updater_fn=self.update_provider,
             telemetry_port=self.telemetry,
+            concurrency_guard=self.concurrency_guard,
         )
 
     def get_benchmark_use_cases(self) -> BenchmarkUseCases:

@@ -63,6 +63,47 @@ async def dashboard_stats_endpoint(
     return result.model_dump()
 
 
+@router.get("/health/detailed")
+async def detailed_health_endpoint(
+    system_use_cases: SystemUseCases = Depends(get_system_use_cases),
+) -> dict[str, Any]:
+    """Get detailed operational health and diagnostics state."""
+    result = await system_use_cases.get_detailed_health()
+    if isinstance(result, ErrorResponse):
+        raise HTTPException(status_code=503, detail=result.model_dump())
+    return result.model_dump()
+
+
+@router.get("/diagnostics")
+async def get_diagnostics_endpoint(
+    system_use_cases: SystemUseCases = Depends(get_system_use_cases),
+) -> dict[str, Any]:
+    """Generate and return sanitized operational diagnostics report."""
+    result = system_use_cases.export_diagnostics()
+    if isinstance(result, dict):
+        return result
+    return {"status": "ok", "path": str(result)}
+
+
+@router.post("/diagnostics/export")
+async def export_diagnostics_endpoint(
+    system_use_cases: SystemUseCases = Depends(get_system_use_cases),
+) -> dict[str, Any]:
+    """Generate and export sanitized operational diagnostic bundle to disk."""
+    result = system_use_cases.export_diagnostics(output_path=None)
+    return {"status": "ok", "export_path": str(result)}
+
+
+@router.get("/logs/recent")
+async def get_recent_logs_endpoint(
+    limit: int = 50,
+    system_use_cases: SystemUseCases = Depends(get_system_use_cases),
+) -> dict[str, Any]:
+    """Get recent sanitized persistent log records."""
+    logs = system_use_cases.get_recent_logs(max_entries=limit)
+    return {"status": "ok", "count": len(logs), "logs": logs}
+
+
 @router.post("/provider/update")
 async def provider_update_endpoint(
     request: UpdateProviderRequest,
@@ -78,3 +119,4 @@ async def provider_update_endpoint(
     if isinstance(result, ErrorResponse):
         raise HTTPException(status_code=500, detail=result.model_dump())
     return result
+

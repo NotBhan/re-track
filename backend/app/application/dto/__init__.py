@@ -56,6 +56,7 @@ from app.application.dto.system import (
     AppSettingsResponse,
     BackendStatusResponse,
     CogneeSettingsRequest,
+    DetailedHealthResponse,
     HealthResponse,
 )
 from app.application.dto.benchmarks import (
@@ -110,6 +111,7 @@ __all__ = [
     "ContextPackageAppendRequest",
     # System
     "HealthResponse",
+    "DetailedHealthResponse",
     "BackendStatusResponse",
     "CogneeSettingsRequest",
     "AppSettingsResponse",

@@ -10,6 +10,11 @@ RE:Track exposes its repository memory, deterministic AST call graphs, architect
 
 The RE:Track MCP server can be launched using any of the following standard mechanisms:
 
+### Using the Dedicated Console Script (Recommended after `pip install retrack-ai`):
+```bash
+retrack-mcp
+```
+
 ### Using the RE:Track CLI:
 ```bash
 retrack mcp
@@ -34,8 +39,23 @@ cd backend && uv run python -m app.mcp
 
 ## 2. Configuring External AI Coding Clients
 
-### Claude Desktop / Claude Code
-Add the following to your `claude_desktop_config.json` (located at `~/.config/Claude/claude_desktop_config.json` on Linux or `~/Library/Application Support/Claude/claude_desktop_config.json` on macOS):
+### Claude Desktop / Claude Code (Standard Package Install)
+```json
+{
+  "mcpServers": {
+    "retrack": {
+      "command": "retrack-mcp",
+      "args": [],
+      "env": {
+        "RETRACK_WORKSPACE_ROOTS": "/path/to/your/projects"
+      }
+    }
+  }
+}
+```
+
+### Claude Desktop / Claude Code (Developer UV Run)
+Add the following to your `claude_desktop_config.json`:
 
 ```json
 {

@@ -77,6 +77,18 @@ class StorageConfig(BaseSettings):
     system_root: Path = Field(default=DEFAULT_SYSTEM_ROOT, description="System storage root")
 
 
+class LoggingConfig(BaseSettings):
+    """Logging subsystem configuration."""
+
+    level: str = Field(default="INFO", description="Minimum log level (DEBUG, INFO, WARNING, ERROR)")
+    log_dir: Path = Field(default_factory=lambda: Path.home() / ".retrack" / "logs", description="Persistent log directory")
+    log_file_name: str = Field(default="app.jsonl", description="Log file name")
+    max_bytes: int = Field(default=10 * 1024 * 1024, description="Maximum size per log file in bytes (default: 10MB)")
+    backup_count: int = Field(default=5, description="Number of rotated backup log files to retain")
+    enable_file_logging: bool = Field(default=True, description="Enable structured file logging")
+    enable_stderr_logging: bool = Field(default=True, description="Enable human-readable stderr logging")
+
+
 class ServiceConfig(BaseSettings):
     """Service behavior configuration."""
 
@@ -95,6 +107,7 @@ class Settings(BaseSettings):
     ollama: OllamaConfig = Field(default_factory=OllamaConfig)
     storage: StorageConfig = Field(default_factory=StorageConfig)
     service: ServiceConfig = Field(default_factory=ServiceConfig)
+    logging: LoggingConfig = Field(default_factory=LoggingConfig)
     settings_store_path: Path = Field(default_factory=lambda: DEFAULT_SETTINGS_STORE_PATH)
     legacy_settings_store_path: Path = Field(default_factory=lambda: DEFAULT_LEGACY_SETTINGS_STORE_PATH)
 
@@ -155,6 +168,16 @@ class Settings(BaseSettings):
             if "llm_port" in data and data["llm_port"]:
                 self.ollama.port = int(data["llm_port"])
 
+            # Logging overrides
+            if "log_level" in data and data["log_level"]:
+                self.logging.level = str(data["log_level"]).upper()
+            if "log_max_bytes" in data and data["log_max_bytes"]:
+                self.logging.max_bytes = int(data["log_max_bytes"])
+            if "log_backup_count" in data and data["log_backup_count"]:
+                self.logging.backup_count = int(data["log_backup_count"])
+            if "enable_file_logging" in data:
+                self.logging.enable_file_logging = bool(data["enable_file_logging"])
+
             logger.info("Loaded persistent settings from %s (vector_db=%s, graph_db=%s, kg=%s)",
                         target_path, self.storage.vector_db, self.storage.graph_db, self.storage.enable_kg_extraction)
         except Exception as e:
@@ -178,6 +201,10 @@ class Settings(BaseSettings):
                 "embedding_model": self.ollama.embedding_model,
                 "llm_host": self.ollama.host,
                 "llm_port": self.ollama.port,
+                "log_level": self.logging.level,
+                "log_max_bytes": self.logging.max_bytes,
+                "log_backup_count": self.logging.backup_count,
+                "enable_file_logging": self.logging.enable_file_logging,
             }
             tmp_path = path.with_suffix(".tmp")
             with open(tmp_path, "w", encoding="utf-8") as f:

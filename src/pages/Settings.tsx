@@ -4,6 +4,7 @@ import { BackendSettings } from "@/components/settings/BackendSettings";
 import { CogneeSettings } from "@/components/settings/CogneeSettings";
 import { OllamaSettings } from "@/components/settings/OllamaSettings";
 import { StorageSettings } from "@/components/settings/StorageSettings";
+import { DiagnosticsSettings } from "@/components/settings/DiagnosticsSettings";
 import { useSettingsStore } from "@/stores/settings-store";
 import { Badge } from "@/components/ui/badge";
 import { Moon, Monitor, Laptop, Check } from "lucide-react";
@@ -110,6 +111,7 @@ function AboutSettingsView() {
 
 const tabComponents: Record<string, React.FC> = {
   backend: BackendSettings,
+  diagnostics: DiagnosticsSettings,
   cognee: CogneeSettings,
   ollama: OllamaSettings,
   storage: StorageSettings,

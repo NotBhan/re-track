@@ -6,7 +6,7 @@ import {
   type CogneeSettingsRequest,
 } from "@/lib/api";
 
-export type SettingsTab = "backend" | "cognee" | "ollama" | "storage" | "theme" | "about";
+export type SettingsTab = "backend" | "diagnostics" | "cognee" | "ollama" | "storage" | "theme" | "about";
 
 interface SettingsStore {
   activeTab: SettingsTab;

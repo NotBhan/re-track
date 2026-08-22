@@ -27,6 +27,24 @@ export interface HealthResponse {
   vram_used_gb?: number;
   execution_device?: "CPU" | "GPU" | "UNKNOWN" | string;
   active_model?: string | null;
+  health_state?: "healthy" | "degraded" | "unavailable" | "not_configured" | string;
+  storage_canonical_exists?: boolean;
+  storage_canonical_writable?: boolean;
+  legacy_storage_detected?: boolean;
+  repository_count?: number;
+  context_package_count?: number;
+  cache_files_count?: number;
+  cache_total_bytes?: number;
+  concurrency_queue_depth?: number;
+  concurrency_queue_capacity?: number;
+  concurrency_available_slots?: number;
+  mcp_server_ready?: boolean;
+  recent_errors_count?: number;
+}
+
+export interface DetailedHealthResponse extends HealthResponse {
+  diagnostics_log_entries?: Array<Record<string, unknown>>;
+  storage_paths?: Record<string, string>;
 }
 
 export interface BackendStatusResponse {
@@ -668,6 +686,27 @@ export async function updateCogneeSettings(
   req: CogneeSettingsRequest
 ): Promise<AppSettingsResponse> {
   return invoke<AppSettingsResponse>("update_cognee_settings", { request: req });
+}
+
+/**
+ * Get detailed operational health, storage paths, and recent diagnostic logs.
+ */
+export async function getDetailedHealth(): Promise<DetailedHealthResponse> {
+  return invoke<DetailedHealthResponse>("detailed_health");
+}
+
+/**
+ * Generate and retrieve sanitized operational diagnostics.
+ */
+export async function getDiagnostics(): Promise<Record<string, unknown>> {
+  return invoke<Record<string, unknown>>("get_diagnostics");
+}
+
+/**
+ * Export sanitized operational diagnostics bundle to persistent JSON file.
+ */
+export async function exportDiagnostics(): Promise<{ status: string; export_path: string }> {
+  return invoke<{ status: string; export_path: string }>("export_diagnostics");
 }
 
 // --- UI domain types (previously in src/types/index.ts) ---

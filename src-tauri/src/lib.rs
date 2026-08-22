@@ -348,6 +348,21 @@ async fn append_context_package(
     http_post(&format!("/packages/{}/append", package_id), &request).await
 }
 
+#[tauri::command]
+async fn detailed_health() -> Result<serde_json::Value, String> {
+    http_get("/health/detailed").await
+}
+
+#[tauri::command]
+async fn get_diagnostics() -> Result<serde_json::Value, String> {
+    http_get("/diagnostics").await
+}
+
+#[tauri::command]
+async fn export_diagnostics() -> Result<serde_json::Value, String> {
+    http_post("/diagnostics/export", &serde_json::json!({})).await
+}
+
 // --- Backend lifecycle management ---
 
 fn resolve_backend_dir() -> std::path::PathBuf {
@@ -537,6 +552,9 @@ pub fn run() {
             get_suggested_prompts,
             get_settings,
             update_cognee_settings,
+            detailed_health,
+            get_diagnostics,
+            export_diagnostics,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

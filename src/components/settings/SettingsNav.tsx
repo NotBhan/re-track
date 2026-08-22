@@ -1,9 +1,10 @@
 import { useSettingsStore } from "@/stores/settings-store";
 import { cn } from "@/lib/utils";
-import { Server, Brain, Zap, HardDrive, Palette, Info } from "lucide-react";
+import { Server, Brain, Zap, HardDrive, Palette, Info, Activity } from "lucide-react";
 
 const allTabs = [
   { id: "backend", label: "Backend", group: "Config", icon: Server },
+  { id: "diagnostics", label: "Diagnostics", group: "Config", icon: Activity },
   { id: "ollama", label: "Inference", group: "Config", icon: Zap },
   { id: "cognee", label: "Cognee", group: "Config", icon: Brain },
   { id: "storage", label: "Storage", group: "Config", icon: HardDrive },

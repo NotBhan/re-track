@@ -60,7 +60,7 @@ from app.services.manifest_service import ManifestService
 from app.services.repository_manager import RepositoryManager
 from app.services.repository_summary import RepositorySummaryGenerator
 
-VERSION = "0.1.0"
+from app import __version__ as VERSION
 
 _REPO_STORE_PATH = Path.home() / ".retrack" / "indexed_repos.json"
 _LEGACY_REPO_STORE_PATH = Path.home() / ".andes" / "indexed_repos.json"
@@ -187,6 +187,33 @@ async def update_cognee_settings(
 ) -> AppSettingsResponse | ErrorResponse:
     container = _get_active_container()
     return await container.get_system_use_cases().update_cognee_settings(request)
+
+
+async def get_detailed_health() -> Any:
+    container = _get_active_container()
+    return await container.get_system_use_cases().get_detailed_health()
+
+
+def export_diagnostics(
+    output_path: Optional[Any] = None,
+    include_logs: bool = True,
+    max_log_lines: int = 50,
+    include_config: bool = True,
+    include_health: bool = True,
+) -> Any:
+    container = _get_active_container()
+    return container.get_system_use_cases().export_diagnostics(
+        output_path=output_path,
+        include_logs=include_logs,
+        max_log_lines=max_log_lines,
+        include_config=include_config,
+        include_health=include_health,
+    )
+
+
+def get_recent_logs(max_entries: int = 50) -> list[dict[str, Any]]:
+    container = _get_active_container()
+    return container.get_system_use_cases().get_recent_logs(max_entries=max_entries)
 
 
 async def update_provider(

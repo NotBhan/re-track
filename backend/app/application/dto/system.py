@@ -22,6 +22,27 @@ class HealthResponse(BaseModel):
     vram_used_gb: float = Field(default=0.0, description="Used GPU VRAM in GB")
     execution_device: str = Field(default="CPU", description="Actual runtime execution device ('CPU', 'GPU', 'UNKNOWN')")
     active_model: Optional[str] = Field(default=None, description="Currently active model loaded in memory")
+    # Phase 9C Detailed Health & Operational Status Fields
+    health_state: str = Field(default="healthy", description="Operational classification: 'healthy', 'degraded', 'unavailable', 'not_configured'")
+    storage_canonical_exists: bool = Field(default=True, description="Whether ~/.retrack/ storage directory exists")
+    storage_canonical_writable: bool = Field(default=True, description="Whether ~/.retrack/ storage directory is writable")
+    legacy_storage_detected: bool = Field(default=False, description="Whether ~/.andes/ legacy storage directory exists")
+    repository_count: int = Field(default=0, description="Total number of registered repositories")
+    context_package_count: int = Field(default=0, description="Total number of saved context packages")
+    cache_files_count: int = Field(default=0, description="Total number of cached AST / context files")
+    cache_total_bytes: int = Field(default=0, description="Total size in bytes of cache files")
+    concurrency_queue_depth: int = Field(default=0, description="Current waiting request count in concurrency queue")
+    concurrency_queue_capacity: int = Field(default=5, description="Maximum concurrency queue capacity")
+    concurrency_available_slots: int = Field(default=1, description="Available execution slots in concurrency guard")
+    mcp_server_ready: bool = Field(default=True, description="Whether MCP runtime services are operational")
+    recent_errors_count: int = Field(default=0, description="Number of recent error log events")
+
+
+class DetailedHealthResponse(HealthResponse):
+    """Detailed operational health and diagnostic status."""
+
+    diagnostics_log_entries: list[dict] = Field(default_factory=list, description="Recent sanitized log records")
+    storage_paths: dict[str, str] = Field(default_factory=dict, description="Storage paths summary")
 
 
 class BackendStatusResponse(BaseModel):

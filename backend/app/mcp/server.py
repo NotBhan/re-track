@@ -12,6 +12,7 @@ from typing import Any, Optional
 
 from mcp.server import MCPServer
 
+from app import __version__
 from app.application.container import ApplicationContainer, get_container
 from app.mcp import tools as mcp_tools
 
@@ -26,7 +27,7 @@ def create_mcp_server(container: Optional[ApplicationContainer] = None) -> MCPSe
     """
     server = MCPServer(
         name="retrack-mcp",
-        version="0.1.0",
+        version=__version__,
         instructions=(
             "RE:Track (RefinedEngine Track) MCP server providing persistent repository memory, "
             "deterministic AST call graphs, architectural summaries, and high-precision context packages "
@@ -181,3 +182,21 @@ async def run_mcp_stdio(container: Optional[ApplicationContainer] = None) -> Non
     except Exception as e:
         logger.error("MCP stdio server encountered fatal error: %s", e, exc_info=True)
         raise
+
+
+def main() -> None:
+    """Run MCP stdio server entry point."""
+    from app.core.logging import setup_logging
+    setup_logging(stream=sys.stderr)
+    try:
+        asyncio.run(run_mcp_stdio())
+    except (KeyboardInterrupt, asyncio.CancelledError):
+        sys.exit(0)
+    except Exception as e:
+        sys.stderr.write(f"[RE:Track MCP Fatal] {e}\n")
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()
+

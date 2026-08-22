@@ -88,17 +88,29 @@ This document tracks the phased development milestones and operational roadmap f
   - User-facing capability matrix (`docs/product/capability-matrix.md`).
   - Release readiness audit and prioritized gap analysis (`docs/product/release-readiness.md`).
   - Phase 9A audit sign-off (`docs/architecture/phase-9a-audit.md`).
-- [ ] **Phase 9B: Installation, Packaging & Update Workflow**
-  - Standard Python distribution build (`pyproject.toml` wheel build, `pip`/`uv` packaging).
-  - First-run initialization wizard for canonical `~/.retrack/` directory bootstrap.
-  - Data migration and reset CLI utilities.
-- [ ] **Phase 9C: Observability, Diagnostics & Supportability**
-  - Structured file-based log rotation and diagnostic export.
-  - In-app health and queue depth inspector in Settings.
-- [ ] **Phase 9D: CI Regression & Release Automation**
-  - Multi-platform GitHub Actions CI matrix (Linux, macOS, Windows).
-  - Automated benchmark regression gate on pull requests.
-  - Semantic Versioning automation and release asset packaging.
+- [x] **Phase 9B: Installation, Packaging & Update Workflow (Completed)**
+  - Standard PEP 517/621 distribution build (`pyproject.toml`, `retrack_ai-0.1.0-py3-none-any.whl`).
+  - First-run bootstrap service & CLI initialization command (`retrack init`).
+  - Scoped state reset (`retrack reset`) and legacy migration (`retrack migrate`) with automated pre-reset backups.
+  - Verification in clean virtual environment outside repository.
+  - Phase 9B audit sign-off (`docs/architecture/phase-9b-audit.md`).
+- [x] **Phase 9C: Observability, Diagnostics & Supportability (FROZEN)**
+  - Structured persistent JSONL logging (`~/.retrack/logs/app.jsonl`) with `SafeRotatingFileHandler` size-based rotation and bounded retention.
+  - In-flight secret redaction regex engine redacting API keys (`sk-...`), bearer tokens, passwords, and DB/HTTP connection strings.
+  - FastMCP stdio safety: `sys.stdout` 100% reserved for JSON-RPC, human diagnostics exclusively on `sys.stderr`.
+  - In-application operational health state machine (`healthy`, `degraded`, `unavailable`, `not_configured`) and concurrency queue inspection.
+  - Redacted diagnostic bundle generation and atomic export (`retrack diagnostics`, `POST /diagnostics/export`).
+  - Interactive Desktop Settings Diagnostics UI for real-time monitoring and log stream inspection.
+  - 32 dedicated Phase 9C unit and adversarial audit tests passing across 6 test suites.
+  - Phase 9C final security and architecture audit sign-off (`docs/architecture/phase-9c-final-audit.md`) and user guide (`docs/product/observability.md`).
+- [x] **Phase 9D: CI Regression & Release Automation (FROZEN)**
+  - Multi-platform GitHub Actions CI matrix (Ubuntu, macOS, Windows) supporting Python 3.11, 3.12, and 3.13 (`.github/workflows/ci.yml`).
+  - Deterministic golden retrieval benchmark regression gate (`BenchmarkRegressionGate`, `app.evaluation.benchmark_gate`) preventing precision/recall regressions beyond mathematically established tolerances.
+  - Single-source version authority (`backend/app/__init__.py`) with hatchling dynamic build derivation and mechanical version drift enforcement (`test_version_authority.py`).
+  - Artifact-first package validation and clean-install outside repository (`test_packaging_validation.py`) verifying CLI and FastMCP stdio framing cleanliness.
+  - Automated gate-protected release workflow (`.github/workflows/release.yml`) with SHA-256 checksum generation and supply-chain hardening.
+  - 21 dedicated Phase 9D tests passing across 3 new test files (`test_version_authority.py`, `test_benchmark_baseline_contract.py`, `test_packaging_validation.py`).
+  - Phase 9D audit sign-off (`docs/architecture/phase-9d-audit.md`), CI guide (`docs/product/ci-and-release.md`), and release runbook (`docs/product/release-process.md`).
 - [ ] **Phase 9E: Frontend Behavioral Verification & UX Hardening**
   - Automated component interaction and end-to-end user workflow tests.
   - Edge-case error state and offline banner hardening.
