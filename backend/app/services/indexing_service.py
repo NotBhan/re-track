@@ -12,6 +12,7 @@ Responsibilities only:
 
 import logging
 from pathlib import Path
+import time
 from typing import Callable, Optional
 
 from app.models.errors import CogneeServiceError
@@ -115,6 +116,7 @@ class IndexingService:
         self._supported = supported_extensions or SUPPORTED_EXTENSIONS
         self._ignored_dirs = ignored_dirs or IGNORED_DIRS
         self._ignored_patterns = ignored_patterns or IGNORED_PATTERNS
+        self.last_summary = None
 
     async def index_repository(
         self,
@@ -144,26 +146,49 @@ class IndexingService:
         if not repo.is_dir():
             raise CogneeServiceError(f"Repository path is not a directory: {repo}")
 
+        start_time = time.monotonic()
+        logger.info("index_started | repo_path=%s | dataset=%s | force=%s", repo, dataset_name, force_reindex)
+
         if progress_callback:
             progress_callback("Scanning & discovering repository files...", 1, 5)
 
         all_files = self.discover_files(repo)
         filtered = self.filter_files(all_files, repo)
 
+        mode = "full"
+        delta = None
+        existing_manifest = None
+
         if force_reindex:
             target_files = filtered
             existing_manifest = None
             deleted_rel_paths: list[str] = []
-            logger.info("force_reindex=True | indexing all %d files", len(filtered))
+            renamed_pairs: list[tuple[str, Path]] = []
+            mode = "full"
+            logger.info("index_mode_selected | mode=full | trigger=force_reindex | files=%d", len(filtered))
         else:
             delta, existing_manifest = self._manifest_service.compute_delta(repo, filtered)
+            logger.info(
+                "index_change_detection_completed | added=%d | modified=%d | deleted=%d | unchanged=%d | renamed=%d",
+                len(delta.added),
+                len(delta.modified),
+                len(delta.deleted),
+                len(delta.unchanged),
+                len(delta.renamed),
+            )
+
             if not delta.has_changes and existing_manifest is not None:
-                logger.info(
-                    "Repository unchanged (0 modifications, %d files cached) | skipping indexing",
-                    len(filtered),
-                )
+                mode = "noop"
+                logger.info("index_mode_selected | mode=noop | files=%d", len(filtered))
                 if progress_callback:
                     progress_callback("Indexing Completed", 5, 5)
+
+                duration_ms = int((time.monotonic() - start_time) * 1000)
+                logger.info(
+                    "index_completed | mode=noop | files_total=%d | files_parsed=0 | duration_ms=%d",
+                    len(filtered),
+                    duration_ms,
+                )
                 return IndexingProgress(
                     total_files=len(filtered),
                     processed_files=len(filtered),
@@ -173,15 +198,18 @@ class IndexingService:
                     total_batches=1,
                 )
 
-            target_files = delta.added + delta.modified
-            deleted_rel_paths = delta.deleted
-            logger.info(
-                "Incremental scan | added=%d | modified=%d | deleted=%d | unchanged=%d",
-                len(delta.added),
-                len(delta.modified),
-                len(delta.deleted),
-                len(delta.unchanged),
-            )
+            if existing_manifest is None:
+                mode = "full"
+                target_files = filtered
+                deleted_rel_paths = []
+                renamed_pairs = []
+                logger.info("index_mode_selected | mode=full | trigger=initial_or_rebuild | files=%d", len(filtered))
+            else:
+                mode = "incremental"
+                target_files = delta.added + delta.modified
+                deleted_rel_paths = delta.deleted
+                renamed_pairs = delta.renamed
+                logger.info("index_mode_selected | mode=incremental | changed_files=%d", len(target_files) + len(deleted_rel_paths))
 
         progress = IndexingProgress(
             total_files=len(filtered),
@@ -193,11 +221,41 @@ class IndexingService:
         if progress_callback:
             progress_callback("Extracting AST call graphs and symbols...", 2, 5)
 
-        # Fast outline generation for cold start (LLM-free)
+        # Fast outline generation for cold start (LLM-free) with incremental AST
         from app.services.repository_summary import RepositorySummaryGenerator
         from app.services.renderer import MarkdownRenderer
+        from app.services.context_cache import context_cache
+
         summary_gen = RepositorySummaryGenerator()
-        repo_summary = summary_gen.generate(repo, filtered)
+        repo_summary = summary_gen.generate(
+            repo_path=repo,
+            files=filtered,
+            existing_manifest=existing_manifest,
+            delta=delta,
+        )
+        self.last_summary = repo_summary
+
+        logger.info(
+            "index_incremental_update | parsed=%d | reused=%d | relinked=%d",
+            summary_gen.last_parse_stats["files_parsed"],
+            summary_gen.last_parse_stats["files_reused"],
+            summary_gen.last_parse_stats["relinked_files"],
+        )
+
+        # Selective Context Cache Invalidation
+        if mode == "incremental" and delta:
+            changed_rels = [
+                str(f.resolve().relative_to(repo).as_posix())
+                for f in (delta.modified + delta.added)
+            ]
+            inv_count = context_cache.invalidate_selective(
+                repo_path=str(repo),
+                changed_files=changed_rels,
+                deleted_files=delta.deleted,
+            )
+            logger.info("cache_selective_invalidation | entries_invalidated=%d", inv_count)
+        elif mode == "full":
+            context_cache.invalidate_repo(str(repo))
 
         if progress_callback:
             progress_callback("Generating repository architecture outline...", 3, 5)
@@ -222,19 +280,30 @@ class IndexingService:
             logger.error("Failed to index repository outline into memory: %s", e)
             progress.failed_files = len(filtered)
 
-        # Update and save manifest
-        self._manifest_service.update_manifest(
-            repo_path=repo,
-            dataset_name=dataset_name,
-            indexed_files=successfully_indexed,
-            deleted_rel_paths=deleted_rel_paths,
-            existing_manifest=existing_manifest,
-        )
+        # Update and atomically save manifest with per-file AST state if indexing succeeded
+        if successfully_indexed:
+            self._manifest_service.update_manifest(
+                repo_path=repo,
+                dataset_name=dataset_name,
+                indexed_files=successfully_indexed,
+                deleted_rel_paths=deleted_rel_paths,
+                existing_manifest=existing_manifest,
+                file_metadata=summary_gen.file_ast_metadata,
+                renamed_pairs=renamed_pairs,
+            )
 
         if progress_callback:
             progress_callback("Indexing Completed", 5, 5)
 
-        logger.info("indexing complete | %s", progress.summary())
+        duration_ms = int((time.monotonic() - start_time) * 1000)
+        logger.info(
+            "index_completed | mode=%s | files_total=%d | files_parsed=%d | duration_ms=%d | %s",
+            mode,
+            len(filtered),
+            summary_gen.last_parse_stats["files_parsed"],
+            duration_ms,
+            progress.summary(),
+        )
         return progress
 
     def discover_files(self, root: Path) -> list[Path]:

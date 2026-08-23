@@ -266,29 +266,14 @@ class ContextUseCases:
 
                 # 0. Check in-memory context synthesis cache (< 5ms hit)
                 manifest_hash = ""
-                manifest_file = repo_path / ".retrack" / "manifest.json"
-                legacy_manifest_file = repo_path / ".andes" / "manifest.json"
-
-                target_manifest = None
-                if self._fs:
-                    if self._fs.exists(manifest_file):
-                        target_manifest = manifest_file
-                    elif self._fs.exists(legacy_manifest_file):
-                        target_manifest = legacy_manifest_file
-                else:
-                    if manifest_file.exists():
-                        target_manifest = manifest_file
-                    elif legacy_manifest_file.exists():
-                        target_manifest = legacy_manifest_file
-
-                if target_manifest:
-                    try:
-                        if self._fs:
-                            manifest_hash = str(self._fs.get_mtime(target_manifest))
-                        else:
-                            manifest_hash = str(target_manifest.stat().st_mtime)
-                    except Exception:
-                        pass
+                try:
+                    from app.services.manifest_service import ManifestService
+                    m_svc = getattr(self._indexing_service, "_manifest_service", None) or ManifestService()
+                    manifest_obj = m_svc.load_manifest(repo_path)
+                    if manifest_obj:
+                        manifest_hash = manifest_obj.repo_fingerprint
+                except Exception:
+                    pass
 
                 cache_key = self._cache.make_key(
                     repo_path=str(repo_path),
@@ -422,8 +407,19 @@ class ContextUseCases:
                     total_time_ms=elapsed_ms,
                 )
 
-                # Store in high-speed synthesis cache
-                self._cache.set(cache_key, response, repo_path=str(repo_path))
+                # Store in high-speed synthesis cache with dependency provenance
+                ref_files = list(files_for_prompt) if "files_for_prompt" in locals() else []
+                ref_symbols = list(intent.extracted_symbols) if "intent" in locals() and intent else []
+                if "ast_context" in locals() and ast_context and hasattr(ast_context, "symbols_found"):
+                    ref_symbols.extend(ast_context.symbols_found)
+
+                self._cache.set(
+                    cache_key,
+                    response,
+                    repo_path=str(repo_path),
+                    referenced_files=ref_files,
+                    referenced_symbols=ref_symbols,
+                )
                 return response
             finally:
                 self._guard.release()

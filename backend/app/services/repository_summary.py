@@ -4,15 +4,17 @@ Analyzes indexed repository files to extract stable, global knowledge:
 project purpose, technology stack, directory structure, AST symbols (classes, functions, routes, React components),
 and key architectural components while strictly respecting .gitignore patterns.
 
-Generates a RepositorySummary after indexing completes.
+Supports incremental AST symbol discovery, reusing persisted deterministic AST nodes
+for unchanged files (0 parses) and performing impact-aware relinking for modified files.
 """
 
 import ast
 import hashlib
 import logging
+from pathlib import Path
 import re
 from datetime import datetime, timezone
-from pathlib import Path
+from typing import Any, Optional
 
 from app.models.responses import (
     ArchitectureInfo,
@@ -23,6 +25,25 @@ from app.models.responses import (
     RepositorySummary,
     TechnologyStack,
 )
+from app.services.manifest_service import (
+    FileFingerprint,
+    IndexDelta,
+    MANIFEST_SCHEMA_VERSION,
+    PARSER_VERSION,
+    RepositoryManifest,
+)
+from app.services.parsers.treesitter_ts_analyzer import (
+    ExtractedExport,
+    ExtractedImport,
+    ExtractedRelationship,
+    ExtractedSymbol,
+    ParsedModulePayload,
+    SourceSpan,
+    TreeSitterTSAnalyzer,
+)
+from app.services.parsers.ts_cross_file_linker import TSCrossFileLinker
+from app.services.parsers.ts_grammar_cache import TSGrammarCache, TSLanguageDialect
+from app.services.parsers.ts_module_resolver import TSModuleResolver
 
 logger = logging.getLogger(__name__)
 
@@ -76,16 +97,30 @@ _FRAMEWORK_MARKERS: dict[str, str] = {
 
 
 class RepositorySummaryGenerator:
-    """Generates a RepositorySummary with AST symbol discovery from indexed repository files."""
+    """Generates a RepositorySummary with deterministic AST symbol discovery from indexed repository files."""
 
-    def generate(self, repo_path: Path, files: list[Path]) -> RepositorySummary:
-        """Generate a RepositorySummary from a repository and its files."""
+    def __init__(self) -> None:
+        self.last_parse_stats: dict[str, int] = {
+            "files_parsed": 0,
+            "files_reused": 0,
+            "relinked_files": 0,
+        }
+        self.file_ast_metadata: dict[str, dict[str, Any]] = {}
+
+    def generate(
+        self,
+        repo_path: Path,
+        files: list[Path],
+        existing_manifest: Optional[RepositoryManifest] = None,
+        delta: Optional[IndexDelta] = None,
+    ) -> RepositorySummary:
+        """Generate a RepositorySummary from a repository and its files with incremental AST reuse."""
         logger.info("generating repository summary | path=%s | files=%d", repo_path, len(files))
 
         # Filter files by gitignore patterns
         filtered_files = self._filter_ignored_files(repo_path, files)
 
-        fingerprint = self._compute_fingerprint(filtered_files)
+        fingerprint = self._compute_fingerprint(repo_path, filtered_files, existing_manifest)
         rel_files = [f.relative_to(repo_path) if f.is_relative_to(repo_path) else f for f in filtered_files]
 
         tech_stack = self._extract_tech_stack(repo_path, rel_files)
@@ -93,7 +128,9 @@ class RepositorySummaryGenerator:
         architecture = self._infer_architecture(repo_path, repo_map, tech_stack.frameworks)
         components = self._extract_components(repo_path, filtered_files)
         purpose = self._infer_purpose(repo_path, repo_map, tech_stack.frameworks)
-        call_nodes, call_edges, call_status, call_error = self._build_call_graph(repo_path, filtered_files)
+        call_nodes, call_edges, call_status, call_error = self._build_call_graph(
+            repo_path, filtered_files, existing_manifest, delta
+        )
 
         summary = RepositorySummary(
             version="1.0",
@@ -116,9 +153,12 @@ class RepositorySummaryGenerator:
         )
 
         logger.info(
-            "repository summary generated | frameworks=%s | components=%d",
+            "repository summary generated | frameworks=%s | components=%d | parsed=%d | reused=%d | relinked=%d",
             tech_stack.frameworks,
             len(components),
+            self.last_parse_stats["files_parsed"],
+            self.last_parse_stats["files_reused"],
+            self.last_parse_stats["relinked_files"],
         )
         return summary
 
@@ -180,11 +220,30 @@ class RepositorySummaryGenerator:
 
         return valid_files
 
-    def _compute_fingerprint(self, files: list[Path]) -> str:
-        """Compute a fingerprint from file paths."""
+    def _compute_fingerprint(
+        self,
+        repo_path: Path,
+        files: list[Path],
+        existing_manifest: Optional[RepositoryManifest] = None,
+    ) -> str:
+        """Compute a deterministic SHA-256 fingerprint from schema version, parser version, and file identities."""
         hasher = hashlib.sha256()
-        for f in sorted(str(p) for p in files):
-            hasher.update(f.encode())
+        header = f"{MANIFEST_SCHEMA_VERSION}:{PARSER_VERSION}:{repo_path.resolve()}"
+        hasher.update(header.encode("utf-8"))
+
+        for f in sorted(files, key=lambda p: str(p)):
+            try:
+                rel = str(f.resolve().relative_to(repo_path.resolve()).as_posix())
+                sha = ""
+                if existing_manifest and rel in existing_manifest.files:
+                    sha = existing_manifest.files[rel].sha256
+                else:
+                    sha = ManifestService.compute_sha256(f)
+                entry_str = f"|{rel}:{sha}:{f.stat().st_size if f.exists() else 0}"
+                hasher.update(entry_str.encode("utf-8"))
+            except Exception:
+                continue
+
         return hasher.hexdigest()[:16]
 
     def _extract_tech_stack(self, repo_path: Path, files: list[Path]) -> TechnologyStack:
@@ -249,246 +308,147 @@ class RepositorySummaryGenerator:
         # Check for Vite config
         if any("vite.config" in f.name for f in files):
             frameworks.add("Vite")
-            frameworks.add("React")
+
+        # Check for Next.js config
+        if any("next.config" in f.name for f in files):
+            frameworks.add("Next.js")
+
+        databases: set[str] = set()
+        dependencies: set[str] = set()
 
         return TechnologyStack(
-            languages=sorted(languages),
-            frameworks=sorted(frameworks),
-            databases=[],
-            dependencies=[],
+            languages=sorted(list(languages)),
+            frameworks=sorted(list(frameworks)),
+            databases=sorted(list(databases)),
+            dependencies=sorted(list(dependencies)),
         )
 
-    def _build_repo_map(self, files: list[Path]) -> list[DirectoryEntry]:
-        """Build a hierarchical map of actual directories and key modules."""
-        dirs: dict[str, list[str]] = {}
-        for f in files:
-            parts = f.parts
-            if len(parts) > 1:
-                # Top level directory
-                dirs.setdefault(parts[0], []).append(str(f))
-                # Depth 2 directory if part of nested package
-                if len(parts) >= 3:
-                    sub_key = "/".join(parts[:2])
-                    dirs.setdefault(sub_key, []).append(str(f))
-            else:
-                dirs.setdefault(".", []).append(str(f))
+    def _build_repo_map(self, rel_files: list[Path]) -> list[DirectoryEntry]:
+        """Build high-level directory map with deterministic path normalization."""
+        dirs: dict[str, int] = {}
+        for f in rel_files:
+            parent = f.parent
+            if parent != Path("."):
+                top_dir = str(parent).split("/")[0] if "/" in str(parent) else str(parent)
+                dirs[top_dir] = dirs.get(top_dir, 0) + 1
 
         entries = []
-        for dir_path, dir_files in sorted(dirs.items()):
-            if dir_path.startswith(".") or "__pycache__" in dir_path:
-                continue
-            desc = self._describe_directory(dir_path, dir_files)
-            entries.append(DirectoryEntry(path=dir_path, description=desc))
+        for d, count in sorted(dirs.items()):
+            desc = self._describe_directory(d)
+            entries.append(DirectoryEntry(path=d, description=f"{desc} ({count} files)"))
         return entries
 
-    def _describe_directory(self, name: str, files: list[str]) -> str:
-        """Generate an informative architectural description for a directory or app."""
-        filenames = {Path(f).name for f in files}
-
-        # React / Vite directory heuristics
-        if name in ("src/components", "components"):
-            return f"React UI Components ({len(files)} component files)"
-        if name in ("src/pages", "src/views", "pages", "views"):
-            return f"Page Views & Routing Layouts ({len(files)} pages)"
-        if name in ("src/stores", "stores", "src/hooks", "hooks"):
-            return f"Client State Stores & Hooks ({len(files)} state modules)"
-        if name in ("src/lib", "lib", "src/utils", "utils"):
-            return f"Utility functions & Client API bridges ({len(files)} files)"
-        if name in ("src/assets", "assets", "public"):
-            return f"Static assets, icons & public files ({len(files)} assets)"
-        if name == "src-tauri":
-            return f"Tauri Rust native core & IPC runtime ({len(files)} files)"
-
-        # Django App Detector
-        if any(f in filenames for f in ("models.py", "views.py", "urls.py", "admin.py", "apps.py")):
-            has_models = "models.py" in filenames
-            has_views = "views.py" in filenames
-            features = []
-            if has_models:
-                features.append("ORM Models")
-            if has_views:
-                features.append("Views/Handlers")
-            feat_str = f" ({', '.join(features)})" if features else ""
-            return f"Django Application module{feat_str} — {len(files)} files"
-
-        # Standard known folder descriptions
-        if name in ("tests", "test"):
-            return f"Test suite ({len(files)} test files)"
-        if name == "docs":
-            return f"Documentation ({len(files)} docs)"
-        if name == "scripts":
-            return f"Development scripts ({len(files)} files)"
-        if name == "templates":
-            return f"HTML Presentation Templates ({len(files)} templates)"
-        if name == "static":
-            return f"Static assets (CSS, JS, media) ({len(files)} files)"
-        if name == "migrations":
-            return f"Database schema migrations ({len(files)} migrations)"
-
-        if "services" in name:
-            return f"Service layer & business logic ({len(files)} services)"
-        if "api" in name or "routers" in name:
-            return f"API endpoints & routes ({len(files)} files)"
-        if "models" in name:
-            return f"Data models & schemas ({len(files)} models)"
-
-        return f"Module ({len(files)} files)"
+    def _describe_directory(self, dir_name: str) -> str:
+        """Infer standard directory purpose based on conventional naming."""
+        d = dir_name.lower()
+        if "test" in d:
+            return "Test suite and validation fixtures"
+        if "doc" in d:
+            return "Documentation and architecture design"
+        if d in ("src", "app", "lib", "core"):
+            return "Primary application source code"
+        if "component" in d:
+            return "UI component library"
+        if "api" in d or "router" in d:
+            return "API route handlers and controllers"
+        if "service" in d:
+            return "Domain business logic services"
+        if "model" in d or "schema" in d:
+            return "Data models and type definitions"
+        if "script" in d:
+            return "Automation and development scripts"
+        return "Application module"
 
     def _infer_architecture(
-        self, repo_path: Path, repo_map: list[DirectoryEntry], frameworks: list[str]
+        self,
+        repo_path: Path,
+        repo_map: list[DirectoryEntry],
+        frameworks: list[str],
     ) -> ArchitectureInfo:
-        """Infer architecture from framework patterns and directory structure."""
-        dir_names = {e.path for e in repo_map}
-        layers = []
+        """Infer architectural pattern and structural layers."""
+        paths = {e.path.lower() for e in repo_map}
+        layers: list[str] = []
 
-        if "Django" in frameworks:
-            layers.append("Django MVC / MTV")
-            if any(e.path == "templates" for e in repo_map):
-                layers.append("Django Templates")
-            if any("api" in e.path for e in repo_map):
-                layers.append("REST API Layer")
-            pattern = "monolith" if len(layers) <= 2 else "layered"
-        elif "React" in frameworks or "Vite" in frameworks or "Next.js" in frameworks:
-            layers.append("React UI Component Tree")
-            if any("stores" in e.path for e in repo_map):
-                layers.append("Zustand / Reactive State")
-            if any("api" in e.path or "lib" in e.path for e in repo_map):
-                layers.append("API & Client Services")
-            if any("src-tauri" in e.path for e in repo_map):
-                layers.append("Tauri Desktop IPC")
-            pattern = "layered" if len(layers) > 1 else "monolith"
-        elif "FastAPI" in frameworks:
-            layers.append("FastAPI Async Endpoints")
-            layers.append("Pydantic Schema & Services")
+        if any("frontend" in p or "client" in p or "ui" in p or "src" in p for p in paths):
+            layers.append("Frontend")
+        if any("backend" in p or "server" in p or "api" in p or "app" in p for p in paths):
+            layers.append("Backend")
+        if any("service" in p for p in paths):
+            layers.append("Services")
+        if any("model" in p or "schema" in p or "db" in p for p in paths):
+            layers.append("Data / Persistence")
+
+        pattern = "modular"
+        if "Frontend" in layers and "Backend" in layers:
             pattern = "layered"
-        else:
-            if any(d in dir_names for d in ("backend", "server")):
-                layers.append("Backend")
-            if any(d in dir_names for d in ("frontend", "src", "client")):
-                layers.append("Frontend")
-            pattern = "layered" if len(layers) > 1 else "monolith"
+        elif "FastAPI" in frameworks or "Django" in frameworks:
+            pattern = "mvc" if "Django" in frameworks else "layered"
 
         return ArchitectureInfo(
             pattern=pattern,
-            layers=layers,
-            boundaries=[d for d in dir_names if "/" in d][:10],
+            layers=layers or ["Application Core"],
+            boundaries=[],
             major_flows=[],
         )
 
     def _extract_components(self, repo_path: Path, files: list[Path]) -> list[ComponentInfo]:
-        """Extract concrete AST classes, models, and React components across the codebase."""
-        components = []
-
-        # 1. Look for Python files with AST classes and routes
-        py_files = [f for f in files if f.suffix.lower() == ".py" and not f.name.startswith(".")]
-        for pf in py_files[:25]:
-            try:
-                code = pf.read_text(errors="ignore")
-                parsed = ast.parse(code)
-                for node in parsed.body:
-                    if isinstance(node, ast.ClassDef):
-                        rel_p = pf.relative_to(repo_path) if pf.is_relative_to(repo_path) else pf
-                        base_names = [getattr(b, "id", getattr(b, "attr", "")) for b in node.bases]
-                        desc = f"Class {node.name}"
-                        if any("model" in b.lower() for b in base_names):
-                            desc = f"Django Model (`{node.name}`) in `{rel_p}`"
-                        elif any("view" in b.lower() for b in base_names):
-                            desc = f"View Controller (`{node.name}`) in `{rel_p}`"
-                        elif any("serializer" in b.lower() for b in base_names):
-                            desc = f"REST Serializer (`{node.name}`) in `{rel_p}`"
-                        else:
-                            desc = f"Class `{node.name}` in `{rel_p}`"
-
-                        components.append(
-                            ComponentInfo(
-                                name=node.name,
-                                responsibilities=desc,
-                                relationships=base_names,
-                            )
-                        )
-                        if len(components) >= 20:
-                            break
-            except Exception:
-                continue
-
-        # 2. Look for React / TypeScript / Vite components (export function / class / const Component)
-        ts_files = [f for f in files if f.suffix.lower() in (".tsx", ".jsx", ".ts", ".js") and not f.name.startswith(".")]
-        if len(components) < 10 and ts_files:
-            react_component_regex = re.compile(r"export\s+(?:default\s+)?(?:function|const|class)\s+([A-Z][A-Za-z0-9_]+)")
-            for tf in ts_files[:30]:
+        """Extract key architectural components by checking module names and class definitions."""
+        components: list[ComponentInfo] = []
+        for f in files:
+            if f.suffix == ".py":
                 try:
-                    text = tf.read_text(errors="ignore")
-                    matches = react_component_regex.findall(text)
-                    rel_p = tf.relative_to(repo_path) if tf.is_relative_to(repo_path) else tf
-                    for comp_name in matches:
-                        components.append(
-                            ComponentInfo(
-                                name=comp_name,
-                                responsibilities=f"React Component (`{comp_name}`) in `{rel_p}`",
-                                relationships=["React"],
-                            )
-                        )
-                        if len(components) >= 20:
-                            break
+                    content = f.read_text(errors="ignore")
+                    for line in content.splitlines()[:50]:
+                        if line.startswith("class ") and ":" in line:
+                            class_name = line.split("class ")[1].split("(")[0].split(":")[0].strip()
+                            if any(class_name.endswith(s) for s in ("Service", "Engine", "Manager", "Store", "Handler", "Generator", "Client")):
+                                components.append(ComponentInfo(
+                                    name=class_name,
+                                    responsibilities=f"Core {class_name} implementation",
+                                    relationships=[],
+                                ))
                 except Exception:
-                    continue
-
-        # 3. Fallback: extract major files
-        if len(components) < 5:
-            for f in files:
-                if f.suffix.lower() in (".py", ".ts", ".tsx", ".js") and not f.name.startswith("."):
-                    rel_p = f.relative_to(repo_path) if f.is_relative_to(repo_path) else f
-                    name = f.stem.replace("_", " ").replace("-", " ").title()
-                    components.append(
-                        ComponentInfo(
-                            name=name,
-                            responsibilities=f"Module in `{rel_p}`",
-                            relationships=[],
-                        )
-                    )
-                    if len(components) >= 15:
-                        break
-
-        return components
+                    pass
+        return components[:15]
 
     def _infer_purpose(
-        self, repo_path: Path, repo_map: list[DirectoryEntry], frameworks: list[str]
+        self,
+        repo_path: Path,
+        repo_map: list[DirectoryEntry],
+        frameworks: list[str],
     ) -> str:
-        """Infer project purpose from README or framework architecture."""
+        """Infer high-level project purpose from README or technology stack."""
         readme = repo_path / "README.md"
         if readme.exists():
             try:
-                content = readme.read_text(errors="replace")[:500]
-                lines = content.strip().split("\n")
-                for line in lines:
-                    line = line.strip()
-                    if line and not line.startswith("#") and not line.startswith("---") and not line.startswith("!"):
-                        return line[:200]
+                lines = readme.read_text(errors="ignore").splitlines()
+                for line in lines[:10]:
+                    cleaned = line.strip().lstrip("#").strip()
+                    if cleaned and len(cleaned) > 10 and not cleaned.startswith("["):
+                        return cleaned
             except Exception:
                 pass
-
-        fw_str = f" built on {', '.join(frameworks)}" if frameworks else ""
-        top_apps = [e.path for e in repo_map if "/" not in e.path and not e.path.startswith(".")]
-        return f"{repo_path.name}{fw_str} with core modules: {', '.join(top_apps[:6])}"
+        return f"Software repository utilizing {', '.join(frameworks) if frameworks else 'modern technologies'}."
 
     def _build_call_graph(
-        self, repo_path: Path, files: list[Path]
+        self,
+        repo_path: Path,
+        files: list[Path],
+        existing_manifest: Optional[RepositoryManifest] = None,
+        delta: Optional[IndexDelta] = None,
     ) -> tuple[list[CallNode], list[CallEdge], str, str | None]:
-        """Build a deterministic function/class/component call graph from Python AST and TS/React imports.
+        """Deterministic Multi-Language AST Structural Extraction & Call Graph Construction.
 
-        Adheres strictly to the invariant:
-        Static Certainty > Graph Completeness.
-        Every CallEdge(source, target) MUST satisfy source in nodes and target in nodes.
-        Unresolved, dynamic, shadowed, or ambiguous symbols produce NO internal edge.
-
-        Returns:
-            (nodes, edges, status, error) where status is:
-            'analyzed' | 'zero_edges' | 'failed'
+        Supports incremental symbol reuse from existing_manifest for unchanged files,
+        reading & parsing only modified/added files, and impact-aware relinking.
         """
         nodes: dict[str, CallNode] = {}
         edges: list[CallEdge] = []
         status = "analyzed"
         error_msg: str | None = None
+
+        self.last_parse_stats = {"files_parsed": 0, "files_reused": 0, "relinked_files": 0}
+        self.file_ast_metadata = {}
 
         MAX_NODES = 120
         MAX_EDGES = 300
@@ -513,7 +473,6 @@ class RepositorySummaryGenerator:
         })
 
         try:
-            # ─────────────────────────────────────────────────────────────────
             def _not_hidden(p_file: Path) -> bool:
                 try:
                     rel_p = p_file.relative_to(repo_path)
@@ -521,6 +480,20 @@ class RepositorySummaryGenerator:
                 except Exception:
                     return not p_file.name.startswith(".")
 
+            # Determine unchanged relative paths set
+            unchanged_rels: set[str] = set()
+            if delta and existing_manifest:
+                for u in delta.unchanged:
+                    try:
+                        rel_u = str(u.resolve().relative_to(repo_path.resolve()).as_posix())
+                        if rel_u in existing_manifest.files and existing_manifest.files[rel_u].ast_nodes:
+                            unchanged_rels.add(rel_u)
+                    except Exception:
+                        pass
+
+            # ─────────────────────────────────────────────────────────────────
+            # 1. PYTHON DETERMINISTIC RESOLVER
+            # ─────────────────────────────────────────────────────────────────
             py_files = [
                 f for f in files
                 if f.suffix == ".py" and not f.name.startswith(".")
@@ -530,26 +503,106 @@ class RepositorySummaryGenerator:
             ]
 
             py_trees: dict[str, tuple[ast.AST, str, Path]] = {}
-            # Symbol indexes for Python
             label_to_py_nodes: dict[str, list[CallNode]] = {}
             class_methods: dict[str, set[str]] = {}
             class_bases: dict[str, list[str]] = {}
+            file_import_maps: dict[str, dict[str, str]] = {}
+            file_to_py_nodes: dict[str, list[CallNode]] = {}
 
-            # --- Python Pass 1: Global Symbol Table Discovery ---
+            # --- Python Pass 1: Global Symbol Discovery (Incremental) ---
             for pf in py_files[:40]:
                 try:
+                    rel = str(pf.resolve().relative_to(repo_path.resolve()).as_posix())
+                    module_prefix = rel.replace("/", ".").replace(".py", "").removesuffix(".__init__")
+
+                    # If file is unchanged and cached in manifest -> REUSE (0 parse)
+                    if rel in unchanged_rels and existing_manifest:
+                        fp = existing_manifest.files[rel]
+                        cached_nodes: list[CallNode] = []
+                        for nd in fp.ast_nodes:
+                            cnode = CallNode(
+                                id=nd["id"],
+                                label=nd["label"],
+                                file=nd.get("file", rel),
+                                kind=nd.get("kind", "function"),
+                                line=nd.get("line", 0),
+                            )
+                            if cnode.id not in nodes and len(nodes) < MAX_NODES:
+                                nodes[cnode.id] = cnode
+                                cached_nodes.append(cnode)
+                                label_to_py_nodes.setdefault(cnode.label, []).append(cnode)
+                                if "." in cnode.label:
+                                    # Method label "ClassName.method_name"
+                                    method_short = cnode.label.split(".")[-1]
+                                    label_to_py_nodes.setdefault(method_short, []).append(cnode)
+
+                        file_to_py_nodes[rel] = cached_nodes
+                        # Reconstruct import map from cached imports
+                        imp_map = {}
+                        for imp_entry in fp.imports:
+                            if " as " in imp_entry:
+                                orig, alias = imp_entry.split(" as ")
+                                imp_map[alias.strip()] = orig.strip()
+                            else:
+                                imp_map[imp_entry] = imp_entry
+                        file_import_maps[rel] = imp_map
+
+                        self.file_ast_metadata[rel] = {
+                            "language": "Python",
+                            "symbols": list(fp.symbols),
+                            "imports": list(fp.imports),
+                            "ast_nodes": [n.to_dict() if hasattr(n, "to_dict") else nd for n, nd in zip(cached_nodes, fp.ast_nodes)],
+                            "ast_edges": list(fp.ast_edges),
+                        }
+                        self.last_parse_stats["files_reused"] += 1
+                        continue
+
+                    # Otherwise: modified, newly added, or full rebuild -> READ & PARSE
                     code = pf.read_text(errors="ignore")
                     tree = ast.parse(code)
-                    rel = str(pf.relative_to(repo_path) if pf.is_relative_to(repo_path) else pf)
-                    module_prefix = rel.replace("/", ".").replace(".py", "").removesuffix(".__init__")
                     py_trees[rel] = (tree, module_prefix, pf)
+                    self.last_parse_stats["files_parsed"] += 1
 
+                    extracted_symbols: list[str] = []
+                    extracted_imports: list[str] = []
+                    extracted_nodes: list[CallNode] = []
+
+                    # Discover imports for this file
+                    file_imports: dict[str, str] = {}
+                    for stmt in tree.body:
+                        if isinstance(stmt, ast.Import):
+                            for alias in stmt.names:
+                                asname = alias.asname or alias.name
+                                file_imports[asname] = alias.name
+                                extracted_imports.append(f"{alias.name} as {asname}" if alias.asname else alias.name)
+                        elif isinstance(stmt, ast.ImportFrom):
+                            mod = stmt.module or ""
+                            if stmt.level > 0:
+                                parts = module_prefix.split(".")
+                                base_parts = parts[:-stmt.level] if len(parts) >= stmt.level else []
+                                if mod:
+                                    base_parts.append(mod)
+                                resolved_mod = ".".join(base_parts)
+                            else:
+                                resolved_mod = mod
+
+                            for alias in stmt.names:
+                                asname = alias.asname or alias.name
+                                full_target = f"{resolved_mod}.{alias.name}" if resolved_mod else alias.name
+                                file_imports[asname] = full_target
+                                extracted_imports.append(f"{full_target} as {asname}" if alias.asname else full_target)
+
+                    file_import_maps[rel] = file_imports
+
+                    # Discover classes, methods, and functions
                     for stmt in tree.body:
                         if isinstance(stmt, ast.ClassDef):
                             class_nid = f"{module_prefix}.{stmt.name}" if module_prefix else stmt.name
                             if class_nid not in nodes and len(nodes) < MAX_NODES:
                                 node = CallNode(id=class_nid, label=stmt.name, file=rel, kind="class", line=stmt.lineno)
                                 nodes[class_nid] = node
+                                extracted_nodes.append(node)
+                                extracted_symbols.append(stmt.name)
                                 label_to_py_nodes.setdefault(stmt.name, []).append(node)
 
                             methods_set = set()
@@ -568,6 +621,8 @@ class RepositorySummaryGenerator:
                                     if method_nid not in nodes and len(nodes) < MAX_NODES:
                                         mnode = CallNode(id=method_nid, label=method_label, file=rel, kind="method", line=item.lineno)
                                         nodes[method_nid] = mnode
+                                        extracted_nodes.append(mnode)
+                                        extracted_symbols.append(item.name)
                                         label_to_py_nodes.setdefault(item.name, []).append(mnode)
                                         label_to_py_nodes.setdefault(method_label, []).append(mnode)
                             class_methods[class_nid] = methods_set
@@ -577,38 +632,30 @@ class RepositorySummaryGenerator:
                             if func_nid not in nodes and len(nodes) < MAX_NODES:
                                 fnode = CallNode(id=func_nid, label=stmt.name, file=rel, kind="function", line=stmt.lineno)
                                 nodes[func_nid] = fnode
+                                extracted_nodes.append(fnode)
+                                extracted_symbols.append(stmt.name)
                                 label_to_py_nodes.setdefault(stmt.name, []).append(fnode)
+
+                    file_to_py_nodes[rel] = extracted_nodes
+                    self.file_ast_metadata[rel] = {
+                        "language": "Python",
+                        "symbols": extracted_symbols,
+                        "imports": extracted_imports,
+                        "ast_nodes": [
+                            {"id": n.id, "label": n.label, "file": n.file, "kind": n.kind, "line": n.line}
+                            for n in extracted_nodes
+                        ],
+                        "ast_edges": [],
+                    }
                 except Exception:
                     continue
 
-            # --- Python Pass 2: Deterministic Import & Call Resolution ---
+            # --- Python Pass 2: Deterministic Import & Call Resolution (Impact-Aware) ---
+            # Files that must be resolved: any file parsed in py_trees
             for rel, (tree, module_prefix, pf) in py_trees.items():
-                # Build per-file import map: alias/name -> full node_id or module_prefix
-                import_map: dict[str, str] = {}
+                import_map = file_import_maps.get(rel, {})
+                file_edges: list[CallEdge] = []
 
-                for stmt in tree.body:
-                    if isinstance(stmt, ast.Import):
-                        for alias in stmt.names:
-                            asname = alias.asname or alias.name
-                            import_map[asname] = alias.name
-                    elif isinstance(stmt, ast.ImportFrom):
-                        mod = stmt.module or ""
-                        if stmt.level > 0:
-                            # Relative import resolution
-                            parts = module_prefix.split(".")
-                            base_parts = parts[:-stmt.level] if len(parts) >= stmt.level else []
-                            if mod:
-                                base_parts.append(mod)
-                            resolved_mod = ".".join(base_parts)
-                        else:
-                            resolved_mod = mod
-
-                        for alias in stmt.names:
-                            asname = alias.asname or alias.name
-                            full_target = f"{resolved_mod}.{alias.name}" if resolved_mod else alias.name
-                            import_map[asname] = full_target
-
-                # Walk AST to extract calls & class inheritance
                 class _PyCallResolver(ast.NodeVisitor):
                     def __init__(self_inner) -> None:
                         self_inner.current_class: str | None = None
@@ -618,7 +665,6 @@ class RepositorySummaryGenerator:
 
                     def visit_ClassDef(self_inner, node: ast.ClassDef) -> None:
                         class_nid = f"{module_prefix}.{node.name}" if module_prefix else node.name
-                        # 1. Inheritance edges
                         for base in node.bases:
                             base_name = getattr(base, "id", getattr(base, "attr", None))
                             if base_name:
@@ -631,7 +677,9 @@ class RepositorySummaryGenerator:
                                     target_id = label_to_py_nodes[base_name][0].id
 
                                 if target_id and target_id in nodes and len(edges) < MAX_EDGES:
-                                    edges.append(CallEdge(source=class_nid, target=target_id, kind="inherits"))
+                                    edge = CallEdge(source=class_nid, target=target_id, kind="inherits")
+                                    edges.append(edge)
+                                    file_edges.append(edge)
 
                         old_class = self_inner.current_class
                         self_inner.current_class = class_nid
@@ -657,7 +705,6 @@ class RepositorySummaryGenerator:
                         self_inner.current_func = node.name
                         self_inner.current_func_nid = func_nid
 
-                        # Track local scope: parameters and assigned variables
                         local_vars = set()
                         for arg in node.args.args + getattr(node.args, "kwonlyargs", []) + getattr(node.args, "posonlyargs", []):
                             local_vars.add(arg.arg)
@@ -680,28 +727,23 @@ class RepositorySummaryGenerator:
 
                         self_inner.local_scope = local_vars
 
-                        # Walk body for calls
                         for child in ast.walk(node):
                             if isinstance(child, ast.Call):
                                 target_id = None
 
-                                # Case A: self.method()
                                 if isinstance(child.func, ast.Attribute) and isinstance(child.func.value, ast.Name):
                                     if child.func.value.id == "self" and self_inner.current_class:
                                         m_name = child.func.attr
                                         if m_name in class_methods.get(self_inner.current_class, set()):
                                             target_id = f"{self_inner.current_class}.{m_name}"
                                     elif child.func.value.id in import_map:
-                                        # module.function() or module.Class()
                                         mod_target = import_map[child.func.value.id]
                                         candidate = f"{mod_target}.{child.func.attr}"
                                         if candidate in nodes:
                                             target_id = candidate
 
-                                # Case B: bare function call func()
                                 elif isinstance(child.func, ast.Name):
                                     fname = child.func.id
-                                    # Static certainty rule: parameters / shadowed local variables produce UNRESOLVED
                                     if fname not in self_inner.local_scope and fname not in BUILTIN_FUNCS:
                                         if fname in import_map and import_map[fname] in nodes:
                                             target_id = import_map[fname]
@@ -709,12 +751,12 @@ class RepositorySummaryGenerator:
                                             target_id = f"{module_prefix}.{fname}"
                                         elif fname in label_to_py_nodes:
                                             if len(label_to_py_nodes[fname]) == 1:
-                                                # Exactly one unique match across the entire codebase
                                                 target_id = label_to_py_nodes[fname][0].id
-                                            # Else: ambiguous (multiple same-name symbols) -> UNRESOLVED
 
                                 if target_id and target_id in nodes and func_nid in nodes and target_id != func_nid and len(edges) < MAX_EDGES:
-                                    edges.append(CallEdge(source=func_nid, target=target_id, kind="calls"))
+                                    edge = CallEdge(source=func_nid, target=target_id, kind="calls")
+                                    edges.append(edge)
+                                    file_edges.append(edge)
 
                         self_inner.current_func = old_func
                         self_inner.current_func_nid = old_nid
@@ -723,157 +765,180 @@ class RepositorySummaryGenerator:
                 resolver = _PyCallResolver()
                 resolver.visit(tree)
 
+                if rel in self.file_ast_metadata:
+                    self.file_ast_metadata[rel]["ast_edges"] = [
+                        {"source": e.source, "target": e.target, "kind": e.kind} for e in file_edges
+                    ]
+                self.last_parse_stats["relinked_files"] += 1
+
+            # For unchanged files, reuse their cached edges if both endpoints exist in nodes
+            for rel in unchanged_rels:
+                if existing_manifest and rel in existing_manifest.files:
+                    cached_edges_raw = existing_manifest.files[rel].ast_edges
+                    for ed in cached_edges_raw:
+                        if ed["source"] in nodes and ed["target"] in nodes and ed["source"] != ed["target"]:
+                            edges.append(CallEdge(source=ed["source"], target=ed["target"], kind=ed.get("kind", "calls")))
+
             # ─────────────────────────────────────────────────────────────────
-            # 2. TYPESCRIPT / REACT / NEXT.JS DETERMINISTIC RESOLVER
+            # 2. TYPESCRIPT / JAVASCRIPT TREE-SITTER STRUCTURAL ANALYZER
             # ─────────────────────────────────────────────────────────────────
             ts_files = [
                 f for f in files
-                if f.suffix.lower() in (".tsx", ".jsx", ".ts", ".js")
+                if f.suffix.lower() in (".tsx", ".jsx", ".ts", ".js", ".mjs", ".cjs")
                 and not f.name.startswith(".")
                 and "node_modules" not in str(f)
                 and _not_hidden(f)
             ]
 
-            import_re = re.compile(r"import\s+(?:\{([^}]+)\}|([A-Za-z0-9_]+)|\*\s+as\s+([A-Za-z0-9_]+))\s+from\s+['\"]([^'\"]+)['\"]")
-            export_comp_re = re.compile(r"export\s+(?:default\s+)?(?:function|const|class)\s+([A-Z][A-Za-z0-9_]+)")
-            export_named_re = re.compile(r"export\s+\{([^}]+)\}")
-            jsx_usage_re = re.compile(r"<([A-Z][A-Za-z0-9_]+)(?:[\s/>]|\.[A-Za-z0-9_]+)")
+            all_ts_rel_paths = {str(tf.resolve().relative_to(repo_path.resolve()).as_posix()) for tf in ts_files}
+            ts_analyzer = TreeSitterTSAnalyzer()
+            ts_resolver = TSModuleResolver(repo_path, known_files=all_ts_rel_paths)
+            parsed_modules: dict[str, ParsedModulePayload] = {}
+            changed_ts_rels: set[str] = set()
 
-            file_exports: dict[str, dict[str, str]] = {}
-            file_to_ts_nodes: dict[str, list[CallNode]] = {}
-            label_to_ts_nodes: dict[str, list[CallNode]] = {}
-            ts_file_texts: dict[str, tuple[str, Path]] = {}
-
-            # --- TS Pass 1: Component & Module Discovery ---
-            for tf in ts_files[:40]:
+            for tf in ts_files[:50]:
                 try:
-                    text = tf.read_text(errors="ignore")
-                    rel = str(tf.relative_to(repo_path) if tf.is_relative_to(repo_path) else tf)
-                    ts_file_texts[rel] = (text, tf)
-                    file_exports[rel] = {}
+                    rel = str(tf.resolve().relative_to(repo_path.resolve()).as_posix())
 
-                    # Match exported named functions / components
-                    for comp_name in export_comp_re.findall(text):
-                        nid = f"{rel}#{comp_name}"
-                        if nid not in nodes and len(nodes) < MAX_NODES:
-                            node = CallNode(id=nid, label=comp_name, file=rel, kind="component", line=0)
-                            nodes[nid] = node
-                            file_exports[rel][comp_name] = nid
-                            file_to_ts_nodes.setdefault(rel, []).append(node)
-                            label_to_ts_nodes.setdefault(comp_name, []).append(node)
+                    # If unchanged and cached -> REUSE
+                    if rel in unchanged_rels and existing_manifest and rel in existing_manifest.files:
+                        fp = existing_manifest.files[rel]
+                        cached_symbols: list[ExtractedSymbol] = []
+                        cached_exports: list[ExtractedExport] = []
 
-                    # Match export { A, B as C }
-                    for named_exports in export_named_re.findall(text):
-                        for part in named_exports.split(","):
-                            clean_part = part.strip()
-                            if not clean_part:
-                                continue
-                            exp_name = clean_part.split(" as ")[-1].strip()
-                            nid = f"{rel}#{exp_name}"
+                        for nd in fp.ast_nodes:
+                            nid = nd["id"]
+                            nlabel = nd["label"]
+                            nkind = nd.get("kind", "function")
+                            nline = nd.get("line", 0)
+                            cnode = CallNode(
+                                id=nid,
+                                label=nlabel,
+                                file=nd.get("file", rel),
+                                kind=nkind,
+                                line=nline,
+                            )
                             if nid not in nodes and len(nodes) < MAX_NODES:
-                                node = CallNode(id=nid, label=exp_name, file=rel, kind="component", line=0)
-                                nodes[nid] = node
-                                file_exports[rel][exp_name] = nid
-                                file_to_ts_nodes.setdefault(rel, []).append(node)
-                                label_to_ts_nodes.setdefault(exp_name, []).append(node)
+                                nodes[nid] = cnode
 
-                    # Next.js page/layout fallback
-                    if not file_exports[rel] and tf.name in ("page.tsx", "page.jsx", "layout.tsx", "layout.jsx", "route.ts"):
-                        page_label = tf.parent.name.title() if tf.parent.name else "Root"
-                        if tf.name.startswith("layout"):
-                            page_label += "Layout"
-                        nid = f"{rel}#{page_label}"
-                        if nid not in nodes and len(nodes) < MAX_NODES:
-                            node = CallNode(id=nid, label=page_label, file=rel, kind="component", line=0)
-                            nodes[nid] = node
-                            file_exports[rel]["default"] = nid
-                            file_exports[rel][page_label] = nid
-                            file_to_ts_nodes.setdefault(rel, []).append(node)
-                            label_to_ts_nodes.setdefault(page_label, []).append(node)
-                except Exception:
-                    continue
+                            cached_symbols.append(
+                                ExtractedSymbol(
+                                    id=nid,
+                                    name=nlabel,
+                                    qualified_name=nlabel,
+                                    kind=nkind,
+                                    file=rel,
+                                    span=SourceSpan(start_line=nline, start_col=0, end_line=nline, end_col=0),
+                                    exported=True,
+                                )
+                            )
+                            cached_exports.append(
+                                ExtractedExport(
+                                    exported_name=nlabel,
+                                    local_name=nlabel,
+                                    file=rel,
+                                )
+                            )
 
-            # --- TS Pass 2: Deterministic Imports & JSX Renders ---
-            for rel, (text, tf) in ts_file_texts.items():
-                src_nodes = file_to_ts_nodes.get(rel, [])
-                if not src_nodes:
-                    continue
-                src_id = src_nodes[0].id
+                        cached_imports = [
+                            ExtractedImport(
+                                source_module=imp,
+                                imported_name="*",
+                                local_name=imp,
+                                file=rel,
+                                span=SourceSpan(start_line=1, start_col=0, end_line=1, end_col=0),
+                            )
+                            for imp in fp.imports
+                        ]
 
-                local_import_table: dict[str, str] = {}
+                        parsed_modules[rel] = ParsedModulePayload(
+                            rel_path=rel,
+                            dialect=TSLanguageDialect.TYPESCRIPT,
+                            symbols=cached_symbols,
+                            imports=cached_imports,
+                            exports=cached_exports,
+                            parse_status="ok",
+                        )
 
-                # 1. Imports
-                for named, def_import, star_import, imp_path in import_re.findall(text):
-                    # Check internal path aliases and relative imports
-                    is_internal = imp_path.startswith(".") or imp_path.startswith("@/") or imp_path.startswith("~/")
-                    if not is_internal:
+                        self.file_ast_metadata[rel] = {
+                            "language": "TypeScript",
+                            "symbols": list(fp.symbols),
+                            "imports": list(fp.imports),
+                            "ast_nodes": [nd for nd in fp.ast_nodes],
+                            "ast_edges": list(fp.ast_edges),
+                        }
+                        self.last_parse_stats["files_reused"] += 1
                         continue
 
-                    # Try to resolve path on disk
-                    clean_path = imp_path.lstrip("./").lstrip("@/").lstrip("~/")
-                    target_rel_candidates = [
-                        clean_path,
-                        f"src/{clean_path}",
-                        f"app/{clean_path}",
-                        f"{clean_path}.tsx",
-                        f"{clean_path}.ts",
-                        f"{clean_path}.jsx",
-                        f"{clean_path}.js",
-                        f"{clean_path}/index.tsx",
-                        f"{clean_path}/index.ts",
-                        f"src/{clean_path}.tsx",
-                        f"src/{clean_path}.ts",
-                    ]
+                    # Otherwise: parse source with Tree-sitter
+                    text = tf.read_text(errors="ignore")
+                    payload = ts_analyzer.parse_file(rel, text)
+                    parsed_modules[rel] = payload
+                    changed_ts_rels.add(rel)
+                    self.last_parse_stats["files_parsed"] += 1
 
-                    matched_target_rel = next((c for c in target_rel_candidates if c in file_exports), None)
+                    extracted_ast_nodes: list[dict[str, Any]] = []
+                    for s in payload.symbols:
+                        if s.id not in nodes and len(nodes) < MAX_NODES:
+                            node = CallNode(
+                                id=s.id,
+                                label=s.qualified_name or s.name,
+                                file=s.file,
+                                kind=s.kind,
+                                line=s.span.start_line,
+                            )
+                            nodes[s.id] = node
+                        extracted_ast_nodes.append({
+                            "id": s.id,
+                            "label": s.qualified_name or s.name,
+                            "file": s.file,
+                            "kind": s.kind,
+                            "line": s.span.start_line,
+                        })
 
-                    # Extract imported symbol names
-                    symbols_to_resolve: list[tuple[str, str]] = []  # (imported_name, local_alias)
-                    if named:
-                        for item in named.split(","):
-                            item = item.strip()
-                            if " as " in item:
-                                orig, alias = item.split(" as ")
-                                symbols_to_resolve.append((orig.strip(), alias.strip()))
-                            elif item:
-                                symbols_to_resolve.append((item, item))
-                    if def_import:
-                        symbols_to_resolve.append(("default", def_import.strip()))
-                        symbols_to_resolve.append((def_import.strip(), def_import.strip()))
-                    if star_import:
-                        symbols_to_resolve.append(("*", star_import.strip()))
+                    self.file_ast_metadata[rel] = {
+                        "language": "TypeScript",
+                        "symbols": [s.name for s in payload.symbols],
+                        "imports": [i.source_module for i in payload.imports],
+                        "ast_nodes": extracted_ast_nodes,
+                        "ast_edges": [],
+                    }
+                except Exception as ex:
+                    logger.debug("Failed parsing TS module %s: %s", tf, ex)
+                    continue
 
-                    for orig_sym, local_alias in symbols_to_resolve:
-                        target_id = None
-                        if matched_target_rel:
-                            exports = file_exports[matched_target_rel]
-                            if orig_sym in exports:
-                                target_id = exports[orig_sym]
-                            elif "default" in exports and orig_sym == "default":
-                                target_id = exports["default"]
-                            elif len(exports) == 1:
-                                target_id = list(exports.values())[0]
+            # --- TS Pass 2: Deterministic Cross-File Linking ---
+            ts_linker = TSCrossFileLinker(ts_resolver)
+            _, ts_edges, linking_stats = ts_linker.link_modules(
+                parsed_modules, existing_nodes=nodes, max_nodes=MAX_NODES, max_edges=MAX_EDGES
+            )
 
-                        # Fallback: Unique match across codebase
-                        if not target_id and local_alias in label_to_ts_nodes:
-                            if len(label_to_ts_nodes[local_alias]) == 1:
-                                target_id = label_to_ts_nodes[local_alias][0].id
+            # Route edges to respective file metadata and global graph
+            edges_by_file: dict[str, list[dict[str, str]]] = {}
+            for edge in ts_edges:
+                if len(edges) < MAX_EDGES:
+                    edges.append(edge)
+                src_file = edge.source.split("#", 1)[0] if "#" in edge.source else None
+                if src_file and src_file in self.file_ast_metadata:
+                    edges_by_file.setdefault(src_file, []).append({
+                        "source": edge.source,
+                        "target": edge.target,
+                        "kind": edge.kind,
+                    })
 
-                        if target_id and target_id in nodes and target_id != src_id:
-                            local_import_table[local_alias] = target_id
+            for changed_rel in changed_ts_rels:
+                if changed_rel in self.file_ast_metadata:
+                    self.file_ast_metadata[changed_rel]["ast_edges"] = edges_by_file.get(changed_rel, [])
+                self.last_parse_stats["relinked_files"] += 1
+
+            # For unchanged TS files that weren't relinked, preserve valid cached edges
+            for rel in unchanged_rels:
+                if rel not in changed_ts_rels and existing_manifest and rel in existing_manifest.files:
+                    cached_ts_edges = existing_manifest.files[rel].ast_edges
+                    for ed in cached_ts_edges:
+                        if ed["source"] in nodes and ed["target"] in nodes and ed["source"] != ed["target"]:
                             if len(edges) < MAX_EDGES:
-                                edges.append(CallEdge(source=src_id, target=target_id, kind="imports"))
-
-                # 2. JSX Renders
-                for used_tag in jsx_usage_re.findall(text):
-                    target_id = None
-                    if used_tag in local_import_table:
-                        target_id = local_import_table[used_tag]
-                    elif used_tag in label_to_ts_nodes and len(label_to_ts_nodes[used_tag]) == 1:
-                        target_id = label_to_ts_nodes[used_tag][0].id
-
-                    if target_id and target_id in nodes and target_id != src_id and len(edges) < MAX_EDGES:
-                        edges.append(CallEdge(source=src_id, target=target_id, kind="renders"))
+                                edges.append(CallEdge(source=ed["source"], target=ed["target"], kind=ed.get("kind", "calls")))
 
         except Exception as e:
             logger.error("Call graph generation failed: %s", e)
@@ -885,7 +950,6 @@ class RepositorySummaryGenerator:
         deduped_edges: list[CallEdge] = []
 
         for e in edges:
-            # Enforce Backend Invariant: both source and target MUST exist in nodes
             if e.source in nodes and e.target in nodes and e.source != e.target:
                 key = (e.source, e.target, e.kind)
                 if key not in seen_edges:
@@ -897,10 +961,4 @@ class RepositorySummaryGenerator:
         elif len(nodes) == 0 and status != "failed":
             status = "not_analyzed"
 
-        logger.info(
-            "call graph built | status=%s | nodes=%d | edges=%d",
-            status,
-            len(nodes),
-            len(deduped_edges),
-        )
         return list(nodes.values()), deduped_edges, status, error_msg

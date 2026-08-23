@@ -1,6 +1,6 @@
 """Abstract context synthesis cache port."""
 
-from typing import Any, Optional, Protocol
+from typing import Any, Optional, Protocol, Sequence, Set
 
 
 class ContextCachePort(Protocol):
@@ -20,12 +20,29 @@ class ContextCachePort(Protocol):
         """Retrieve cached value if present and unexpired."""
         ...
 
-    def set(self, key: str, value: Any, repo_path: str = "") -> None:
-        """Store synthesized context in cache."""
+    def set(
+        self,
+        key: str,
+        value: Any,
+        repo_path: str = "",
+        referenced_files: Optional[Set[str] | Sequence[str]] = None,
+        referenced_symbols: Optional[Set[str] | Sequence[str]] = None,
+    ) -> None:
+        """Store synthesized context in cache with provenance."""
         ...
 
     def invalidate_repo(self, repo_path: str) -> int:
         """Invalidate all cached entries for a given repository path."""
+        ...
+
+    def invalidate_selective(
+        self,
+        repo_path: str,
+        changed_files: Set[str] | Sequence[str],
+        deleted_files: Set[str] | Sequence[str] = (),
+        changed_symbols: Set[str] | Sequence[str] = (),
+    ) -> int:
+        """Selectively invalidate cache entries affected by modified/deleted files or symbols."""
         ...
 
     def clear(self) -> None:

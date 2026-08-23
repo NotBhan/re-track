@@ -138,10 +138,26 @@ This document tracks the phased development milestones and operational roadmap f
   - Rust Tauri bridge `cargo check` verified with 0 errors.
   - Phase 9E.1 runtime validation architecture document (`docs/architecture/phase-9e-runtime-validation.md`).
 
-### Phase 10: Retrieval & Intelligence Evolution (Planned)
+### Phase 10: Retrieval & Intelligence Evolution
 
-- [ ] **Phase 10A: Incremental / Diff-Aware Indexing** (Git diff change detection and selective file re-indexing).
-- [ ] **Phase 10B: Improved TS/JS/JSX Structural Analysis** (Tree-sitter native WASM bindings for cross-file type resolution).
+- [x] **Phase 10A: Incremental / Diff-Aware Indexing (COMPLETED & FROZEN)**
+  - Three execution modes: `NOOP` (0 source AST parses on unchanged repo), `INCREMENTAL` (parses only added/modified files and reuses manifest AST for unchanged files), and `FULL` (deterministic rebuild on corruption, schema mismatch, or user request).
+  - Manifest Schema 2.0 / Parser 1.0.0 with per-file cryptographic fingerprints, atomic persistence (`.tmp` + `os.fsync` + rename), and rename detection with conservative fallback.
+  - Multi-tier change detection: Git-aware fast-path (`git status --porcelain=v1`) with authoritative filesystem fallback (mtime + size + SHA-256).
+  - Fine-grained provenance-based `ContextCacheEngine` invalidation (`referenced_files`, `referenced_symbols`) selectively purging impacted context packages while preserving unaffected entries.
+  - Strict Memory & Security truth boundary preservation: updates Cognee memory at the architectural outline level without unsupported per-file mutation claims; full workspace authorization and symlink containment.
+  - 27 dedicated automated test cases passing across 7 test files (`test_incremental_manifest.py`, `test_incremental_ast_updates.py`, `test_incremental_cache_invalidation.py`, `test_incremental_failure_recovery.py`, `test_incremental_security.py`, `test_incremental_semantic_memory.py`, `test_incremental_performance.py`).
+  - Empirical 23.6x speedup on unchanged repos (< 1ms) and 7.9x speedup on single-file modifications.
+  - Authoritative Phase 10A audit documentation (`docs/architecture/phase-10a-audit.md`) and user guide (`docs/product/incremental-indexing.md`).
+- [x] **Phase 10B: Improved TS/JS/JSX Structural Analysis (COMPLETED & FROZEN)**
+  - Replaced regex heuristics with native Tree-sitter concrete syntax tree (CST) parser across TypeScript, TSX, and JavaScript dialects.
+  - Full symbol extraction: top-level & async functions, arrow functions, classes, constructors, methods, interfaces, type aliases, enums, namespaces, and JSX component render usages.
+  - Deterministic module resolution (`TSModuleResolver`): relative imports (`./`, `../`), comment-tolerant `tsconfig.json`/`jsconfig.json` `compilerOptions.baseUrl` + `compilerOptions.paths` wildcard mapping (`@/*` -> `src/*`), extension probing (`.ts`, `.tsx`, `.d.ts`, `.js`, `.jsx`, `/index.ts`), and external package classification.
+  - Cross-file symbol and call graph linking (`TSCrossFileLinker`): resolves imported symbols, recursive re-export barrel chains (up to depth 5 with cycle protection), namespace calls (`API.fetchUser`), and JSX renders into canonical `CallNode` and `CallEdge` graphs.
+  - Incremental Indexing integration: bumped `PARSER_VERSION = "2.0.0"` in Manifest Schema 2.0; automatic clean rebuild for parser 1.0.0 manifests and instant 0-parse AST reuse for unchanged TypeScript/JavaScript files.
+  - 31 dedicated automated test cases passing across 8 test suites (`test_ts_js_parser.py`, `test_ts_js_import_resolution.py`, `test_ts_js_cross_file_graph.py`, `test_ts_js_incremental.py`, `test_ts_js_compatibility.py`, `test_ts_js_security.py`, `test_ts_js_performance.py`, `test_ast_integrity.py`).
+  - Full regression validation: 566/566 backend pytest tests passing, `npm run build` passing with 0 errors, and 50/50 Vitest tests passing.
+  - Authoritative Phase 10B audit documentation (`docs/architecture/phase-10b-audit.md`) and user guide (`docs/product/typescript-structural-analysis.md`).
 - [ ] **Phase 10C: Expanded Retrieval Benchmarking** (Multi-repository complex cross-package golden tasks).
 - [ ] **Phase 10D: Adaptive Query-Aware Retrieval** (Task-type-specific token allocation profiles).
 - [ ] **Phase 10E: Agent Workflow Optimization** (Multi-turn conversational context caching).

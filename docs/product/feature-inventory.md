@@ -50,6 +50,8 @@ This document establishes the verified inventory of all features and technical c
 | **FEAT-023** | Context Cache & Invalidation Engine | Caching & Performance | Internal | Production | `backend/app/services/context_cache.py` | `tests/test_phase_8e_resource_stability.py` | Fingerprints query & file mtimes; evicts on source file modification. |
 | **FEAT-024** | Hybrid Semantic-Graph Memory (Cognee) | Memory & Knowledge | Internal | Production with Limitations | `backend/app/services/cognee_service.py` | `tests/test_cognee_service.py` | Requires external local LLM for cognify/embedding; offline fallback provided. |
 | **FEAT-025** | Pure Deterministic Evaluation Engine | Benchmarking & Evaluation | Internal | Production | `backend/tests/evaluation/evaluator.py` | `tests/test_evaluation_engine.py` | Functional precision/recall/coverage metrics against `golden_tasks.json`. |
+| **FEAT-026** | Incremental / Diff-Aware Indexing Engine | Indexing & AST Intelligence | Internal | Production | `backend/app/services/manifest_service.py`, `backend/app/services/indexing_service.py`, `backend/app/services/repository_summary.py` | `tests/test_incremental_ast_updates.py`, `tests/test_incremental_manifest.py`, `tests/test_incremental_performance.py` | Schema 2.0 / Parser 1.0.0; supports NOOP (0 AST parses), INCREMENTAL, and FULL modes with crash-safe atomic manifest commit. |
+| **FEAT-027** | Fine-Grained Provenance Context Cache Invalidation | Caching & Performance | Internal | Production | `backend/app/services/context_cache.py`, `backend/app/application/use_cases/context.py` | `tests/test_incremental_cache_invalidation.py` | Tracks referenced files and symbols; selectively invalidates impacted cache packages while preserving unrelated entries. |
 
 ---
 

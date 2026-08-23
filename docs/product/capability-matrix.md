@@ -77,7 +77,7 @@ To prevent misleading claims, RE:Track latency characteristics are categorized i
 | **MCP / Agent Transport** | Stdio FastMCP Server, 5 Standard Tools | — | — | — | Network HTTP/SSE Transport |
 | **Context Synthesis** | Token Budgeting, Section Selection, Context Studio | Local Summary Fallback when Cognee empty | Bounded Concurrency Guard (`max_concurrent=1`) | Dynamic Multi-Repo Context Union | Cloud-Hosted Multi-Tenant Synthesis |
 | **Code Intelligence** | Python Native AST Symbol & Call Resolution | TypeScript/JS/JSX Heuristic AST Extraction | Context Cache Invalidation Engine | Tree-sitter Native WASM Bindings | Dynamic Runtime Execution Tracing |
-| **Repository Management** | Local Repository Registration, File Scanning | — | Workspace Authorization Sandboxing | Git Diff-Aware Incremental Re-indexing | Remote Git Ingestion (`git clone` API) |
+| **Repository Management** | Local Repository Registration, File Scanning, Incremental / Diff-Aware Indexing (Manifest 2.0) | — | Workspace Authorization Sandboxing, Selective Cache Invalidation | — | Remote Git Ingestion (`git clone` API) |
 | **Memory & Storage** | Dataset Deletion (`forget`), Metadata Store | Cognee 1.5.0 Semantic Vector/Graph Ingestion | Dual-Path Storage (`.retrack` canonical, `.andes` fallback) | Chunk-Level Hash Change Detection | Distributed Database Clustering |
 | **Reliability & Ops** | Subprocess Provider Reconnection, Signal Teardown | — | Stderr-Only Logging Separation | Automated Daemon Watchdog | Distributed Celery/Redis Task Queue |
 | **Benchmarking** | 20-Task Golden Suite, Precision/Recall Evaluator | — | Token Baseline Scanner | Automated CI GitHub Action Benchmark Gate | — |

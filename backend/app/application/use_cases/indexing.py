@@ -129,7 +129,8 @@ class IndexingUseCases:
                         if isinstance(res_f, (list, tuple, set)):
                             filtered = list(res_f)
 
-                    if self._summary_generator and hasattr(self._summary_generator, "generate"):
+                    summary = getattr(self._indexing_service, "last_summary", None)
+                    if summary is None and self._summary_generator and hasattr(self._summary_generator, "generate"):
                         summary = await self._summary_generator.generate(repo_path, filtered) if asyncio.iscoroutinefunction(self._summary_generator.generate) else self._summary_generator.generate(repo_path, filtered)
 
                         if summary and hasattr(summary, "technology_stack") and summary.technology_stack:
