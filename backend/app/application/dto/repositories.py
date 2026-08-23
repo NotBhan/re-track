@@ -10,6 +10,7 @@ class RepositoryCreateRequest(BaseModel):
     source_type: str = Field(..., description="github | local")
     source_url: Optional[str] = Field(None, description="GitHub URL")
     local_path: Optional[str] = Field(None, description="Local path")
+    path: Optional[str] = Field(None, description="Alternative local path alias")
     name: Optional[str] = Field(None, description="Display name")
 
 

@@ -56,7 +56,7 @@ export default function Memory() {
       id: "datasets",
       label: "Datasets & Files",
       icon: Database,
-      badge: datasets.length,
+      badge: datasets?.length || 0,
     },
     {
       id: "vectors",
@@ -95,7 +95,7 @@ export default function Memory() {
                   Cognee Semantic Memory Graph
                 </h1>
                 <Badge variant="outline" className="text-[11px] font-mono">
-                  {datasets.length} datasets
+                  {datasets?.length || 0} datasets
                 </Badge>
               </div>
               <p className="text-xs text-neutral-500 mt-0.5">

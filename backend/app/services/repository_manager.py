@@ -231,6 +231,16 @@ class RepositoryManager:
             raise KeyError(f"Repository not found: {repo_id}")
         return self._dict_to_repo(self._repositories[repo_id])
 
+    def get_by_id(self, repo_id: str) -> Repository | None:
+        """Port-compliant retrieval by repo ID."""
+        if repo_id not in self._repositories:
+            return None
+        return self._dict_to_repo(self._repositories[repo_id])
+
+    def get(self, repo_id: str) -> Repository | None:
+        """Alias for get_by_id."""
+        return self.get_by_id(repo_id)
+
     def update_repository(self, repo_id: str, **kwargs: Any) -> Repository:
         if repo_id not in self._repositories:
             raise KeyError(f"Repository not found: {repo_id}")
@@ -247,7 +257,30 @@ class RepositoryManager:
         del self._repositories[repo_id]
         self._save()
 
-    # ── Import ────────────────────────────────────────────────────
+    def delete(self, repo_id: str) -> bool:
+        """Port-compliant deletion returning boolean success."""
+        if repo_id not in self._repositories:
+            return False
+        del self._repositories[repo_id]
+        self._save()
+        return True
+
+    def scan(self, repo_id: str) -> ScanResult:
+        """Alias for scan_repository."""
+        return self.scan_repository(repo_id)
+
+    def import_repo(
+        self,
+        name: str,
+        path: str,
+        branch: str | None = None,
+    ) -> Repository:
+        """Port-compliant alias for import_repository."""
+        return self.import_repository(
+            source_type="local",
+            local_path=path,
+            name=name,
+        )
 
     def import_repository(
         self,

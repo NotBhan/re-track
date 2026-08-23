@@ -64,6 +64,10 @@ export function EvidenceProvenanceLayer({
   // Parse evidence from actual AgentContextResponse metadata
   const { groups, totalSources, totalSymbols } = useMemo(() => {
     const rawMarkdown = agentResponse.context_markdown || "";
+    const extractedSymbols = agentResponse.extracted_symbols || [];
+    const relatedFiles = agentResponse.related_files || [];
+    const callers = agentResponse.callers || [];
+    const callees = agentResponse.callees || [];
 
     // 1. Extract snippet file paths and line ranges from markdown headers
     const snippetRegex = /###\s*`?([^\n`]+)`?\s*(?:\(Lines\s*(\d+-\d+)\))?/g;
@@ -80,7 +84,7 @@ export function EvidenceProvenanceLayer({
     }
 
     // 2. Data Models & Schemas
-    const modelSymbols = agentResponse.extracted_symbols.filter((s) => {
+    const modelSymbols = extractedSymbols.filter((s) => {
       const lower = s.toLowerCase();
       return (
         lower.includes("model") ||
@@ -97,7 +101,7 @@ export function EvidenceProvenanceLayer({
     });
 
     const modelItems: EvidenceItem[] = modelSymbols.slice(0, 6).map((sym) => {
-      const matchingFile = agentResponse.related_files.find((f) =>
+      const matchingFile = relatedFiles.find((f) =>
         f.toLowerCase().includes(sym.toLowerCase()) || f.toLowerCase().includes("model")
       );
       const matchingSnippet = parsedSnippets.find((s) => s.path === matchingFile);
@@ -105,7 +109,7 @@ export function EvidenceProvenanceLayer({
       return {
         id: `model-${sym}`,
         name: sym,
-        path: matchingFile || agentResponse.related_files[0],
+        path: matchingFile || relatedFiles[0],
         lineRange: matchingSnippet?.lineRange,
         kind: "model",
         relevanceReason: sym.toLowerCase().includes("model") ? "Schema" : "Domain Entity",
@@ -113,7 +117,7 @@ export function EvidenceProvenanceLayer({
     });
 
     // 3. Components, Services & Middleware
-    const serviceSymbols = agentResponse.extracted_symbols.filter(
+    const serviceSymbols = extractedSymbols.filter(
       (s) => !modelSymbols.includes(s)
     );
 
@@ -130,7 +134,7 @@ export function EvidenceProvenanceLayer({
         reason = "Verification";
       }
 
-      const matchingFile = agentResponse.related_files.find((f) =>
+      const matchingFile = relatedFiles.find((f) =>
         f.toLowerCase().includes(sym.toLowerCase())
       );
       const matchingSnippet = parsedSnippets.find((s) => s.path === matchingFile);
@@ -147,13 +151,13 @@ export function EvidenceProvenanceLayer({
 
     // 4. Structural Call Flow
     const callFlowItems: EvidenceItem[] = [
-      ...agentResponse.callers.slice(0, 4).map((c) => ({
+      ...callers.slice(0, 4).map((c) => ({
         id: `caller-${c}`,
         name: c,
         kind: "caller" as const,
         relevanceReason: "Caller (Upstream)",
       })),
-      ...agentResponse.callees.slice(0, 4).map((c) => ({
+      ...callees.slice(0, 4).map((c) => ({
         id: `callee-${c}`,
         name: c,
         kind: "callee" as const,
@@ -163,7 +167,7 @@ export function EvidenceProvenanceLayer({
 
     // 5. Verified Source Files
     const fileItems: EvidenceItem[] = Array.from(
-      new Set([...parsedSnippets.map((s) => s.path), ...agentResponse.related_files])
+      new Set([...parsedSnippets.map((s) => s.path), ...relatedFiles])
     )
       .slice(0, 8)
       .map((filePath) => {
@@ -225,16 +229,16 @@ export function EvidenceProvenanceLayer({
 
     const uniqueSourcesCount = Array.from(
       new Set([
-        ...agentResponse.related_files,
+        ...relatedFiles,
         ...parsedSnippets.map((s) => s.path),
       ])
     ).length;
 
     const uniqueSymbolsCount = Array.from(
       new Set([
-        ...agentResponse.extracted_symbols,
-        ...agentResponse.callers,
-        ...agentResponse.callees,
+        ...extractedSymbols,
+        ...callers,
+        ...callees,
       ])
     ).length;
 

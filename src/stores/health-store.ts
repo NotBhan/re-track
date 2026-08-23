@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import type { HealthResponse, BackendStatusResponse } from "@/lib/api";
-import { getDashboardStats, type DashboardStats } from "@/lib/api";
+import { health, getBackendStatus, getDashboardStats, type DashboardStats } from "@/lib/api";
 
 interface HealthStore {
   health: HealthResponse | null;
@@ -23,7 +23,6 @@ export const useHealthStore = create<HealthStore>((set) => ({
 
   pollHealth: async () => {
     try {
-      const { health, getBackendStatus } = await import("@/lib/api");
       const [h, s, ds] = await Promise.all([
         health(),
         getBackendStatus(),
@@ -32,12 +31,13 @@ export const useHealthStore = create<HealthStore>((set) => ({
       set({
         health: h,
         status: s,
-        backendOnline: h.status === "ok",
-        ollamaRunning: h.ollama_reachable,
-        cogneeIdle: h.cognee_initialized,
+        backendOnline: h.status === "ok" || h.status === "degraded",
+        ollamaRunning: Boolean(h.ollama_reachable),
+        cogneeIdle: Boolean(h.cognee_initialized),
         dashboardStats: ds,
       });
-    } catch {
+    } catch (err) {
+      console.error("DEBUG pollHealth failed:", err);
       set({
         health: null,
         status: null,

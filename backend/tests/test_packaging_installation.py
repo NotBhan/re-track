@@ -15,7 +15,8 @@ def test_package_metadata_consistency():
     assert pyproject_file.exists()
     content = pyproject_file.read_text()
     assert 'name = "retrack-ai"' in content
-    assert f'version = "{__version__}"' in content
+    assert 'dynamic = ["version"]' in content
+    assert 'path = "app/__init__.py"' in content
     assert 'retrack = "app.cli.main:app"' in content
     assert 'retrack-mcp = "app.mcp.server:main"' in content
 

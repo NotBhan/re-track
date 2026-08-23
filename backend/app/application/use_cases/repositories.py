@@ -10,6 +10,7 @@ from pathlib import Path
 import time
 from typing import Any, Optional
 
+from app.application.domain.repository import IndexedRepositoryRecord
 from app.application.dto import (
     ASTCallGraphResponse,
     ErrorResponse,
@@ -152,21 +153,40 @@ class RepositoryUseCases:
     ) -> RepositoryResponse | ErrorResponse:
         """Create/import a repository."""
         start = time.monotonic()
-        logger.info("use_case: create_repository() | name=%s", request.name)
         try:
-            if hasattr(self._manager, "import_repo"):
-                repo = self._manager.import_repo(
-                    name=request.name,
-                    path=request.local_path or "",
-                    branch=None,
-                ) if "source_type" not in getattr(self._manager.import_repo, "__code__", type("", (), {"co_varnames": ()})).co_varnames else self._manager.import_repo(
+            target_path = request.local_path or request.path or ""
+            if hasattr(self._manager, "import_repository"):
+                repo = self._manager.import_repository(
                     source_type=request.source_type,
                     source_url=request.source_url,
-                    local_path=request.local_path,
+                    local_path=target_path,
                     name=request.name,
+                )
+            elif hasattr(self._manager, "import_repo"):
+                repo = self._manager.import_repo(
+                    name=request.name or "",
+                    path=target_path,
+                    branch=None,
                 )
             else:
                 raise ValueError("RepositoryManager does not support repository import")
+
+            if self._metadata_store:
+                try:
+                    record = IndexedRepositoryRecord(
+                        id=getattr(repo, "id", ""),
+                        name=getattr(repo, "name", ""),
+                        path=getattr(repo, "local_path", ""),
+                    )
+                    self._metadata_store.upsert(record)
+                except Exception as ems:
+                    logger.warning("Could not persist repo to metadata store: %s", ems)
+
+            if self._workspace_auth and hasattr(self._workspace_auth, "add_workspace_root"):
+                try:
+                    self._workspace_auth.add_workspace_root(getattr(repo, "local_path", ""))
+                except Exception as ewa:
+                    logger.warning("Could not add authorized workspace root: %s", ewa)
 
             elapsed = time.monotonic() - start
             logger.info("use_case: create_repository() complete | id=%s | %.2fs", getattr(repo, "id", ""), elapsed)
@@ -182,9 +202,17 @@ class RepositoryUseCases:
     async def scan_repository(self, repo_id: str) -> ScanResultResponse | ErrorResponse:
         """Scan a repository for languages and frameworks."""
         start = time.monotonic()
-        logger.info("use_case: scan_repository() | repo_id=%s", repo_id)
         try:
-            scan = getattr(self._manager, "scan", getattr(self._manager, "scan_local", None))(repo_id)
+            if hasattr(self._manager, "scan_repository"):
+                scan = self._manager.scan_repository(repo_id)
+            elif hasattr(self._manager, "scan"):
+                scan = self._manager.scan(repo_id)
+            elif hasattr(self._manager, "scan_local"):
+                repo = getattr(self._manager, "get", getattr(self._manager, "get_by_id", None))(repo_id)
+                path = Path(getattr(repo, "local_path", "")) if repo else Path(repo_id)
+                scan = self._manager.scan_local(path)
+            else:
+                raise ValueError("RepositoryManager does not support scanning")
             elapsed = time.monotonic() - start
             logger.info("use_case: scan_repository() complete | repo=%s | %.2fs", repo_id, elapsed)
             return ScanResultResponse(

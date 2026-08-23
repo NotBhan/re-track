@@ -101,8 +101,8 @@ export default function ContextStudio() {
   }, [cooldown]);
 
   const activeRepo =
-    repositories.find((r) => r.id === repoIdParam) ||
-    repositories[0] || {
+    repositories?.find((r) => r.id === repoIdParam) ||
+    repositories?.[0] || {
       id: "local",
       name: "re-track",
       local_path: "/home/chandrabhan/Documents/Personal Projects/re-track",
@@ -830,7 +830,7 @@ export default function ContextStudio() {
                         <div className="flex items-center gap-1.5">
                           <span className="text-neutral-500">Sources:</span>
                           <span className="text-neutral-200 font-medium">
-                            {agentResponse.related_files.length} files
+                            {(agentResponse.related_files?.length ?? 0)} files
                           </span>
                         </div>
                         {health?.high_memory_pressure && (

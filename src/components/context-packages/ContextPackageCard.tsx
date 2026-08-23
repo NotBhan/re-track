@@ -95,7 +95,7 @@ export function ContextPackageCard({ pkg, onCompareSelect, isCompareSelected }: 
                 variant="outline"
                 className="shrink-0 text-[10px] font-mono"
               >
-                ~{pkg.token_estimate.toLocaleString()} tokens
+                ~{(pkg.token_estimate || 0).toLocaleString()} tokens
               </Badge>
               {pkg.tags && pkg.tags.map((t) => (
                 <span key={t} className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[#121212] text-neutral-400 border border-[#222222]">
