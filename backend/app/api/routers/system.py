@@ -104,12 +104,47 @@ async def get_recent_logs_endpoint(
     return {"status": "ok", "count": len(logs), "logs": logs}
 
 
+@router.get("/provider/status")
+async def provider_status_endpoint(
+    system_use_cases: SystemUseCases = Depends(get_system_use_cases),
+) -> dict[str, Any]:
+    """Get authoritative active LLM inference provider status and loaded models."""
+    result = await system_use_cases.get_provider_status()
+    if isinstance(result, ErrorResponse):
+        raise HTTPException(status_code=500, detail=result.model_dump())
+    return result.model_dump()
+
+
+class DiscoverProviderRequest(BaseModel):
+    provider: str = "ollama"
+    base_url: str = "http://localhost:11434/v1"
+    api_key: str = "local"
+
+
+@router.post("/provider/discover")
+async def provider_discover_endpoint(
+    request: DiscoverProviderRequest,
+    system_use_cases: SystemUseCases = Depends(get_system_use_cases),
+) -> dict[str, Any]:
+    """Non-mutating model discovery probe for candidate or active provider endpoints."""
+    from app.application.dto import ProviderDiscoveryRequest
+    req = ProviderDiscoveryRequest(
+        provider=request.provider,
+        base_url=request.base_url,
+        api_key=request.api_key,
+    )
+    result = await system_use_cases.discover_provider_models(req)
+    if isinstance(result, ErrorResponse):
+        raise HTTPException(status_code=500, detail=result.model_dump())
+    return result.model_dump()
+
+
 @router.post("/provider/update")
 async def provider_update_endpoint(
     request: UpdateProviderRequest,
     system_use_cases: SystemUseCases = Depends(get_system_use_cases),
 ) -> dict[str, Any]:
-    """Hot-reload the active LLM inference provider without restarting."""
+    """Hot-reload and persist the active LLM inference provider."""
     result = await system_use_cases.update_provider(
         provider=request.provider,
         base_url=request.base_url,
@@ -119,4 +154,5 @@ async def provider_update_endpoint(
     if isinstance(result, ErrorResponse):
         raise HTTPException(status_code=500, detail=result.model_dump())
     return result
+
 

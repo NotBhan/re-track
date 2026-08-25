@@ -25,6 +25,16 @@ class QuantizationLevel(str, Enum):
     UNKNOWN = "unknown"
 
 
+class DiscoveryStatus(str, Enum):
+    """Fine-grained discovery and reachability status."""
+
+    AVAILABLE = "available"
+    REACHABLE_BUT_EMPTY = "reachable_but_empty"
+    UNREACHABLE = "unreachable"
+    DISCOVERY_FAILED = "discovery_failed"
+    NOT_CONFIGURED = "not_configured"
+
+
 @dataclass
 class LoadedModelInfo:
     """Information about an active or discovered model in the provider."""
@@ -47,3 +57,18 @@ class ProviderHealthStatus:
     active_model: Optional[str] = None
     loaded_models: list[LoadedModelInfo] = field(default_factory=list)
     quantization_warning: Optional[str] = None
+    discovery_status: DiscoveryStatus = DiscoveryStatus.NOT_CONFIGURED
+
+
+@dataclass
+class ProviderDiscoveryResult:
+    """Detailed result of a non-mutating model discovery probe."""
+
+    provider: ProviderType
+    base_url: str
+    is_reachable: bool
+    status: DiscoveryStatus
+    models: list[LoadedModelInfo] = field(default_factory=list)
+    message: str = ""
+    error_details: Optional[str] = None
+

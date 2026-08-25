@@ -1,0 +1,1362 @@
+{
+  "version": "2.0.0",
+  "name": "RE:Track Expanded Multi-Repository Retrieval Benchmark Dataset",
+  "description": "Deterministic ground-truth evaluation dataset measuring Context Engine retrieval, AST topology extraction, and cross-file relationship resolution across 6 neutral benchmark repositories.",
+  "tasks": [
+    {
+      "id": "TASK-PY-01",
+      "repository_id": "py_backend",
+      "category": "python_layered_architecture",
+      "task_prompt": "How does DocumentProcessor coordinate document parsing, metadata extraction, and storage across domain ports in py_backend?",
+      "expected_files": [
+        "application/processor.py",
+        "domain/ports.py",
+        "domain/document.py",
+        "infrastructure/file_store.py"
+      ],
+      "critical_files": [
+        "application/processor.py",
+        "domain/ports.py"
+      ],
+      "expected_symbols": [
+        "DocumentProcessor",
+        "process_document",
+        "DocumentStorePort",
+        "DocumentParserPort",
+        "Document",
+        "DocumentStatus"
+      ],
+      "critical_symbols": [
+        "DocumentProcessor",
+        "process_document",
+        "DocumentStorePort"
+      ],
+      "expected_relationships": [
+        {
+          "source": "application.processor.DocumentProcessor.process_document",
+          "target": "domain.document.Document",
+          "kind": "calls"
+        }
+      ],
+      "known_irrelevant_files": [
+        "api/routes.py"
+      ],
+      "disallowed_noise": [
+        "api/routes.py"
+      ],
+      "rationale": "DocumentProcessor coordinates between DocumentStorePort, DocumentParserPort, and Document entity."
+    },
+    {
+      "id": "TASK-PY-02",
+      "repository_id": "py_backend",
+      "category": "python_layered_architecture",
+      "task_prompt": "How does LocalFileStore implement the DocumentStorePort protocol in infrastructure/file_store.py?",
+      "expected_files": [
+        "infrastructure/file_store.py",
+        "domain/ports.py",
+        "domain/document.py"
+      ],
+      "critical_files": [
+        "infrastructure/file_store.py",
+        "domain/ports.py"
+      ],
+      "expected_symbols": [
+        "LocalFileStore",
+        "DocumentStorePort",
+        "save",
+        "load",
+        "exists"
+      ],
+      "critical_symbols": [
+        "LocalFileStore",
+        "DocumentStorePort"
+      ],
+      "expected_relationships": [
+        {
+          "source": "infrastructure.file_store.LocalFileStore",
+          "target": "domain.ports.DocumentStorePort",
+          "kind": "inherits"
+        }
+      ],
+      "known_irrelevant_files": [
+        "main.py"
+      ],
+      "disallowed_noise": [
+        "main.py"
+      ],
+      "rationale": "LocalFileStore provides concrete implementation of DocumentStorePort abstract interface."
+    },
+    {
+      "id": "TASK-PY-03",
+      "repository_id": "py_backend",
+      "category": "python_layered_architecture",
+      "task_prompt": "How does bootstrap_service wire dependencies and construct DocumentRoutes in py_backend?",
+      "expected_files": [
+        "main.py",
+        "api/routes.py",
+        "application/processor.py",
+        "infrastructure/file_store.py"
+      ],
+      "critical_files": [
+        "main.py",
+        "api/routes.py"
+      ],
+      "expected_symbols": [
+        "bootstrap_service",
+        "DocumentRoutes",
+        "DocumentProcessor",
+        "LocalFileStore",
+        "StandardDocumentParser"
+      ],
+      "critical_symbols": [
+        "bootstrap_service",
+        "DocumentRoutes"
+      ],
+      "expected_relationships": [
+        {
+          "source": "main.bootstrap_service",
+          "target": "infrastructure.file_store.LocalFileStore",
+          "kind": "calls"
+        },
+        {
+          "source": "main.bootstrap_service",
+          "target": "application.processor.DocumentProcessor",
+          "kind": "calls"
+        }
+      ],
+      "known_irrelevant_files": [
+        "domain/document.py"
+      ],
+      "disallowed_noise": [
+        "domain/document.py"
+      ],
+      "rationale": "main.py is the composition root wiring store, parser, processor, and routes."
+    },
+    {
+      "id": "TASK-TS-01",
+      "repository_id": "ts_react",
+      "category": "typescript_structural",
+      "task_prompt": "How does TaskBoard render TaskCard components and update task status using useBoard in ts_react?",
+      "expected_files": [
+        "src/components/TaskBoard.tsx",
+        "src/components/TaskCard.tsx",
+        "src/hooks/useBoard.ts"
+      ],
+      "critical_files": [
+        "src/components/TaskBoard.tsx",
+        "src/components/TaskCard.tsx"
+      ],
+      "expected_symbols": [
+        "TaskBoard",
+        "TaskCard",
+        "TaskItem",
+        "useBoard"
+      ],
+      "critical_symbols": [
+        "TaskBoard",
+        "TaskCard"
+      ],
+      "expected_relationships": [
+        {
+          "source": "src/components/TaskBoard.tsx#TaskBoard",
+          "target": "src/components/TaskCard.tsx#TaskCard",
+          "kind": "renders"
+        },
+        {
+          "source": "src/components/TaskBoard.tsx#TaskBoard",
+          "target": "src/hooks/useBoard.ts#useBoard",
+          "kind": "calls"
+        }
+      ],
+      "known_irrelevant_files": [
+        "src/App.tsx"
+      ],
+      "disallowed_noise": [
+        "src/App.tsx"
+      ],
+      "rationale": "TaskBoard consumes useBoard hook and renders TaskCard components."
+    },
+    {
+      "id": "TASK-TS-02",
+      "repository_id": "ts_react",
+      "category": "typescript_structural",
+      "task_prompt": "How does useBoard access BoardContext and validate that it is used within a BoardProvider in ts_react?",
+      "expected_files": [
+        "src/hooks/useBoard.ts",
+        "src/context/BoardContext.tsx"
+      ],
+      "critical_files": [
+        "src/hooks/useBoard.ts",
+        "src/context/BoardContext.tsx"
+      ],
+      "expected_symbols": [
+        "useBoard",
+        "BoardContext",
+        "BoardContextValue"
+      ],
+      "critical_symbols": [
+        "useBoard",
+        "BoardContext"
+      ],
+      "expected_relationships": [
+        {
+          "source": "src/hooks/useBoard.ts#useBoard",
+          "target": "src/context/BoardContext.tsx#BoardContext",
+          "kind": "imports"
+        }
+      ],
+      "known_irrelevant_files": [
+        "src/components/TaskCard.tsx"
+      ],
+      "disallowed_noise": [
+        "src/components/TaskCard.tsx"
+      ],
+      "rationale": "useBoard reads BoardContext directly and enforces provider encapsulation."
+    },
+    {
+      "id": "TASK-TS-03",
+      "repository_id": "ts_react",
+      "category": "typescript_structural",
+      "task_prompt": "How does App.tsx compose BoardProvider and TaskBoard to construct the UI tree in ts_react?",
+      "expected_files": [
+        "src/App.tsx",
+        "src/context/BoardContext.tsx",
+        "src/components/TaskBoard.tsx"
+      ],
+      "critical_files": [
+        "src/App.tsx",
+        "src/components/TaskBoard.tsx"
+      ],
+      "expected_symbols": [
+        "App",
+        "BoardProvider",
+        "TaskBoard"
+      ],
+      "critical_symbols": [
+        "App",
+        "TaskBoard"
+      ],
+      "expected_relationships": [
+        {
+          "source": "src/App.tsx#App",
+          "target": "src/context/BoardContext.tsx#BoardProvider",
+          "kind": "renders"
+        },
+        {
+          "source": "src/App.tsx#App",
+          "target": "src/components/TaskBoard.tsx#TaskBoard",
+          "kind": "renders"
+        }
+      ],
+      "known_irrelevant_files": [
+        "src/components/TaskCard.tsx"
+      ],
+      "disallowed_noise": [
+        "src/components/TaskCard.tsx"
+      ],
+      "rationale": "App component renders BoardProvider and TaskBoard."
+    },
+    {
+      "id": "TASK-JS-01",
+      "repository_id": "polyglot",
+      "category": "javascript_structural",
+      "task_prompt": "How does formatValue in frontend/src/utils/formatter.cjs format numerical values and export functions via CommonJS module.exports?",
+      "expected_files": [
+        "frontend/src/utils/formatter.cjs"
+      ],
+      "critical_files": [
+        "frontend/src/utils/formatter.cjs"
+      ],
+      "expected_symbols": [
+        "formatValue",
+        "truncateString",
+        "module.exports"
+      ],
+      "critical_symbols": [
+        "formatValue",
+        "truncateString"
+      ],
+      "expected_relationships": [],
+      "known_irrelevant_files": [
+        "backend/app/routes/items.py",
+        "frontend/src/App.tsx"
+      ],
+      "disallowed_noise": [
+        "backend/app/routes/items.py"
+      ],
+      "rationale": "formatValue and truncateString are exported via CommonJS module.exports in formatter.cjs."
+    },
+    {
+      "id": "TASK-JS-02",
+      "repository_id": "polyglot",
+      "category": "javascript_structural",
+      "task_prompt": "How does computeTotal in frontend/src/utils/mathHelper.cjs require formatter.cjs and compute discounted totals via CommonJS?",
+      "expected_files": [
+        "frontend/src/utils/mathHelper.cjs",
+        "frontend/src/utils/formatter.cjs"
+      ],
+      "critical_files": [
+        "frontend/src/utils/mathHelper.cjs"
+      ],
+      "expected_symbols": [
+        "computeTotal",
+        "calculateAverage",
+        "formatValue"
+      ],
+      "critical_symbols": [
+        "computeTotal",
+        "calculateAverage"
+      ],
+      "expected_relationships": [
+        {
+          "source": "frontend/src/utils/mathHelper.cjs#computeTotal",
+          "target": "frontend/src/utils/formatter.cjs#formatValue",
+          "kind": "calls"
+        }
+      ],
+      "known_irrelevant_files": [
+        "backend/app/services/catalog.py"
+      ],
+      "disallowed_noise": [
+        "backend/app/services/catalog.py"
+      ],
+      "rationale": "mathHelper.cjs uses CommonJS require to call formatValue from formatter.cjs."
+    },
+    {
+      "id": "TASK-JS-03",
+      "repository_id": "ts_alias",
+      "category": "javascript_structural",
+      "task_prompt": "How does formatLabel format prefix and ID strings and export DEFAULT_PREFIX in src/shared/stringUtils.js?",
+      "expected_files": [
+        "src/shared/stringUtils.js"
+      ],
+      "critical_files": [
+        "src/shared/stringUtils.js"
+      ],
+      "expected_symbols": [
+        "formatLabel",
+        "parseLabel",
+        "DEFAULT_PREFIX"
+      ],
+      "critical_symbols": [
+        "formatLabel",
+        "DEFAULT_PREFIX"
+      ],
+      "expected_relationships": [],
+      "known_irrelevant_files": [
+        "src/core/engine.ts",
+        "src/app.ts"
+      ],
+      "disallowed_noise": [
+        "src/core/engine.ts"
+      ],
+      "rationale": "stringUtils.js is a standard JavaScript ESM module exporting formatLabel and DEFAULT_PREFIX."
+    },
+    {
+      "id": "TASK-BARREL-01",
+      "repository_id": "ts_barrel",
+      "category": "barrel_reexport",
+      "task_prompt": "How does src/components/index.ts re-export Badge as default export and formatBadgeLabel as named export?",
+      "expected_files": [
+        "src/components/index.ts",
+        "src/components/Badge.tsx"
+      ],
+      "critical_files": [
+        "src/components/index.ts",
+        "src/components/Badge.tsx"
+      ],
+      "expected_symbols": [
+        "Badge",
+        "formatBadgeLabel",
+        "BadgeProps"
+      ],
+      "critical_symbols": [
+        "Badge",
+        "formatBadgeLabel"
+      ],
+      "expected_relationships": [
+        {
+          "source": "src/components/Badge.tsx#Badge",
+          "target": "src/components/Badge.tsx#formatBadgeLabel",
+          "kind": "calls"
+        }
+      ],
+      "known_irrelevant_files": [
+        "src/components/Panel.tsx"
+      ],
+      "disallowed_noise": [
+        "src/components/Panel.tsx"
+      ],
+      "rationale": "src/components/index.ts re-exports Badge and formatBadgeLabel from Badge.tsx."
+    },
+    {
+      "id": "TASK-BARREL-02",
+      "repository_id": "ts_barrel",
+      "category": "barrel_reexport",
+      "task_prompt": "How does src/components/index.ts export all symbols from src/components/Panel.tsx via wildcard re-export?",
+      "expected_files": [
+        "src/components/index.ts",
+        "src/components/Panel.tsx"
+      ],
+      "critical_files": [
+        "src/components/index.ts",
+        "src/components/Panel.tsx"
+      ],
+      "expected_symbols": [
+        "Panel",
+        "PanelHeader",
+        "PanelProps"
+      ],
+      "critical_symbols": [
+        "Panel",
+        "PanelHeader"
+      ],
+      "expected_relationships": [
+        {
+          "source": "src/components/Panel.tsx#Panel",
+          "target": "src/components/Panel.tsx#PanelHeader",
+          "kind": "renders"
+        }
+      ],
+      "known_irrelevant_files": [
+        "src/components/Badge.tsx"
+      ],
+      "disallowed_noise": [
+        "src/components/Badge.tsx"
+      ],
+      "rationale": "src/components/index.ts uses export * from './Panel' to re-export Panel and PanelHeader."
+    },
+    {
+      "id": "TASK-BARREL-03",
+      "repository_id": "ts_barrel",
+      "category": "barrel_reexport",
+      "task_prompt": "How does the root src/index.ts re-export StatusBadge and all component exports from src/components?",
+      "expected_files": [
+        "src/index.ts",
+        "src/components/index.ts",
+        "src/components/Badge.tsx",
+        "src/components/Panel.tsx"
+      ],
+      "critical_files": [
+        "src/index.ts",
+        "src/components/index.ts"
+      ],
+      "expected_symbols": [
+        "StatusBadge",
+        "Badge",
+        "Panel"
+      ],
+      "critical_symbols": [
+        "Badge",
+        "Panel"
+      ],
+      "expected_relationships": [
+        {
+          "source": "src/components/Badge.tsx#Badge",
+          "target": "src/components/Badge.tsx#formatBadgeLabel",
+          "kind": "calls"
+        }
+      ],
+      "known_irrelevant_files": [],
+      "disallowed_noise": [],
+      "rationale": "Root index.ts acts as secondary barrel re-exporting StatusBadge and all component exports."
+    },
+    {
+      "id": "TASK-ALIAS-01",
+      "repository_id": "ts_alias",
+      "category": "path_alias",
+      "task_prompt": "How does ProcessingEngine resolve @core/types via tsconfig path alias to implement PipelineRunner?",
+      "expected_files": [
+        "src/core/engine.ts",
+        "src/core/types.ts",
+        "tsconfig.json"
+      ],
+      "critical_files": [
+        "src/core/engine.ts",
+        "src/core/types.ts"
+      ],
+      "expected_symbols": [
+        "ProcessingEngine",
+        "PipelineRunner",
+        "EngineConfig",
+        "PipelineStatus"
+      ],
+      "critical_symbols": [
+        "ProcessingEngine",
+        "PipelineRunner"
+      ],
+      "expected_relationships": [
+        {
+          "source": "src/core/engine.ts#ProcessingEngine",
+          "target": "src/core/types.ts#PipelineRunner",
+          "kind": "inherits"
+        }
+      ],
+      "known_irrelevant_files": [
+        "src/shared/format.ts"
+      ],
+      "disallowed_noise": [
+        "src/shared/format.ts"
+      ],
+      "rationale": "ProcessingEngine resolves import from @core/types defined in tsconfig.json."
+    },
+    {
+      "id": "TASK-ALIAS-02",
+      "repository_id": "ts_alias",
+      "category": "path_alias",
+      "task_prompt": "How does ReportGenerator import @core/engine and @shared/format through path aliases to generate reports?",
+      "expected_files": [
+        "src/features/report.ts",
+        "src/core/engine.ts",
+        "src/shared/format.ts",
+        "src/core/types.ts"
+      ],
+      "critical_files": [
+        "src/features/report.ts",
+        "src/core/engine.ts",
+        "src/shared/format.ts"
+      ],
+      "expected_symbols": [
+        "ReportGenerator",
+        "generateSummaryReport",
+        "ProcessingEngine",
+        "formatReportData"
+      ],
+      "critical_symbols": [
+        "ReportGenerator",
+        "formatReportData"
+      ],
+      "expected_relationships": [
+        {
+          "source": "src/features/report.ts#ReportGenerator",
+          "target": "src/core/engine.ts#ProcessingEngine",
+          "kind": "calls"
+        },
+        {
+          "source": "src/features/report.ts#ReportGenerator",
+          "target": "src/shared/format.ts#formatReportData",
+          "kind": "calls"
+        }
+      ],
+      "known_irrelevant_files": [
+        "src/app.ts"
+      ],
+      "disallowed_noise": [
+        "src/app.ts"
+      ],
+      "rationale": "ReportGenerator resolves multi-alias imports across @core, @shared, and @features."
+    },
+    {
+      "id": "TASK-ALIAS-03",
+      "repository_id": "ts_alias",
+      "category": "path_alias",
+      "task_prompt": "How does runApplication in src/app.ts instantiate ProcessingEngine and ReportGenerator using path aliases?",
+      "expected_files": [
+        "src/app.ts",
+        "src/core/engine.ts",
+        "src/features/report.ts"
+      ],
+      "critical_files": [
+        "src/app.ts",
+        "src/features/report.ts"
+      ],
+      "expected_symbols": [
+        "runApplication",
+        "ProcessingEngine",
+        "ReportGenerator"
+      ],
+      "critical_symbols": [
+        "runApplication",
+        "ReportGenerator"
+      ],
+      "expected_relationships": [
+        {
+          "source": "src/app.ts#runApplication",
+          "target": "src/features/report.ts#ReportGenerator",
+          "kind": "calls"
+        },
+        {
+          "source": "src/app.ts#runApplication",
+          "target": "src/core/engine.ts#ProcessingEngine",
+          "kind": "calls"
+        }
+      ],
+      "known_irrelevant_files": [
+        "src/shared/format.ts"
+      ],
+      "disallowed_noise": [
+        "src/shared/format.ts"
+      ],
+      "rationale": "runApplication orchestrates the pipeline via @core/engine and @features/report."
+    },
+    {
+      "id": "TASK-MONO-01",
+      "repository_id": "monorepo",
+      "category": "cross_package_monorepo",
+      "task_prompt": "How does packages/core/src/parser.ts import ASTNode and SyntaxTree from packages/shared/src/types.ts?",
+      "expected_files": [
+        "packages/core/src/parser.ts",
+        "packages/shared/src/types.ts"
+      ],
+      "critical_files": [
+        "packages/core/src/parser.ts",
+        "packages/shared/src/types.ts"
+      ],
+      "expected_symbols": [
+        "CodeParser",
+        "parseSource",
+        "ASTNode",
+        "SyntaxTree"
+      ],
+      "critical_symbols": [
+        "CodeParser",
+        "SyntaxTree"
+      ],
+      "expected_relationships": [
+        {
+          "source": "packages/core/src/parser.ts#CodeParser",
+          "target": "packages/shared/src/types.ts#ASTNode",
+          "kind": "imports"
+        }
+      ],
+      "known_irrelevant_files": [
+        "packages/ui/src/TreeView.tsx",
+        "packages/app/src/main.ts"
+      ],
+      "disallowed_noise": [
+        "packages/ui/src/TreeView.tsx"
+      ],
+      "rationale": "packages/core/src/parser.ts depends directly on packages/shared/src/types.ts."
+    },
+    {
+      "id": "TASK-MONO-02",
+      "repository_id": "monorepo",
+      "category": "cross_package_monorepo",
+      "task_prompt": "How does packages/ui/src/TreeView.tsx consume SyntaxTree models from packages/shared to render the tree?",
+      "expected_files": [
+        "packages/ui/src/TreeView.tsx",
+        "packages/shared/src/types.ts"
+      ],
+      "critical_files": [
+        "packages/ui/src/TreeView.tsx",
+        "packages/shared/src/types.ts"
+      ],
+      "expected_symbols": [
+        "TreeView",
+        "TreeViewProps",
+        "SyntaxTree",
+        "ASTNode"
+      ],
+      "critical_symbols": [
+        "TreeView",
+        "SyntaxTree"
+      ],
+      "expected_relationships": [
+        {
+          "source": "packages/ui/src/TreeView.tsx#TreeView",
+          "target": "packages/shared/src/types.ts#SyntaxTree",
+          "kind": "imports"
+        }
+      ],
+      "known_irrelevant_files": [
+        "packages/core/src/parser.ts"
+      ],
+      "disallowed_noise": [
+        "packages/core/src/parser.ts"
+      ],
+      "rationale": "packages/ui/src/TreeView.tsx consumes shared types to render syntax nodes."
+    },
+    {
+      "id": "TASK-MONO-03",
+      "repository_id": "monorepo",
+      "category": "cross_package_monorepo",
+      "task_prompt": "How does packages/app/src/WorkspaceView.tsx integrate CodeParser from @core and TreeView from @ui?",
+      "expected_files": [
+        "packages/app/src/WorkspaceView.tsx",
+        "packages/core/src/index.ts",
+        "packages/core/src/parser.ts",
+        "packages/ui/src/index.ts",
+        "packages/ui/src/TreeView.tsx",
+        "packages/shared/src/types.ts"
+      ],
+      "critical_files": [
+        "packages/app/src/WorkspaceView.tsx",
+        "packages/core/src/parser.ts",
+        "packages/ui/src/TreeView.tsx"
+      ],
+      "expected_symbols": [
+        "WorkspaceView",
+        "CodeParser",
+        "TreeView",
+        "SyntaxTree"
+      ],
+      "critical_symbols": [
+        "WorkspaceView",
+        "CodeParser",
+        "TreeView"
+      ],
+      "expected_relationships": [
+        {
+          "source": "packages/app/src/WorkspaceView.tsx#WorkspaceView",
+          "target": "packages/core/src/parser.ts#CodeParser",
+          "kind": "calls"
+        },
+        {
+          "source": "packages/app/src/WorkspaceView.tsx#WorkspaceView",
+          "target": "packages/ui/src/TreeView.tsx#TreeView",
+          "kind": "renders"
+        }
+      ],
+      "known_irrelevant_files": [
+        "packages/app/src/main.ts"
+      ],
+      "disallowed_noise": [
+        "packages/app/src/main.ts"
+      ],
+      "rationale": "WorkspaceView unifies packages/core and packages/ui into a single application view."
+    },
+    {
+      "id": "TASK-POLY-01",
+      "repository_id": "polyglot",
+      "category": "polyglot_cross_language",
+      "task_prompt": "How does CatalogService in backend/app/services/catalog.py manage CatalogItem models for route handlers in polyglot?",
+      "expected_files": [
+        "backend/app/services/catalog.py",
+        "backend/app/models/item.py",
+        "backend/app/routes/items.py"
+      ],
+      "critical_files": [
+        "backend/app/services/catalog.py",
+        "backend/app/models/item.py"
+      ],
+      "expected_symbols": [
+        "CatalogService",
+        "InMemoryCatalogStore",
+        "CatalogItem",
+        "ItemSpec"
+      ],
+      "critical_symbols": [
+        "CatalogService",
+        "CatalogItem"
+      ],
+      "expected_relationships": [
+        {
+          "source": "backend.app.services.catalog.CatalogService.register_item",
+          "target": "backend.app.models.item.CatalogItem",
+          "kind": "calls"
+        }
+      ],
+      "known_irrelevant_files": [
+        "frontend/src/views/ItemList.tsx",
+        "frontend/src/App.tsx"
+      ],
+      "disallowed_noise": [
+        "frontend/src/views/ItemList.tsx"
+      ],
+      "rationale": "CatalogService handles catalog domain logic in Python backend."
+    },
+    {
+      "id": "TASK-POLY-02",
+      "repository_id": "polyglot",
+      "category": "polyglot_cross_language",
+      "task_prompt": "How does frontend/src/api/itemClient.ts fetch items from backend routes /api/v1/items and map CatalogItemDTO from backend models in polyglot?",
+      "expected_files": [
+        "frontend/src/api/itemClient.ts",
+        "backend/app/routes/items.py",
+        "backend/app/models/item.py"
+      ],
+      "critical_files": [
+        "frontend/src/api/itemClient.ts",
+        "backend/app/routes/items.py"
+      ],
+      "expected_symbols": [
+        "fetchCatalogItems",
+        "CatalogItemDTO",
+        "get_catalog_items",
+        "CatalogItem"
+      ],
+      "critical_symbols": [
+        "fetchCatalogItems",
+        "CatalogItemDTO",
+        "get_catalog_items"
+      ],
+      "expected_relationships": [],
+      "known_irrelevant_files": [
+        "backend/app/services/catalog.py"
+      ],
+      "disallowed_noise": [
+        "backend/app/services/catalog.py"
+      ],
+      "rationale": "itemClient.ts defines client-side contracts corresponding to backend items route."
+    },
+    {
+      "id": "TASK-POLY-03",
+      "repository_id": "polyglot",
+      "category": "polyglot_cross_language",
+      "task_prompt": "How does ItemList.tsx in the React frontend invoke fetchCatalogItems to render catalog item list in polyglot?",
+      "expected_files": [
+        "frontend/src/views/ItemList.tsx",
+        "frontend/src/api/itemClient.ts",
+        "frontend/src/App.tsx"
+      ],
+      "critical_files": [
+        "frontend/src/views/ItemList.tsx",
+        "frontend/src/api/itemClient.ts"
+      ],
+      "expected_symbols": [
+        "ItemList",
+        "ItemListProps",
+        "fetchCatalogItems",
+        "CatalogItemDTO"
+      ],
+      "critical_symbols": [
+        "ItemList",
+        "fetchCatalogItems"
+      ],
+      "expected_relationships": [
+        {
+          "source": "frontend/src/views/ItemList.tsx#ItemList",
+          "target": "frontend/src/api/itemClient.ts#fetchCatalogItems",
+          "kind": "calls"
+        }
+      ],
+      "known_irrelevant_files": [
+        "backend/app/routes/items.py"
+      ],
+      "disallowed_noise": [
+        "backend/app/routes/items.py"
+      ],
+      "rationale": "ItemList.tsx is a React view invoking TypeScript API client methods."
+    },
+    {
+      "id": "TASK-CALL-01",
+      "repository_id": "py_backend",
+      "category": "calls_relationship",
+      "task_prompt": "What dependencies does bootstrap_service call and initialize in main.py in py_backend?",
+      "expected_files": [
+        "main.py",
+        "application/processor.py",
+        "infrastructure/file_store.py"
+      ],
+      "critical_files": [
+        "main.py",
+        "application/processor.py"
+      ],
+      "expected_symbols": [
+        "bootstrap_service",
+        "DocumentProcessor",
+        "LocalFileStore"
+      ],
+      "critical_symbols": [
+        "bootstrap_service",
+        "DocumentProcessor"
+      ],
+      "expected_relationships": [
+        {
+          "source": "main.bootstrap_service",
+          "target": "application.processor.DocumentProcessor",
+          "kind": "calls"
+        }
+      ],
+      "known_irrelevant_files": [
+        "domain/document.py"
+      ],
+      "disallowed_noise": [
+        "domain/document.py"
+      ],
+      "rationale": "bootstrap_service initializes DocumentProcessor and LocalFileStore."
+    },
+    {
+      "id": "TASK-CALL-02",
+      "repository_id": "ts_alias",
+      "category": "calls_relationship",
+      "task_prompt": "What methods does ReportGenerator.generateSummaryReport invoke on ProcessingEngine and formatReportData in ts_alias?",
+      "expected_files": [
+        "src/features/report.ts",
+        "src/core/engine.ts",
+        "src/shared/format.ts"
+      ],
+      "critical_files": [
+        "src/features/report.ts",
+        "src/core/engine.ts"
+      ],
+      "expected_symbols": [
+        "ReportGenerator",
+        "generateSummaryReport",
+        "ProcessingEngine",
+        "execute",
+        "formatReportData"
+      ],
+      "critical_symbols": [
+        "generateSummaryReport",
+        "execute"
+      ],
+      "expected_relationships": [
+        {
+          "source": "src/features/report.ts#ReportGenerator",
+          "target": "src/core/engine.ts#ProcessingEngine",
+          "kind": "calls"
+        },
+        {
+          "source": "src/features/report.ts#ReportGenerator",
+          "target": "src/shared/format.ts#formatReportData",
+          "kind": "calls"
+        }
+      ],
+      "known_irrelevant_files": [
+        "src/app.ts"
+      ],
+      "disallowed_noise": [
+        "src/app.ts"
+      ],
+      "rationale": "generateSummaryReport calls engine.execute() and formatReportData()."
+    },
+    {
+      "id": "TASK-CALL-03",
+      "repository_id": "polyglot",
+      "category": "calls_relationship",
+      "task_prompt": "What methods does ItemList invoke on itemClient in frontend/src/views/ItemList.tsx in polyglot?",
+      "expected_files": [
+        "frontend/src/views/ItemList.tsx",
+        "frontend/src/api/itemClient.ts"
+      ],
+      "critical_files": [
+        "frontend/src/views/ItemList.tsx",
+        "frontend/src/api/itemClient.ts"
+      ],
+      "expected_symbols": [
+        "ItemList",
+        "fetchCatalogItems",
+        "CatalogItemDTO"
+      ],
+      "critical_symbols": [
+        "ItemList",
+        "fetchCatalogItems"
+      ],
+      "expected_relationships": [
+        {
+          "source": "frontend/src/views/ItemList.tsx#ItemList",
+          "target": "frontend/src/api/itemClient.ts#fetchCatalogItems",
+          "kind": "calls"
+        }
+      ],
+      "known_irrelevant_files": [
+        "frontend/src/App.tsx"
+      ],
+      "disallowed_noise": [
+        "frontend/src/App.tsx"
+      ],
+      "rationale": "get_catalog_items invokes CatalogService.list_items."
+    },
+    {
+      "id": "TASK-INH-01",
+      "repository_id": "py_backend",
+      "category": "inherits_implements",
+      "task_prompt": "What base interface does LocalFileStore inherit from in infrastructure/file_store.py?",
+      "expected_files": [
+        "infrastructure/file_store.py",
+        "domain/ports.py"
+      ],
+      "critical_files": [
+        "infrastructure/file_store.py",
+        "domain/ports.py"
+      ],
+      "expected_symbols": [
+        "LocalFileStore",
+        "DocumentStorePort"
+      ],
+      "critical_symbols": [
+        "LocalFileStore",
+        "DocumentStorePort"
+      ],
+      "expected_relationships": [
+        {
+          "source": "infrastructure.file_store.LocalFileStore",
+          "target": "domain.ports.DocumentStorePort",
+          "kind": "inherits"
+        }
+      ],
+      "known_irrelevant_files": [
+        "api/routes.py"
+      ],
+      "disallowed_noise": [
+        "api/routes.py"
+      ],
+      "rationale": "LocalFileStore inherits from DocumentStorePort interface."
+    },
+    {
+      "id": "TASK-INH-02",
+      "repository_id": "ts_alias",
+      "category": "inherits_implements",
+      "task_prompt": "What interface does ProcessingEngine implement in src/core/engine.ts?",
+      "expected_files": [
+        "src/core/engine.ts",
+        "src/core/types.ts"
+      ],
+      "critical_files": [
+        "src/core/engine.ts",
+        "src/core/types.ts"
+      ],
+      "expected_symbols": [
+        "ProcessingEngine",
+        "PipelineRunner"
+      ],
+      "critical_symbols": [
+        "ProcessingEngine",
+        "PipelineRunner"
+      ],
+      "expected_relationships": [
+        {
+          "source": "src/core/engine.ts#ProcessingEngine",
+          "target": "src/core/types.ts#PipelineRunner",
+          "kind": "inherits"
+        }
+      ],
+      "known_irrelevant_files": [
+        "src/shared/format.ts"
+      ],
+      "disallowed_noise": [
+        "src/shared/format.ts"
+      ],
+      "rationale": "ProcessingEngine implements PipelineRunner interface."
+    },
+    {
+      "id": "TASK-INH-03",
+      "repository_id": "py_backend",
+      "category": "inherits_implements",
+      "task_prompt": "What base interface does StandardDocumentParser implement in infrastructure/file_store.py?",
+      "expected_files": [
+        "infrastructure/file_store.py",
+        "domain/ports.py"
+      ],
+      "critical_files": [
+        "infrastructure/file_store.py",
+        "domain/ports.py"
+      ],
+      "expected_symbols": [
+        "StandardDocumentParser",
+        "DocumentParserPort"
+      ],
+      "critical_symbols": [
+        "StandardDocumentParser",
+        "DocumentParserPort"
+      ],
+      "expected_relationships": [
+        {
+          "source": "infrastructure.file_store.StandardDocumentParser",
+          "target": "domain.ports.DocumentParserPort",
+          "kind": "inherits"
+        }
+      ],
+      "known_irrelevant_files": [
+        "main.py"
+      ],
+      "disallowed_noise": [
+        "main.py"
+      ],
+      "rationale": "StandardDocumentParser implements DocumentParserPort abstract class."
+    },
+    {
+      "id": "TASK-TYPE-01",
+      "repository_id": "ts_alias",
+      "category": "type_reference",
+      "task_prompt": "Where is the PipelineStatus interface defined and referenced in ts_alias?",
+      "expected_files": [
+        "src/core/types.ts",
+        "src/core/engine.ts",
+        "src/shared/format.ts",
+        "src/features/report.ts"
+      ],
+      "critical_files": [
+        "src/core/types.ts",
+        "src/shared/format.ts"
+      ],
+      "expected_symbols": [
+        "PipelineStatus",
+        "ProcessingEngine",
+        "formatReportData"
+      ],
+      "critical_symbols": [
+        "PipelineStatus",
+        "formatReportData"
+      ],
+      "expected_relationships": [],
+      "known_irrelevant_files": [
+        "src/app.ts"
+      ],
+      "disallowed_noise": [
+        "src/app.ts"
+      ],
+      "rationale": "PipelineStatus is the shared data type passed from engine to report formatting."
+    },
+    {
+      "id": "TASK-TYPE-02",
+      "repository_id": "monorepo",
+      "category": "type_reference",
+      "task_prompt": "Where is the SyntaxTree interface defined and referenced across packages in monorepo?",
+      "expected_files": [
+        "packages/shared/src/types.ts",
+        "packages/core/src/parser.ts",
+        "packages/ui/src/TreeView.tsx",
+        "packages/app/src/WorkspaceView.tsx"
+      ],
+      "critical_files": [
+        "packages/shared/src/types.ts",
+        "packages/core/src/parser.ts",
+        "packages/ui/src/TreeView.tsx"
+      ],
+      "expected_symbols": [
+        "SyntaxTree",
+        "ASTNode",
+        "CodeParser",
+        "TreeView"
+      ],
+      "critical_symbols": [
+        "SyntaxTree",
+        "CodeParser"
+      ],
+      "expected_relationships": [],
+      "known_irrelevant_files": [
+        "packages/app/src/main.ts"
+      ],
+      "disallowed_noise": [
+        "packages/app/src/main.ts"
+      ],
+      "rationale": "SyntaxTree is the core cross-package data type model."
+    },
+    {
+      "id": "TASK-TYPE-03",
+      "repository_id": "ts_react",
+      "category": "type_reference",
+      "task_prompt": "Where is the TaskItem interface defined and referenced across components in ts_react?",
+      "expected_files": [
+        "src/components/TaskCard.tsx",
+        "src/components/TaskBoard.tsx",
+        "src/context/BoardContext.tsx"
+      ],
+      "critical_files": [
+        "src/components/TaskCard.tsx",
+        "src/context/BoardContext.tsx"
+      ],
+      "expected_symbols": [
+        "TaskItem",
+        "TaskCard",
+        "BoardContext"
+      ],
+      "critical_symbols": [
+        "TaskItem",
+        "TaskCard"
+      ],
+      "expected_relationships": [],
+      "known_irrelevant_files": [
+        "src/App.tsx"
+      ],
+      "disallowed_noise": [
+        "src/App.tsx"
+      ],
+      "rationale": "TaskItem is the item type definition used in TaskCard and BoardContext."
+    },
+    {
+      "id": "TASK-JSX-01",
+      "repository_id": "ts_react",
+      "category": "jsx_render",
+      "task_prompt": "How does TaskBoard render TaskCard JSX elements in ts_react?",
+      "expected_files": [
+        "src/components/TaskBoard.tsx",
+        "src/components/TaskCard.tsx"
+      ],
+      "critical_files": [
+        "src/components/TaskBoard.tsx",
+        "src/components/TaskCard.tsx"
+      ],
+      "expected_symbols": [
+        "TaskBoard",
+        "TaskCard"
+      ],
+      "critical_symbols": [
+        "TaskBoard",
+        "TaskCard"
+      ],
+      "expected_relationships": [
+        {
+          "source": "src/components/TaskBoard.tsx#TaskBoard",
+          "target": "src/components/TaskCard.tsx#TaskCard",
+          "kind": "renders"
+        }
+      ],
+      "known_irrelevant_files": [
+        "src/App.tsx",
+        "src/hooks/useBoard.ts"
+      ],
+      "disallowed_noise": [
+        "src/App.tsx"
+      ],
+      "rationale": "TaskBoard renders TaskCard inside its JSX return statement."
+    },
+    {
+      "id": "TASK-JSX-02",
+      "repository_id": "ts_react",
+      "category": "jsx_render",
+      "task_prompt": "How does App.tsx render BoardProvider and TaskBoard JSX elements in ts_react?",
+      "expected_files": [
+        "src/App.tsx",
+        "src/context/BoardContext.tsx",
+        "src/components/TaskBoard.tsx"
+      ],
+      "critical_files": [
+        "src/App.tsx",
+        "src/components/TaskBoard.tsx"
+      ],
+      "expected_symbols": [
+        "App",
+        "BoardProvider",
+        "TaskBoard"
+      ],
+      "critical_symbols": [
+        "App",
+        "TaskBoard"
+      ],
+      "expected_relationships": [
+        {
+          "source": "src/App.tsx#App",
+          "target": "src/context/BoardContext.tsx#BoardProvider",
+          "kind": "renders"
+        },
+        {
+          "source": "src/App.tsx#App",
+          "target": "src/components/TaskBoard.tsx#TaskBoard",
+          "kind": "renders"
+        }
+      ],
+      "known_irrelevant_files": [
+        "src/components/TaskCard.tsx"
+      ],
+      "disallowed_noise": [
+        "src/components/TaskCard.tsx"
+      ],
+      "rationale": "App.tsx wraps TaskBoard in BoardProvider JSX."
+    },
+    {
+      "id": "TASK-JSX-03",
+      "repository_id": "monorepo",
+      "category": "jsx_render",
+      "task_prompt": "How does WorkspaceView render TreeView in packages/app/src/WorkspaceView.tsx in monorepo?",
+      "expected_files": [
+        "packages/app/src/WorkspaceView.tsx",
+        "packages/ui/src/TreeView.tsx"
+      ],
+      "critical_files": [
+        "packages/app/src/WorkspaceView.tsx",
+        "packages/ui/src/TreeView.tsx"
+      ],
+      "expected_symbols": [
+        "WorkspaceView",
+        "TreeView"
+      ],
+      "critical_symbols": [
+        "WorkspaceView",
+        "TreeView"
+      ],
+      "expected_relationships": [
+        {
+          "source": "packages/app/src/WorkspaceView.tsx#WorkspaceView",
+          "target": "packages/ui/src/TreeView.tsx#TreeView",
+          "kind": "renders"
+        }
+      ],
+      "known_irrelevant_files": [
+        "packages/app/src/main.ts"
+      ],
+      "disallowed_noise": [
+        "packages/app/src/main.ts"
+      ],
+      "rationale": "WorkspaceView renders TreeView component in its JSX tree."
+    },
+    {
+      "id": "TASK-NOISE-01",
+      "repository_id": "py_backend",
+      "category": "noise_discrimination",
+      "task_prompt": "How is DocumentMetadata structured in domain/document.py without retrieving unrelated API routes or main bootstrap?",
+      "expected_files": [
+        "domain/document.py"
+      ],
+      "critical_files": [
+        "domain/document.py"
+      ],
+      "expected_symbols": [
+        "DocumentMetadata",
+        "DocumentStatus",
+        "Document"
+      ],
+      "critical_symbols": [
+        "DocumentMetadata"
+      ],
+      "expected_relationships": [],
+      "known_irrelevant_files": [
+        "api/routes.py",
+        "main.py"
+      ],
+      "disallowed_noise": [
+        "api/routes.py",
+        "main.py"
+      ],
+      "rationale": "Task requires isolating pure domain model without retrieving unrelated API/bootstrap code."
+    },
+    {
+      "id": "TASK-NOISE-02",
+      "repository_id": "ts_barrel",
+      "category": "noise_discrimination",
+      "task_prompt": "How is formatBadgeLabel implemented in src/components/Badge.tsx without retrieving unrelated Panel component?",
+      "expected_files": [
+        "src/components/Badge.tsx"
+      ],
+      "critical_files": [
+        "src/components/Badge.tsx"
+      ],
+      "expected_symbols": [
+        "formatBadgeLabel",
+        "BadgeProps"
+      ],
+      "critical_symbols": [
+        "formatBadgeLabel"
+      ],
+      "expected_relationships": [],
+      "known_irrelevant_files": [
+        "src/components/Panel.tsx"
+      ],
+      "disallowed_noise": [
+        "src/components/Panel.tsx"
+      ],
+      "rationale": "Task isolates Badge component logic and tests discrimination against Panel."
+    },
+    {
+      "id": "TASK-NOISE-03",
+      "repository_id": "ts_alias",
+      "category": "noise_discrimination",
+      "task_prompt": "How is sanitizeInput defined in src/shared/format.ts without retrieving engine execution classes?",
+      "expected_files": [
+        "src/shared/format.ts"
+      ],
+      "critical_files": [
+        "src/shared/format.ts"
+      ],
+      "expected_symbols": [
+        "sanitizeInput",
+        "formatReportData"
+      ],
+      "critical_symbols": [
+        "sanitizeInput"
+      ],
+      "expected_relationships": [],
+      "known_irrelevant_files": [
+        "src/core/engine.ts",
+        "src/app.ts"
+      ],
+      "disallowed_noise": [
+        "src/core/engine.ts",
+        "src/app.ts"
+      ],
+      "rationale": "Task isolates shared format helpers without retrieving core engine or app entrypoint."
+    }
+  ]
+}

@@ -49,11 +49,17 @@ from app.application.dto import (
     AppSettingsResponse,
     BackendStatusResponse,
     CogneeSettingsRequest,
+    DetailedHealthResponse,
+    DiscoveredModelDTO,
     HealthResponse,
+    ProviderDiscoveryRequest,
+    ProviderDiscoveryResponse,
+    ProviderStatusResponse,
     # Benchmarks
     BenchmarkResultItem,
     BenchmarkSuiteResponse,
 )
+
 
 __all__ = [
     "ErrorResponse",

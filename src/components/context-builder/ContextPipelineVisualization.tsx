@@ -60,10 +60,10 @@ export function ContextPipelineVisualization() {
               </div>
               <div className="p-3.5 rounded-lg w-full bg-black border border-[#262626]">
                 <h4 className="text-xs font-mono font-bold text-white">
-                  Context Synthesis Complete
+                  {result.model_invoked ? "Model Synthesis Complete" : "Deterministic Retrieval Complete"}
                 </h4>
                 <p className="text-xs font-mono text-neutral-400 mt-1">
-                  {result.section_count} sections · {result.retrieved_memories} memories retrieved · {result.deduplicated_memories} deduplicated
+                  {result.section_count} sections · {result.retrieved_memories} memories retrieved · {result.model_invoked ? `${result.model_name || "Model"} (${result.provider_identity || "LLM"})` : "model-free AST"}
                 </p>
               </div>
             </div>

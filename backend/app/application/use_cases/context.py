@@ -49,6 +49,7 @@ from app.application.ports.memory import MemoryPort
 from app.application.ports.source_search import SourceSearchPort
 from app.application.ports.summary_generator import SummaryGeneratorPort
 from app.application.ports.workspace_authorization import WorkspaceAuthorizationPort
+from app.core.logging import log_event
 from app.models.errors import CogneeServiceError
 
 logger = logging.getLogger(__name__)
@@ -148,6 +149,15 @@ class ContextUseCases:
             request.datasets,
             request.top_k,
         )
+        log_event(
+            logger,
+            logging.INFO,
+            "context_generation_started",
+            component="context_engine",
+            operation="generate_context",
+            task_length=len(request.task),
+            datasets_count=len(request.datasets),
+        )
 
         try:
             self._ensure_services()
@@ -193,6 +203,23 @@ class ContextUseCases:
                 total_time_ms=total_ms,
                 reference_count=len(references),
                 section_headings=headings,
+                model_invoked=False,
+                provider_identity=None,
+                model_name=None,
+                inference_status="not_configured",
+                fallback_used=True,
+                fallback_reason="Deterministic retrieval pipeline (model-free)",
+                inference_time_ms=0,
+            )
+            log_event(
+                logger,
+                logging.INFO,
+                "context_generation_completed",
+                component="context_engine",
+                operation="generate_context",
+                duration_ms=total_ms,
+                model_invoked=False,
+                fallback_used=True,
             )
             return response
 
@@ -226,6 +253,15 @@ class ContextUseCases:
         """
         start = time.monotonic()
         logger.info("use_case: get_agent_context() | prompt=%s", request.task_prompt[:80])
+        log_event(
+            logger,
+            logging.INFO,
+            "context_generation_started",
+            component="context_engine",
+            operation="get_agent_context",
+            task_prompt_length=len(request.task_prompt),
+            repository_path=request.repository_path,
+        )
 
         try:
             if self._workspace_auth:
@@ -294,7 +330,15 @@ class ContextUseCases:
                 async def _get_intent():
                     if self._intent_parser:
                         return await self._intent_parser.parse_intent(request.task_prompt)
-                    return parse_intent_heuristics(request.task_prompt)
+                    fallback_record = parse_intent_heuristics(request.task_prompt)
+                    fallback_record.model_invoked = False
+                    fallback_record.provider_identity = None
+                    fallback_record.model_name = None
+                    fallback_record.inference_status = "not_configured"
+                    fallback_record.fallback_used = True
+                    fallback_record.fallback_reason = "No intent parser configured"
+                    fallback_record.inference_time_ms = 0
+                    return fallback_record
 
                 async def _get_repo_summary():
                     raw_files = self._indexing_service.discover_files(repo_path)
@@ -405,6 +449,25 @@ class ContextUseCases:
                     ranking_time_ms=ranking_time_ms,
                     synthesis_time_ms=synthesis_time_ms,
                     total_time_ms=elapsed_ms,
+                    model_invoked=getattr(intent, "model_invoked", False),
+                    provider_identity=getattr(intent, "provider_identity", None),
+                    model_name=getattr(intent, "model_name", None),
+                    inference_status=getattr(intent, "inference_status", "not_configured"),
+                    fallback_used=getattr(intent, "fallback_used", False),
+                    fallback_reason=getattr(intent, "fallback_reason", None),
+                    inference_time_ms=getattr(intent, "inference_time_ms", 0),
+                )
+
+                log_event(
+                    logger,
+                    logging.INFO,
+                    "context_generation_completed",
+                    component="context_engine",
+                    operation="get_agent_context",
+                    duration_ms=elapsed_ms,
+                    model_invoked=response.model_invoked,
+                    fallback_used=response.fallback_used,
+                    inference_status=response.inference_status,
                 )
 
                 # Store in high-speed synthesis cache with dependency provenance

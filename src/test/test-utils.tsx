@@ -39,7 +39,20 @@ export const mockHealthData: HealthResponse = {
   vram_total_gb: 24,
   vram_used_gb: 6,
   execution_device: "GPU",
+  provider: "ollama",
+  provider_identity: "ollama",
+  provider_configured: true,
+  provider_reachable: true,
+  provider_health_state: "healthy",
+  provider_base_url: "http://localhost:11434/v1",
+  configured_model: "qwen2.5-coder:7b",
   active_model: "qwen2.5-coder:7b",
+  active_model_state: "active",
+  discovered_models: ["qwen2.5-coder:7b"],
+  engine_state: "healthy",
+  engine_reason: null,
+  cognee_state: "healthy",
+  cognee_reason: null,
   health_state: "healthy",
   storage_canonical_exists: true,
   storage_canonical_writable: true,
@@ -88,6 +101,18 @@ export const mockBackendStatus: BackendStatusResponse = {
   cognee_initialized: true,
   gpu_presence: "NVIDIA",
   execution_device: "GPU",
+  provider_identity: "ollama",
+  provider_configured: true,
+  provider_reachable: true,
+  provider_health_state: "healthy",
+  configured_model: "qwen2.5-coder:7b",
+  active_model: "qwen2.5-coder:7b",
+  active_model_state: "active",
+  discovered_models: ["qwen2.5-coder:7b"],
+  engine_state: "healthy",
+  engine_reason: null,
+  cognee_state: "healthy",
+  cognee_reason: null,
 };
 
 export const mockDashboardStats: DashboardStats = {
@@ -400,6 +425,62 @@ export function createDefaultMockHandler(): MockInvokeHandler {
         return mockBenchmarkResponse;
       case "get_settings":
         return mockAppSettings;
+      case "get_provider_status":
+        return {
+          success: true,
+          provider: "ollama",
+          base_url: "http://127.0.0.1:11434/v1",
+          active_model: "phi4-mini:q6_k",
+          is_reachable: true,
+          health_state: "healthy",
+          discovery_status: "available",
+          loaded_models: [
+            {
+              model_id: "phi4-mini:q6_k",
+              name: "phi4-mini",
+              quantization: "q6_k",
+              is_phi4_mini: true,
+              is_q6_or_higher: true,
+              warning: null,
+            },
+          ],
+          quantization_warning: null,
+          api_key_configured: false,
+          api_key_masked: "local",
+        };
+      case "discover_provider":
+        return {
+          success: true,
+          provider: "ollama",
+          base_url: "http://127.0.0.1:11434/v1",
+          is_reachable: true,
+          status: "available",
+          models: [
+            {
+              model_id: "phi4-mini:q6_k",
+              name: "phi4-mini",
+              quantization: "q6_k",
+              is_phi4_mini: true,
+              is_q6_or_higher: true,
+              warning: null,
+            },
+          ],
+          message: "Discovered 1 model(s) from ollama.",
+          error_details: null,
+        };
+      case "update_provider":
+        return {
+          success: true,
+          provider: "ollama",
+          base_url: "http://127.0.0.1:11434/v1",
+          model: "phi4-mini:q6_k",
+          reachable: true,
+          health_state: "healthy",
+          loaded_models: ["phi4-mini:q6_k"],
+          quantization_warning: null,
+          api_key_configured: false,
+          api_key_masked: "local",
+        };
       case "update_cognee_settings":
         return mockAppSettings;
       case "get_diagnostics":
@@ -420,6 +501,7 @@ export function createDefaultMockHandler(): MockInvokeHandler {
     }
   };
 }
+
 
 // Initialize default mock handler
 setDefaultMockHandler(createDefaultMockHandler());
@@ -497,6 +579,19 @@ export function resetAllStores() {
     health: null,
     status: null,
     backendOnline: false,
+    providerIdentity: "ollama",
+    providerConfigured: true,
+    providerReachable: false,
+    providerHealthState: "unavailable",
+    activeModel: null,
+    configuredModel: null,
+    activeModelState: "unknown",
+    discoveredModels: [],
+    engineState: "unavailable",
+    engineReason: null,
+    cogneeState: "unavailable",
+    cogneeReason: null,
+    cogneeInitialized: false,
     ollamaRunning: false,
     cogneeIdle: true,
     dashboardStats: null,
@@ -504,6 +599,20 @@ export function resetAllStores() {
 
   useSettingsStore.setState({
     activeTab: "backend",
+    provider: "ollama",
+    endpoint: "http://localhost:11434/v1",
+    model: "phi4-mini",
+    apiKey: "",
+    apiKeyConfigured: false,
+    apiKeyMasked: "local",
+    providerReachable: true,
+    providerHealthState: "healthy",
+    quantizationWarning: null,
+    availableModels: [],
+    discovering: false,
+    discoveryStatus: "idle",
+    discoveryMessage: "",
+    discoveryError: null,
     vectorDb: "lancedb",
     graphDb: "kuzu",
     relationalDb: "sqlite",
@@ -518,6 +627,7 @@ export function resetAllStores() {
     statusMessage: null,
     error: null,
   });
+
 }
 
 import { LayoutProvider } from "@/components/layout/LayoutContext";

@@ -11,11 +11,40 @@ interface TopBarProps {
 }
 
 export function TopBar({ title, subtitle, children }: TopBarProps) {
-  const { backendOnline, status, ollamaRunning } = useHealthStore();
+  const {
+    backendOnline,
+    engineState,
+    providerIdentity,
+    activeModel,
+    configuredModel,
+  } = useHealthStore();
   const { toggleMobileMenu } = useLayout();
 
-  const llmModel = status?.llm_model?.split(":")[0] || "phi-4-mini";
-  const engineOk = backendOnline && ollamaRunning;
+  const displayModel = activeModel
+    ? activeModel.split(":")[0]
+    : configuredModel
+    ? configuredModel.split(":")[0]
+    : "No active model";
+
+  const isHealthy = engineState === "healthy";
+  const isDegraded = engineState === "degraded";
+
+  const statusLabel = isHealthy
+    ? "Ready"
+    : isDegraded
+    ? "Degraded"
+    : backendOnline
+    ? "Unavailable"
+    : "Offline";
+
+  const providerLabel =
+    providerIdentity === "lmstudio"
+      ? "LM Studio"
+      : providerIdentity === "ollama"
+      ? "Ollama"
+      : providerIdentity === "openai_compatible"
+      ? "OpenAI Compatible"
+      : providerIdentity || "AI Engine";
 
   return (
     <header className="h-13 sm:h-14 w-full sticky top-0 z-30 bg-black/95 backdrop-blur-md flex items-center justify-between px-4 sm:px-6 border-b border-[#1e1e1e] select-none shrink-0">
@@ -55,17 +84,35 @@ export function TopBar({ title, subtitle, children }: TopBarProps) {
 
       {/* Group C: Engine Status & Telemetry */}
       <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-        <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-[#222222] bg-[#0a0a0a] text-[11px] font-mono text-neutral-300 shadow-xs">
+        <div
+          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-[#222222] bg-[#0a0a0a] text-[11px] font-mono text-neutral-300 shadow-xs"
+          title={`${providerLabel}: ${displayModel} (${statusLabel})`}
+        >
           <span
             className={cn(
               "w-1.5 h-1.5 rounded-full shrink-0",
-              engineOk ? "bg-emerald-400" : backendOnline ? "bg-amber-400" : "bg-red-500"
+              isHealthy
+                ? "bg-emerald-400"
+                : isDegraded
+                ? "bg-amber-400"
+                : "bg-red-500"
             )}
           />
-          <span className="truncate max-w-[90px] sm:max-w-[140px]">{llmModel}</span>
+          <span className="truncate max-w-[90px] sm:max-w-[140px]">
+            {displayModel}
+          </span>
           <span className="text-neutral-600 hidden xs:inline">·</span>
-          <span className={cn("hidden xs:inline", engineOk ? "text-neutral-400" : "text-amber-400")}>
-            {engineOk ? "Ready" : backendOnline ? "Degraded" : "Offline"}
+          <span
+            className={cn(
+              "hidden xs:inline",
+              isHealthy
+                ? "text-neutral-400"
+                : isDegraded
+                ? "text-amber-400"
+                : "text-red-400"
+            )}
+          >
+            {statusLabel}
           </span>
         </div>
       </div>

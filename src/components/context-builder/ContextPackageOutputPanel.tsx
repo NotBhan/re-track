@@ -107,10 +107,15 @@ export function ContextPackageOutputPanel() {
     <div className="w-1/3 flex flex-col bg-[#0a0a0a] rounded-xl border border-[#262626] shadow-2xl flex-1 relative overflow-hidden">
       {/* Toolbar */}
       <div className="p-3 border-b border-[#222222] bg-[#0c0c0c] flex justify-between items-center sticky top-0 z-10">
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
           <span className="text-[10px] font-mono uppercase tracking-wider font-semibold text-neutral-300 px-2 py-1 bg-black rounded border border-[#262626]">
             Markdown Output
           </span>
+          {result && (
+            <span className="text-[10px] font-mono px-2 py-0.5 rounded border border-[#262626] bg-[#111] text-neutral-400">
+              {result.model_invoked ? "Model Synthesized" : "Deterministic AST"}
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-1.5">
           <Button

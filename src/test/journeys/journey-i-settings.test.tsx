@@ -52,18 +52,70 @@ describe("Journey I — Settings & Provider Management (Hot-Reloading & Persiste
     await user.click(inferenceTabs[0]);
 
     await waitFor(() => {
-      expect(screen.getByText("Inference & Provider")).toBeInTheDocument();
+      expect(screen.getByText(/Inference & Provider/i)).toBeInTheDocument();
     });
 
-    // Click Apply & Test button
-    const applyButton = screen.getByRole("button", { name: /Apply & Test/i });
+    // Click Save & Apply button
+    const applyButton = screen.getByRole("button", { name: /Save & Apply/i });
     await user.click(applyButton);
 
     await waitFor(() => {
       expect(updatedProviderRequest).not.toBeNull();
-      expect(screen.getByText(/Connected · 2 model\(s\) loaded/i)).toBeInTheDocument();
+      expect(screen.getByText(/Provider configured: ollama/i)).toBeInTheDocument();
     });
   });
+
+  it("performs non-mutating model discovery on candidate endpoint", async () => {
+    const user = userEvent.setup();
+    let discoveryRequested = false;
+    const defaultMock = createDefaultMockHandler();
+
+    setMockInvokeHandler(async (cmd: string, args) => {
+      if (cmd === "discover_provider") {
+        discoveryRequested = true;
+        return {
+          success: true,
+          provider: "lmstudio",
+          base_url: "http://127.0.0.1:1234/v1",
+          is_reachable: true,
+          status: "available",
+          models: [
+            {
+              model_id: "phi4-mini:q6_k",
+              name: "phi4-mini",
+              quantization: "q6_k",
+              is_phi4_mini: true,
+              is_q6_or_higher: true,
+              warning: null,
+            },
+          ],
+          message: "Discovered 1 model(s) from lmstudio.",
+          error_details: null,
+        };
+      }
+      return defaultMock(cmd, args);
+    });
+
+    renderWithProviders(<Settings />);
+
+    // Switch to Inference tab
+    const inferenceTabs = screen.getAllByRole("button", { name: /Inference/i });
+    await user.click(inferenceTabs[0]);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Inference & Provider/i)).toBeInTheDocument();
+    });
+
+    // Click Discover button
+    const discoverBtn = screen.getByRole("button", { name: /Discover/i });
+    await user.click(discoverBtn);
+
+    await waitFor(() => {
+      expect(discoveryRequested).toBe(true);
+      expect(screen.getByText(/Discovered 1 model\(s\) from lmstudio/i)).toBeInTheDocument();
+    });
+  });
+
 
   it("configures and saves Cognee storage & database settings", async () => {
     const user = userEvent.setup();

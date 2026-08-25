@@ -7,6 +7,7 @@ import { MemoryStats } from "@/components/memory/MemoryStats";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import { Search, Loader2, Database, Layers, Share2 } from "lucide-react";
 import { useMemoryStore, type MemoryTabType } from "@/stores/memory-store";
+import { useHealthStore } from "@/stores/health-store";
 import { forgetDataset as forgetDatasetApi } from "@/lib/api";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -17,6 +18,23 @@ export default function Memory() {
     id: string;
     name: string;
   } | null>(null);
+
+  const {
+    providerIdentity,
+    providerReachable,
+    activeModel,
+    configuredModel,
+    cogneeInitialized,
+  } = useHealthStore();
+
+  const providerLabel =
+    providerIdentity === "lmstudio"
+      ? "LM Studio"
+      : providerIdentity === "ollama"
+      ? "Ollama"
+      : providerIdentity === "openai_compatible"
+      ? "OpenAI Compatible"
+      : providerIdentity || "Provider";
 
   const {
     loading,
@@ -97,6 +115,46 @@ export default function Memory() {
                 <Badge variant="outline" className="text-[11px] font-mono">
                   {datasets?.length || 0} datasets
                 </Badge>
+                {/* Independent Inference Provider Status */}
+                <span
+                  className={cn(
+                    "inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-mono border",
+                    providerReachable
+                      ? "bg-emerald-950/30 text-emerald-300 border-emerald-500/30"
+                      : "bg-red-950/30 text-red-300 border-red-500/30"
+                  )}
+                  title={`Inference Provider: ${providerLabel} (${providerReachable ? "Healthy" : "Offline"})`}
+                >
+                  <span
+                    className={cn(
+                      "w-1.5 h-1.5 rounded-full shrink-0",
+                      providerReachable ? "bg-emerald-400" : "bg-red-400"
+                    )}
+                  />
+                  <span>
+                    {providerLabel}: {providerReachable ? (activeModel || configuredModel || "Ready") : "Offline"}
+                  </span>
+                </span>
+                {/* Independent Cognee Memory Status */}
+                <span
+                  className={cn(
+                    "inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-mono border",
+                    cogneeInitialized
+                      ? "bg-neutral-900 text-neutral-300 border-[#333]"
+                      : "bg-amber-950/30 text-amber-300 border-amber-500/30"
+                  )}
+                  title={`Cognee Memory Engine: ${cogneeInitialized ? "Initialized" : "Offline / Uninitialized"}`}
+                >
+                  <span
+                    className={cn(
+                      "w-1.5 h-1.5 rounded-full shrink-0",
+                      cogneeInitialized ? "bg-emerald-400" : "bg-amber-400"
+                    )}
+                  />
+                  <span>
+                    Cognee: {cogneeInitialized ? "Initialized" : "Offline"}
+                  </span>
+                </span>
               </div>
               <p className="text-xs text-neutral-500 mt-0.5">
                 Vector embeddings, semantic knowledge graphs, and persistent repository concepts.

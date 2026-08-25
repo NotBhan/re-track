@@ -34,8 +34,18 @@ interface SidebarProps {
 }
 
 export function Sidebar({ onNewIndex, onCloseMobile, isMobile = false }: SidebarProps) {
-  const { health, status, backendOnline, ollamaRunning, cogneeIdle, fetchDashboardStats, pollHealth } =
-    useHealthStore();
+  const {
+    health,
+    backendOnline,
+    engineState,
+    providerIdentity,
+    activeModel,
+    configuredModel,
+    cogneeState,
+    cogneeInitialized,
+    fetchDashboardStats,
+    pollHealth,
+  } = useHealthStore();
   const [refreshing, setRefreshing] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
 
@@ -51,11 +61,31 @@ export function Sidebar({ onNewIndex, onCloseMobile, isMobile = false }: Sidebar
   const vramTotal = health?.vram_total_gb ?? 0;
   const cpuPct = health?.cpu_percent ?? 0;
 
-  // Model labels from BackendStatusResponse (trimmed for display)
-  const llmModel = status?.llm_model?.split(":")[0] || "phi-4-mini";
+  const displayModel = activeModel
+    ? activeModel.split(":")[0]
+    : configuredModel
+    ? configuredModel.split(":")[0]
+    : "No active model";
 
-  // Overall engine status
-  const engineOk = backendOnline && ollamaRunning;
+  const isHealthy = engineState === "healthy";
+  const isDegraded = engineState === "degraded";
+
+  const engineLabel = isHealthy
+    ? "Engine ready"
+    : isDegraded
+    ? "Engine degraded"
+    : backendOnline
+    ? "Engine unavailable"
+    : "Engine offline";
+
+  const providerLabel =
+    providerIdentity === "lmstudio"
+      ? "LM Studio"
+      : providerIdentity === "ollama"
+      ? "Ollama"
+      : providerIdentity === "openai_compatible"
+      ? "OpenAI Compatible"
+      : "Local";
 
   const handleNavClick = () => {
     if (isMobile && onCloseMobile) {
@@ -160,19 +190,19 @@ export function Sidebar({ onNewIndex, onCloseMobile, isMobile = false }: Sidebar
             <span
               className={cn(
                 "w-1.5 h-1.5 rounded-full shrink-0",
-                engineOk
+                isHealthy
                   ? "bg-emerald-400"
-                  : backendOnline
+                  : isDegraded
                   ? "bg-amber-400"
                   : "bg-red-500"
               )}
             />
             <div className="min-w-0">
               <div className="text-xs font-medium text-neutral-200 truncate">
-                {engineOk ? "Engine ready" : backendOnline ? "Engine degraded" : "Engine offline"}
+                {engineLabel}
               </div>
               <div className="text-[11px] text-neutral-500 font-mono truncate">
-                {llmModel} · Local inference
+                {displayModel} · {providerLabel}
               </div>
             </div>
           </div>
@@ -216,8 +246,8 @@ export function Sidebar({ onNewIndex, onCloseMobile, isMobile = false }: Sidebar
             </div>
             <div className="flex items-center justify-between pt-1 border-t border-[#181818]">
               <span className="text-neutral-500">Cognee</span>
-              <span className={cn(cogneeIdle ? "text-emerald-400" : "text-neutral-500")}>
-                {cogneeIdle ? "ready" : "offline"}
+              <span className={cn(cogneeInitialized || cogneeState === "healthy" ? "text-emerald-400" : "text-neutral-500")}>
+                {cogneeInitialized || cogneeState === "healthy" ? "ready" : "offline"}
               </span>
             </div>
           </div>

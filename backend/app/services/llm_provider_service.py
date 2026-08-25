@@ -12,7 +12,9 @@ from typing import Any, Optional
 import httpx
 
 from app.models.provider import (
+    DiscoveryStatus,
     LoadedModelInfo,
+    ProviderDiscoveryResult,
     ProviderHealthStatus,
     ProviderType,
     QuantizationLevel,
@@ -54,11 +56,12 @@ class LLMProviderService:
             return QuantizationLevel.Q4_K_M
         return QuantizationLevel.UNKNOWN
 
-    def evaluate_model_quality(self, model_id: str) -> LoadedModelInfo:
+    @classmethod
+    def evaluate_model_quality(cls, model_id: str) -> LoadedModelInfo:
         """Evaluate if the loaded model is phi4:mini and check quantization tier."""
         lowered = model_id.lower()
         is_phi4 = bool(re.search(r"phi[-_]?4[-_]?mini", lowered))
-        quant = self.parse_quantization(model_id)
+        quant = cls.parse_quantization(model_id)
 
         is_q6_plus = quant in (
             QuantizationLevel.Q6_K,
@@ -88,55 +91,160 @@ class LLMProviderService:
             warning=warning,
         )
 
+    @classmethod
+    async def discover_models_for_endpoint(
+        cls,
+        provider_type: ProviderType | str,
+        base_url: str,
+        api_key: str = "local",
+        timeout: float = 5.0,
+    ) -> ProviderDiscoveryResult:
+        """Non-mutating model discovery probe for candidate or active provider endpoints."""
+        clean_url = (base_url or "").strip().rstrip("/")
+        if not clean_url:
+            return ProviderDiscoveryResult(
+                provider=provider_type if isinstance(provider_type, ProviderType) else ProviderType.OPENAI_COMPATIBLE,
+                base_url="",
+                is_reachable=False,
+                status=DiscoveryStatus.NOT_CONFIGURED,
+                models=[],
+                message="Provider endpoint URL is not configured.",
+            )
+
+        p_type = provider_type if isinstance(provider_type, ProviderType) else (
+            ProviderType.LM_STUDIO if "lm" in str(provider_type).lower() or "studio" in str(provider_type).lower()
+            else ProviderType.OLLAMA if "ollama" in str(provider_type).lower()
+            else ProviderType.OPENAI_COMPATIBLE
+        )
+
+        # Build candidate URLs for model discovery
+        candidate_urls: list[str] = []
+        if clean_url.endswith("/v1"):
+            candidate_urls.append(f"{clean_url}/models")
+            base_no_v1 = clean_url[:-3]
+            if p_type == ProviderType.OLLAMA:
+                candidate_urls.append(f"{base_no_v1}/api/tags")
+        else:
+            candidate_urls.append(f"{clean_url}/v1/models")
+            candidate_urls.append(f"{clean_url}/models")
+            if p_type == ProviderType.OLLAMA:
+                candidate_urls.append(f"{clean_url}/api/tags")
+
+        headers = {"Authorization": f"Bearer {api_key}"}
+        last_error = None
+        last_status_code = None
+
+        for url in candidate_urls:
+            try:
+                async with httpx.AsyncClient(timeout=timeout) as client:
+                    resp = await client.get(url, headers=headers)
+                    last_status_code = resp.status_code
+
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        raw_items = []
+                        if isinstance(data, dict):
+                            raw_items = data.get("data") or data.get("models") or []
+                        elif isinstance(data, list):
+                            raw_items = data
+
+                        results: list[LoadedModelInfo] = []
+                        for item in raw_items:
+                            m_id = ""
+                            if isinstance(item, dict):
+                                m_id = item.get("id") or item.get("name") or item.get("model") or ""
+                            elif isinstance(item, str):
+                                m_id = item
+                            if m_id:
+                                results.append(cls.evaluate_model_quality(m_id))
+
+                        if len(results) == 0:
+                            return ProviderDiscoveryResult(
+                                provider=p_type,
+                                base_url=clean_url,
+                                is_reachable=True,
+                                status=DiscoveryStatus.REACHABLE_BUT_EMPTY,
+                                models=[],
+                                message=f"Provider is reachable at {clean_url}, but no models are currently loaded or available.",
+                            )
+
+                        return ProviderDiscoveryResult(
+                            provider=p_type,
+                            base_url=clean_url,
+                            is_reachable=True,
+                            status=DiscoveryStatus.AVAILABLE,
+                            models=results,
+                            message=f"Discovered {len(results)} model(s) from {p_type.value}.",
+                        )
+                    elif resp.status_code in (401, 403):
+                        return ProviderDiscoveryResult(
+                            provider=p_type,
+                            base_url=clean_url,
+                            is_reachable=True,
+                            status=DiscoveryStatus.DISCOVERY_FAILED,
+                            models=[],
+                            message=f"Authentication failed (HTTP {resp.status_code}) for endpoint {clean_url}.",
+                            error_details=f"HTTP {resp.status_code}",
+                        )
+            except httpx.ConnectError as ce:
+                last_error = f"Connection refused: {ce}"
+            except httpx.TimeoutException:
+                last_error = "Connection timed out"
+            except Exception as e:
+                last_error = str(e)
+
+        # If none of candidate URLs succeeded
+        if last_error and ("refused" in last_error.lower() or "timed out" in last_error.lower()):
+            return ProviderDiscoveryResult(
+                provider=p_type,
+                base_url=clean_url,
+                is_reachable=False,
+                status=DiscoveryStatus.UNREACHABLE,
+                models=[],
+                message=f"Provider endpoint '{clean_url}' is unreachable. Verify host and port.",
+                error_details=last_error,
+            )
+
+        return ProviderDiscoveryResult(
+            provider=p_type,
+            base_url=clean_url,
+            is_reachable=False,
+            status=DiscoveryStatus.DISCOVERY_FAILED,
+            models=[],
+            message=f"Model discovery failed for endpoint '{clean_url}'.",
+            error_details=last_error or f"HTTP {last_status_code}",
+        )
+
     async def list_models(self) -> list[LoadedModelInfo]:
         """Query /models endpoint to discover available models in the active provider."""
-        models_url = f"{self.base_url}/models"
-        headers = {"Authorization": f"Bearer {self.api_key}"}
-
-        try:
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
-                resp = await client.get(models_url, headers=headers)
-                if resp.status_code != 200:
-                    logger.warning("GET %s returned status %d", models_url, resp.status_code)
-                    return []
-                data = resp.json()
-                items = data.get("data", [])
-                results = []
-                for item in items:
-                    m_id = item.get("id") or item.get("name") or ""
-                    if m_id:
-                        results.append(self.evaluate_model_quality(m_id))
-                return results
-        except Exception as e:
-            logger.debug("Failed to list models from %s: %s", models_url, e)
-            return []
+        result = await self.discover_models_for_endpoint(
+            provider_type=self.provider_type,
+            base_url=self.base_url,
+            api_key=self.api_key,
+            timeout=self.timeout,
+        )
+        return result.models
 
     async def check_health(self) -> ProviderHealthStatus:
         """Perform non-blocking health check and inspect loaded model quality."""
-        models = await self.list_models()
-        is_reachable = len(models) > 0
+        discovery = await self.discover_models_for_endpoint(
+            provider_type=self.provider_type,
+            base_url=self.base_url,
+            api_key=self.api_key,
+            timeout=self.timeout,
+        )
+        models = discovery.models
+        is_reachable = discovery.is_reachable
 
-        # If /models was empty, attempt basic connection probe
-        if not is_reachable:
-            try:
-                async with httpx.AsyncClient(timeout=self.timeout) as client:
-                    resp = await client.get(f"{self.base_url}/models")
-                    is_reachable = resp.status_code in (200, 401, 403)
-            except Exception:
-                is_reachable = False
-
-        active_model = self.default_model
+        active_model = self.default_model if self.default_model else None
         quant_warning = None
 
-        # Find matching model info
-        for m in models:
-            if m.model_id == self.default_model or m.name == self.default_model:
-                quant_warning = m.warning
-                break
-        else:
-            if models:
-                active_model = models[0].model_id
-                quant_warning = models[0].warning
+        # Find matching model info if default_model is specified
+        if active_model:
+            for m in models:
+                if m.model_id == active_model or m.name == active_model:
+                    quant_warning = m.warning
+                    break
 
         return ProviderHealthStatus(
             provider=self.provider_type,
@@ -145,6 +253,7 @@ class LLMProviderService:
             active_model=active_model,
             loaded_models=models,
             quantization_warning=quant_warning,
+            discovery_status=discovery.status,
         )
 
     async def generate_completion(
@@ -156,7 +265,14 @@ class LLMProviderService:
         max_tokens: int = 1024,
     ) -> str:
         """Execute a completion via OpenAI-compatible /chat/completions API."""
-        chat_url = f"{self.base_url}/chat/completions"
+        clean_base = (self.base_url or "").strip().rstrip("/")
+        if not clean_base:
+            raise ValueError("Provider endpoint URL is not configured.")
+
+        chat_url = f"{clean_base}/chat/completions"
+        if not clean_base.endswith("/v1") and not chat_url.endswith("/v1/chat/completions"):
+            chat_url = f"{clean_base}/v1/chat/completions"
+
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
@@ -167,16 +283,48 @@ class LLMProviderService:
             messages.append({"role": "system", "content": system_prompt})
         messages.append({"role": "user", "content": prompt})
 
+        target_model = model or self.default_model or "phi4-mini"
+
         payload = {
-            "model": model or self.default_model,
+            "model": target_model,
             "messages": messages,
             "temperature": temperature,
             "max_tokens": max_tokens,
             "stream": False,
         }
 
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            resp = await client.post(chat_url, headers=headers, json=payload)
-            resp.raise_for_status()
-            data = resp.json()
-            return data["choices"][0]["message"]["content"].strip()
+        try:
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                resp = await client.post(chat_url, headers=headers, json=payload)
+                if resp.status_code == 404:
+                    raise ValueError(f"Model '{target_model}' not found on provider at {clean_base} (HTTP 404).")
+                elif resp.status_code in (401, 403):
+                    raise PermissionError(f"Authentication failed (HTTP {resp.status_code}) for provider at {clean_base}.")
+                resp.raise_for_status()
+                data = resp.json()
+                choices = data.get("choices", [])
+                if not choices or not isinstance(choices, list) or "message" not in choices[0]:
+                    raise ValueError(f"Malformed completion response from {clean_base}: missing choices/message.")
+                return choices[0]["message"].get("content", "").strip()
+        except httpx.ConnectError as ce:
+            raise ConnectionError(f"Connection refused to provider at {clean_base}: {ce}") from ce
+        except httpx.TimeoutException as te:
+            raise TimeoutError(f"Inference request to provider at {clean_base} timed out: {te}") from te
+
+
+    async def discover_models(
+        self,
+        provider_type: str,
+        base_url: str,
+        api_key: str = "local",
+        timeout: float = 3.0,
+    ) -> ProviderDiscoveryResult:
+        """Probe an endpoint and return discovered models without mutating state."""
+        return await self.discover_models_for_endpoint(
+            provider_type=provider_type,
+            base_url=base_url,
+            api_key=api_key,
+            timeout=timeout,
+        )
+
+

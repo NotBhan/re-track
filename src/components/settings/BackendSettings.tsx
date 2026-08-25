@@ -85,9 +85,10 @@ export function BackendSettings() {
           <div className="md:w-2/3 relative">
             <input
               type={showKey ? "text" : "password"}
-              defaultValue="sk-retrack-local-dev-12345"
+              placeholder="Optional backend API key"
               className={`${inputCls} pr-9`}
             />
+
             <button
               type="button"
               onClick={() => setShowKey(!showKey)}

@@ -1,112 +1,117 @@
 import { useEffect, useState } from "react";
-import { CheckCircle2, AlertCircle, Loader2, RefreshCw } from "lucide-react";
+import {
+  CheckCircle2,
+  AlertCircle,
+  Loader2,
+  RefreshCw,
+  Search,
+  Eye,
+  EyeOff,
+  AlertTriangle,
+} from "lucide-react";
 import { useHealthStore } from "@/stores/health-store";
-import { updateProvider } from "@/lib/api";
-import type { UpdateProviderRequest } from "@/lib/api";
+import { useSettingsStore } from "@/stores/settings-store";
 import { Button } from "@/components/ui/button";
 
 const PROVIDER_DEFAULTS: Record<
-  UpdateProviderRequest["provider"],
-  { label: string; url: string; apiKey: string }
+  string,
+  { label: string; url: string; defaultKeyPlaceholder: string }
 > = {
   ollama: {
     label: "Ollama",
     url: "http://127.0.0.1:11434/v1",
-    apiKey: "ollama",
+    defaultKeyPlaceholder: "ollama (or local)",
   },
   lmstudio: {
     label: "LM Studio",
     url: "http://127.0.0.1:1234/v1",
-    apiKey: "lm-studio",
+    defaultKeyPlaceholder: "lm-studio (or local)",
   },
   openai_compatible: {
-    label: "Custom OpenAI Compatible",
+    label: "Custom OpenAI-Compatible",
     url: "http://127.0.0.1:8080/v1",
-    apiKey: "local",
+    defaultKeyPlaceholder: "API Key (optional)",
   },
 };
 
 export function OllamaSettings() {
-  const { status, ollamaRunning, pollHealth } = useHealthStore();
+  const { pollHealth } = useHealthStore();
+  const {
+    provider,
+    endpoint,
+    model,
+    apiKeyConfigured,
+    apiKeyMasked,
+    providerReachable,
+    providerHealthState,
+    quantizationWarning,
+    availableModels,
+    discovering,
+    discoveryStatus,
+    discoveryMessage,
+    discoveryError,
+    saving,
+    saveSuccess,
+    statusMessage,
+    fetchSettings,
+    discoverModels,
+    saveProviderSettings,
+    clearStatus,
+  } = useSettingsStore();
 
-  // Derive current provider from active status.
-  // Heuristic: LM Studio default port is 1234, Ollama is 11434.
-  const detectedProvider = (): UpdateProviderRequest["provider"] => {
-    if (!status) return "lmstudio";
-    const port = status.ollama_port;
-    if (port === 11434) return "ollama";
-    if (port === 1234) return "lmstudio";
-    return "openai_compatible";
+
+  // Local transient form state
+  const [selectedProvider, setSelectedProvider] = useState(provider || "ollama");
+  const [baseUrl, setBaseUrl] = useState(endpoint || "http://127.0.0.1:11434/v1");
+  const [selectedModel, setSelectedModel] = useState(model || "phi4-mini");
+  const [newApiKey, setNewApiKey] = useState("");
+  const [showKey, setShowKey] = useState(false);
+
+  // Authoritative hydration on mount
+  useEffect(() => {
+    fetchSettings();
+  }, [fetchSettings]);
+
+  // Sync transient form when store updates from backend
+  useEffect(() => {
+    if (provider) setSelectedProvider(provider);
+    if (endpoint) setBaseUrl(endpoint);
+    if (model) setSelectedModel(model);
+  }, [provider, endpoint, model]);
+
+  const handleProviderChange = (newP: string) => {
+    setSelectedProvider(newP);
+    const def = PROVIDER_DEFAULTS[newP] || PROVIDER_DEFAULTS.ollama;
+    setBaseUrl(def.url);
+    clearStatus();
   };
 
-  const [provider, setProvider] =
-    useState<UpdateProviderRequest["provider"]>(detectedProvider);
-  const [baseUrl, setBaseUrl] = useState(
-    status
-      ? `http://${status.ollama_host}:${status.ollama_port}/v1`
-      : PROVIDER_DEFAULTS["lmstudio"].url
-  );
-  const [model, setModel] = useState(
-    status?.llm_model ?? "phi4-mini:q6_k"
-  );
-  const [apiKey, setApiKey] = useState(
-    PROVIDER_DEFAULTS[detectedProvider()].apiKey
-  );
-  const [loadedModels, setLoadedModels] = useState<string[]>([]);
-
-  const [saving, setSaving] = useState(false);
-  const [saveResult, setSaveResult] = useState<
-    { ok: boolean; message: string } | null
-  >(null);
-
-  // When provider dropdown changes, pre-fill URL and apiKey defaults.
-  const handleProviderChange = (p: UpdateProviderRequest["provider"]) => {
-    setProvider(p);
-    setBaseUrl(PROVIDER_DEFAULTS[p].url);
-    setApiKey(PROVIDER_DEFAULTS[p].apiKey);
-    setLoadedModels([]);
-    setSaveResult(null);
+  const handleDiscover = async () => {
+    clearStatus();
+    const res = await discoverModels(selectedProvider, baseUrl, newApiKey || undefined);
+    if (res && res.models && res.models.length > 0) {
+      // If current selectedModel is not in discovered models, default to first discovered
+      const hasMatch = res.models.some(
+        (m) => m.model_id === selectedModel || m.name === selectedModel
+      );
+      if (!hasMatch) {
+        setSelectedModel(res.models[0].model_id);
+      }
+    }
   };
 
   const handleApply = async () => {
-    setSaving(true);
-    setSaveResult(null);
-    try {
-      const result = await updateProvider({ provider, base_url: baseUrl, model, api_key: apiKey });
-      setLoadedModels(result.loaded_models ?? []);
-      // Auto-select first loaded model if current model isn't loaded
-      if (result.loaded_models?.length > 0 && !result.loaded_models.includes(model)) {
-        setModel(result.loaded_models[0]);
-      }
-      setSaveResult({
-        ok: result.reachable,
-        message: result.reachable
-          ? `Connected · ${result.loaded_models.length} model(s) loaded`
-          : "Provider unreachable — check URL and that the server is running",
-      });
-      // Refresh sidebar health status
+    const success = await saveProviderSettings(
+      selectedProvider,
+      baseUrl,
+      selectedModel,
+      newApiKey || undefined
+    );
+    if (success) {
+      setNewApiKey("");
       await pollHealth();
-    } catch (err) {
-      setSaveResult({ ok: false, message: String(err) });
-    } finally {
-      setSaving(false);
     }
   };
-
-  // Refresh loaded model list on mount if backend is already up
-  useEffect(() => {
-    if (status && ollamaRunning) {
-      updateProvider({
-        provider: detectedProvider(),
-        base_url: `http://${status.ollama_host}:${status.ollama_port}/v1`,
-        model: status.llm_model,
-        api_key: apiKey,
-      }).then((r) => {
-        if (r.loaded_models?.length) setLoadedModels(r.loaded_models);
-      }).catch(() => {});
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   const inputCls =
     "w-full bg-[#050505] h-8 px-3 rounded-md border border-[#222222] focus:border-white focus:outline-none text-neutral-200 font-mono text-xs transition-colors placeholder:text-neutral-600";
@@ -117,37 +122,51 @@ export function OllamaSettings() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h2 className="text-sm font-semibold text-white tracking-tight mb-0.5">
-          Inference &amp; Provider
-        </h2>
-        <p className="text-xs text-neutral-500">
-          Configure your local inference engine. Changes apply immediately — no restart needed.
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-sm font-semibold text-white tracking-tight mb-0.5">
+            Inference &amp; Provider Configuration
+          </h2>
+          <p className="text-xs text-neutral-500">
+            Configure authoritative local or remote LLM inference endpoints. Configuration survives restarts.
+          </p>
+        </div>
+
+        {/* Health state badge */}
+        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#111111] border border-[#222222]">
+          <span
+            className={`w-2 h-2 rounded-full ${
+              providerHealthState === "healthy"
+                ? "bg-emerald-400"
+                : providerHealthState === "degraded"
+                ? "bg-amber-400"
+                : "bg-red-400"
+            }`}
+          />
+          <span className="text-[10px] font-mono uppercase tracking-wider text-neutral-300">
+            {providerHealthState || (providerReachable ? "healthy" : "unavailable")}
+          </span>
+        </div>
       </div>
 
       <div className="bg-[#0a0a0a] border border-[#1e1e1e] rounded-lg p-4 space-y-4">
         {/* Provider dropdown */}
         <div className={rowCls}>
           <div className="md:w-1/3">
-            <label className={labelCls}>Inference Backend</label>
-            <span className={subCls}>Select your local runner.</span>
+            <label className={labelCls}>Inference Provider</label>
+            <span className={subCls}>Authoritative backend runner selection.</span>
           </div>
           <div className="md:w-2/3">
             <select
-              value={provider}
-              onChange={(e) =>
-                handleProviderChange(e.target.value as UpdateProviderRequest["provider"])
-              }
+              value={selectedProvider}
+              onChange={(e) => handleProviderChange(e.target.value)}
               className={inputCls}
             >
-              {(Object.keys(PROVIDER_DEFAULTS) as Array<UpdateProviderRequest["provider"]>).map(
-                (p) => (
-                  <option key={p} value={p}>
-                    {PROVIDER_DEFAULTS[p].label}
-                  </option>
-                )
-              )}
+              {Object.keys(PROVIDER_DEFAULTS).map((p) => (
+                <option key={p} value={p}>
+                  {PROVIDER_DEFAULTS[p].label}
+                </option>
+              ))}
             </select>
           </div>
         </div>
@@ -156,7 +175,7 @@ export function OllamaSettings() {
         <div className={rowCls}>
           <div className="md:w-1/3">
             <label className={labelCls}>Base URL</label>
-            <span className={subCls}>Include /v1 suffix for OpenAI-compatible APIs.</span>
+            <span className={subCls}>Endpoint URL (normalized with /v1 where required).</span>
           </div>
           <div className="md:w-2/3">
             <input
@@ -168,86 +187,164 @@ export function OllamaSettings() {
           </div>
         </div>
 
-        {/* Active Model */}
+        {/* API Key */}
+        <div className={rowCls}>
+          <div className="md:w-1/3">
+            <label className={labelCls}>API Key</label>
+            <span className={subCls}>
+              {apiKeyConfigured
+                ? `Key configured (${apiKeyMasked}). Enter a new key to change.`
+                : "Required for authenticated local or remote endpoints."}
+            </span>
+          </div>
+          <div className="md:w-2/3 relative">
+            <input
+              type={showKey ? "text" : "password"}
+              value={newApiKey}
+              onChange={(e) => setNewApiKey(e.target.value)}
+              placeholder={
+                apiKeyConfigured
+                  ? `Configured (${apiKeyMasked}) — leave blank to keep`
+                  : PROVIDER_DEFAULTS[selectedProvider]?.defaultKeyPlaceholder || "Optional API Key"
+              }
+              className={`${inputCls} pr-9`}
+            />
+            <button
+              type="button"
+              onClick={() => setShowKey(!showKey)}
+              className="absolute right-2.5 top-2 text-neutral-400 hover:text-white transition-colors"
+            >
+              {showKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+            </button>
+          </div>
+        </div>
+
+        {/* Model Discovery Section */}
         <div className={rowCls}>
           <div className="md:w-1/3">
             <label className={labelCls}>Active Model</label>
             <span className={subCls}>
-              Tuned for phi4:mini (Q6_K+ recommended).
+              phi4:mini (Q6_K+) is tuned for optimal reasoning in RE:Track.
             </span>
           </div>
-          <div className="md:w-2/3 space-y-1.5">
-            {/* If we have a list of loaded models, show a select + text fallback */}
-            {loadedModels.length > 0 ? (
-              <select
-                value={model}
-                onChange={(e) => setModel(e.target.value)}
-                className={inputCls}
-              >
-                {loadedModels.map((m) => (
-                  <option key={m} value={m}>
-                    {m}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <input
-                type="text"
-                value={model}
-                onChange={(e) => setModel(e.target.value)}
-                placeholder="e.g. phi4-mini:q6_k"
-                className={inputCls}
-              />
-            )}
-            {loadedModels.length > 0 && (
-              <p className="text-[10px] text-neutral-500 font-mono">
-                {loadedModels.length} model(s) loaded in {PROVIDER_DEFAULTS[provider].label}
-              </p>
-            )}
-          </div>
-        </div>
+          <div className="md:w-2/3 space-y-2">
+            <div className="flex gap-2">
+              {availableModels.length > 0 ? (
+                <select
+                  value={selectedModel}
+                  onChange={(e) => setSelectedModel(e.target.value)}
+                  className={inputCls}
+                >
+                  {availableModels.map((m) => (
+                    <option key={m.model_id} value={m.model_id}>
+                      {m.name} ({m.quantization || "unknown"}) {m.is_phi4_mini ? "★ phi4" : ""}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  type="text"
+                  value={selectedModel}
+                  onChange={(e) => setSelectedModel(e.target.value)}
+                  placeholder="e.g. phi4-mini:q6_k"
+                  className={inputCls}
+                />
+              )}
 
-        {/* API Key */}
-        <div className="flex flex-col md:flex-row md:items-start gap-2 md:gap-8">
-          <div className="md:w-1/3">
-            <label className={labelCls}>API Key</label>
-            <span className={subCls}>
-              Use &ldquo;ollama&rdquo; or &ldquo;lm-studio&rdquo; for local servers.
-            </span>
-          </div>
-          <div className="md:w-2/3">
-            <input
-              type="text"
-              value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
-              className={inputCls}
-            />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleDiscover}
+                disabled={discovering}
+                className="h-8 px-3 text-xs bg-[#141414] hover:bg-[#222222] text-neutral-200 border-[#2a2a2a] shrink-0"
+              >
+                {discovering ? (
+                  <Loader2 className="w-3 h-3 animate-spin mr-1.5" />
+                ) : (
+                  <Search className="w-3 h-3 mr-1.5" />
+                )}
+                <span>Discover</span>
+              </Button>
+            </div>
+
+            {/* Discovery Status Feedback */}
+            {discoveryStatus === "available" && availableModels.length > 0 && (
+              <div className="flex items-center gap-1.5 text-[11px] text-emerald-400 font-mono">
+                <CheckCircle2 className="w-3 h-3" />
+                <span>{discoveryMessage || `Discovered ${availableModels.length} model(s)`}</span>
+              </div>
+            )}
+
+            {discoveryStatus === "reachable_but_empty" && (
+              <div className="p-2.5 rounded-md bg-amber-950/30 border border-amber-800/40 text-amber-300 text-xs space-y-1">
+                <div className="flex items-center gap-1.5 font-medium">
+                  <AlertTriangle className="w-3.5 h-3.5" />
+                  <span>No models loaded</span>
+                </div>
+                <p className="text-[11px] text-amber-200/80">
+                  Endpoint is reachable, but 0 models are currently loaded in {selectedProvider}. Load a model in your runner first.
+                </p>
+              </div>
+            )}
+
+            {discoveryStatus === "unreachable" && (
+              <div className="p-2.5 rounded-md bg-red-950/30 border border-red-800/40 text-red-300 text-xs space-y-1">
+                <div className="flex items-center gap-1.5 font-medium">
+                  <AlertCircle className="w-3.5 h-3.5" />
+                  <span>Endpoint unreachable</span>
+                </div>
+                <p className="text-[11px] text-red-200/80">
+                  {discoveryMessage || "Could not connect to provider endpoint. Verify that the runner is running."}
+                </p>
+              </div>
+            )}
+
+            {discoveryStatus === "discovery_failed" && (
+              <div className="p-2.5 rounded-md bg-red-950/30 border border-red-800/40 text-red-300 text-xs space-y-1">
+                <div className="flex items-center gap-1.5 font-medium">
+                  <AlertCircle className="w-3.5 h-3.5" />
+                  <span>Discovery failed</span>
+                </div>
+                <p className="text-[11px] text-red-200/80">
+                  {discoveryError || discoveryMessage}
+                </p>
+              </div>
+            )}
+
+            {/* Quantization warning banner */}
+            {quantizationWarning && (
+              <div className="p-2.5 rounded-md bg-amber-950/20 border border-amber-800/30 text-amber-300/90 text-xs flex items-start gap-2">
+                <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5 text-amber-400" />
+                <span>{quantizationWarning}</span>
+              </div>
+            )}
           </div>
         </div>
       </div>
 
-      {/* Footer: status + apply */}
+      {/* Footer: status + save/apply */}
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2 min-h-[24px]">
           {saving && (
             <>
               <Loader2 className="w-3.5 h-3.5 text-neutral-400 animate-spin" />
-              <span className="text-xs font-mono text-neutral-400">Connecting…</span>
+              <span className="text-xs font-mono text-neutral-400">Saving &amp; applying configuration…</span>
             </>
           )}
-          {!saving && saveResult && (
+          {!saving && statusMessage && (
             <>
-              {saveResult.ok ? (
+              {saveSuccess ? (
                 <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
               ) : (
                 <AlertCircle className="w-3.5 h-3.5 text-red-400 shrink-0" />
               )}
               <span
                 className={`text-xs font-mono ${
-                  saveResult.ok ? "text-emerald-400" : "text-red-400"
+                  saveSuccess ? "text-emerald-400" : "text-red-400"
                 }`}
               >
-                {saveResult.message}
+                {statusMessage}
               </span>
             </>
           )}
@@ -257,14 +354,14 @@ export function OllamaSettings() {
           onClick={handleApply}
           disabled={saving}
           size="sm"
-          className="w-[125px] justify-center gap-1.5 h-7.5 px-3 text-xs bg-white text-black font-medium hover:bg-neutral-200 rounded-md cursor-pointer shadow-xs disabled:opacity-60"
+          className="w-[140px] justify-center gap-1.5 h-7.5 px-3 text-xs bg-white text-black font-medium hover:bg-neutral-200 rounded-md cursor-pointer shadow-xs disabled:opacity-60"
         >
           {saving ? (
             <Loader2 className="w-3 h-3 animate-spin" />
           ) : (
             <RefreshCw className="w-3 h-3" />
           )}
-          <span>{saving ? "Applying..." : "Apply & Test"}</span>
+          <span>{saving ? "Applying..." : "Save & Apply"}</span>
         </Button>
       </div>
     </div>

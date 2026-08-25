@@ -12,10 +12,29 @@ interface ProviderAlertBannerProps {
 
 export function ProviderAlertBanner({ className, showWhenOnline = false }: ProviderAlertBannerProps) {
   const navigate = useNavigate();
-  const { health, status, backendOnline, ollamaRunning, pollHealth } = useHealthStore();
+  const {
+    backendOnline,
+    providerIdentity,
+    providerReachable,
+    activeModel,
+    configuredModel,
+    engineReason,
+    pollHealth,
+  } = useHealthStore();
   const [retrying, setRetrying] = useState(false);
 
-  const isOnline = backendOnline && ollamaRunning;
+  const isOnline = backendOnline && providerReachable;
+
+  const providerLabel =
+    providerIdentity === "lmstudio"
+      ? "LM Studio"
+      : providerIdentity === "ollama"
+      ? "Ollama"
+      : providerIdentity === "openai_compatible"
+      ? "OpenAI Compatible"
+      : providerIdentity || "Local Provider";
+
+  const activeModelDisplay = activeModel || configuredModel || "Connected";
 
   const handleRetry = async () => {
     setRetrying(true);
@@ -52,11 +71,11 @@ export function ProviderAlertBanner({ className, showWhenOnline = false }: Provi
                 <p className="text-xs sm:text-sm font-semibold text-white tracking-tight flex items-center gap-2">
                   <span>AI Provider Offline</span>
                   <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                    Ollama / LM Studio
+                    {providerLabel}
                   </span>
                 </p>
                 <p className="text-xs text-neutral-400 mt-0.5 font-mono">
-                  Local language model endpoint is not responding. Memory indexing &amp; context synthesis require a running provider.
+                  {engineReason || "Inference provider endpoint is unreachable. Verify provider host and port in Settings."}
                 </p>
               </div>
             </div>
@@ -92,7 +111,7 @@ export function ProviderAlertBanner({ className, showWhenOnline = false }: Provi
         >
           <div className="flex items-center gap-2">
             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-            <span>AI Provider Active: <strong>{status?.llm_model || health?.version || "Local LLM"}</strong></span>
+            <span>AI Provider Active: <strong>{providerLabel} ({activeModelDisplay})</strong></span>
           </div>
           <span className="text-[10px] text-emerald-400/80">Ready for synthesis</span>
         </motion.div>

@@ -114,6 +114,13 @@ async def get_agent_context_tool(
                 "related_files": result.related_files,
                 "estimated_tokens": result.estimated_tokens,
                 "total_time_ms": result.total_time_ms,
+                "model_invoked": result.model_invoked,
+                "provider_identity": result.provider_identity,
+                "model_name": result.model_name,
+                "inference_status": result.inference_status,
+                "fallback_used": result.fallback_used,
+                "fallback_reason": result.fallback_reason,
+                "inference_time_ms": result.inference_time_ms,
             }
 
         return {"success": False, "error": "UnexpectedResponse", "message": "Unexpected response type from use case"}

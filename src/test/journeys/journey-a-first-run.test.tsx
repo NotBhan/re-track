@@ -43,6 +43,7 @@ describe("Journey A — First Run & Application Initialization", () => {
           status: "degraded",
           ollama_reachable: false,
           health_state: "degraded",
+          engine_state: "degraded",
         };
       }
       if (cmd === "detailed_health") {
@@ -51,6 +52,7 @@ describe("Journey A — First Run & Application Initialization", () => {
           status: "degraded",
           ollama_reachable: false,
           health_state: "degraded",
+          engine_state: "degraded",
         };
       }
       return defaultMock(cmd, args);

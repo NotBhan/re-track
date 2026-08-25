@@ -26,7 +26,26 @@ export interface HealthResponse {
   vram_total_gb?: number;
   vram_used_gb?: number;
   execution_device?: "CPU" | "GPU" | "UNKNOWN" | string;
+
+  // Authoritative Provider & Model runtime state
+  provider?: "ollama" | "lmstudio" | "openai_compatible" | string;
+  provider_identity?: "ollama" | "lmstudio" | "openai_compatible" | string;
+  provider_configured?: boolean;
+  provider_reachable?: boolean;
+  provider_health_state?: "healthy" | "degraded" | "unavailable" | "not_configured" | string;
+  provider_base_url?: string | null;
+  configured_model?: string | null;
   active_model?: string | null;
+  active_model_state?: "active" | "available" | "configured_only" | "unknown" | "none" | string;
+  discovered_models?: string[];
+
+  // Authoritative Engine & Cognee runtime state
+  engine_state?: "healthy" | "degraded" | "unavailable" | "not_configured" | string;
+  engine_reason?: string | null;
+  cognee_state?: "healthy" | "degraded" | "unavailable" | "not_configured" | string;
+  cognee_reason?: string | null;
+
+  // Operational metrics
   health_state?: "healthy" | "degraded" | "unavailable" | "not_configured" | string;
   storage_canonical_exists?: boolean;
   storage_canonical_writable?: boolean;
@@ -52,6 +71,8 @@ export interface BackendStatusResponse {
   ollama_reachable: boolean;
   ollama_host: string;
   ollama_port: number;
+  llm_provider?: string;
+  llm_endpoint?: string;
   llm_model: string;
   embedding_model: string;
   vector_db: string;
@@ -62,6 +83,22 @@ export interface BackendStatusResponse {
   cognee_initialized: boolean;
   gpu_presence?: string;
   execution_device?: string;
+
+  // Authoritative Provider & Model runtime state
+  provider_identity?: string;
+  provider_configured?: boolean;
+  provider_reachable?: boolean;
+  provider_health_state?: string;
+  configured_model?: string | null;
+  active_model?: string | null;
+  active_model_state?: string;
+  discovered_models?: string[];
+
+  // Authoritative Engine & Cognee runtime state
+  engine_state?: string;
+  engine_reason?: string | null;
+  cognee_state?: string;
+  cognee_reason?: string | null;
 }
 
 export interface IndexRepositoryRequest {
@@ -106,6 +143,13 @@ export interface ContextResponse {
   total_time_ms: number;
   reference_count: number;
   section_headings: string[];
+  model_invoked?: boolean;
+  provider_identity?: string | null;
+  model_name?: string | null;
+  inference_status?: string;
+  fallback_used?: boolean;
+  fallback_reason?: string | null;
+  inference_time_ms?: number;
 }
 
 export interface AgentContextRequest {
@@ -132,6 +176,13 @@ export interface AgentContextResponse {
   ranking_time_ms?: number;
   synthesis_time_ms?: number;
   total_time_ms?: number;
+  model_invoked?: boolean;
+  provider_identity?: string | null;
+  model_name?: string | null;
+  inference_status?: string;
+  fallback_used?: boolean;
+  fallback_reason?: string | null;
+  inference_time_ms?: number;
 }
 
 export interface ForgetDatasetRequest {
@@ -398,8 +449,48 @@ export async function getBackendStatus(): Promise<BackendStatusResponse> {
   return invoke<BackendStatusResponse>("get_status");
 }
 
+export interface DiscoveredModel {
+  model_id: string;
+  name: string;
+  quantization: string;
+  is_phi4_mini: boolean;
+  is_q6_or_higher: boolean;
+  warning?: string | null;
+}
+
+export interface ProviderDiscoveryRequest {
+  provider: "ollama" | "lmstudio" | "openai_compatible" | string;
+  base_url: string;
+  api_key?: string;
+}
+
+export interface ProviderDiscoveryResponse {
+  success: boolean;
+  provider: string;
+  base_url: string;
+  is_reachable: boolean;
+  status: "available" | "reachable_but_empty" | "unreachable" | "discovery_failed" | "not_configured" | string;
+  models: DiscoveredModel[];
+  message: string;
+  error_details?: string | null;
+}
+
+export interface ProviderStatusResponse {
+  success: boolean;
+  provider: string;
+  base_url: string;
+  active_model?: string | null;
+  is_reachable: boolean;
+  health_state: "healthy" | "degraded" | "unavailable" | "not_configured" | string;
+  discovery_status: string;
+  loaded_models: DiscoveredModel[];
+  quantization_warning?: string | null;
+  api_key_configured: boolean;
+  api_key_masked: string;
+}
+
 export interface UpdateProviderRequest {
-  provider: "ollama" | "lmstudio" | "openai_compatible";
+  provider: "ollama" | "lmstudio" | "openai_compatible" | string;
   base_url: string;
   model: string;
   api_key?: string;
@@ -411,17 +502,38 @@ export interface UpdateProviderResponse {
   base_url: string;
   model: string;
   reachable: boolean;
+  health_state?: string;
   loaded_models: string[];
+  quantization_warning?: string | null;
+  api_key_configured?: boolean;
+  api_key_masked?: string;
 }
 
 /**
- * Hot-reload the active LLM inference provider without restarting the backend.
+ * Get authoritative active inference provider status.
+ */
+export async function getProviderStatus(): Promise<ProviderStatusResponse> {
+  return invoke<ProviderStatusResponse>("get_provider_status");
+}
+
+/**
+ * Non-mutating model discovery probe for candidate or active provider endpoints.
+ */
+export async function discoverProvider(
+  request: ProviderDiscoveryRequest
+): Promise<ProviderDiscoveryResponse> {
+  return invoke<ProviderDiscoveryResponse>("discover_provider", { request });
+}
+
+/**
+ * Hot-reload and persist the active LLM inference provider.
  */
 export async function updateProvider(
   request: UpdateProviderRequest
 ): Promise<UpdateProviderResponse> {
   return invoke<UpdateProviderResponse>("update_provider", { request });
 }
+
 
 /**
  * Index a repository into Cognee memory.
@@ -658,11 +770,15 @@ export interface AppSettingsResponse {
   data_root: string;
   system_root: string;
   llm_provider: string;
+  llm_endpoint?: string;
   llm_host: string;
   llm_port: number;
   llm_model: string;
   embedding_model: string;
+  api_key_configured?: boolean;
+  api_key_masked?: string;
 }
+
 
 export interface CogneeSettingsRequest {
   vector_db?: string;

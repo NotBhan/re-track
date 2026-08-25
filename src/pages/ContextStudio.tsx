@@ -695,6 +695,15 @@ export default function ContextStudio() {
                       <Loader2 className="w-2.5 h-2.5 animate-spin" />
                       <span>Re-synthesizing</span>
                     </Badge>
+                  ) : agentResponse?.model_invoked && agentResponse?.inference_status === "completed" ? (
+                    <Badge variant="success" className="text-[10px] font-mono flex items-center gap-1">
+                      <Sparkles className="w-3 h-3 text-emerald-400" />
+                      <span>Model Synthesized</span>
+                    </Badge>
+                  ) : agentResponse?.fallback_used ? (
+                    <Badge variant="warning" className="text-[10px] font-mono flex items-center gap-1" title={agentResponse.fallback_reason || "Deterministic AST fallback"}>
+                      <span>Deterministic Fallback</span>
+                    </Badge>
                   ) : agentResponse ? (
                     <Badge variant="success" className="text-[10px] font-mono">
                       Ready
@@ -833,9 +842,22 @@ export default function ContextStudio() {
                             {(agentResponse.related_files?.length ?? 0)} files
                           </span>
                         </div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-neutral-500">Inference:</span>
+                          <span className={cn("font-medium", agentResponse.model_invoked ? "text-emerald-400" : "text-amber-400")}>
+                            {agentResponse.model_invoked
+                              ? `${agentResponse.model_name || "Model"} (${agentResponse.provider_identity || "LLM"}) · ${agentResponse.inference_time_ms || 0}ms`
+                              : "Deterministic AST (model bypassed)"}
+                          </span>
+                        </div>
                         {health?.high_memory_pressure && (
                           <div className="flex items-center gap-1 text-[10px] text-amber-400">
                             <span>High RAM Pressure ({health.ram_percent}%)</span>
+                          </div>
+                        )}
+                        {agentResponse.fallback_used && agentResponse.fallback_reason && (
+                          <div className="w-full text-[10px] font-mono text-amber-400/80 bg-amber-950/20 border border-amber-500/20 rounded px-2 py-0.5 mt-0.5">
+                            <span>Notice: {agentResponse.fallback_reason}</span>
                           </div>
                         )}
                       </div>

@@ -8,7 +8,7 @@ class HealthResponse(BaseModel):
     """System health check response."""
 
     status: str = Field(description="Health status: 'ok' or 'degraded'")
-    ollama_reachable: bool = Field(description="Whether Ollama is reachable")
+    ollama_reachable: bool = Field(description="Legacy alias for provider_reachable")
     cognee_initialized: bool = Field(description="Whether CogneeService is initialized")
     version: str = Field(default="0.1.0", description="Backend version")
     ram_total_gb: float = Field(default=0.0, description="Total host RAM in GB")
@@ -21,7 +21,25 @@ class HealthResponse(BaseModel):
     vram_total_gb: float = Field(default=0.0, description="Total GPU VRAM in GB")
     vram_used_gb: float = Field(default=0.0, description="Used GPU VRAM in GB")
     execution_device: str = Field(default="CPU", description="Actual runtime execution device ('CPU', 'GPU', 'UNKNOWN')")
-    active_model: Optional[str] = Field(default=None, description="Currently active model loaded in memory")
+
+    # Authoritative Provider & Model runtime state
+    provider: str = Field(default="ollama", description="Active LLM provider identity ('ollama', 'lmstudio', 'openai_compatible', 'unknown')")
+    provider_identity: str = Field(default="ollama", description="Active LLM provider identity")
+    provider_configured: bool = Field(default=True, description="Whether provider is configured")
+    provider_reachable: bool = Field(default=False, description="Whether provider endpoint is reachable")
+    provider_health_state: str = Field(default="unavailable", description="Provider state: 'healthy', 'degraded', 'unavailable', 'not_configured'")
+    provider_base_url: Optional[str] = Field(default=None, description="Active provider base URL")
+    configured_model: Optional[str] = Field(default=None, description="Configured model name in settings")
+    active_model: Optional[str] = Field(default=None, description="Authoritative active model loaded in inference engine")
+    active_model_state: str = Field(default="unknown", description="Active model state: 'active', 'available', 'unknown', 'none'")
+    discovered_models: list[str] = Field(default_factory=list, description="Available models discovered at provider endpoint")
+
+    # Authoritative Engine & Cognee runtime state
+    engine_state: str = Field(default="unavailable", description="Inference engine operational state: 'healthy', 'degraded', 'unavailable', 'not_configured'")
+    engine_reason: Optional[str] = Field(default=None, description="Reason for current inference engine state")
+    cognee_state: str = Field(default="unavailable", description="Cognee memory state: 'healthy', 'degraded', 'unavailable', 'not_configured'")
+    cognee_reason: Optional[str] = Field(default=None, description="Reason for current Cognee memory state")
+
     # Phase 9C Detailed Health & Operational Status Fields
     health_state: str = Field(default="healthy", description="Operational classification: 'healthy', 'degraded', 'unavailable', 'not_configured'")
     storage_canonical_exists: bool = Field(default=True, description="Whether ~/.retrack/ storage directory exists")
@@ -49,9 +67,11 @@ class BackendStatusResponse(BaseModel):
     """Detailed backend status."""
 
     status: str = Field(description="Health status: 'ok' or 'degraded'")
-    ollama_reachable: bool = Field(description="Whether Ollama is reachable")
+    ollama_reachable: bool = Field(description="Legacy alias for provider_reachable")
     ollama_host: str = Field(description="Ollama host")
     ollama_port: int = Field(description="Ollama port")
+    llm_provider: str = Field(default="ollama", description="Active LLM provider")
+    llm_endpoint: str = Field(default="http://localhost:11434/v1", description="Active LLM endpoint")
     llm_model: str = Field(description="Current LLM model name")
     embedding_model: str = Field(description="Current embedding model name")
     vector_db: str = Field(description="Vector database provider")
@@ -62,6 +82,22 @@ class BackendStatusResponse(BaseModel):
     cognee_initialized: bool = Field(description="Whether CogneeService is initialized")
     gpu_presence: str = Field(default="None", description="GPU presence")
     execution_device: str = Field(default="CPU", description="Runtime execution device")
+
+    # Authoritative Provider & Model runtime state
+    provider_identity: str = Field(default="ollama", description="Active LLM provider identity")
+    provider_configured: bool = Field(default=True, description="Whether provider is configured")
+    provider_reachable: bool = Field(default=False, description="Whether provider endpoint is reachable")
+    provider_health_state: str = Field(default="unavailable", description="Provider state: 'healthy', 'degraded', 'unavailable', 'not_configured'")
+    configured_model: Optional[str] = Field(default=None, description="Configured model name in settings")
+    active_model: Optional[str] = Field(default=None, description="Authoritative active model loaded in inference engine")
+    active_model_state: str = Field(default="unknown", description="Active model state: 'active', 'available', 'unknown', 'none'")
+    discovered_models: list[str] = Field(default_factory=list, description="Available models discovered at provider endpoint")
+
+    # Authoritative Engine & Cognee runtime state
+    engine_state: str = Field(default="unavailable", description="Inference engine operational state: 'healthy', 'degraded', 'unavailable', 'not_configured'")
+    engine_reason: Optional[str] = Field(default=None, description="Reason for current inference engine state")
+    cognee_state: str = Field(default="unavailable", description="Cognee memory state: 'healthy', 'degraded', 'unavailable', 'not_configured'")
+    cognee_reason: Optional[str] = Field(default=None, description="Reason for current Cognee memory state")
 
 
 class CogneeSettingsRequest(BaseModel):
@@ -87,7 +123,59 @@ class AppSettingsResponse(BaseModel):
     data_root: str = Field(description="Data root storage directory")
     system_root: str = Field(description="System root storage directory")
     llm_provider: str = Field(default="ollama", description="Active LLM provider")
+    llm_endpoint: str = Field(default="http://localhost:11434/v1", description="Active LLM endpoint URL")
     llm_host: str = Field(default="localhost", description="LLM host")
     llm_port: int = Field(default=11434, description="LLM port")
     llm_model: str = Field(default="phi4-mini", description="Active LLM model")
     embedding_model: str = Field(default="nomic-embed-text:latest", description="Active embedding model")
+    api_key_configured: bool = Field(default=False, description="Whether an API key is set")
+    api_key_masked: str = Field(default="local", description="Masked API key indicator")
+
+
+class DiscoveredModelDTO(BaseModel):
+    """Discovered model details."""
+
+    model_id: str
+    name: str
+    quantization: str = "unknown"
+    is_phi4_mini: bool = False
+    is_q6_or_higher: bool = False
+    warning: Optional[str] = None
+
+
+class ProviderDiscoveryRequest(BaseModel):
+    """Request to probe candidate provider endpoint."""
+
+    provider: str = Field(default="ollama", description="Provider type (ollama, lmstudio, openai_compatible)")
+    base_url: str = Field(default="http://localhost:11434/v1", description="Provider base URL")
+    api_key: str = Field(default="local", description="Provider API key")
+
+
+class ProviderDiscoveryResponse(BaseModel):
+    """Result of provider model discovery probe."""
+
+    success: bool = True
+    provider: str
+    base_url: str
+    is_reachable: bool
+    status: str = Field(description="Discovery status: available, reachable_but_empty, unreachable, discovery_failed, not_configured")
+    models: list[DiscoveredModelDTO] = Field(default_factory=list)
+    message: str = ""
+    error_details: Optional[str] = None
+
+
+class ProviderStatusResponse(BaseModel):
+    """Authoritative active provider status."""
+
+    success: bool = True
+    provider: str
+    base_url: str
+    active_model: Optional[str] = None
+    is_reachable: bool
+    health_state: str = "healthy"
+    discovery_status: str = "available"
+    loaded_models: list[DiscoveredModelDTO] = Field(default_factory=list)
+    quantization_warning: Optional[str] = None
+    api_key_configured: bool = False
+    api_key_masked: str = "local"
+

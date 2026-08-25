@@ -14,6 +14,13 @@ class ParsedIntentRecord:
     extracted_symbols: list[str] = field(default_factory=list)
     relevant_file_hints: list[str] = field(default_factory=list)
     is_vague: bool = False
+    model_invoked: bool = False
+    provider_identity: str | None = None
+    model_name: str | None = None
+    inference_status: str = "not_configured"
+    fallback_used: bool = False
+    fallback_reason: str | None = None
+    inference_time_ms: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize intent record to dictionary format."""
@@ -23,6 +30,13 @@ class ParsedIntentRecord:
             "extracted_symbols": self.extracted_symbols,
             "relevant_file_hints": self.relevant_file_hints,
             "is_vague": self.is_vague,
+            "model_invoked": self.model_invoked,
+            "provider_identity": self.provider_identity,
+            "model_name": self.model_name,
+            "inference_status": self.inference_status,
+            "fallback_used": self.fallback_used,
+            "fallback_reason": self.fallback_reason,
+            "inference_time_ms": self.inference_time_ms,
         }
 
     @classmethod
@@ -34,6 +48,13 @@ class ParsedIntentRecord:
             extracted_symbols=list(data.get("extracted_symbols", [])),
             relevant_file_hints=list(data.get("relevant_file_hints", [])),
             is_vague=bool(data.get("is_vague", False)),
+            model_invoked=bool(data.get("model_invoked", False)),
+            provider_identity=data.get("provider_identity"),
+            model_name=data.get("model_name"),
+            inference_status=str(data.get("inference_status", "not_configured")),
+            fallback_used=bool(data.get("fallback_used", False)),
+            fallback_reason=data.get("fallback_reason"),
+            inference_time_ms=int(data.get("inference_time_ms", 0)),
         )
 
 

@@ -106,25 +106,31 @@ class ApplicationContainer:
 
     async def initialize(self, settings: Optional[Settings] = None) -> None:
         """Initialize all backend services."""
-        self.settings = settings or self.settings or get_settings()
-        self.cognee_service = CogneeService(self.settings)
-        await self.cognee_service.initialize()
+        if settings is not None:
+            self.settings = settings
+        else:
+            self.settings = self.settings or get_settings()
+            self.settings.load_persisted_settings()
 
-        llm_endpoint = os.environ.get("LLM_ENDPOINT", self.settings.ollama.llm_endpoint)
-        llm_model = os.environ.get("LLM_MODEL", self.settings.ollama.llm_model)
-        llm_api_key = os.environ.get("LLM_API_KEY", "lm-studio")
-        provider_str = os.environ.get("LLM_PROVIDER", "lmstudio").lower()
+        provider_str = (self.settings.llm_provider or "ollama").lower()
+        llm_endpoint = self.settings.llm_endpoint or ""
+        llm_model = self.settings.ollama.llm_model or "phi4-mini"
+        llm_api_key = self.settings.llm_api_key or "local"
 
         if "lm" in provider_str or "studio" in provider_str:
             p_type = ProviderType.LM_STUDIO
-            if not os.environ.get("LLM_ENDPOINT"):
+            if not llm_endpoint:
                 llm_endpoint = "http://localhost:1234/v1"
         elif "ollama" in provider_str:
             p_type = ProviderType.OLLAMA
-            if not os.environ.get("LLM_ENDPOINT"):
+            if not llm_endpoint:
                 llm_endpoint = "http://localhost:11434/v1"
         else:
             p_type = ProviderType.OPENAI_COMPATIBLE
+
+        self.settings.llm_provider = provider_str
+        self.settings.llm_endpoint = llm_endpoint
+        self.settings.llm_api_key = llm_api_key
 
         self.llm_provider = LLMProviderService(
             provider_type=p_type,
@@ -132,6 +138,12 @@ class ApplicationContainer:
             api_key=llm_api_key,
             default_model=llm_model,
         )
+
+        self.cognee_service = CogneeService(self.settings)
+        try:
+            await self.cognee_service.initialize()
+        except Exception as e:
+            logger.warning("CogneeService initialization deferred / failed: %s", e)
 
         self.intent_parser = IntentParserService(self.llm_provider)
         self.cgc_service = CGCService()
@@ -158,7 +170,7 @@ class ApplicationContainer:
         model: str,
         api_key: str = "local",
     ) -> dict:
-        """Hot-reload the active LLM provider."""
+        """Hot-reload and atomically persist the active LLM provider."""
         prov_lower = provider.lower()
         if "lm" in prov_lower or "studio" in prov_lower:
             p_type = ProviderType.LM_STUDIO
@@ -167,26 +179,51 @@ class ApplicationContainer:
         else:
             p_type = ProviderType.OPENAI_COMPATIBLE
 
+        clean_base_url = (base_url or "").strip().rstrip("/")
+
         self.llm_provider = LLMProviderService(
             provider_type=p_type,
-            base_url=base_url,
-            model=model,
+            base_url=clean_base_url,
             api_key=api_key,
+            default_model=model,
         )
         self.intent_parser = IntentParserService(self.llm_provider)
+
+        # Update and persist settings
+        if self.settings is None:
+            self.settings = get_settings()
+        self.settings.llm_provider = p_type.value
+        self.settings.llm_endpoint = clean_base_url
+        self.settings.llm_api_key = api_key
+        self.settings.ollama.llm_model = model
+        self.settings.save_persisted_settings()
+        self.settings.apply_to_environment()
+        self.settings.configure_cognee()
 
         health_status = await self.llm_provider.check_health()
         loaded = [m.model_id for m in health_status.loaded_models]
 
+        masked_key = "local"
+        if api_key in ("local", "ollama", "lm-studio"):
+            masked_key = api_key
+        elif len(api_key) > 8:
+            masked_key = f"{api_key[:3]}...{api_key[-3:]}"
+        else:
+            masked_key = "configured"
+
         return {
             "success": True,
-            "provider": provider,
-            "base_url": base_url,
+            "provider": p_type.value,
+            "base_url": clean_base_url,
             "model": model,
             "reachable": health_status.is_reachable,
+            "health_state": "healthy" if health_status.is_reachable else "unavailable",
             "loaded_models": loaded,
             "quantization_warning": health_status.quantization_warning,
+            "api_key_configured": bool(api_key and api_key != "local"),
+            "api_key_masked": masked_key,
         }
+
 
     # Factory methods returning explicit use cases with injected dependencies:
 

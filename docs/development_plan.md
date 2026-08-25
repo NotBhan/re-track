@@ -158,9 +158,40 @@ This document tracks the phased development milestones and operational roadmap f
   - 31 dedicated automated test cases passing across 8 test suites (`test_ts_js_parser.py`, `test_ts_js_import_resolution.py`, `test_ts_js_cross_file_graph.py`, `test_ts_js_incremental.py`, `test_ts_js_compatibility.py`, `test_ts_js_security.py`, `test_ts_js_performance.py`, `test_ast_integrity.py`).
   - Full regression validation: 566/566 backend pytest tests passing, `npm run build` passing with 0 errors, and 50/50 Vitest tests passing.
   - Authoritative Phase 10B audit documentation (`docs/architecture/phase-10b-audit.md`) and user guide (`docs/product/typescript-structural-analysis.md`).
-- [ ] **Phase 10C: Expanded Retrieval Benchmarking** (Multi-repository complex cross-package golden tasks).
+- [x] **Phase 10C: Expanded Retrieval Benchmarking (COMPLETED & FROZEN)**
+  - Multi-repository synthetic benchmark corpus across 6 neutral fixtures (`py_backend`, `ts_react`, `ts_barrel`, `polyglot`, `ts_alias`, `monorepo`) with strict domain neutrality guard (zero commercial/billing/auth terms).
+  - 36 deterministic golden retrieval tasks across 12 distinct categories (3 tasks each) with exact ground-truth expected files, critical evidence, expected symbols, AST relationships, and noise negative assertions.
+  - Multi-dimensional evaluator (`ExpandedBenchmarkEvaluator`, `app.evaluation.expanded_benchmark`) computing Precision@K (0.5977), Recall@K (0.9907), Critical Evidence Coverage (1.0000), Noise Ratio (0.1750), Relationship Coverage (0.9722), and Latency (2.99ms).
+  - Comprehensive incremental mutation evaluator (`IncrementalMutationEvaluator`) validating 7 mutation scenarios against isolated temp copies (`cold_initial_index`, `warm_noop_reindex`, `single_file_modification`, `single_file_addition`, `single_file_deletion`, `rename_without_edit`, `dependency_relink`).
+  - Strict immutability guarantee for Phase 7/9D frozen baseline assets verified via automated bitwise SHA-256 integrity tests.
+  - 7 dedicated automated test cases passing across 4 new test suites (`test_expanded_benchmark.py`, `test_expanded_benchmark_contract.py`, `test_expanded_benchmark_incremental.py`, `test_expanded_benchmark_reproducibility.py`).
+  - Deterministic evaluation artifacts generated: `benchmarks/expanded/benchmark_results.json` and `benchmarks/expanded/benchmark_scorecard.md`.
+  - Authoritative Phase 10C audit documentation (`docs/architecture/phase-10c-audit.md`) and user guide (`docs/product/expanded-retrieval-benchmarking.md`).
+- [x] **Phase 10D.1: Frontend ↔ Backend Integration, Provider Discovery, and Secure Configuration (COMPLETED & FROZEN)**
+  - Authoritative provider detection eliminating port-based heuristics in frontend (`GET /provider/status` returning `ollama`, `lmstudio`, `openai_compatible`).
+  - Non-mutating model discovery engine (`POST /provider/discover`, `discover_provider`) probing candidate endpoints without state side-effects; distinct truthful handling of `available`, `reachable_but_empty`, `unreachable`, `discovery_failed`, and `not_configured` states.
+  - Atomic configuration persistence with POSIX security (`~/.retrack/settings.json` enforcing `0600` file / `0700` dir permissions; hot-reload synchronization with environment variables).
+  - Secure secret handling: absolute elimination of plain secrets from `localStorage`, logs, and diagnostics; masked token telemetry (`api_key_masked`, `api_key_configured`).
+  - Clean hexagonal architecture alignment: `SystemUseCases` adheres strictly to `LLMProviderPort` protocol without concrete service dependencies.
+  - 100% test validation: 7 new dedicated tests in `test_provider_configuration.py`, 37 API tests, 18 architectural boundary tests, 51/51 Vitest frontend tests, and clean Vite/TypeScript production build.
+  - Authoritative Phase 10D.1 audit documentation (`docs/architecture/phase-10d1-audit.md`) and user guide (`docs/product/provider-configuration.md`).
+- [x] **Phase 10D.1.1: Runtime Engine State Reconciliation (COMPLETED & FROZEN)**
+  - Unified authoritative runtime engine state contract (`engine_state`, `engine_reason`, `provider_identity`, `provider_reachable`, `provider_health_state`, `active_model`, `configured_model`, `cognee_state`, `cognee_reason`) across `GET /health` and `GET /status`.
+  - Solved environment variable overwrite bug where default Ollama endpoints overrode persisted LM Studio settings on restart.
+  - Fixed hardcoded Ollama connection validation in Cognee initialization via generalized `validate_provider()` and decoupled inference engine health from Cognee memory initialization.
+  - Truth boundary guarantees: removed synthetic `"phi4-mini"` fallback; active model is populated only when authoritatively confirmed by backend.
+  - Universal frontend runtime state alignment: updated `useHealthStore` with `Promise.allSettled` resilience; synchronized `TopBar`, `Sidebar`, `ProviderAlertBanner`, `Repositories`, and `Memory` to consume unified backend runtime state.
+  - Authoritative Phase 10D.1.1 audit documentation (`docs/architecture/phase-10d1-runtime-reconciliation-audit.md`).
+- [x] **Phase 10D.2: Context Generation Runtime Verification & Model Invocation (COMPLETED & FROZEN)**
+  - Eliminates silent local heuristics fallback swallows in `IntentParserService`; emits structured observability events (`context_model_invocation_started`, `context_model_invocation_completed`, `context_model_invocation_failed`, `context_deterministic_fallback`).
+  - Strict provider invocation: `LLMProviderService.generate_completion()` strictly targets configured OpenAI-compatible / LM Studio / Ollama `/v1/chat/completions` endpoints with configured model names and explicit error classifications.
+  - Truthful telemetry contracts across `ParsedIntentRecord`, `AgentContextResponse`, `ContextResponse`, and MCP `get_agent_context_tool` (`model_invoked`, `provider_identity`, `model_name`, `inference_status`, `fallback_used`, `fallback_reason`, `inference_time_ms`).
+  - Frontend truth alignment: `ContextStudio.tsx` and context-builder panels truthfully display `Model Synthesized` (green) only on completed provider invocations, and `Deterministic Fallback` (amber) with notice tooltip when local AST heuristics are used.
+  - 10 new dedicated automated test cases across `test_context_model_invocation.py` and `test_context_model_contract.py`.
+  - Authoritative Phase 10D.2 audit documentation (`docs/architecture/phase-10d2-context-generation-audit.md`) and product specification (`docs/product/context-generation.md`).
 - [ ] **Phase 10D: Adaptive Query-Aware Retrieval** (Task-type-specific token allocation profiles).
 - [ ] **Phase 10E: Agent Workflow Optimization** (Multi-turn conversational context caching).
+
 
 ### Deferred Capabilities (Postponed Until Specific Demand)
 
@@ -173,8 +204,8 @@ This document tracks the phased development milestones and operational roadmap f
 
 ## 2. Quality & Verification Metrics
 
-- **Backend Pytest Suite:** Passing unit/integration/soak tests across 39 test files (`backend/tests/`).
-- **Frontend Vitest Suite:** 50 passing behavioral tests across 12 test suites (`src/test/journeys/`).
+- **Backend Pytest Suite:** 586/586 passing unit/integration/soak tests across 39 test files (`backend/tests/`).
+- **Frontend Vitest Suite:** 51/51 passing behavioral tests across 12 test suites (`src/test/journeys/`).
 - **AST Integrity:** 100% passing multi-language AST syntax and symbol resolution tests (`tests/test_ast_integrity.py`).
 - **Frontend Build & Types:** 100% clean TypeScript compile and Vite production build (`npm run build`).
 - **Design System:** Vercel Geist aesthetic with dark mode canvas (`#000000`), micro-animations (`motion/react`), and high-contrast typography.

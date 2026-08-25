@@ -1,0 +1,2004 @@
+{
+  "total_tasks": 36,
+  "passed_tasks": 36,
+  "failed_tasks": 0,
+  "pass_rate": 1.0,
+  "mean_precision_at_k": 0.5035,
+  "mean_recall_at_k": 0.9907,
+  "mean_critical_file_coverage": 1.0,
+  "mean_critical_symbol_coverage": 1.0,
+  "mean_critical_coverage": 1.0,
+  "mean_noise_ratio": 0.1571,
+  "mean_relationship_coverage": 0.9722,
+  "mean_compression_ratio": 6.2786,
+  "mean_token_savings_percent": 81.82,
+  "mean_retrieval_time_ms": 0.22,
+  "distributions": {
+    "precision_at_k": {
+      "mean": 0.5035,
+      "median": 0.5,
+      "min": 0.1667,
+      "max": 1.0,
+      "p90": 0.7619,
+      "p95": 1.0
+    },
+    "recall_at_k": {
+      "mean": 0.9907,
+      "median": 1.0,
+      "min": 0.6667,
+      "max": 1.0,
+      "p90": 1.0,
+      "p95": 1.0
+    },
+    "critical_file_coverage": {
+      "mean": 1.0,
+      "median": 1.0,
+      "min": 1.0,
+      "max": 1.0,
+      "p90": 1.0,
+      "p95": 1.0
+    },
+    "critical_symbol_coverage": {
+      "mean": 1.0,
+      "median": 1.0,
+      "min": 1.0,
+      "max": 1.0,
+      "p90": 1.0,
+      "p95": 1.0
+    },
+    "critical_evidence_coverage": {
+      "mean": 1.0,
+      "median": 1.0,
+      "min": 1.0,
+      "max": 1.0,
+      "p90": 1.0,
+      "p95": 1.0
+    },
+    "noise_ratio": {
+      "mean": 0.1571,
+      "median": 0.1667,
+      "min": 0.0,
+      "max": 0.3333,
+      "p90": 0.25,
+      "p95": 0.3333
+    },
+    "relationship_coverage": {
+      "mean": 0.9722,
+      "median": 1.0,
+      "min": 0.5,
+      "max": 1.0,
+      "p90": 1.0,
+      "p95": 1.0
+    },
+    "token_savings_percent": {
+      "mean": 81.8194,
+      "median": 84.8,
+      "min": 71.5,
+      "max": 91.4,
+      "p90": 88.6,
+      "p95": 91.325
+    }
+  },
+  "repository_breakdown": {
+    "monorepo": {
+      "tasks": 5.0,
+      "pass_rate": 1.0,
+      "precision": 0.4571,
+      "recall": 1.0,
+      "critical_coverage": 1.0,
+      "noise_ratio": 0.1429,
+      "relationship_coverage": 1.0,
+      "token_savings": 74.3
+    },
+    "polyglot": {
+      "tasks": 6.0,
+      "pass_rate": 1.0,
+      "precision": 0.3542,
+      "recall": 1.0,
+      "critical_coverage": 1.0,
+      "noise_ratio": 0.0958,
+      "relationship_coverage": 1.0,
+      "token_savings": 88.1
+    },
+    "py_backend": {
+      "tasks": 7.0,
+      "pass_rate": 1.0,
+      "precision": 0.5476,
+      "recall": 0.9524,
+      "critical_coverage": 1.0,
+      "noise_ratio": 0.2024,
+      "relationship_coverage": 1.0,
+      "token_savings": 87.3
+    },
+    "ts_alias": {
+      "tasks": 8.0,
+      "pass_rate": 1.0,
+      "precision": 0.5042,
+      "recall": 1.0,
+      "critical_coverage": 1.0,
+      "noise_ratio": 0.15,
+      "relationship_coverage": 0.875,
+      "token_savings": 78.6
+    },
+    "ts_barrel": {
+      "tasks": 4.0,
+      "pass_rate": 1.0,
+      "precision": 0.5625,
+      "recall": 1.0,
+      "critical_coverage": 1.0,
+      "noise_ratio": 0.1875,
+      "relationship_coverage": 1.0,
+      "token_savings": 71.5
+    },
+    "ts_react": {
+      "tasks": 6.0,
+      "pass_rate": 1.0,
+      "precision": 0.6,
+      "recall": 1.0,
+      "critical_coverage": 1.0,
+      "noise_ratio": 0.1667,
+      "relationship_coverage": 1.0,
+      "token_savings": 86.6
+    }
+  },
+  "category_breakdown": {
+    "barrel_reexport": {
+      "tasks": 3.0,
+      "pass_rate": 1.0,
+      "precision": 0.6667,
+      "recall": 1.0,
+      "critical_coverage": 1.0,
+      "noise_ratio": 0.1667,
+      "relationship_coverage": 1.0,
+      "token_savings": 71.5
+    },
+    "calls_relationship": {
+      "tasks": 3.0,
+      "pass_rate": 1.0,
+      "precision": 0.5,
+      "recall": 1.0,
+      "critical_coverage": 1.0,
+      "noise_ratio": 0.1889,
+      "relationship_coverage": 0.8333,
+      "token_savings": 85.9
+    },
+    "cross_package_monorepo": {
+      "tasks": 3.0,
+      "pass_rate": 1.0,
+      "precision": 0.4762,
+      "recall": 1.0,
+      "critical_coverage": 1.0,
+      "noise_ratio": 0.1429,
+      "relationship_coverage": 1.0,
+      "token_savings": 74.3
+    },
+    "inherits_implements": {
+      "tasks": 3.0,
+      "pass_rate": 1.0,
+      "precision": 0.5,
+      "recall": 1.0,
+      "critical_coverage": 1.0,
+      "noise_ratio": 0.1389,
+      "relationship_coverage": 1.0,
+      "token_savings": 84.4
+    },
+    "javascript_structural": {
+      "tasks": 3.0,
+      "pass_rate": 1.0,
+      "precision": 0.2556,
+      "recall": 1.0,
+      "critical_coverage": 1.0,
+      "noise_ratio": 0.0556,
+      "relationship_coverage": 1.0,
+      "token_savings": 86.7
+    },
+    "jsx_render": {
+      "tasks": 3.0,
+      "pass_rate": 1.0,
+      "precision": 0.4286,
+      "recall": 1.0,
+      "critical_coverage": 1.0,
+      "noise_ratio": 0.181,
+      "relationship_coverage": 1.0,
+      "token_savings": 82.2
+    },
+    "noise_discrimination": {
+      "tasks": 3.0,
+      "pass_rate": 1.0,
+      "precision": 0.1945,
+      "recall": 1.0,
+      "critical_coverage": 1.0,
+      "noise_ratio": 0.3055,
+      "relationship_coverage": 1.0,
+      "token_savings": 78.4
+    },
+    "path_alias": {
+      "tasks": 3.0,
+      "pass_rate": 1.0,
+      "precision": 0.5889,
+      "recall": 1.0,
+      "critical_coverage": 1.0,
+      "noise_ratio": 0.1111,
+      "relationship_coverage": 0.8333,
+      "token_savings": 78.6
+    },
+    "polyglot_cross_language": {
+      "tasks": 3.0,
+      "pass_rate": 1.0,
+      "precision": 0.375,
+      "recall": 1.0,
+      "critical_coverage": 1.0,
+      "noise_ratio": 0.125,
+      "relationship_coverage": 1.0,
+      "token_savings": 84.8
+    },
+    "python_layered_architecture": {
+      "tasks": 3.0,
+      "pass_rate": 1.0,
+      "precision": 0.6667,
+      "recall": 0.8889,
+      "critical_coverage": 1.0,
+      "noise_ratio": 0.2222,
+      "relationship_coverage": 1.0,
+      "token_savings": 87.3
+    },
+    "type_reference": {
+      "tasks": 3.0,
+      "pass_rate": 1.0,
+      "precision": 0.8571,
+      "recall": 1.0,
+      "critical_coverage": 1.0,
+      "noise_ratio": 0.0476,
+      "relationship_coverage": 1.0,
+      "token_savings": 81.4
+    },
+    "typescript_structural": {
+      "tasks": 3.0,
+      "pass_rate": 1.0,
+      "precision": 0.5333,
+      "recall": 1.0,
+      "critical_coverage": 1.0,
+      "noise_ratio": 0.2,
+      "relationship_coverage": 1.0,
+      "token_savings": 86.4
+    }
+  },
+  "task_results": [
+    {
+      "task_id": "TASK-ALIAS-01",
+      "repository_id": "ts_alias",
+      "category": "path_alias",
+      "task_prompt": "How does ProcessingEngine resolve @core/types via tsconfig path alias to implement PipelineRunner?",
+      "precision_at_k": 0.6,
+      "recall_at_k": 1.0,
+      "critical_file_coverage": 1.0,
+      "critical_symbol_coverage": 1.0,
+      "critical_evidence_coverage": 1.0,
+      "noise_ratio": 0.0,
+      "relationship_coverage": 1.0,
+      "compression_ratio": 5.39,
+      "token_savings_percent": 81.5,
+      "retrieved_files": [
+        "src/core/engine.ts",
+        "src/core/types.ts",
+        "src/app.ts",
+        "src/features/report.ts",
+        "tsconfig.json"
+      ],
+      "missing_expected_files": [],
+      "missing_critical_files": [],
+      "retrieved_symbols": [
+        "ProcessingEngine",
+        "PipelineRunner",
+        "EngineConfig",
+        "PipelineStatus"
+      ],
+      "missing_expected_symbols": [],
+      "missing_critical_symbols": [],
+      "matched_relationships": [
+        {
+          "source": "src/core/engine.ts#ProcessingEngine",
+          "target": "src/core/types.ts#PipelineRunner",
+          "kind": "inherits"
+        }
+      ],
+      "missing_relationships": [],
+      "detected_noise_files": [],
+      "context_tokens": 135,
+      "baseline_tokens": 728,
+      "retrieval_time_ms": 0.35,
+      "passed": true,
+      "verdict": "PASS",
+      "failure_reasons": []
+    },
+    {
+      "task_id": "TASK-ALIAS-02",
+      "repository_id": "ts_alias",
+      "category": "path_alias",
+      "task_prompt": "How does ReportGenerator import @core/engine and @shared/format through path aliases to generate reports?",
+      "precision_at_k": 0.6667,
+      "recall_at_k": 1.0,
+      "critical_file_coverage": 1.0,
+      "critical_symbol_coverage": 1.0,
+      "critical_evidence_coverage": 1.0,
+      "noise_ratio": 0.1667,
+      "relationship_coverage": 0.5,
+      "compression_ratio": 4.36,
+      "token_savings_percent": 77.1,
+      "retrieved_files": [
+        "src/core/engine.ts",
+        "src/features/report.ts",
+        "src/shared/format.ts",
+        "src/core/types.ts",
+        "src/app.ts",
+        "src/shared/stringUtils.js"
+      ],
+      "missing_expected_files": [],
+      "missing_critical_files": [],
+      "retrieved_symbols": [
+        "ReportGenerator",
+        "generateSummaryReport",
+        "ProcessingEngine",
+        "formatReportData"
+      ],
+      "missing_expected_symbols": [],
+      "missing_critical_symbols": [],
+      "matched_relationships": [
+        {
+          "source": "src/features/report.ts#ReportGenerator",
+          "target": "src/shared/format.ts#formatReportData",
+          "kind": "calls"
+        }
+      ],
+      "missing_relationships": [
+        {
+          "source": "src/features/report.ts#ReportGenerator",
+          "target": "src/core/engine.ts#ProcessingEngine",
+          "kind": "calls"
+        }
+      ],
+      "detected_noise_files": [
+        "src/app.ts"
+      ],
+      "context_tokens": 167,
+      "baseline_tokens": 728,
+      "retrieval_time_ms": 0.26,
+      "passed": true,
+      "verdict": "PASS",
+      "failure_reasons": []
+    },
+    {
+      "task_id": "TASK-ALIAS-03",
+      "repository_id": "ts_alias",
+      "category": "path_alias",
+      "task_prompt": "How does runApplication in src/app.ts instantiate ProcessingEngine and ReportGenerator using path aliases?",
+      "precision_at_k": 0.5,
+      "recall_at_k": 1.0,
+      "critical_file_coverage": 1.0,
+      "critical_symbol_coverage": 1.0,
+      "critical_evidence_coverage": 1.0,
+      "noise_ratio": 0.1667,
+      "relationship_coverage": 1.0,
+      "compression_ratio": 4.36,
+      "token_savings_percent": 77.1,
+      "retrieved_files": [
+        "src/core/engine.ts",
+        "src/app.ts",
+        "src/features/report.ts",
+        "src/core/types.ts",
+        "src/shared/format.ts",
+        "src/shared/stringUtils.js"
+      ],
+      "missing_expected_files": [],
+      "missing_critical_files": [],
+      "retrieved_symbols": [
+        "runApplication",
+        "ProcessingEngine",
+        "ReportGenerator"
+      ],
+      "missing_expected_symbols": [],
+      "missing_critical_symbols": [],
+      "matched_relationships": [
+        {
+          "source": "src/app.ts#runApplication",
+          "target": "src/features/report.ts#ReportGenerator",
+          "kind": "calls"
+        },
+        {
+          "source": "src/app.ts#runApplication",
+          "target": "src/core/engine.ts#ProcessingEngine",
+          "kind": "calls"
+        }
+      ],
+      "missing_relationships": [],
+      "detected_noise_files": [
+        "src/shared/format.ts"
+      ],
+      "context_tokens": 167,
+      "baseline_tokens": 728,
+      "retrieval_time_ms": 0.26,
+      "passed": true,
+      "verdict": "PASS",
+      "failure_reasons": []
+    },
+    {
+      "task_id": "TASK-BARREL-01",
+      "repository_id": "ts_barrel",
+      "category": "barrel_reexport",
+      "task_prompt": "How does src/components/index.ts re-export Badge as default export and formatBadgeLabel as named export?",
+      "precision_at_k": 0.5,
+      "recall_at_k": 1.0,
+      "critical_file_coverage": 1.0,
+      "critical_symbol_coverage": 1.0,
+      "critical_evidence_coverage": 1.0,
+      "noise_ratio": 0.25,
+      "relationship_coverage": 1.0,
+      "compression_ratio": 3.51,
+      "token_savings_percent": 71.5,
+      "retrieved_files": [
+        "src/components/Badge.tsx",
+        "src/components/index.ts",
+        "src/index.ts",
+        "src/components/Panel.tsx"
+      ],
+      "missing_expected_files": [],
+      "missing_critical_files": [],
+      "retrieved_symbols": [
+        "Badge",
+        "formatBadgeLabel",
+        "BadgeProps"
+      ],
+      "missing_expected_symbols": [],
+      "missing_critical_symbols": [],
+      "matched_relationships": [
+        {
+          "source": "src/components/Badge.tsx#Badge",
+          "target": "src/components/Badge.tsx#formatBadgeLabel",
+          "kind": "calls"
+        }
+      ],
+      "missing_relationships": [],
+      "detected_noise_files": [
+        "src/components/Panel.tsx"
+      ],
+      "context_tokens": 81,
+      "baseline_tokens": 284,
+      "retrieval_time_ms": 0.08,
+      "passed": true,
+      "verdict": "PASS",
+      "failure_reasons": []
+    },
+    {
+      "task_id": "TASK-BARREL-02",
+      "repository_id": "ts_barrel",
+      "category": "barrel_reexport",
+      "task_prompt": "How does src/components/index.ts export all symbols from src/components/Panel.tsx via wildcard re-export?",
+      "precision_at_k": 0.5,
+      "recall_at_k": 1.0,
+      "critical_file_coverage": 1.0,
+      "critical_symbol_coverage": 1.0,
+      "critical_evidence_coverage": 1.0,
+      "noise_ratio": 0.25,
+      "relationship_coverage": 1.0,
+      "compression_ratio": 3.51,
+      "token_savings_percent": 71.5,
+      "retrieved_files": [
+        "src/components/Panel.tsx",
+        "src/components/Badge.tsx",
+        "src/components/index.ts",
+        "src/index.ts"
+      ],
+      "missing_expected_files": [],
+      "missing_critical_files": [],
+      "retrieved_symbols": [
+        "Panel",
+        "PanelHeader",
+        "PanelProps"
+      ],
+      "missing_expected_symbols": [],
+      "missing_critical_symbols": [],
+      "matched_relationships": [
+        {
+          "source": "src/components/Panel.tsx#Panel",
+          "target": "src/components/Panel.tsx#PanelHeader",
+          "kind": "renders"
+        }
+      ],
+      "missing_relationships": [],
+      "detected_noise_files": [
+        "src/components/Badge.tsx"
+      ],
+      "context_tokens": 81,
+      "baseline_tokens": 284,
+      "retrieval_time_ms": 0.06,
+      "passed": true,
+      "verdict": "PASS",
+      "failure_reasons": []
+    },
+    {
+      "task_id": "TASK-BARREL-03",
+      "repository_id": "ts_barrel",
+      "category": "barrel_reexport",
+      "task_prompt": "How does the root src/index.ts re-export StatusBadge and all component exports from src/components?",
+      "precision_at_k": 1.0,
+      "recall_at_k": 1.0,
+      "critical_file_coverage": 1.0,
+      "critical_symbol_coverage": 1.0,
+      "critical_evidence_coverage": 1.0,
+      "noise_ratio": 0.0,
+      "relationship_coverage": 1.0,
+      "compression_ratio": 3.51,
+      "token_savings_percent": 71.5,
+      "retrieved_files": [
+        "src/components/index.ts",
+        "src/components/Badge.tsx",
+        "src/components/Panel.tsx",
+        "src/index.ts"
+      ],
+      "missing_expected_files": [],
+      "missing_critical_files": [],
+      "retrieved_symbols": [
+        "Badge",
+        "Panel"
+      ],
+      "missing_expected_symbols": [
+        "StatusBadge"
+      ],
+      "missing_critical_symbols": [],
+      "matched_relationships": [
+        {
+          "source": "src/components/Badge.tsx#Badge",
+          "target": "src/components/Badge.tsx#formatBadgeLabel",
+          "kind": "calls"
+        }
+      ],
+      "missing_relationships": [],
+      "detected_noise_files": [],
+      "context_tokens": 81,
+      "baseline_tokens": 284,
+      "retrieval_time_ms": 0.06,
+      "passed": true,
+      "verdict": "PASS",
+      "failure_reasons": []
+    },
+    {
+      "task_id": "TASK-CALL-01",
+      "repository_id": "py_backend",
+      "category": "calls_relationship",
+      "task_prompt": "What dependencies does bootstrap_service call and initialize in main.py in py_backend?",
+      "precision_at_k": 0.5,
+      "recall_at_k": 1.0,
+      "critical_file_coverage": 1.0,
+      "critical_symbol_coverage": 1.0,
+      "critical_evidence_coverage": 1.0,
+      "noise_ratio": 0.1667,
+      "relationship_coverage": 1.0,
+      "compression_ratio": 7.49,
+      "token_savings_percent": 86.6,
+      "retrieved_files": [
+        "main.py",
+        "infrastructure/file_store.py",
+        "domain/document.py",
+        "domain/ports.py",
+        "application/processor.py",
+        "api/routes.py"
+      ],
+      "missing_expected_files": [],
+      "missing_critical_files": [],
+      "retrieved_symbols": [
+        "bootstrap_service",
+        "DocumentProcessor",
+        "LocalFileStore"
+      ],
+      "missing_expected_symbols": [],
+      "missing_critical_symbols": [],
+      "matched_relationships": [
+        {
+          "source": "main.bootstrap_service",
+          "target": "application.processor.DocumentProcessor",
+          "kind": "calls"
+        }
+      ],
+      "missing_relationships": [],
+      "detected_noise_files": [
+        "domain/document.py"
+      ],
+      "context_tokens": 194,
+      "baseline_tokens": 1453,
+      "retrieval_time_ms": 0.3,
+      "passed": true,
+      "verdict": "PASS",
+      "failure_reasons": []
+    },
+    {
+      "task_id": "TASK-CALL-02",
+      "repository_id": "ts_alias",
+      "category": "calls_relationship",
+      "task_prompt": "What methods does ReportGenerator.generateSummaryReport invoke on ProcessingEngine and formatReportData in ts_alias?",
+      "precision_at_k": 0.6,
+      "recall_at_k": 1.0,
+      "critical_file_coverage": 1.0,
+      "critical_symbol_coverage": 1.0,
+      "critical_evidence_coverage": 1.0,
+      "noise_ratio": 0.2,
+      "relationship_coverage": 0.5,
+      "compression_ratio": 4.95,
+      "token_savings_percent": 79.8,
+      "retrieved_files": [
+        "src/features/report.ts",
+        "src/core/engine.ts",
+        "src/shared/format.ts",
+        "src/core/types.ts",
+        "src/app.ts"
+      ],
+      "missing_expected_files": [],
+      "missing_critical_files": [],
+      "retrieved_symbols": [
+        "ReportGenerator",
+        "generateSummaryReport",
+        "ProcessingEngine",
+        "execute",
+        "formatReportData"
+      ],
+      "missing_expected_symbols": [],
+      "missing_critical_symbols": [],
+      "matched_relationships": [
+        {
+          "source": "src/features/report.ts#ReportGenerator",
+          "target": "src/shared/format.ts#formatReportData",
+          "kind": "calls"
+        }
+      ],
+      "missing_relationships": [
+        {
+          "source": "src/features/report.ts#ReportGenerator",
+          "target": "src/core/engine.ts#ProcessingEngine",
+          "kind": "calls"
+        }
+      ],
+      "detected_noise_files": [
+        "src/app.ts"
+      ],
+      "context_tokens": 147,
+      "baseline_tokens": 728,
+      "retrieval_time_ms": 0.24,
+      "passed": true,
+      "verdict": "PASS",
+      "failure_reasons": []
+    },
+    {
+      "task_id": "TASK-CALL-03",
+      "repository_id": "polyglot",
+      "category": "calls_relationship",
+      "task_prompt": "What methods does ItemList invoke on itemClient in frontend/src/views/ItemList.tsx in polyglot?",
+      "precision_at_k": 0.4,
+      "recall_at_k": 1.0,
+      "critical_file_coverage": 1.0,
+      "critical_symbol_coverage": 1.0,
+      "critical_evidence_coverage": 1.0,
+      "noise_ratio": 0.2,
+      "relationship_coverage": 1.0,
+      "compression_ratio": 11.54,
+      "token_savings_percent": 91.3,
+      "retrieved_files": [
+        "frontend/src/views/ItemList.tsx",
+        "frontend/src/api/itemClient.ts",
+        "frontend/src/App.tsx",
+        "frontend/src/utils/formatter.cjs",
+        "frontend/src/utils/mathHelper.cjs"
+      ],
+      "missing_expected_files": [],
+      "missing_critical_files": [],
+      "retrieved_symbols": [
+        "ItemList",
+        "fetchCatalogItems",
+        "CatalogItemDTO"
+      ],
+      "missing_expected_symbols": [],
+      "missing_critical_symbols": [],
+      "matched_relationships": [
+        {
+          "source": "frontend/src/views/ItemList.tsx#ItemList",
+          "target": "frontend/src/api/itemClient.ts#fetchCatalogItems",
+          "kind": "calls"
+        }
+      ],
+      "missing_relationships": [],
+      "detected_noise_files": [
+        "frontend/src/App.tsx"
+      ],
+      "context_tokens": 125,
+      "baseline_tokens": 1443,
+      "retrieval_time_ms": 0.27,
+      "passed": true,
+      "verdict": "PASS",
+      "failure_reasons": []
+    },
+    {
+      "task_id": "TASK-INH-01",
+      "repository_id": "py_backend",
+      "category": "inherits_implements",
+      "task_prompt": "What base interface does LocalFileStore inherit from in infrastructure/file_store.py?",
+      "precision_at_k": 0.6667,
+      "recall_at_k": 1.0,
+      "critical_file_coverage": 1.0,
+      "critical_symbol_coverage": 1.0,
+      "critical_evidence_coverage": 1.0,
+      "noise_ratio": 0.0,
+      "relationship_coverage": 1.0,
+      "compression_ratio": 8.75,
+      "token_savings_percent": 88.6,
+      "retrieved_files": [
+        "infrastructure/file_store.py",
+        "main.py",
+        "domain/ports.py"
+      ],
+      "missing_expected_files": [],
+      "missing_critical_files": [],
+      "retrieved_symbols": [
+        "LocalFileStore",
+        "DocumentStorePort"
+      ],
+      "missing_expected_symbols": [],
+      "missing_critical_symbols": [],
+      "matched_relationships": [
+        {
+          "source": "infrastructure.file_store.LocalFileStore",
+          "target": "domain.ports.DocumentStorePort",
+          "kind": "inherits"
+        }
+      ],
+      "missing_relationships": [],
+      "detected_noise_files": [],
+      "context_tokens": 166,
+      "baseline_tokens": 1453,
+      "retrieval_time_ms": 0.19,
+      "passed": true,
+      "verdict": "PASS",
+      "failure_reasons": []
+    },
+    {
+      "task_id": "TASK-INH-02",
+      "repository_id": "ts_alias",
+      "category": "inherits_implements",
+      "task_prompt": "What interface does ProcessingEngine implement in src/core/engine.ts?",
+      "precision_at_k": 0.3333,
+      "recall_at_k": 1.0,
+      "critical_file_coverage": 1.0,
+      "critical_symbol_coverage": 1.0,
+      "critical_evidence_coverage": 1.0,
+      "noise_ratio": 0.1667,
+      "relationship_coverage": 1.0,
+      "compression_ratio": 4.39,
+      "token_savings_percent": 77.2,
+      "retrieved_files": [
+        "src/core/engine.ts",
+        "src/core/types.ts",
+        "src/app.ts",
+        "src/features/report.ts",
+        "src/shared/format.ts",
+        "src/shared/stringUtils.js"
+      ],
+      "missing_expected_files": [],
+      "missing_critical_files": [],
+      "retrieved_symbols": [
+        "ProcessingEngine",
+        "PipelineRunner"
+      ],
+      "missing_expected_symbols": [],
+      "missing_critical_symbols": [],
+      "matched_relationships": [
+        {
+          "source": "src/core/engine.ts#ProcessingEngine",
+          "target": "src/core/types.ts#PipelineRunner",
+          "kind": "inherits"
+        }
+      ],
+      "missing_relationships": [],
+      "detected_noise_files": [
+        "src/shared/format.ts"
+      ],
+      "context_tokens": 166,
+      "baseline_tokens": 728,
+      "retrieval_time_ms": 0.22,
+      "passed": true,
+      "verdict": "PASS",
+      "failure_reasons": []
+    },
+    {
+      "task_id": "TASK-INH-03",
+      "repository_id": "py_backend",
+      "category": "inherits_implements",
+      "task_prompt": "What base interface does StandardDocumentParser implement in infrastructure/file_store.py?",
+      "precision_at_k": 0.5,
+      "recall_at_k": 1.0,
+      "critical_file_coverage": 1.0,
+      "critical_symbol_coverage": 1.0,
+      "critical_evidence_coverage": 1.0,
+      "noise_ratio": 0.25,
+      "relationship_coverage": 1.0,
+      "compression_ratio": 7.85,
+      "token_savings_percent": 87.3,
+      "retrieved_files": [
+        "infrastructure/file_store.py",
+        "main.py",
+        "domain/document.py",
+        "domain/ports.py"
+      ],
+      "missing_expected_files": [],
+      "missing_critical_files": [],
+      "retrieved_symbols": [
+        "StandardDocumentParser",
+        "DocumentParserPort"
+      ],
+      "missing_expected_symbols": [],
+      "missing_critical_symbols": [],
+      "matched_relationships": [
+        {
+          "source": "infrastructure.file_store.StandardDocumentParser",
+          "target": "domain.ports.DocumentParserPort",
+          "kind": "inherits"
+        }
+      ],
+      "missing_relationships": [],
+      "detected_noise_files": [
+        "main.py"
+      ],
+      "context_tokens": 185,
+      "baseline_tokens": 1453,
+      "retrieval_time_ms": 0.21,
+      "passed": true,
+      "verdict": "PASS",
+      "failure_reasons": []
+    },
+    {
+      "task_id": "TASK-JS-01",
+      "repository_id": "polyglot",
+      "category": "javascript_structural",
+      "task_prompt": "How does formatValue in frontend/src/utils/formatter.cjs format numerical values and export functions via CommonJS module.exports?",
+      "precision_at_k": 0.2,
+      "recall_at_k": 1.0,
+      "critical_file_coverage": 1.0,
+      "critical_symbol_coverage": 1.0,
+      "critical_evidence_coverage": 1.0,
+      "noise_ratio": 0.0,
+      "relationship_coverage": 1.0,
+      "compression_ratio": 11.64,
+      "token_savings_percent": 91.4,
+      "retrieved_files": [
+        "frontend/src/utils/formatter.cjs",
+        "frontend/src/utils/mathHelper.cjs",
+        "frontend/src/App.tsx",
+        "frontend/src/api/itemClient.ts",
+        "frontend/src/views/ItemList.tsx"
+      ],
+      "missing_expected_files": [],
+      "missing_critical_files": [],
+      "retrieved_symbols": [
+        "formatValue",
+        "truncateString"
+      ],
+      "missing_expected_symbols": [
+        "module.exports"
+      ],
+      "missing_critical_symbols": [],
+      "matched_relationships": [],
+      "missing_relationships": [],
+      "detected_noise_files": [],
+      "context_tokens": 124,
+      "baseline_tokens": 1443,
+      "retrieval_time_ms": 0.27,
+      "passed": true,
+      "verdict": "PASS",
+      "failure_reasons": []
+    },
+    {
+      "task_id": "TASK-JS-02",
+      "repository_id": "polyglot",
+      "category": "javascript_structural",
+      "task_prompt": "How does computeTotal in frontend/src/utils/mathHelper.cjs require formatter.cjs and compute discounted totals via CommonJS?",
+      "precision_at_k": 0.4,
+      "recall_at_k": 1.0,
+      "critical_file_coverage": 1.0,
+      "critical_symbol_coverage": 1.0,
+      "critical_evidence_coverage": 1.0,
+      "noise_ratio": 0.0,
+      "relationship_coverage": 1.0,
+      "compression_ratio": 11.64,
+      "token_savings_percent": 91.4,
+      "retrieved_files": [
+        "frontend/src/utils/mathHelper.cjs",
+        "frontend/src/utils/formatter.cjs",
+        "frontend/src/App.tsx",
+        "frontend/src/api/itemClient.ts",
+        "frontend/src/views/ItemList.tsx"
+      ],
+      "missing_expected_files": [],
+      "missing_critical_files": [],
+      "retrieved_symbols": [
+        "computeTotal",
+        "calculateAverage",
+        "formatValue"
+      ],
+      "missing_expected_symbols": [],
+      "missing_critical_symbols": [],
+      "matched_relationships": [
+        {
+          "source": "frontend/src/utils/mathHelper.cjs#computeTotal",
+          "target": "frontend/src/utils/formatter.cjs#formatValue",
+          "kind": "calls"
+        }
+      ],
+      "missing_relationships": [],
+      "detected_noise_files": [],
+      "context_tokens": 124,
+      "baseline_tokens": 1443,
+      "retrieval_time_ms": 0.25,
+      "passed": true,
+      "verdict": "PASS",
+      "failure_reasons": []
+    },
+    {
+      "task_id": "TASK-JS-03",
+      "repository_id": "ts_alias",
+      "category": "javascript_structural",
+      "task_prompt": "How does formatLabel format prefix and ID strings and export DEFAULT_PREFIX in src/shared/stringUtils.js?",
+      "precision_at_k": 0.1667,
+      "recall_at_k": 1.0,
+      "critical_file_coverage": 1.0,
+      "critical_symbol_coverage": 1.0,
+      "critical_evidence_coverage": 1.0,
+      "noise_ratio": 0.1667,
+      "relationship_coverage": 1.0,
+      "compression_ratio": 4.39,
+      "token_savings_percent": 77.2,
+      "retrieved_files": [
+        "src/shared/stringUtils.js",
+        "src/shared/format.ts",
+        "src/features/report.ts",
+        "src/core/types.ts",
+        "src/app.ts",
+        "src/core/engine.ts"
+      ],
+      "missing_expected_files": [],
+      "missing_critical_files": [],
+      "retrieved_symbols": [
+        "formatLabel",
+        "parseLabel",
+        "DEFAULT_PREFIX"
+      ],
+      "missing_expected_symbols": [],
+      "missing_critical_symbols": [],
+      "matched_relationships": [],
+      "missing_relationships": [],
+      "detected_noise_files": [
+        "src/core/engine.ts"
+      ],
+      "context_tokens": 166,
+      "baseline_tokens": 728,
+      "retrieval_time_ms": 0.18,
+      "passed": true,
+      "verdict": "PASS",
+      "failure_reasons": []
+    },
+    {
+      "task_id": "TASK-JSX-01",
+      "repository_id": "ts_react",
+      "category": "jsx_render",
+      "task_prompt": "How does TaskBoard render TaskCard JSX elements in ts_react?",
+      "precision_at_k": 0.4,
+      "recall_at_k": 1.0,
+      "critical_file_coverage": 1.0,
+      "critical_symbol_coverage": 1.0,
+      "critical_evidence_coverage": 1.0,
+      "noise_ratio": 0.2,
+      "relationship_coverage": 1.0,
+      "compression_ratio": 7.27,
+      "token_savings_percent": 86.2,
+      "retrieved_files": [
+        "src/components/TaskBoard.tsx",
+        "src/components/TaskCard.tsx",
+        "src/hooks/useBoard.ts",
+        "src/App.tsx",
+        "src/context/BoardContext.tsx"
+      ],
+      "missing_expected_files": [],
+      "missing_critical_files": [],
+      "retrieved_symbols": [
+        "TaskBoard",
+        "TaskCard"
+      ],
+      "missing_expected_symbols": [],
+      "missing_critical_symbols": [],
+      "matched_relationships": [
+        {
+          "source": "src/components/TaskBoard.tsx#TaskBoard",
+          "target": "src/components/TaskCard.tsx#TaskCard",
+          "kind": "renders"
+        }
+      ],
+      "missing_relationships": [],
+      "detected_noise_files": [
+        "src/App.tsx"
+      ],
+      "context_tokens": 116,
+      "baseline_tokens": 843,
+      "retrieval_time_ms": 0.15,
+      "passed": true,
+      "verdict": "PASS",
+      "failure_reasons": []
+    },
+    {
+      "task_id": "TASK-JSX-02",
+      "repository_id": "ts_react",
+      "category": "jsx_render",
+      "task_prompt": "How does App.tsx render BoardProvider and TaskBoard JSX elements in ts_react?",
+      "precision_at_k": 0.6,
+      "recall_at_k": 1.0,
+      "critical_file_coverage": 1.0,
+      "critical_symbol_coverage": 1.0,
+      "critical_evidence_coverage": 1.0,
+      "noise_ratio": 0.2,
+      "relationship_coverage": 1.0,
+      "compression_ratio": 7.27,
+      "token_savings_percent": 86.2,
+      "retrieved_files": [
+        "src/components/TaskBoard.tsx",
+        "src/App.tsx",
+        "src/context/BoardContext.tsx",
+        "src/components/TaskCard.tsx",
+        "src/hooks/useBoard.ts"
+      ],
+      "missing_expected_files": [],
+      "missing_critical_files": [],
+      "retrieved_symbols": [
+        "App",
+        "BoardProvider",
+        "TaskBoard"
+      ],
+      "missing_expected_symbols": [],
+      "missing_critical_symbols": [],
+      "matched_relationships": [
+        {
+          "source": "src/App.tsx#App",
+          "target": "src/context/BoardContext.tsx#BoardProvider",
+          "kind": "renders"
+        },
+        {
+          "source": "src/App.tsx#App",
+          "target": "src/components/TaskBoard.tsx#TaskBoard",
+          "kind": "renders"
+        }
+      ],
+      "missing_relationships": [],
+      "detected_noise_files": [
+        "src/components/TaskCard.tsx"
+      ],
+      "context_tokens": 116,
+      "baseline_tokens": 843,
+      "retrieval_time_ms": 0.17,
+      "passed": true,
+      "verdict": "PASS",
+      "failure_reasons": []
+    },
+    {
+      "task_id": "TASK-JSX-03",
+      "repository_id": "monorepo",
+      "category": "jsx_render",
+      "task_prompt": "How does WorkspaceView render TreeView in packages/app/src/WorkspaceView.tsx in monorepo?",
+      "precision_at_k": 0.2857,
+      "recall_at_k": 1.0,
+      "critical_file_coverage": 1.0,
+      "critical_symbol_coverage": 1.0,
+      "critical_evidence_coverage": 1.0,
+      "noise_ratio": 0.1429,
+      "relationship_coverage": 1.0,
+      "compression_ratio": 3.89,
+      "token_savings_percent": 74.3,
+      "retrieved_files": [
+        "packages/app/src/WorkspaceView.tsx",
+        "packages/ui/src/TreeView.tsx",
+        "packages/app/src/main.ts",
+        "packages/shared/src/types.ts",
+        "packages/core/src/parser.ts",
+        "packages/core/src/index.ts",
+        "packages/ui/src/index.ts"
+      ],
+      "missing_expected_files": [],
+      "missing_critical_files": [],
+      "retrieved_symbols": [
+        "WorkspaceView",
+        "TreeView"
+      ],
+      "missing_expected_symbols": [],
+      "missing_critical_symbols": [],
+      "matched_relationships": [
+        {
+          "source": "packages/app/src/WorkspaceView.tsx#WorkspaceView",
+          "target": "packages/ui/src/TreeView.tsx#TreeView",
+          "kind": "renders"
+        }
+      ],
+      "missing_relationships": [],
+      "detected_noise_files": [
+        "packages/app/src/main.ts"
+      ],
+      "context_tokens": 133,
+      "baseline_tokens": 517,
+      "retrieval_time_ms": 0.17,
+      "passed": true,
+      "verdict": "PASS",
+      "failure_reasons": []
+    },
+    {
+      "task_id": "TASK-MONO-01",
+      "repository_id": "monorepo",
+      "category": "cross_package_monorepo",
+      "task_prompt": "How does packages/core/src/parser.ts import ASTNode and SyntaxTree from packages/shared/src/types.ts?",
+      "precision_at_k": 0.2857,
+      "recall_at_k": 1.0,
+      "critical_file_coverage": 1.0,
+      "critical_symbol_coverage": 1.0,
+      "critical_evidence_coverage": 1.0,
+      "noise_ratio": 0.1429,
+      "relationship_coverage": 1.0,
+      "compression_ratio": 3.89,
+      "token_savings_percent": 74.3,
+      "retrieved_files": [
+        "packages/shared/src/types.ts",
+        "packages/core/src/parser.ts",
+        "packages/app/src/WorkspaceView.tsx",
+        "packages/ui/src/TreeView.tsx",
+        "packages/core/src/index.ts",
+        "packages/ui/src/index.ts",
+        "packages/app/src/main.ts"
+      ],
+      "missing_expected_files": [],
+      "missing_critical_files": [],
+      "retrieved_symbols": [
+        "CodeParser",
+        "parseSource",
+        "ASTNode",
+        "SyntaxTree"
+      ],
+      "missing_expected_symbols": [],
+      "missing_critical_symbols": [],
+      "matched_relationships": [
+        {
+          "source": "packages/core/src/parser.ts#CodeParser",
+          "target": "packages/shared/src/types.ts#ASTNode",
+          "kind": "imports"
+        }
+      ],
+      "missing_relationships": [],
+      "detected_noise_files": [
+        "packages/ui/src/TreeView.tsx"
+      ],
+      "context_tokens": 133,
+      "baseline_tokens": 517,
+      "retrieval_time_ms": 0.15,
+      "passed": true,
+      "verdict": "PASS",
+      "failure_reasons": []
+    },
+    {
+      "task_id": "TASK-MONO-02",
+      "repository_id": "monorepo",
+      "category": "cross_package_monorepo",
+      "task_prompt": "How does packages/ui/src/TreeView.tsx consume SyntaxTree models from packages/shared to render the tree?",
+      "precision_at_k": 0.2857,
+      "recall_at_k": 1.0,
+      "critical_file_coverage": 1.0,
+      "critical_symbol_coverage": 1.0,
+      "critical_evidence_coverage": 1.0,
+      "noise_ratio": 0.1429,
+      "relationship_coverage": 1.0,
+      "compression_ratio": 3.89,
+      "token_savings_percent": 74.3,
+      "retrieved_files": [
+        "packages/ui/src/TreeView.tsx",
+        "packages/shared/src/types.ts",
+        "packages/app/src/WorkspaceView.tsx",
+        "packages/core/src/parser.ts",
+        "packages/core/src/index.ts",
+        "packages/ui/src/index.ts",
+        "packages/app/src/main.ts"
+      ],
+      "missing_expected_files": [],
+      "missing_critical_files": [],
+      "retrieved_symbols": [
+        "TreeView",
+        "TreeViewProps",
+        "SyntaxTree",
+        "ASTNode"
+      ],
+      "missing_expected_symbols": [],
+      "missing_critical_symbols": [],
+      "matched_relationships": [
+        {
+          "source": "packages/ui/src/TreeView.tsx#TreeView",
+          "target": "packages/shared/src/types.ts#SyntaxTree",
+          "kind": "imports"
+        }
+      ],
+      "missing_relationships": [],
+      "detected_noise_files": [
+        "packages/core/src/parser.ts"
+      ],
+      "context_tokens": 133,
+      "baseline_tokens": 517,
+      "retrieval_time_ms": 0.19,
+      "passed": true,
+      "verdict": "PASS",
+      "failure_reasons": []
+    },
+    {
+      "task_id": "TASK-MONO-03",
+      "repository_id": "monorepo",
+      "category": "cross_package_monorepo",
+      "task_prompt": "How does packages/app/src/WorkspaceView.tsx integrate CodeParser from @core and TreeView from @ui?",
+      "precision_at_k": 0.8571,
+      "recall_at_k": 1.0,
+      "critical_file_coverage": 1.0,
+      "critical_symbol_coverage": 1.0,
+      "critical_evidence_coverage": 1.0,
+      "noise_ratio": 0.1429,
+      "relationship_coverage": 1.0,
+      "compression_ratio": 3.89,
+      "token_savings_percent": 74.3,
+      "retrieved_files": [
+        "packages/app/src/WorkspaceView.tsx",
+        "packages/ui/src/TreeView.tsx",
+        "packages/core/src/parser.ts",
+        "packages/shared/src/types.ts",
+        "packages/app/src/main.ts",
+        "packages/core/src/index.ts",
+        "packages/ui/src/index.ts"
+      ],
+      "missing_expected_files": [],
+      "missing_critical_files": [],
+      "retrieved_symbols": [
+        "WorkspaceView",
+        "CodeParser",
+        "TreeView",
+        "SyntaxTree"
+      ],
+      "missing_expected_symbols": [],
+      "missing_critical_symbols": [],
+      "matched_relationships": [
+        {
+          "source": "packages/app/src/WorkspaceView.tsx#WorkspaceView",
+          "target": "packages/core/src/parser.ts#CodeParser",
+          "kind": "calls"
+        },
+        {
+          "source": "packages/app/src/WorkspaceView.tsx#WorkspaceView",
+          "target": "packages/ui/src/TreeView.tsx#TreeView",
+          "kind": "renders"
+        }
+      ],
+      "missing_relationships": [],
+      "detected_noise_files": [
+        "packages/app/src/main.ts"
+      ],
+      "context_tokens": 133,
+      "baseline_tokens": 517,
+      "retrieval_time_ms": 0.19,
+      "passed": true,
+      "verdict": "PASS",
+      "failure_reasons": []
+    },
+    {
+      "task_id": "TASK-NOISE-01",
+      "repository_id": "py_backend",
+      "category": "noise_discrimination",
+      "task_prompt": "How is DocumentMetadata structured in domain/document.py without retrieving unrelated API routes or main bootstrap?",
+      "precision_at_k": 0.1667,
+      "recall_at_k": 1.0,
+      "critical_file_coverage": 1.0,
+      "critical_symbol_coverage": 1.0,
+      "critical_evidence_coverage": 1.0,
+      "noise_ratio": 0.3333,
+      "relationship_coverage": 1.0,
+      "compression_ratio": 7.45,
+      "token_savings_percent": 86.6,
+      "retrieved_files": [
+        "main.py",
+        "infrastructure/file_store.py",
+        "domain/ports.py",
+        "domain/document.py",
+        "api/routes.py",
+        "application/processor.py"
+      ],
+      "missing_expected_files": [],
+      "missing_critical_files": [],
+      "retrieved_symbols": [
+        "DocumentMetadata",
+        "DocumentStatus",
+        "Document"
+      ],
+      "missing_expected_symbols": [],
+      "missing_critical_symbols": [],
+      "matched_relationships": [],
+      "missing_relationships": [],
+      "detected_noise_files": [
+        "api/routes.py",
+        "main.py"
+      ],
+      "context_tokens": 195,
+      "baseline_tokens": 1453,
+      "retrieval_time_ms": 0.45,
+      "passed": true,
+      "verdict": "PASS",
+      "failure_reasons": []
+    },
+    {
+      "task_id": "TASK-NOISE-02",
+      "repository_id": "ts_barrel",
+      "category": "noise_discrimination",
+      "task_prompt": "How is formatBadgeLabel implemented in src/components/Badge.tsx without retrieving unrelated Panel component?",
+      "precision_at_k": 0.25,
+      "recall_at_k": 1.0,
+      "critical_file_coverage": 1.0,
+      "critical_symbol_coverage": 1.0,
+      "critical_evidence_coverage": 1.0,
+      "noise_ratio": 0.25,
+      "relationship_coverage": 1.0,
+      "compression_ratio": 3.51,
+      "token_savings_percent": 71.5,
+      "retrieved_files": [
+        "src/components/Badge.tsx",
+        "src/components/Panel.tsx",
+        "src/components/index.ts",
+        "src/index.ts"
+      ],
+      "missing_expected_files": [],
+      "missing_critical_files": [],
+      "retrieved_symbols": [
+        "formatBadgeLabel",
+        "BadgeProps"
+      ],
+      "missing_expected_symbols": [],
+      "missing_critical_symbols": [],
+      "matched_relationships": [],
+      "missing_relationships": [],
+      "detected_noise_files": [
+        "src/components/Panel.tsx"
+      ],
+      "context_tokens": 81,
+      "baseline_tokens": 284,
+      "retrieval_time_ms": 0.08,
+      "passed": true,
+      "verdict": "PASS",
+      "failure_reasons": []
+    },
+    {
+      "task_id": "TASK-NOISE-03",
+      "repository_id": "ts_alias",
+      "category": "noise_discrimination",
+      "task_prompt": "How is sanitizeInput defined in src/shared/format.ts without retrieving engine execution classes?",
+      "precision_at_k": 0.1667,
+      "recall_at_k": 1.0,
+      "critical_file_coverage": 1.0,
+      "critical_symbol_coverage": 1.0,
+      "critical_evidence_coverage": 1.0,
+      "noise_ratio": 0.3333,
+      "relationship_coverage": 1.0,
+      "compression_ratio": 4.36,
+      "token_savings_percent": 77.1,
+      "retrieved_files": [
+        "src/core/engine.ts",
+        "src/core/types.ts",
+        "src/shared/format.ts",
+        "src/features/report.ts",
+        "src/app.ts",
+        "src/shared/stringUtils.js"
+      ],
+      "missing_expected_files": [],
+      "missing_critical_files": [],
+      "retrieved_symbols": [
+        "sanitizeInput",
+        "formatReportData"
+      ],
+      "missing_expected_symbols": [],
+      "missing_critical_symbols": [],
+      "matched_relationships": [],
+      "missing_relationships": [],
+      "detected_noise_files": [
+        "src/app.ts",
+        "src/core/engine.ts"
+      ],
+      "context_tokens": 167,
+      "baseline_tokens": 728,
+      "retrieval_time_ms": 0.21,
+      "passed": true,
+      "verdict": "PASS",
+      "failure_reasons": []
+    },
+    {
+      "task_id": "TASK-POLY-01",
+      "repository_id": "polyglot",
+      "category": "polyglot_cross_language",
+      "task_prompt": "How does CatalogService in backend/app/services/catalog.py manage CatalogItem models for route handlers in polyglot?",
+      "precision_at_k": 0.375,
+      "recall_at_k": 1.0,
+      "critical_file_coverage": 1.0,
+      "critical_symbol_coverage": 1.0,
+      "critical_evidence_coverage": 1.0,
+      "noise_ratio": 0.125,
+      "relationship_coverage": 1.0,
+      "compression_ratio": 6.59,
+      "token_savings_percent": 84.8,
+      "retrieved_files": [
+        "backend/app/services/catalog.py",
+        "frontend/src/api/itemClient.ts",
+        "frontend/src/views/ItemList.tsx",
+        "backend/app/models/item.py",
+        "backend/app/routes/items.py",
+        "frontend/src/App.tsx",
+        "frontend/src/utils/formatter.cjs",
+        "frontend/src/utils/mathHelper.cjs"
+      ],
+      "missing_expected_files": [],
+      "missing_critical_files": [],
+      "retrieved_symbols": [
+        "CatalogService",
+        "InMemoryCatalogStore",
+        "CatalogItem",
+        "ItemSpec"
+      ],
+      "missing_expected_symbols": [],
+      "missing_critical_symbols": [],
+      "matched_relationships": [
+        {
+          "source": "backend.app.services.catalog.CatalogService.register_item",
+          "target": "backend.app.models.item.CatalogItem",
+          "kind": "calls"
+        }
+      ],
+      "missing_relationships": [],
+      "detected_noise_files": [
+        "frontend/src/views/ItemList.tsx"
+      ],
+      "context_tokens": 219,
+      "baseline_tokens": 1443,
+      "retrieval_time_ms": 0.39,
+      "passed": true,
+      "verdict": "PASS",
+      "failure_reasons": []
+    },
+    {
+      "task_id": "TASK-POLY-02",
+      "repository_id": "polyglot",
+      "category": "polyglot_cross_language",
+      "task_prompt": "How does frontend/src/api/itemClient.ts fetch items from backend routes /api/v1/items and map CatalogItemDTO from backend models in polyglot?",
+      "precision_at_k": 0.375,
+      "recall_at_k": 1.0,
+      "critical_file_coverage": 1.0,
+      "critical_symbol_coverage": 1.0,
+      "critical_evidence_coverage": 1.0,
+      "noise_ratio": 0.125,
+      "relationship_coverage": 1.0,
+      "compression_ratio": 6.59,
+      "token_savings_percent": 84.8,
+      "retrieved_files": [
+        "frontend/src/api/itemClient.ts",
+        "frontend/src/views/ItemList.tsx",
+        "backend/app/routes/items.py",
+        "backend/app/models/item.py",
+        "backend/app/services/catalog.py",
+        "frontend/src/App.tsx",
+        "frontend/src/utils/formatter.cjs",
+        "frontend/src/utils/mathHelper.cjs"
+      ],
+      "missing_expected_files": [],
+      "missing_critical_files": [],
+      "retrieved_symbols": [
+        "fetchCatalogItems",
+        "CatalogItemDTO",
+        "get_catalog_items",
+        "CatalogItem"
+      ],
+      "missing_expected_symbols": [],
+      "missing_critical_symbols": [],
+      "matched_relationships": [],
+      "missing_relationships": [],
+      "detected_noise_files": [
+        "backend/app/services/catalog.py"
+      ],
+      "context_tokens": 219,
+      "baseline_tokens": 1443,
+      "retrieval_time_ms": 0.31,
+      "passed": true,
+      "verdict": "PASS",
+      "failure_reasons": []
+    },
+    {
+      "task_id": "TASK-POLY-03",
+      "repository_id": "polyglot",
+      "category": "polyglot_cross_language",
+      "task_prompt": "How does ItemList.tsx in the React frontend invoke fetchCatalogItems to render catalog item list in polyglot?",
+      "precision_at_k": 0.375,
+      "recall_at_k": 1.0,
+      "critical_file_coverage": 1.0,
+      "critical_symbol_coverage": 1.0,
+      "critical_evidence_coverage": 1.0,
+      "noise_ratio": 0.125,
+      "relationship_coverage": 1.0,
+      "compression_ratio": 6.59,
+      "token_savings_percent": 84.8,
+      "retrieved_files": [
+        "frontend/src/views/ItemList.tsx",
+        "frontend/src/api/itemClient.ts",
+        "backend/app/services/catalog.py",
+        "backend/app/models/item.py",
+        "backend/app/routes/items.py",
+        "frontend/src/App.tsx",
+        "frontend/src/utils/formatter.cjs",
+        "frontend/src/utils/mathHelper.cjs"
+      ],
+      "missing_expected_files": [],
+      "missing_critical_files": [],
+      "retrieved_symbols": [
+        "ItemList",
+        "ItemListProps",
+        "fetchCatalogItems",
+        "CatalogItemDTO"
+      ],
+      "missing_expected_symbols": [],
+      "missing_critical_symbols": [],
+      "matched_relationships": [
+        {
+          "source": "frontend/src/views/ItemList.tsx#ItemList",
+          "target": "frontend/src/api/itemClient.ts#fetchCatalogItems",
+          "kind": "calls"
+        }
+      ],
+      "missing_relationships": [],
+      "detected_noise_files": [
+        "backend/app/routes/items.py"
+      ],
+      "context_tokens": 219,
+      "baseline_tokens": 1443,
+      "retrieval_time_ms": 0.53,
+      "passed": true,
+      "verdict": "PASS",
+      "failure_reasons": []
+    },
+    {
+      "task_id": "TASK-PY-01",
+      "repository_id": "py_backend",
+      "category": "python_layered_architecture",
+      "task_prompt": "How does DocumentProcessor coordinate document parsing, metadata extraction, and storage across domain ports in py_backend?",
+      "precision_at_k": 0.6667,
+      "recall_at_k": 1.0,
+      "critical_file_coverage": 1.0,
+      "critical_symbol_coverage": 1.0,
+      "critical_evidence_coverage": 1.0,
+      "noise_ratio": 0.1667,
+      "relationship_coverage": 1.0,
+      "compression_ratio": 7.49,
+      "token_savings_percent": 86.6,
+      "retrieved_files": [
+        "main.py",
+        "infrastructure/file_store.py",
+        "application/processor.py",
+        "domain/document.py",
+        "domain/ports.py",
+        "api/routes.py"
+      ],
+      "missing_expected_files": [],
+      "missing_critical_files": [],
+      "retrieved_symbols": [
+        "DocumentProcessor",
+        "process_document",
+        "DocumentStorePort",
+        "DocumentParserPort",
+        "Document",
+        "DocumentStatus"
+      ],
+      "missing_expected_symbols": [],
+      "missing_critical_symbols": [],
+      "matched_relationships": [
+        {
+          "source": "application.processor.DocumentProcessor.process_document",
+          "target": "domain.document.Document",
+          "kind": "calls"
+        }
+      ],
+      "missing_relationships": [],
+      "detected_noise_files": [
+        "api/routes.py"
+      ],
+      "context_tokens": 194,
+      "baseline_tokens": 1453,
+      "retrieval_time_ms": 0.45,
+      "passed": true,
+      "verdict": "PASS",
+      "failure_reasons": []
+    },
+    {
+      "task_id": "TASK-PY-02",
+      "repository_id": "py_backend",
+      "category": "python_layered_architecture",
+      "task_prompt": "How does LocalFileStore implement the DocumentStorePort protocol in infrastructure/file_store.py?",
+      "precision_at_k": 0.6667,
+      "recall_at_k": 0.6667,
+      "critical_file_coverage": 1.0,
+      "critical_symbol_coverage": 1.0,
+      "critical_evidence_coverage": 1.0,
+      "noise_ratio": 0.3333,
+      "relationship_coverage": 1.0,
+      "compression_ratio": 8.75,
+      "token_savings_percent": 88.6,
+      "retrieved_files": [
+        "infrastructure/file_store.py",
+        "domain/ports.py",
+        "main.py"
+      ],
+      "missing_expected_files": [
+        "domain/document.py"
+      ],
+      "missing_critical_files": [],
+      "retrieved_symbols": [
+        "LocalFileStore",
+        "DocumentStorePort",
+        "save",
+        "load",
+        "exists"
+      ],
+      "missing_expected_symbols": [],
+      "missing_critical_symbols": [],
+      "matched_relationships": [
+        {
+          "source": "infrastructure.file_store.LocalFileStore",
+          "target": "domain.ports.DocumentStorePort",
+          "kind": "inherits"
+        }
+      ],
+      "missing_relationships": [],
+      "detected_noise_files": [
+        "main.py"
+      ],
+      "context_tokens": 166,
+      "baseline_tokens": 1453,
+      "retrieval_time_ms": 0.2,
+      "passed": true,
+      "verdict": "PASS",
+      "failure_reasons": []
+    },
+    {
+      "task_id": "TASK-PY-03",
+      "repository_id": "py_backend",
+      "category": "python_layered_architecture",
+      "task_prompt": "How does bootstrap_service wire dependencies and construct DocumentRoutes in py_backend?",
+      "precision_at_k": 0.6667,
+      "recall_at_k": 1.0,
+      "critical_file_coverage": 1.0,
+      "critical_symbol_coverage": 1.0,
+      "critical_evidence_coverage": 1.0,
+      "noise_ratio": 0.1667,
+      "relationship_coverage": 1.0,
+      "compression_ratio": 7.49,
+      "token_savings_percent": 86.6,
+      "retrieved_files": [
+        "main.py",
+        "infrastructure/file_store.py",
+        "api/routes.py",
+        "domain/document.py",
+        "domain/ports.py",
+        "application/processor.py"
+      ],
+      "missing_expected_files": [],
+      "missing_critical_files": [],
+      "retrieved_symbols": [
+        "bootstrap_service",
+        "DocumentRoutes",
+        "DocumentProcessor",
+        "LocalFileStore",
+        "StandardDocumentParser"
+      ],
+      "missing_expected_symbols": [],
+      "missing_critical_symbols": [],
+      "matched_relationships": [
+        {
+          "source": "main.bootstrap_service",
+          "target": "infrastructure.file_store.LocalFileStore",
+          "kind": "calls"
+        },
+        {
+          "source": "main.bootstrap_service",
+          "target": "application.processor.DocumentProcessor",
+          "kind": "calls"
+        }
+      ],
+      "missing_relationships": [],
+      "detected_noise_files": [
+        "domain/document.py"
+      ],
+      "context_tokens": 194,
+      "baseline_tokens": 1453,
+      "retrieval_time_ms": 0.27,
+      "passed": true,
+      "verdict": "PASS",
+      "failure_reasons": []
+    },
+    {
+      "task_id": "TASK-TS-01",
+      "repository_id": "ts_react",
+      "category": "typescript_structural",
+      "task_prompt": "How does TaskBoard render TaskCard components and update task status using useBoard in ts_react?",
+      "precision_at_k": 0.6,
+      "recall_at_k": 1.0,
+      "critical_file_coverage": 1.0,
+      "critical_symbol_coverage": 1.0,
+      "critical_evidence_coverage": 1.0,
+      "noise_ratio": 0.2,
+      "relationship_coverage": 1.0,
+      "compression_ratio": 7.33,
+      "token_savings_percent": 86.4,
+      "retrieved_files": [
+        "src/components/TaskBoard.tsx",
+        "src/components/TaskCard.tsx",
+        "src/hooks/useBoard.ts",
+        "src/context/BoardContext.tsx",
+        "src/App.tsx"
+      ],
+      "missing_expected_files": [],
+      "missing_critical_files": [],
+      "retrieved_symbols": [
+        "TaskBoard",
+        "TaskCard",
+        "TaskItem",
+        "useBoard"
+      ],
+      "missing_expected_symbols": [],
+      "missing_critical_symbols": [],
+      "matched_relationships": [
+        {
+          "source": "src/components/TaskBoard.tsx#TaskBoard",
+          "target": "src/components/TaskCard.tsx#TaskCard",
+          "kind": "renders"
+        },
+        {
+          "source": "src/components/TaskBoard.tsx#TaskBoard",
+          "target": "src/hooks/useBoard.ts#useBoard",
+          "kind": "calls"
+        }
+      ],
+      "missing_relationships": [],
+      "detected_noise_files": [
+        "src/App.tsx"
+      ],
+      "context_tokens": 115,
+      "baseline_tokens": 843,
+      "retrieval_time_ms": 0.25,
+      "passed": true,
+      "verdict": "PASS",
+      "failure_reasons": []
+    },
+    {
+      "task_id": "TASK-TS-02",
+      "repository_id": "ts_react",
+      "category": "typescript_structural",
+      "task_prompt": "How does useBoard access BoardContext and validate that it is used within a BoardProvider in ts_react?",
+      "precision_at_k": 0.4,
+      "recall_at_k": 1.0,
+      "critical_file_coverage": 1.0,
+      "critical_symbol_coverage": 1.0,
+      "critical_evidence_coverage": 1.0,
+      "noise_ratio": 0.2,
+      "relationship_coverage": 1.0,
+      "compression_ratio": 7.33,
+      "token_savings_percent": 86.4,
+      "retrieved_files": [
+        "src/context/BoardContext.tsx",
+        "src/hooks/useBoard.ts",
+        "src/App.tsx",
+        "src/components/TaskBoard.tsx",
+        "src/components/TaskCard.tsx"
+      ],
+      "missing_expected_files": [],
+      "missing_critical_files": [],
+      "retrieved_symbols": [
+        "useBoard",
+        "BoardContext",
+        "BoardContextValue"
+      ],
+      "missing_expected_symbols": [],
+      "missing_critical_symbols": [],
+      "matched_relationships": [
+        {
+          "source": "src/hooks/useBoard.ts#useBoard",
+          "target": "src/context/BoardContext.tsx#BoardContext",
+          "kind": "imports"
+        }
+      ],
+      "missing_relationships": [],
+      "detected_noise_files": [
+        "src/components/TaskCard.tsx"
+      ],
+      "context_tokens": 115,
+      "baseline_tokens": 843,
+      "retrieval_time_ms": 0.15,
+      "passed": true,
+      "verdict": "PASS",
+      "failure_reasons": []
+    },
+    {
+      "task_id": "TASK-TS-03",
+      "repository_id": "ts_react",
+      "category": "typescript_structural",
+      "task_prompt": "How does App.tsx compose BoardProvider and TaskBoard to construct the UI tree in ts_react?",
+      "precision_at_k": 0.6,
+      "recall_at_k": 1.0,
+      "critical_file_coverage": 1.0,
+      "critical_symbol_coverage": 1.0,
+      "critical_evidence_coverage": 1.0,
+      "noise_ratio": 0.2,
+      "relationship_coverage": 1.0,
+      "compression_ratio": 7.33,
+      "token_savings_percent": 86.4,
+      "retrieved_files": [
+        "src/components/TaskBoard.tsx",
+        "src/App.tsx",
+        "src/context/BoardContext.tsx",
+        "src/components/TaskCard.tsx",
+        "src/hooks/useBoard.ts"
+      ],
+      "missing_expected_files": [],
+      "missing_critical_files": [],
+      "retrieved_symbols": [
+        "App",
+        "BoardProvider",
+        "TaskBoard"
+      ],
+      "missing_expected_symbols": [],
+      "missing_critical_symbols": [],
+      "matched_relationships": [
+        {
+          "source": "src/App.tsx#App",
+          "target": "src/context/BoardContext.tsx#BoardProvider",
+          "kind": "renders"
+        },
+        {
+          "source": "src/App.tsx#App",
+          "target": "src/components/TaskBoard.tsx#TaskBoard",
+          "kind": "renders"
+        }
+      ],
+      "missing_relationships": [],
+      "detected_noise_files": [
+        "src/components/TaskCard.tsx"
+      ],
+      "context_tokens": 115,
+      "baseline_tokens": 843,
+      "retrieval_time_ms": 0.16,
+      "passed": true,
+      "verdict": "PASS",
+      "failure_reasons": []
+    },
+    {
+      "task_id": "TASK-TYPE-01",
+      "repository_id": "ts_alias",
+      "category": "type_reference",
+      "task_prompt": "Where is the PipelineStatus interface defined and referenced in ts_alias?",
+      "precision_at_k": 1.0,
+      "recall_at_k": 1.0,
+      "critical_file_coverage": 1.0,
+      "critical_symbol_coverage": 1.0,
+      "critical_evidence_coverage": 1.0,
+      "noise_ratio": 0.0,
+      "relationship_coverage": 1.0,
+      "compression_ratio": 5.52,
+      "token_savings_percent": 81.9,
+      "retrieved_files": [
+        "src/core/types.ts",
+        "src/core/engine.ts",
+        "src/shared/format.ts",
+        "src/features/report.ts"
+      ],
+      "missing_expected_files": [],
+      "missing_critical_files": [],
+      "retrieved_symbols": [
+        "PipelineStatus",
+        "ProcessingEngine",
+        "formatReportData"
+      ],
+      "missing_expected_symbols": [],
+      "missing_critical_symbols": [],
+      "matched_relationships": [],
+      "missing_relationships": [],
+      "detected_noise_files": [],
+      "context_tokens": 132,
+      "baseline_tokens": 728,
+      "retrieval_time_ms": 0.13,
+      "passed": true,
+      "verdict": "PASS",
+      "failure_reasons": []
+    },
+    {
+      "task_id": "TASK-TYPE-02",
+      "repository_id": "monorepo",
+      "category": "type_reference",
+      "task_prompt": "Where is the SyntaxTree interface defined and referenced across packages in monorepo?",
+      "precision_at_k": 0.5714,
+      "recall_at_k": 1.0,
+      "critical_file_coverage": 1.0,
+      "critical_symbol_coverage": 1.0,
+      "critical_evidence_coverage": 1.0,
+      "noise_ratio": 0.1429,
+      "relationship_coverage": 1.0,
+      "compression_ratio": 3.89,
+      "token_savings_percent": 74.3,
+      "retrieved_files": [
+        "packages/shared/src/types.ts",
+        "packages/core/src/parser.ts",
+        "packages/ui/src/TreeView.tsx",
+        "packages/app/src/WorkspaceView.tsx",
+        "packages/core/src/index.ts",
+        "packages/ui/src/index.ts",
+        "packages/app/src/main.ts"
+      ],
+      "missing_expected_files": [],
+      "missing_critical_files": [],
+      "retrieved_symbols": [
+        "SyntaxTree",
+        "ASTNode",
+        "CodeParser",
+        "TreeView"
+      ],
+      "missing_expected_symbols": [],
+      "missing_critical_symbols": [],
+      "matched_relationships": [],
+      "missing_relationships": [],
+      "detected_noise_files": [
+        "packages/app/src/main.ts"
+      ],
+      "context_tokens": 133,
+      "baseline_tokens": 517,
+      "retrieval_time_ms": 0.11,
+      "passed": true,
+      "verdict": "PASS",
+      "failure_reasons": []
+    },
+    {
+      "task_id": "TASK-TYPE-03",
+      "repository_id": "ts_react",
+      "category": "type_reference",
+      "task_prompt": "Where is the TaskItem interface defined and referenced across components in ts_react?",
+      "precision_at_k": 1.0,
+      "recall_at_k": 1.0,
+      "critical_file_coverage": 1.0,
+      "critical_symbol_coverage": 1.0,
+      "critical_evidence_coverage": 1.0,
+      "noise_ratio": 0.0,
+      "relationship_coverage": 1.0,
+      "compression_ratio": 8.43,
+      "token_savings_percent": 88.1,
+      "retrieved_files": [
+        "src/components/TaskCard.tsx",
+        "src/components/TaskBoard.tsx",
+        "src/context/BoardContext.tsx"
+      ],
+      "missing_expected_files": [],
+      "missing_critical_files": [],
+      "retrieved_symbols": [
+        "TaskItem",
+        "TaskCard",
+        "BoardContext"
+      ],
+      "missing_expected_symbols": [],
+      "missing_critical_symbols": [],
+      "matched_relationships": [],
+      "missing_relationships": [],
+      "detected_noise_files": [],
+      "context_tokens": 100,
+      "baseline_tokens": 843,
+      "retrieval_time_ms": 0.09,
+      "passed": true,
+      "verdict": "PASS",
+      "failure_reasons": []
+    }
+  ]
+}

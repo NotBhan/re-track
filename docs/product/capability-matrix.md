@@ -38,13 +38,14 @@ RE:Track provides a local-first code intelligence and context synthesis platform
 | **Context Synthesis** | Agent Context Synthesis (`get_agent_context`) | **Production** | AI Coding Agents | **Cold**: ~80-150ms<br>**Warm/Hit**: < 2ms | Local LLM for semantic recall; offline fallback enabled |
 | **Context Synthesis** | Interactive Context Studio | **Production** | Human Developers | Real-time UI updates (60fps) | None for AST; LLM for semantic chunks |
 | **Context Synthesis** | Token Budgeting (100–32,000 tokens) | **Production** | Human Developers & Agents | Sub-1ms budget pruning | None |
-| **Code Intelligence** | Python AST Call Graph Extraction | **Production** | Internal Engine | Full-fidelity native AST (`ast` module) | None |
-| **Code Intelligence** | TypeScript / JS / JSX Call Graph Extraction | **Production with Limitations** | Internal Engine | Heuristic regex/AST extraction | None |
+| **Code Intelligence** | Python Native AST Call Graph Extraction | **Production** | Internal Engine | Full-fidelity native AST (`ast` module) | None |
+| **Code Intelligence** | TypeScript / JS / JSX Tree-sitter AST Extraction | **Production** | Internal Engine | Native Tree-sitter CST parsing, module alias & barrel linking | None |
 | **Code Intelligence** | Force-Directed Graph Explorer | **Production** | Human Developers | Smooth 60fps spring-physics layout | None (SVG Canvas) |
 | **Memory & Graph** | LanceDB Vector Indexing | **Production with Limitations** | Internal Engine | Sub-50ms vector query | **Required** (Ollama / LM Studio for embeddings) |
 | **Memory & Graph** | Kùzu Graph Triples Indexing | **Production with Limitations** | Internal Engine | Sub-20ms graph traversal | **Required** (Ollama / LM Studio for entity extraction) |
 | **Memory & Graph** | Memory Topology & Triple Inspector | **Production** | Human Developers | Direct read from Kùzu/LanceDB | None (Read-only truth boundary) |
-| **Benchmarking** | Golden Task Evaluator (20 Tasks) | **Production** | Developers & CI | ~1-3s complete suite execution | None (Deterministic evaluator) |
+| **Benchmarking** | Phase 7 Baseline Gate (20 Tasks) | **Production** | Developers & CI | ~1-3s complete suite execution | None (Deterministic evaluator) |
+| **Benchmarking** | Phase 10C Expanded Multi-Repo Suite (36 Tasks) | **Production** | Developers & CI | ~2-4s across 6 repositories, 12 categories | None (Deterministic evaluator) |
 | **Benchmarking** | Precision@K, Recall@K Scorecard | **Production** | Human Developers | Real-time scorecard rendering | None |
 | **Administration** | Headless CLI Tooling (`retrack`) | **Production** | Developers & Scripts | Instant startup (< 200ms) | Provider-dependent for `index` |
 | **Administration** | Provider Hot-Reloading | **Production** | Human Developers | Instant runtime switch (< 5ms) | Connects to active Ollama / LM Studio |
@@ -76,11 +77,11 @@ To prevent misleading claims, RE:Track latency characteristics are categorized i
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **MCP / Agent Transport** | Stdio FastMCP Server, 5 Standard Tools | — | — | — | Network HTTP/SSE Transport |
 | **Context Synthesis** | Token Budgeting, Section Selection, Context Studio | Local Summary Fallback when Cognee empty | Bounded Concurrency Guard (`max_concurrent=1`) | Dynamic Multi-Repo Context Union | Cloud-Hosted Multi-Tenant Synthesis |
-| **Code Intelligence** | Python Native AST Symbol & Call Resolution | TypeScript/JS/JSX Heuristic AST Extraction | Context Cache Invalidation Engine | Tree-sitter Native WASM Bindings | Dynamic Runtime Execution Tracing |
+| **Code Intelligence** | Python Native AST, TypeScript/JS/JSX Tree-sitter AST | — | Context Cache Invalidation Engine | Native WASM Bindings | Dynamic Runtime Execution Tracing |
 | **Repository Management** | Local Repository Registration, File Scanning, Incremental / Diff-Aware Indexing (Manifest 2.0) | — | Workspace Authorization Sandboxing, Selective Cache Invalidation | — | Remote Git Ingestion (`git clone` API) |
 | **Memory & Storage** | Dataset Deletion (`forget`), Metadata Store | Cognee 1.5.0 Semantic Vector/Graph Ingestion | Dual-Path Storage (`.retrack` canonical, `.andes` fallback) | Chunk-Level Hash Change Detection | Distributed Database Clustering |
 | **Reliability & Ops** | Subprocess Provider Reconnection, Signal Teardown | — | Stderr-Only Logging Separation | Automated Daemon Watchdog | Distributed Celery/Redis Task Queue |
-| **Benchmarking** | 20-Task Golden Suite, Precision/Recall Evaluator | — | Token Baseline Scanner | Automated CI GitHub Action Benchmark Gate | — |
+| **Benchmarking** | 20-Task Baseline Gate, 36-Task Multi-Repo Expanded Suite (12 categories, 6 repos) | — | Token Baseline Scanner | Automated CI GitHub Action Benchmark Gate | — |
 | **CLI & Desktop UX** | Typer CLI (`retrack`), React 19 Desktop Dashboard | — | Hardware Telemetry Port | Native Desktop System Tray Widget | Light/Dark Theme Customizer |
 
 ---

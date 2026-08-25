@@ -129,15 +129,17 @@ async def test_real_subprocess_provider_crash_and_recovery_5_cycles(tmp_path: Pa
         )
     )
 
-    os.environ["LLM_ENDPOINT"] = base_url
-    os.environ["LLM_PROVIDER"] = "openai_compatible"
+    from app.config.settings import Settings
+    custom_settings = Settings()
+    custom_settings.llm_endpoint = base_url
+    custom_settings.llm_provider = "openai_compatible"
 
     # Start the provider subprocess
     provider_proc = _start_provider_subprocess(port)
     assert provider_proc.poll() is None, "Subprocess provider failed to start"
 
     # Initialize container services
-    await container.initialize()
+    await container.initialize(settings=custom_settings)
     if container.llm_provider:
         container.llm_provider.timeout = 2.0
 

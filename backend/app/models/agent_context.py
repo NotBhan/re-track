@@ -40,3 +40,12 @@ class AgentContextResponse(BaseModel):
     ranking_time_ms: int = 0
     synthesis_time_ms: int = 0
     total_time_ms: int = 0
+    # Model invocation telemetry
+    model_invoked: bool = Field(default=False, description="Whether LLM inference was executed")
+    provider_identity: Optional[str] = Field(default=None, description="Active LLM provider identifier")
+    model_name: Optional[str] = Field(default=None, description="Active LLM model used")
+    inference_status: str = Field(default="not_configured", description="Status of inference (completed, failed, not_configured, fallback)")
+    fallback_used: bool = Field(default=False, description="Whether deterministic fallback was used")
+    fallback_reason: Optional[str] = Field(default=None, description="Reason deterministic fallback was used")
+    inference_time_ms: int = Field(default=0, description="Time spent in LLM inference")
+

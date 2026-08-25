@@ -108,6 +108,9 @@ class Settings(BaseSettings):
     storage: StorageConfig = Field(default_factory=StorageConfig)
     service: ServiceConfig = Field(default_factory=ServiceConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
+    llm_provider: str = Field(default="ollama", description="Active LLM provider: ollama, lmstudio, openai_compatible")
+    llm_endpoint: str = Field(default="http://localhost:11434/v1", description="Active LLM endpoint base URL")
+    llm_api_key: str = Field(default="local", description="Active LLM API key")
     settings_store_path: Path = Field(default_factory=lambda: DEFAULT_SETTINGS_STORE_PATH)
     legacy_settings_store_path: Path = Field(default_factory=lambda: DEFAULT_LEGACY_SETTINGS_STORE_PATH)
 
@@ -141,6 +144,14 @@ class Settings(BaseSettings):
             data = json.loads(target_path.read_text(encoding="utf-8"))
             if not isinstance(data, dict):
                 return
+
+            # Provider overrides
+            if "llm_provider" in data and data["llm_provider"]:
+                self.llm_provider = str(data["llm_provider"])
+            if "llm_endpoint" in data and data["llm_endpoint"]:
+                self.llm_endpoint = str(data["llm_endpoint"])
+            if "llm_api_key" in data and data["llm_api_key"] is not None:
+                self.llm_api_key = str(data["llm_api_key"])
 
             # Storage overrides
             if "vector_db" in data and data["vector_db"]:
@@ -178,19 +189,28 @@ class Settings(BaseSettings):
             if "enable_file_logging" in data:
                 self.logging.enable_file_logging = bool(data["enable_file_logging"])
 
-            logger.info("Loaded persistent settings from %s (vector_db=%s, graph_db=%s, kg=%s)",
-                        target_path, self.storage.vector_db, self.storage.graph_db, self.storage.enable_kg_extraction)
+            logger.info("Loaded persistent settings from %s (provider=%s, endpoint=%s, model=%s)",
+                        target_path, self.llm_provider, self.llm_endpoint, self.ollama.llm_model)
         except Exception as e:
             logger.warning("Failed to load persistent settings from %s: %s", target_path, e)
 
     def save_persisted_settings(self, store_path: Path | None = None) -> None:
-        """Save current user-customized settings atomically to canonical persistent JSON file."""
+        """Save current user-customized settings atomically to canonical persistent JSON file with 0600 permissions."""
         path = store_path or self.settings_store_path
         try:
             import json
             import os
-            path.parent.mkdir(parents=True, exist_ok=True)
+            parent = path.parent
+            parent.mkdir(parents=True, exist_ok=True)
+            try:
+                os.chmod(parent, 0o700)
+            except OSError:
+                pass
+
             data = {
+                "llm_provider": self.llm_provider,
+                "llm_endpoint": self.llm_endpoint,
+                "llm_api_key": self.llm_api_key,
                 "vector_db": self.storage.vector_db,
                 "graph_db": self.storage.graph_db,
                 "relational_db": self.storage.relational_db,
@@ -207,18 +227,35 @@ class Settings(BaseSettings):
                 "enable_file_logging": self.logging.enable_file_logging,
             }
             tmp_path = path.with_suffix(".tmp")
-            with open(tmp_path, "w", encoding="utf-8") as f:
+            flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
+            fd = os.open(tmp_path, flags, 0o600)
+            with open(fd, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2)
                 f.flush()
                 os.fsync(f.fileno())
+            try:
+                os.chmod(tmp_path, 0o600)
+            except OSError:
+                pass
             tmp_path.replace(path)
-            logger.info("Saved persistent settings atomically to %s", path)
+            try:
+                os.chmod(path, 0o600)
+            except OSError:
+                pass
+            logger.info("Saved persistent settings atomically to %s (0600 permissions)", path)
         except Exception as e:
             logger.error("Failed to save persistent settings to %s: %s", path, e)
 
     @model_validator(mode="after")
     def _apply_env_overrides(self) -> "Settings":
-        """Read environment variables, then load persisted user settings."""
+        """Load persisted user settings first, then apply explicit environment variable overrides."""
+        # 1. Apply persisted user settings from canonical storage (if any exist on disk)
+        self.load_persisted_settings()
+
+        # 2. Environment variables override persisted settings
+        self.llm_provider = os.environ.get("LLM_PROVIDER", self.llm_provider)
+        self.llm_endpoint = os.environ.get("LLM_ENDPOINT", self.llm_endpoint)
+        self.llm_api_key = os.environ.get("LLM_API_KEY", self.llm_api_key)
         self.ollama.llm_model = os.environ.get("LLM_MODEL", self.ollama.llm_model)
         self.ollama.embedding_model = os.environ.get(
             "EMBEDDING_MODEL", self.ollama.embedding_model
@@ -256,18 +293,16 @@ class Settings(BaseSettings):
         if skip is not None:
             self.service.skip_connection_test = skip.lower() == "true"
 
-        # Apply persisted user settings (if any exist on disk)
-        self.load_persisted_settings()
-
         return self
+
 
     def apply_to_environment(self) -> None:
         """Write current settings into os.environ for Cognee compatibility."""
-        llm_endpoint = os.environ.get("LLM_ENDPOINT", self.ollama.llm_endpoint)
+        llm_endpoint = self.llm_endpoint or self.ollama.llm_endpoint
         embedding_endpoint = os.environ.get("EMBEDDING_ENDPOINT", self.ollama.embedding_endpoint)
-        llm_provider = os.environ.get("LLM_PROVIDER", "ollama")
+        llm_provider = self.llm_provider or "ollama"
         embedding_provider = os.environ.get("EMBEDDING_PROVIDER", "ollama")
-        llm_api_key = os.environ.get("LLM_API_KEY", "ollama")
+        llm_api_key = self.llm_api_key or "local"
         embedding_api_key = os.environ.get("EMBEDDING_API_KEY", "ollama")
 
         env = {
@@ -294,7 +329,7 @@ class Settings(BaseSettings):
             os.environ[key] = value
 
     def configure_cognee(self) -> None:
-        """Configure Cognee's internal config object."""
+        """Configure Cognee's internal config object with active provider and endpoint."""
         import cognee
         import litellm
 
@@ -302,23 +337,29 @@ class Settings(BaseSettings):
 
         self.apply_to_environment()
 
-        llm_provider = os.environ.get("LLM_PROVIDER", "ollama")
-        embedding_provider = os.environ.get("EMBEDDING_PROVIDER", "ollama")
-        llm_endpoint = os.environ.get("LLM_ENDPOINT", self.ollama.llm_endpoint)
-        embedding_endpoint = os.environ.get("EMBEDDING_ENDPOINT", self.ollama.embedding_endpoint)
-        llm_api_key = os.environ.get("LLM_API_KEY", "ollama")
-        embedding_api_key = os.environ.get("EMBEDDING_API_KEY", "ollama")
+        prov_lower = (self.llm_provider or "ollama").lower()
+        if "lm" in prov_lower or "studio" in prov_lower or "openai" in prov_lower:
+            cognee_llm_provider = "openai"
+        else:
+            cognee_llm_provider = "ollama"
 
+        llm_endpoint = self.llm_endpoint or self.ollama.llm_endpoint
+        llm_api_key = self.llm_api_key or "local"
         llm_model = self.ollama.llm_model
-        if llm_provider == "openai" and not (llm_model.startswith("openai/") or llm_model.startswith("lm_studio/")):
+
+        if cognee_llm_provider == "openai" and not (llm_model.startswith("openai/") or llm_model.startswith("lm_studio/")):
             llm_model = f"openai/{llm_model}"
 
-        cognee.config.set_llm_provider(llm_provider)
+        cognee.config.set_llm_provider(cognee_llm_provider)
         cognee.config.set_llm_model(llm_model)
         cognee.config.set_llm_api_key(llm_api_key)
         cognee.config.set_llm_endpoint(llm_endpoint)
 
+        embedding_provider = os.environ.get("EMBEDDING_PROVIDER", "ollama")
+        embedding_endpoint = os.environ.get("EMBEDDING_ENDPOINT", self.ollama.embedding_endpoint)
+        embedding_api_key = os.environ.get("EMBEDDING_API_KEY", "ollama")
         embedding_model = self.ollama.embedding_model
+
         if embedding_provider == "openai" and not (embedding_model.startswith("openai/") or embedding_model.startswith("lm_studio/")):
             embedding_model = f"openai/{embedding_model}"
 
@@ -334,13 +375,21 @@ class Settings(BaseSettings):
         cognee.config.data_root_directory = str(self.storage.data_root)
         cognee.config.system_root_directory = str(self.storage.system_root)
 
+    def validate_provider(self) -> None:
+        """Check provider reachability if connection test is not skipped."""
+        if self.service.skip_connection_test:
+            return
+        prov_lower = (self.llm_provider or "ollama").lower()
+        if "ollama" in prov_lower:
+            if not self.ollama.check_connection():
+                raise OllamaConnectionError(
+                    f"Ollama is not reachable at {self.ollama.base_url}. "
+                    "Start it with: ollama serve"
+                )
+
     def validate_ollama(self) -> None:
-        """Check that Ollama is reachable and required models exist."""
-        if not self.service.skip_connection_test and not self.ollama.check_connection():
-            raise OllamaConnectionError(
-                f"Ollama is not reachable at {self.ollama.base_url}. "
-                "Start it with: ollama serve"
-            )
+        """Check that Ollama is reachable and required models exist (backwards compatibility)."""
+        self.validate_provider()
 
     def ensure_directories(self) -> None:
         """Create storage directories if they don't exist."""

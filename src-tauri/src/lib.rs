@@ -280,6 +280,16 @@ async fn update_cognee_settings(request: serde_json::Value) -> Result<serde_json
 }
 
 #[tauri::command]
+async fn get_provider_status() -> Result<serde_json::Value, String> {
+    http_get("/provider/status").await
+}
+
+#[tauri::command]
+async fn discover_provider(request: serde_json::Value) -> Result<serde_json::Value, String> {
+    http_post("/provider/discover", &request).await
+}
+
+#[tauri::command]
 async fn update_provider(request: serde_json::Value) -> Result<serde_json::Value, String> {
     http_post("/provider/update", &request).await
 }
@@ -288,6 +298,7 @@ async fn update_provider(request: serde_json::Value) -> Result<serde_json::Value
 async fn list_repositories() -> Result<serde_json::Value, String> {
     http_get("/repos").await
 }
+
 
 #[tauri::command]
 async fn create_repository(request: serde_json::Value) -> Result<serde_json::Value, String> {
@@ -548,6 +559,8 @@ pub fn run() {
             get_context_package,
             delete_context_package,
             append_context_package,
+            get_provider_status,
+            discover_provider,
             update_provider,
             get_suggested_prompts,
             get_settings,
@@ -557,5 +570,6 @@ pub fn run() {
             export_diagnostics,
         ])
         .run(tauri::generate_context!())
+
         .expect("error while running tauri application");
 }

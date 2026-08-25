@@ -24,3 +24,14 @@ class LLMProviderPort(Protocol):
     async def list_models(self) -> list[Any]:
         """List all available models reported by the provider endpoint."""
         ...
+
+    async def discover_models(
+        self,
+        provider_type: str,
+        base_url: str,
+        api_key: str = "local",
+        timeout: float = 3.0,
+    ) -> Any:
+        """Probe an endpoint and return discovered models without mutating state."""
+        ...
+

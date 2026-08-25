@@ -128,6 +128,10 @@ export const TAURI_BRIDGE_INIT_SCRIPT = `
           return await get("/diagnostics");
         case "export_diagnostics":
           return await post("/diagnostics/export", {});
+        case "get_provider_status":
+          return await get("/provider/status");
+        case "discover_provider":
+          return await post("/provider/discover", args?.request || args);
         case "update_provider":
           return await post("/provider/update", args?.request || args);
         case "update_cognee_settings":
@@ -138,6 +142,7 @@ export const TAURI_BRIDGE_INIT_SCRIPT = `
           return await get("/dashboard/stats");
         case "run_benchmark":
           return await post("/benchmarks/run", {});
+
         default:
           console.warn("Unhandled Tauri command in browser bridge:", cmd, args);
           return { success: true };

@@ -69,7 +69,7 @@ class CogneeService:
 
         try:
             self._settings.configure_cognee()
-            self._settings.validate_ollama()
+            self._settings.validate_provider()
             self._settings.ensure_directories()
             self._initialized = True
             logger.info(

@@ -57,8 +57,13 @@ from app.application.dto.system import (
     BackendStatusResponse,
     CogneeSettingsRequest,
     DetailedHealthResponse,
+    DiscoveredModelDTO,
     HealthResponse,
+    ProviderDiscoveryRequest,
+    ProviderDiscoveryResponse,
+    ProviderStatusResponse,
 )
+
 from app.application.dto.benchmarks import (
     BenchmarkResultItem,
     BenchmarkSuiteResponse,
