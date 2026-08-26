@@ -121,6 +121,17 @@ async def get_agent_context_tool(
                 "fallback_used": result.fallback_used,
                 "fallback_reason": result.fallback_reason,
                 "inference_time_ms": result.inference_time_ms,
+                "evidence_state": result.evidence_state,
+                "evidence_score": result.evidence_score,
+                "evidence_confidence": result.evidence_confidence,
+                "evidence_files": result.evidence_files,
+                "evidence_symbols": result.evidence_symbols,
+                "evidence_relationships": result.evidence_relationships,
+                "missing_evidence": result.missing_evidence,
+                "observed_evidence": result.observed_evidence,
+                "abstained": result.abstained,
+                "abstention_reason": result.abstention_reason,
+                "model_claims_allowed": result.model_claims_allowed,
             }
 
         return {"success": False, "error": "UnexpectedResponse", "message": "Unexpected response type from use case"}

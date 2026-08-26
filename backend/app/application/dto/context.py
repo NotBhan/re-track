@@ -39,12 +39,25 @@ class ContextResponse(BaseModel):
     # Reference fields
     reference_count: int = Field(default=0, description="Number of traceable references")
     section_headings: list[str] = Field(default_factory=list, description="Headings of generated sections")
-    # Model invocation telemetry
+    # Inference telemetry
     model_invoked: bool = Field(default=False, description="Whether LLM inference was executed")
     provider_identity: Optional[str] = Field(default=None, description="Active LLM provider identifier")
-    model_name: Optional[str] = Field(default=None, description="Active LLM model used")
-    inference_status: str = Field(default="not_configured", description="Status of inference (completed, failed, not_configured, fallback)")
-    fallback_used: bool = Field(default=False, description="Whether deterministic fallback was used")
-    fallback_reason: Optional[str] = Field(default=None, description="Reason deterministic fallback was used")
-    inference_time_ms: int = Field(default=0, description="Time spent in LLM inference")
+    model_name: Optional[str] = Field(default=None, description="Active model name")
+    inference_status: str = Field(default="not_configured", description="Inference status")
+    fallback_used: bool = Field(default=False, description="Whether fallback was used")
+    fallback_reason: Optional[str] = Field(default=None, description="Reason fallback was used")
+    inference_time_ms: int = Field(default=0, description="Inference latency in milliseconds")
+    # Evidence evaluation
+    evidence_state: str = Field(default="sufficient", description="Evidence state")
+    evidence_score: float = Field(default=1.0, description="Evidence score between 0.0 and 1.0")
+    evidence_confidence: float = Field(default=1.0, description="Evidence confidence between 0.0 and 1.0")
+    evidence_files: list[str] = Field(default_factory=list, description="Files containing direct code evidence")
+    evidence_symbols: list[str] = Field(default_factory=list, description="Verified AST symbols supporting evidence")
+    evidence_relationships: list[str] = Field(default_factory=list, description="Verified AST relationships")
+    observed_evidence: list[str] = Field(default_factory=list, description="Observed repository facts")
+    missing_evidence: list[str] = Field(default_factory=list, description="Missing evidence items")
+    abstained: bool = Field(default=False, description="Whether generation abstained")
+    abstention_reason: Optional[str] = Field(default=None, description="Abstention reason")
+    model_claims_allowed: bool = Field(default=True, description="Whether model claims are allowed")
+
 

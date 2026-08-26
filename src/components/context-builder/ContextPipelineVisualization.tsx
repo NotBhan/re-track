@@ -55,15 +55,23 @@ export function ContextPipelineVisualization() {
             </div>
           ) : result ? (
             <div className="relative z-10 flex items-start gap-3">
-              <div className="w-7 h-7 rounded-full flex items-center justify-center -ml-[26px] mt-0.5 flex-shrink-0 bg-emerald-500 text-black">
+              <div className={`w-7 h-7 rounded-full flex items-center justify-center -ml-[26px] mt-0.5 flex-shrink-0 ${
+                result.abstained ? "bg-amber-500 text-black" : "bg-emerald-500 text-black"
+              }`}>
                 <Check className="w-3.5 h-3.5 stroke-[3]" />
               </div>
               <div className="p-3.5 rounded-lg w-full bg-black border border-[#262626]">
                 <h4 className="text-xs font-mono font-bold text-white">
-                  {result.model_invoked ? "Model Synthesis Complete" : "Deterministic Retrieval Complete"}
+                  {result.abstained
+                    ? "Abstained: Insufficient Repository Evidence"
+                    : result.model_invoked
+                    ? "Model Synthesis Complete"
+                    : "Deterministic Retrieval Complete"}
                 </h4>
                 <p className="text-xs font-mono text-neutral-400 mt-1">
-                  {result.section_count} sections · {result.retrieved_memories} memories retrieved · {result.model_invoked ? `${result.model_name || "Model"} (${result.provider_identity || "LLM"})` : "model-free AST"}
+                  {result.abstained
+                    ? (result.abstention_reason || "Zero hallucination: no repository code for requested feature")
+                    : `${result.section_count} sections · ${result.retrieved_memories} memories retrieved · ${result.model_invoked ? `${result.model_name || "Model"} (${result.provider_identity || "LLM"})` : "model-free AST"}`}
                 </p>
               </div>
             </div>

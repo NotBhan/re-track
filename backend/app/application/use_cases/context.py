@@ -10,24 +10,8 @@ from pathlib import Path
 import time
 from typing import Any, Callable, Optional
 
-from app.application.dto import (
-    AgentContextRequest,
-    AgentContextResponse,
-    ContextResponse,
-    ErrorResponse,
-    GenerateContextRequest,
-    SourceSearchResponse,
-    SourceSearchResultItem,
-)
-from app.application.ports.cgc_service import CGCServicePort
-from app.application.ports.context_cache import ContextCachePort
-from app.application.ports.context_service import ContextServicePort
-from app.application.ports.filesystem import FileSystemPort
-from app.application.ports.indexing_service import IndexingServicePort
-from app.application.ports.intent_parser import IntentParserPort
-from app.application.ports.llm_provider import LLMProviderPort
-from app.application.ports.memory import MemoryPort
 from app.application.domain.dataset_identity import derive_dataset_name
+from app.application.domain.evidence import EvidenceRecord, EvidenceState
 from app.application.domain.intent import parse_intent_heuristics
 from app.application.dto import (
     AgentContextRequest,
@@ -51,6 +35,8 @@ from app.application.ports.summary_generator import SummaryGeneratorPort
 from app.application.ports.workspace_authorization import WorkspaceAuthorizationPort
 from app.core.logging import log_event
 from app.models.errors import CogneeServiceError
+from app.services.evidence_service import EvidenceService
+from app.services.retrieval_arbitrator import RetrievalArbitrator
 
 logger = logging.getLogger(__name__)
 
@@ -326,7 +312,7 @@ class ContextUseCases:
                     )
                     return cached_resp
 
-                # 1. Parallel Step: Parse intent + generate repo summary + check provider health
+                # Gather intent, repository summary, and provider health
                 async def _get_intent():
                     if self._intent_parser:
                         return await self._intent_parser.parse_intent(request.task_prompt)
@@ -360,7 +346,7 @@ class ContextUseCases:
                     _get_provider_health(),
                 )
 
-                # 2. Parallel Step: CGC Structural Query + Cognee Context Synthesis (Retrieval Stage)
+                # Retrieve graph context and base context package
                 t_retrieval_start = time.perf_counter()
 
                 async def _query_cgc():
@@ -388,7 +374,7 @@ class ContextUseCases:
                     _query_cgc(),
                     _generate_package(),
                 )
-                # 3. Direct AST & symbol relevance search across repository files (Ranking Stage)
+                # Rank snippets and matching files
                 t_rank_start = time.perf_counter()
                 relevant_snippets = []
                 matched_file_rels = []
@@ -413,10 +399,165 @@ class ContextUseCases:
                     )
                 retrieval_time_ms = int((time.perf_counter() - t_retrieval_start) * 1000)
 
-                # 4. Merge snippets and structural graph into Markdown output (Synthesis Stage)
-                t_synth_start = time.perf_counter()
-                quant_warning = health_status.quantization_warning if health_status else None
+                # Arbitrate retrieved multi-modal evidence (Phase 10D.5)
+                symbols_found = structural_res.symbols_found if structural_res else []
+                call_edges = [
+                    f"{caller} -> {sym}"
+                    for caller in (structural_res.callers if structural_res else [])
+                    for sym in (structural_res.symbols_found if structural_res else [])
+                ]
 
+                arbitrated_result = RetrievalArbitrator.arbitrate(
+                    task_prompt=request.task_prompt,
+                    intent=intent,
+                    manifest=manifest_obj,
+                    source_snippets=relevant_snippets,
+                    source_matched_files=matched_file_rels,
+                    ast_symbols=symbols_found,
+                    ast_call_edges=call_edges,
+                    lancedb_kuzu_memories=[],
+                    cognee_memories=[],
+                    target_tokens=target_tokens,
+                    reserve_authoritative_budget=True,
+                )
+
+                # Assess evidence and evaluate gate using arbitrated result
+                evidence = EvidenceService.assess_evidence(
+                    task_prompt=request.task_prompt,
+                    intent=intent,
+                    repo_summary=repo_summary,
+                    indexed_files=indexed_files,
+                    relevant_snippets=arbitrated_result.authoritative_snippets or relevant_snippets,
+                    matched_file_rels=arbitrated_result.authoritative_files or matched_file_rels,
+                    structural_symbols=arbitrated_result.authoritative_symbols or symbols_found,
+                    structural_relationships=arbitrated_result.authoritative_relationships or call_edges,
+                    manifest=manifest_obj,
+                    arbitrated_result=arbitrated_result,
+                )
+
+                log_event(
+                    logger,
+                    logging.INFO,
+                    "context_evidence_collection_completed",
+                    component="context_engine",
+                    operation="get_agent_context",
+                    evidence_state=evidence.evidence_state,
+                    evidence_score=evidence.evidence_score,
+                    evidence_file_count=len(evidence.evidence_files),
+                    evidence_symbol_count=len(evidence.evidence_symbols),
+                    evidence_relationship_count=len(evidence.evidence_relationships),
+                    abstained=evidence.abstained,
+                )
+
+                quant_warning = health_status.quantization_warning if health_status else None
+                elapsed_ms = int((time.monotonic() - start) * 1000)
+
+                # Abstain if evidence is insufficient
+                if evidence.abstained:
+                    log_event(
+                        logger,
+                        logging.INFO,
+                        "context_evidence_gate_rejected",
+                        component="context_engine",
+                        operation="get_agent_context",
+                        evidence_state=evidence.evidence_state,
+                        evidence_score=evidence.evidence_score,
+                        missing_evidence_count=len(evidence.missing_evidence),
+                    )
+                    log_event(
+                        logger,
+                        logging.INFO,
+                        "context_model_invocation_skipped",
+                        component="context_engine",
+                        operation="get_agent_context",
+                        reason="abstained_insufficient_evidence",
+                    )
+                    log_event(
+                        logger,
+                        logging.INFO,
+                        "context_abstained_insufficient_evidence",
+                        component="context_engine",
+                        operation="get_agent_context",
+                        evidence_state=evidence.evidence_state,
+                        abstention_reason=evidence.abstention_reason,
+                    )
+
+                    abstention_markdown = EvidenceService.build_abstention_package(
+                        task_prompt=request.task_prompt,
+                        intent=intent,
+                        evidence=evidence,
+                    )
+
+                    response = AgentContextResponse(
+                        success=True,
+                        context_markdown=abstention_markdown,
+                        task_summary=intent.task_summary,
+                        intent_category=intent.category,
+                        extracted_symbols=evidence.evidence_symbols,
+                        callers=[],
+                        callees=[],
+                        related_files=evidence.evidence_files,
+                        quantization_warning=quant_warning,
+                        estimated_tokens=len(abstention_markdown) // 4,
+                        generation_time_ms=elapsed_ms,
+                        retrieval_time_ms=retrieval_time_ms,
+                        ranking_time_ms=ranking_time_ms,
+                        synthesis_time_ms=0,
+                        total_time_ms=elapsed_ms,
+                        model_invoked=False,
+                        provider_identity=None,
+                        model_name=None,
+                        inference_status="not_configured",
+                        fallback_used=True,
+                        fallback_reason="Deterministic abstention: insufficient repository evidence",
+                        inference_time_ms=0,
+                        evidence_state=evidence.evidence_state,
+                        evidence_score=evidence.evidence_score,
+                        evidence_confidence=evidence.evidence_confidence,
+                        evidence_files=evidence.evidence_files,
+                        evidence_symbols=evidence.evidence_symbols,
+                        evidence_relationships=evidence.evidence_relationships,
+                        observed_evidence=evidence.observed_evidence,
+                        missing_evidence=evidence.missing_evidence,
+                        abstained=True,
+                        abstention_reason=evidence.abstention_reason,
+                        model_claims_allowed=False,
+                    )
+
+                    log_event(
+                        logger,
+                        logging.INFO,
+                        "context_generation_completed",
+                        component="context_engine",
+                        operation="get_agent_context",
+                        duration_ms=elapsed_ms,
+                        model_invoked=False,
+                        fallback_used=True,
+                        inference_status=response.inference_status,
+                        abstained=True,
+                    )
+
+                    self._cache.set(
+                        cache_key,
+                        response,
+                        repo_path=str(repo_path),
+                        referenced_files=evidence.evidence_files,
+                        referenced_symbols=evidence.evidence_symbols,
+                    )
+                    return response
+
+                # Synthesize and sanitize grounded markdown
+                log_event(
+                    logger,
+                    logging.INFO,
+                    "context_evidence_gate_passed",
+                    component="context_engine",
+                    operation="get_agent_context",
+                    evidence_state=evidence.evidence_state,
+                    evidence_score=evidence.evidence_score,
+                )
+
+                t_synth_start = time.perf_counter()
                 final_markdown = package.markdown
                 if relevant_snippets:
                     final_markdown += "\n\n---\n\n# Relevant Code Snippets & Target Implementations\n\n" + "\n\n".join(relevant_snippets)
@@ -425,6 +566,13 @@ class ContextUseCases:
                     struct_md = structural_res.to_markdown()
                     if struct_md:
                         final_markdown += f"\n\n---\n\n# Structural Code Relationships\n\n{struct_md}\n"
+
+                # Sanitize reasoning tags
+                final_markdown = EvidenceService.sanitize_and_validate_grounded_response(
+                    raw_markdown=final_markdown,
+                    evidence=evidence,
+                    indexed_files=indexed_files,
+                )
 
                 synthesis_time_ms = int((time.perf_counter() - t_synth_start) * 1000)
                 elapsed_ms = int((time.monotonic() - start) * 1000)
@@ -456,6 +604,17 @@ class ContextUseCases:
                     fallback_used=getattr(intent, "fallback_used", False),
                     fallback_reason=getattr(intent, "fallback_reason", None),
                     inference_time_ms=getattr(intent, "inference_time_ms", 0),
+                    evidence_state=evidence.evidence_state,
+                    evidence_score=evidence.evidence_score,
+                    evidence_confidence=evidence.evidence_confidence,
+                    evidence_files=evidence.evidence_files or all_related,
+                    evidence_symbols=evidence.evidence_symbols or intent.extracted_symbols,
+                    evidence_relationships=evidence.evidence_relationships or call_edges,
+                    observed_evidence=evidence.observed_evidence,
+                    missing_evidence=evidence.missing_evidence,
+                    abstained=False,
+                    abstention_reason=None,
+                    model_claims_allowed=True,
                 )
 
                 log_event(
@@ -468,9 +627,10 @@ class ContextUseCases:
                     model_invoked=response.model_invoked,
                     fallback_used=response.fallback_used,
                     inference_status=response.inference_status,
+                    abstained=False,
                 )
 
-                # Store in high-speed synthesis cache with dependency provenance
+                # Cache response
                 ref_files = list(files_for_prompt) if "files_for_prompt" in locals() else []
                 ref_symbols = list(intent.extracted_symbols) if "intent" in locals() and intent else []
                 if "ast_context" in locals() and ast_context and hasattr(ast_context, "symbols_found"):

@@ -113,7 +113,15 @@ This document establishes the verified inventory of all features and technical c
 - **How It Works**: All new write operations persist strictly to `~/.retrack/`. If `~/.retrack/` does not contain a requested record, the adapter falls back to reading legacy data from `~/.andes/`. Legacy files are never modified.
 - **Inputs**: File read/write requests.
 - **Outputs**: Loaded or persisted JSON records.
-- **Dependencies**: `LocalFileSystemAdapter`, `Path`.
-- **Verification Evidence**: `tests/test_storage_compatibility.py` (all tests passing).
-- **Known Limitations**: Migration from `.andes` to `.retrack` is lazy on-demand rather than a bulk one-time migration script.
+### FEAT-029: End-to-End Retrieval Arbitration
+- **User-Facing / Internal**: Internal (Retrieval & Knowledge Arbitration)
+- **Status**: Production
+- **Implementation**: [`backend/app/services/retrieval_arbitrator.py`](file:///home/chandrabhan/Documents/Personal%20Projects/re-track/backend/app/services/retrieval_arbitrator.py), [`backend/app/application/domain/arbitration.py`](file:///home/chandrabhan/Documents/Personal%20Projects/re-track/backend/app/application/domain/arbitration.py)
+- **How It Works**: Pre-gating arbitration engine that orders multi-modal retrieval candidates into 4 strict authority tiers: Tier 1 (`filesystem_verified_source`) > Tier 2 (`manifest_ast`) > Tier 3 (`validated_lancedb_kuzu`) > Tier 4 (`validated_cognee`). Enforces lexicographic ranking `(TierPriority, Relevance, Confidence, Specificity)` and token budget reservation for authoritative tiers.
+- **Inputs**: Task prompt, parsed intent, active repository manifest, source snippets, AST symbols, vector/graph memories.
+- **Outputs**: `ArbitratedEvidenceResult` with ordered candidates, authoritative files/symbols/snippets/relationships, and stale/cross-repo rejection metrics.
+- **Dependencies**: `EvidenceService`, `ManifestService`, `RepositoryManifest`.
+- **Verification Evidence**: `tests/test_retrieval_arbitration.py` (7 adversarial tests passing).
+- **Known Limitations**: Physical persistence schema migration across historical raw files requires explicit datastore validation tooling.
 - **Maturity**: Production.
+

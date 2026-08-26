@@ -82,6 +82,12 @@ class MemoryUseCases:
                     created_at=ds.created_at if isinstance(ds, MemoryDatasetRecord) else ds.get("created_at"),
                     file_count=ds.file_count if isinstance(ds, MemoryDatasetRecord) else ds.get("file_count", 0),
                     source_path=ds.source_path if isinstance(ds, MemoryDatasetRecord) else ds.get("source_path"),
+                    storage_state=ds.storage_state if isinstance(ds, MemoryDatasetRecord) else ds.get("storage_state", "healthy"),
+                    provenance=(
+                        ds.provenance.to_dict()
+                        if (isinstance(ds, MemoryDatasetRecord) and ds.provenance)
+                        else (ds.get("provenance") if isinstance(ds, dict) else None)
+                    ),
                 )
                 for ds in raw_datasets
             ]
@@ -121,6 +127,11 @@ class MemoryUseCases:
                     extension=it.extension if isinstance(it, MemoryDataItemRecord) else it.get("extension", ""),
                     content_hash=it.content_hash if isinstance(it, MemoryDataItemRecord) else it.get("content_hash", ""),
                     pipeline_status=it.pipeline_status if isinstance(it, MemoryDataItemRecord) else it.get("pipeline_status", {}),
+                    provenance=(
+                        it.provenance.to_dict()
+                        if (isinstance(it, MemoryDataItemRecord) and it.provenance)
+                        else (it.get("provenance") if isinstance(it, dict) else None)
+                    ),
                 )
                 for it in items_raw
             ]
@@ -271,15 +282,18 @@ class MemoryUseCases:
             kg_status = "not_extracted"
             graph_nodes = None
             graph_edges = None
+            kuzu_state = "healthy"
             if hasattr(self._cognee, "get_graph"):
                 try:
                     graph = await self._cognee.get_graph()
                     if isinstance(graph, MemoryGraphRecord):
                         nodes = graph.nodes
                         edges = graph.edges
+                        kuzu_state = graph.storage_state
                     elif isinstance(graph, dict):
                         nodes = graph.get("nodes", [])
                         edges = graph.get("edges", [])
+                        kuzu_state = graph.get("storage_state", "healthy")
                     else:
                         nodes = getattr(graph, "nodes", [])
                         edges = getattr(graph, "edges", [])
@@ -288,7 +302,9 @@ class MemoryUseCases:
                         graph_nodes = len(nodes)
                         graph_edges = len(edges)
                 except Exception:
-                    pass
+                    kuzu_state = "degraded"
+
+            cognee_state = "healthy" if (self._cognee and self._cognee.is_initialized) else "not_configured"
 
             response = MemoryStatsResponse(
                 success=True,
@@ -297,6 +313,11 @@ class MemoryUseCases:
                 knowledge_graph_status=kg_status,
                 graph_nodes=graph_nodes,
                 graph_edges=graph_edges,
+                storage_subsystems={
+                    "lancedb": "healthy",
+                    "kuzu": kuzu_state,
+                    "cognee": cognee_state,
+                },
             )
             elapsed = time.monotonic() - start
             logger.info("use_case: get_memory_stats() complete | %.2fs", elapsed)
@@ -323,12 +344,15 @@ class MemoryUseCases:
             if isinstance(raw_graph, MemoryGraphRecord):
                 raw_nodes = raw_graph.nodes
                 raw_edges = raw_graph.edges
+                graph_state = raw_graph.storage_state
             elif isinstance(raw_graph, dict):
                 raw_nodes = raw_graph.get("nodes", [])
                 raw_edges = raw_graph.get("edges", [])
+                graph_state = raw_graph.get("storage_state", "healthy")
             else:
                 raw_nodes = getattr(raw_graph, "nodes", [])
                 raw_edges = getattr(raw_graph, "edges", [])
+                graph_state = "healthy"
 
             nodes = [
                 MemoryGraphNode(
@@ -337,6 +361,7 @@ class MemoryUseCases:
                     kind=n.kind if isinstance(n, MemoryGraphNodeRecord) else n.get("kind", "entity"),
                     type=n.type if isinstance(n, MemoryGraphNodeRecord) else n.get("type"),
                     properties=n.properties if isinstance(n, MemoryGraphNodeRecord) else n.get("properties", {}),
+                    provenance=n.provenance.to_dict() if (isinstance(n, MemoryGraphNodeRecord) and n.provenance) else (n.get("provenance") if isinstance(n, dict) else None),
                 )
                 for n in raw_nodes
             ]
@@ -347,6 +372,7 @@ class MemoryUseCases:
                     kind=e.kind if isinstance(e, MemoryGraphEdgeRecord) else e.get("kind", "relates_to"),
                     relationship_type=e.relationship_type if isinstance(e, MemoryGraphEdgeRecord) else e.get("relationship_type"),
                     properties=e.properties if isinstance(e, MemoryGraphEdgeRecord) else e.get("properties", {}),
+                    provenance=e.provenance.to_dict() if (isinstance(e, MemoryGraphEdgeRecord) and e.provenance) else (e.get("provenance") if isinstance(e, dict) else None),
                 )
                 for e in raw_edges
             ]
@@ -363,6 +389,7 @@ class MemoryUseCases:
             return MemoryGraphResponse(
                 success=True,
                 status=status,
+                storage_state=graph_state,
                 nodes=nodes,
                 edges=edges,
                 total_nodes=len(nodes),
@@ -391,6 +418,7 @@ class MemoryUseCases:
                 "total_vectors": 0,
                 "embedding_model": settings.ollama.embedding_model,
                 "embedding_dimensions": 768,
+                "storage_state": "healthy",
             }
 
             if self._cognee and self._cognee.is_initialized:
@@ -421,11 +449,13 @@ class MemoryUseCases:
                 raw_tables = v_stats.tables
                 emb_model = v_stats.embedding_model or settings.ollama.embedding_model or "nomic-embed-text"
                 emb_dim = v_stats.embedding_dimensions
+                vec_storage_state = v_stats.storage_state
             else:
                 total_vecs = v_stats.get("total_vectors", 0)
                 raw_tables = v_stats.get("tables", [])
                 emb_model = v_stats.get("embedding_model") or settings.ollama.embedding_model or "nomic-embed-text"
                 emb_dim = v_stats.get("embedding_dimensions", 768)
+                vec_storage_state = v_stats.get("storage_state", "healthy")
 
             tables_list = [
                 t if isinstance(t, dict) else {"table_name": str(t), "row_count": 0}
@@ -442,6 +472,7 @@ class MemoryUseCases:
             logger.info("use_case: get_memory_vectors() complete | datasets=%d | files=%d | vectors=%d | %.2fs", len(datasets_list), total_files, total_vecs, elapsed)
             return MemoryVectorsResponse(
                 success=True,
+                storage_state=vec_storage_state,
                 vector_db_provider=settings.storage.vector_db,
                 embedding_model=emb_model,
                 embedding_dimensions=emb_dim,

@@ -15,6 +15,7 @@ All Cognee imports stay inside this module.
 import logging
 import asyncio
 import re
+import os
 from typing import Any, Optional
 
 import cognee
@@ -412,7 +413,11 @@ class CogneeService:
                 except Exception as e_tbl:
                     logger.warning("Could not query table %s: %s", tname, e_tbl)
 
-            emb_model = self.settings.ollama.embedding_model or os.getenv("EMBEDDING_MODEL") or "nomic-embed-text"
+            emb_model = (
+                getattr(self._settings.ollama, "embedding_model", None)
+                or os.getenv("EMBEDDING_MODEL")
+                or "nomic-embed-text"
+            )
             emb_dim = 768
             try:
                 emb_dim = int(os.getenv("EMBEDDING_DIMENSIONS", "768"))
@@ -424,15 +429,21 @@ class CogneeService:
                 "total_vectors": total_vectors,
                 "embedding_model": emb_model,
                 "embedding_dimensions": emb_dim,
+                "storage_state": "healthy",
             }
         except Exception as e:
             logger.warning("get_vector_stats() failed: %s", e)
-            emb_model = self.settings.ollama.embedding_model or os.getenv("EMBEDDING_MODEL") or "nomic-embed-text"
+            emb_model = (
+                getattr(self._settings.ollama, "embedding_model", None)
+                or os.getenv("EMBEDDING_MODEL")
+                or "nomic-embed-text"
+            )
             return {
                 "tables": [],
                 "total_vectors": 0,
                 "embedding_model": emb_model,
                 "embedding_dimensions": 768,
+                "storage_state": "unavailable",
             }
 
     async def get_graph_stats(self) -> dict[str, int]:

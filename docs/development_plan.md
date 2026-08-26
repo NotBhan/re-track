@@ -189,6 +189,30 @@ This document tracks the phased development milestones and operational roadmap f
   - Frontend truth alignment: `ContextStudio.tsx` and context-builder panels truthfully display `Model Synthesized` (green) only on completed provider invocations, and `Deterministic Fallback` (amber) with notice tooltip when local AST heuristics are used.
   - 10 new dedicated automated test cases across `test_context_model_invocation.py` and `test_context_model_contract.py`.
   - Authoritative Phase 10D.2 audit documentation (`docs/architecture/phase-10d2-context-generation-audit.md`) and product specification (`docs/product/context-generation.md`).
+- [x] **Phase 10D.3: Grounded Context Generation, Evidence Gating & Abstention (COMPLETED & FROZEN)**
+  - Authoritative **Deterministic Evidence Assessment & Gating Engine** (`EvidenceService`, `EvidenceRecord`, `EvidenceState`) enforcing multi-dimensional scoring (symbols: 0.35, code snippets: 0.30, files: 0.20, AST edges: 0.10, framework context: 0.05 background only).
+  - Strict separation of **task intent** (prompt vocabulary) from **observed repository evidence** (deterministic indexed data).
+  - Hard negative gate: when a requested subsystem (e.g. JWT authentication, billing, celery workers) has no supporting repository evidence, the engine bypasses model inference and returns a deterministic **Abstention Package** (`# Task Intent`, `# Observed Repository Evidence`, `# Missing Evidence`, `# Suggested Next Action`).
+  - Strict abstention invariant: `abstained=true => model_invoked=false, model_claims_allowed=false`.
+  - Post-generation grounding validation: automatic stripping of `<think>...</think>` and `[THINKING]` reasoning blocks; validation of referenced symbols and files against indexed repository.
+  - Telemetry and DTO synchronization across REST API (`AgentContextResponse`, `ContextResponse`), FastMCP (`get_agent_context_tool`), and TypeScript interfaces (`src/lib/api.ts`).
+  - Frontend truth alignment in `ContextStudio.tsx`, `ContextPipelineVisualization.tsx`, and `ContextPackageOutputPanel.tsx` with dedicated badges (`Insufficient Repository Evidence`, `Partial Evidence`, `Model Synthesized`) and structured missing-evidence callouts.
+  - 13 new dedicated automated tests across `test_context_evidence_gate.py`, `test_context_grounding.py`, and `test_context_evidence_contract.py` verifying critical Django negative case and positive grounded cases.
+  - Authoritative Phase 10D.3 audit documentation (`docs/architecture/phase-10d3-grounded-context-audit.md`) and user guide (`docs/product/grounded-context-generation.md`).
+- [x] **Phase 10D.4: Database & Memory Integration — Truth Alignment (COMPLETED & FROZEN)**
+  - Established strict **Truth Hierarchy & Authority Precedence**: Level 1 (Filesystem Source) > Level 2 (Manifest 2.0 + Deterministic AST) > Level 3 (Derived LanceDB / Kùzu Projections) > Level 4 (Cognee Semantic Memory) > Level 5 (LLM Synthesis).
+  - Derived memory subordination: derived memory records may never create repository truth, invent missing nodes, or repair absent source evidence.
+  - Implemented `MemoryProvenance` contract with SHA-256 fingerprint validation; stale provenance from edited/deleted files is pruned and excluded from `EvidenceService`.
+  - Strict storage failure resilience: LanceDB, Kùzu, or Cognee unavailability gracefully degrades vector/semantic features while deterministic AST retrieval remains 100% operational.
+  - 8 dedicated automated test cases in `test_memory_truth_alignment.py` verifying fresh provenance, stale invalidation, deletion pruning, cross-repo isolation, symbol absence, and storage outage resilience.
+  - Authoritative Phase 10D.4 audit documentation (`docs/architecture/phase-10d4-audit.md`) and product guide (`docs/product/database-memory-integration.md`).
+- [x] **Phase 10D.5: End-to-End Retrieval Arbitration (COMPLETED & FROZEN)**
+  - Implemented authoritative **End-to-End Retrieval Arbitration Pipeline** (`RetrievalArbitrator`, `app.services.retrieval_arbitrator`) establishing authority-first evidence selection prior to `EvidenceService` gating and LLM synthesis.
+  - Strict 4-tier lexicographic ordering: Tier 1 (`filesystem_verified_source`) > Tier 2 (`manifest_ast`) > Tier 3 (`validated_lancedb_kuzu`) > Tier 4 (`validated_cognee`).
+  - Lexicographic sort key: `(TierPriority, Relevance, Confidence, Specificity)` ensuring that authoritative source and AST evidence unconditionally outrank semantic similarity.
+  - Hard token budget guarantees: Authoritative Tier 1/2 evidence is reserved; subordinate Tier 3/4 candidates only fill residual budget and can never evict or displace higher-tier candidates.
+  - 7 new adversarial test cases passing in `test_retrieval_arbitration.py` covering stale rejection, lexicographic tier precedence, path-only non-sufficiency, LLM output isolation, budget reservation, cross-repo rejection, and Django abstention contract.
+  - Authoritative Phase 10D.5 audit documentation (`docs/architecture/phase-10d5-audit.md`), design spec (`docs/architecture/phase-10d5-design.md`), and user guide (`docs/product/retrieval-arbitration.md`).
 - [ ] **Phase 10D: Adaptive Query-Aware Retrieval** (Task-type-specific token allocation profiles).
 - [ ] **Phase 10E: Agent Workflow Optimization** (Multi-turn conversational context caching).
 
@@ -204,7 +228,7 @@ This document tracks the phased development milestones and operational roadmap f
 
 ## 2. Quality & Verification Metrics
 
-- **Backend Pytest Suite:** 586/586 passing unit/integration/soak tests across 39 test files (`backend/tests/`).
+- **Backend Pytest Suite:** 593/593 passing unit/integration/soak tests across 40 test files (`backend/tests/`).
 - **Frontend Vitest Suite:** 51/51 passing behavioral tests across 12 test suites (`src/test/journeys/`).
 - **AST Integrity:** 100% passing multi-language AST syntax and symbol resolution tests (`tests/test_ast_integrity.py`).
 - **Frontend Build & Types:** 100% clean TypeScript compile and Vite production build (`npm run build`).

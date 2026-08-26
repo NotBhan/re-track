@@ -80,14 +80,14 @@ async def test_provider_failure_and_same_process_recovery():
 
         # Cycle 1: Provider is UP -> Success
         is_provider_up = True
-        res1 = await mcp_tools.get_agent_context_tool("task 1", str(repo_path), container=container)
+        res1 = await mcp_tools.get_agent_context_tool("modify process_data function", str(repo_path), container=container)
         assert res1["success"] is True
         assert "Recovered Synthesis Package" in res1["context_markdown"]
 
         # Cycle 2: Provider goes DOWN -> Handled error in same process
         is_provider_up = False
         t0 = time.perf_counter()
-        res2 = await mcp_tools.get_agent_context_tool("task 2", str(repo_path), container=container)
+        res2 = await mcp_tools.get_agent_context_tool("modify process_data function again", str(repo_path), container=container)
         t_fail = time.perf_counter() - t0
         assert res2["success"] is False
         assert res2["error"] in ("ConnectionError", "InternalError")
@@ -101,16 +101,16 @@ async def test_provider_failure_and_same_process_recovery():
 
         # Cycle 3: Provider RESTORED in same process -> Automatic Recovery
         is_provider_up = True
-        res3 = await mcp_tools.get_agent_context_tool("task 3", str(repo_path), container=container)
+        res3 = await mcp_tools.get_agent_context_tool("modify process_data 3", str(repo_path), container=container)
         assert res3["success"] is True
         assert "Recovered Synthesis Package" in res3["context_markdown"]
 
         # Cycle 4: Repeat outage & recovery again to verify repeatability
         is_provider_up = False
-        res4 = await mcp_tools.get_agent_context_tool("task 4", str(repo_path), container=container)
+        res4 = await mcp_tools.get_agent_context_tool("modify process_data 4", str(repo_path), container=container)
         assert res4["success"] is False
 
         is_provider_up = True
-        res5 = await mcp_tools.get_agent_context_tool("task 5", str(repo_path), container=container)
+        res5 = await mcp_tools.get_agent_context_tool("modify process_data 5", str(repo_path), container=container)
         assert res5["success"] is True
         assert "Recovered Synthesis Package" in res5["context_markdown"]

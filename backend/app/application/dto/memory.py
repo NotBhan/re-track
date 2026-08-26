@@ -35,6 +35,8 @@ class DatasetInfo(BaseModel):
     created_at: Optional[str] = Field(default=None, description="ISO 8601 creation timestamp")
     file_count: int = Field(default=0, description="Number of files in dataset")
     source_path: Optional[str] = Field(default=None, description="Source repository path (unknown if unavailable)")
+    storage_state: str = Field(default="healthy", description="Subsystem storage status")
+    provenance: Optional[dict[str, Any]] = Field(default=None, description="Provenance anchoring metadata")
 
 
 class DatasetListResponse(BaseModel):
@@ -53,6 +55,7 @@ class MemoryGraphNode(BaseModel):
     kind: str = Field(default="entity", description="Node kind (entity, concept, document, file)")
     type: Optional[str] = Field(default=None, description="Entity type classification")
     properties: dict[str, Any] = Field(default_factory=dict, description="Node attributes")
+    provenance: Optional[dict[str, Any]] = Field(default=None, description="Provenance metadata")
 
 
 class MemoryGraphEdge(BaseModel):
@@ -63,6 +66,7 @@ class MemoryGraphEdge(BaseModel):
     kind: str = Field(default="relates_to", description="Relationship classification")
     relationship_type: Optional[str] = Field(default=None, description="Semantic relation")
     properties: dict[str, Any] = Field(default_factory=dict, description="Edge attributes")
+    provenance: Optional[dict[str, Any]] = Field(default=None, description="Provenance metadata")
 
 
 class MemoryGraphResponse(BaseModel):
@@ -70,6 +74,7 @@ class MemoryGraphResponse(BaseModel):
 
     success: bool = Field(description="Whether the operation succeeded")
     status: str = Field(description="Knowledge graph status: extracted, not_extracted, extracting, failed")
+    storage_state: str = Field(default="healthy", description="Kùzu graph engine state (healthy, degraded, unavailable)")
     nodes: list[MemoryGraphNode] = Field(default_factory=list, description="Authoritative graph nodes")
     edges: list[MemoryGraphEdge] = Field(default_factory=list, description="Authoritative graph edges")
     total_nodes: int = Field(default=0, description="Total nodes count")
@@ -88,12 +93,14 @@ class VectorDatasetInfo(BaseModel):
     created_at: Optional[str] = Field(default=None, description="Creation timestamp")
     vector_status: str = Field(default="ready", description="Vector index status (ready, indexing, empty)")
     chunk_count: int = Field(default=0, description="Estimated vector chunk count")
+    provenance: Optional[dict[str, Any]] = Field(default=None, description="Provenance metadata")
 
 
 class MemoryVectorsResponse(BaseModel):
     """Response containing vector space and embedding index details."""
 
     success: bool = Field(description="Whether query succeeded")
+    storage_state: str = Field(default="healthy", description="LanceDB engine state (healthy, degraded, unavailable)")
     vector_db_provider: str = Field(default="lancedb", description="Vector database provider")
     embedding_model: str = Field(default="", description="Active embedding model")
     embedding_dimensions: int = Field(default=768, description="Embedding vector dimensions")
@@ -116,6 +123,7 @@ class MemoryDataItem(BaseModel):
     extension: str = Field(default="", description="File extension")
     content_hash: str = Field(default="", description="Content SHA hash")
     pipeline_status: dict[str, Any] = Field(default_factory=dict, description="Pipeline processing status")
+    provenance: Optional[dict[str, Any]] = Field(default=None, description="Provenance metadata")
 
 
 class DatasetDataItemsResponse(BaseModel):
@@ -154,6 +162,10 @@ class MemoryStatsResponse(BaseModel):
     knowledge_graph_status: str = Field(default="not_extracted", description="'not_extracted' | 'extracting' | 'extracted' | 'failed'")
     graph_nodes: Optional[int] = Field(default=None, description="Number of graph nodes if extracted")
     graph_edges: Optional[int] = Field(default=None, description="Number of graph edges if extracted")
+    storage_subsystems: dict[str, str] = Field(
+        default_factory=lambda: {"lancedb": "healthy", "kuzu": "healthy", "cognee": "healthy"},
+        description="Individual storage subsystem states",
+    )
 
 
 class DashboardStats(BaseModel):

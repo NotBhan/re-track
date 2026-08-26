@@ -147,9 +147,18 @@ export interface ContextResponse {
   provider_identity?: string | null;
   model_name?: string | null;
   inference_status?: string;
-  fallback_used?: boolean;
-  fallback_reason?: string | null;
   inference_time_ms?: number;
+  evidence_state?: string;
+  evidence_score?: number;
+  evidence_confidence?: number;
+  evidence_files?: string[];
+  evidence_symbols?: string[];
+  evidence_relationships?: string[];
+  observed_evidence?: string[];
+  missing_evidence?: string[];
+  abstained?: boolean;
+  abstention_reason?: string | null;
+  model_claims_allowed?: boolean;
 }
 
 export interface AgentContextRequest {
@@ -183,6 +192,17 @@ export interface AgentContextResponse {
   fallback_used?: boolean;
   fallback_reason?: string | null;
   inference_time_ms?: number;
+  evidence_state?: string;
+  evidence_score?: number;
+  evidence_confidence?: number;
+  evidence_files?: string[];
+  evidence_symbols?: string[];
+  evidence_relationships?: string[];
+  observed_evidence?: string[];
+  missing_evidence?: string[];
+  abstained?: boolean;
+  abstention_reason?: string | null;
+  model_claims_allowed?: boolean;
 }
 
 export interface ForgetDatasetRequest {
@@ -211,6 +231,8 @@ export interface DatasetInfo {
   created_at: string;
   file_count: number;
   source_path: string;
+  storage_state?: "healthy" | "degraded" | "unavailable" | string;
+  provenance?: Record<string, unknown> | null;
 }
 
 export interface DatasetListResponse {
@@ -225,8 +247,8 @@ export interface RepoArchInfo {
 }
 
 export interface RepoComponentInfo {
-  path: string;
-  centrality: string;
+  name: string;
+  type: string;
 }
 
 export interface RepositorySummaryInfo {
@@ -268,6 +290,11 @@ export interface MemoryStatsResponse {
   knowledge_graph_status?: "not_extracted" | "extracting" | "extracted" | "failed";
   graph_nodes?: number | null;
   graph_edges?: number | null;
+  storage_subsystems?: {
+    lancedb?: "healthy" | "degraded" | "unavailable" | string;
+    kuzu?: "healthy" | "degraded" | "unavailable" | string;
+    cognee?: "healthy" | "degraded" | "unavailable" | "not_configured" | string;
+  };
 }
 
 export interface MemoryGraphNode {
@@ -276,6 +303,7 @@ export interface MemoryGraphNode {
   kind: string;
   type?: string | null;
   properties?: Record<string, string>;
+  provenance?: Record<string, unknown> | null;
 }
 
 export interface MemoryGraphEdge {
@@ -284,11 +312,13 @@ export interface MemoryGraphEdge {
   kind: string;
   relationship_type?: string | null;
   properties?: Record<string, string>;
+  provenance?: Record<string, unknown> | null;
 }
 
 export interface MemoryGraphResponse {
   success: boolean;
   status: "extracted" | "not_extracted" | "extracting" | "failed";
+  storage_state?: "healthy" | "degraded" | "unavailable" | string;
   nodes: MemoryGraphNode[];
   edges: MemoryGraphEdge[];
   total_nodes: number;
@@ -305,10 +335,12 @@ export interface VectorDatasetInfo {
   created_at?: string | null;
   vector_status: "ready" | "indexing" | "empty" | string;
   chunk_count: number;
+  provenance?: Record<string, unknown> | null;
 }
 
 export interface MemoryVectorsResponse {
   success: boolean;
+  storage_state?: "healthy" | "degraded" | "unavailable" | string;
   vector_db_provider: string;
   embedding_model: string;
   embedding_dimensions: number;
@@ -329,6 +361,7 @@ export interface MemoryDataItem {
   extension: string;
   content_hash: string;
   pipeline_status?: Record<string, unknown>;
+  provenance?: Record<string, unknown> | null;
 }
 
 export interface DatasetDataItemsResponse {

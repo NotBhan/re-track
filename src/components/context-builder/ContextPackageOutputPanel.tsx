@@ -112,8 +112,18 @@ export function ContextPackageOutputPanel() {
             Markdown Output
           </span>
           {result && (
-            <span className="text-[10px] font-mono px-2 py-0.5 rounded border border-[#262626] bg-[#111] text-neutral-400">
-              {result.model_invoked ? "Model Synthesized" : "Deterministic AST"}
+            <span className={`text-[10px] font-mono px-2 py-0.5 rounded border ${
+              result.abstained
+                ? "border-amber-500/30 bg-amber-950/30 text-amber-400"
+                : result.model_invoked
+                ? "border-emerald-500/30 bg-emerald-950/30 text-emerald-400"
+                : "border-[#262626] bg-[#111] text-neutral-400"
+            }`}>
+              {result.abstained
+                ? "Abstained"
+                : result.model_invoked
+                ? "Model Synthesized"
+                : "Deterministic AST"}
             </span>
           )}
         </div>

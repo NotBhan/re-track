@@ -18,6 +18,7 @@ import {
   ShieldCheck,
   Loader2,
   AlertCircle,
+  AlertTriangle,
   PanelRightClose,
   PanelRightOpen,
   X,
@@ -695,6 +696,15 @@ export default function ContextStudio() {
                       <Loader2 className="w-2.5 h-2.5 animate-spin" />
                       <span>Re-synthesizing</span>
                     </Badge>
+                  ) : agentResponse?.abstained ? (
+                    <Badge variant="outline" className="text-[10px] font-mono flex items-center gap-1 border-amber-500/40 text-amber-400 bg-amber-950/20" title={agentResponse.abstention_reason || "Insufficient repository evidence"}>
+                      <AlertTriangle className="w-3 h-3 text-amber-400" />
+                      <span>Insufficient Repository Evidence</span>
+                    </Badge>
+                  ) : agentResponse?.evidence_state === "partial" ? (
+                    <Badge variant="warning" className="text-[10px] font-mono flex items-center gap-1">
+                      <span>Partial Evidence</span>
+                    </Badge>
                   ) : agentResponse?.model_invoked && agentResponse?.inference_status === "completed" ? (
                     <Badge variant="success" className="text-[10px] font-mono flex items-center gap-1">
                       <Sparkles className="w-3 h-3 text-emerald-400" />
@@ -844,10 +854,18 @@ export default function ContextStudio() {
                         </div>
                         <div className="flex items-center gap-1.5">
                           <span className="text-neutral-500">Inference:</span>
-                          <span className={cn("font-medium", agentResponse.model_invoked ? "text-emerald-400" : "text-amber-400")}>
+                          <span className={cn("font-medium", agentResponse.model_invoked ? "text-emerald-400" : agentResponse.abstained ? "text-amber-400" : "text-amber-400")}>
                             {agentResponse.model_invoked
                               ? `${agentResponse.model_name || "Model"} (${agentResponse.provider_identity || "LLM"}) · ${agentResponse.inference_time_ms || 0}ms`
+                              : agentResponse.abstained
+                              ? "Abstained (zero hallucination)"
                               : "Deterministic AST (model bypassed)"}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-neutral-500">Evidence:</span>
+                          <span className={cn("font-medium", agentResponse.evidence_state === "sufficient" ? "text-emerald-400" : agentResponse.evidence_state === "partial" ? "text-amber-400" : "text-neutral-300")}>
+                            {agentResponse.evidence_state || "sufficient"} ({Math.round((agentResponse.evidence_score ?? 1.0) * 100)}%)
                           </span>
                         </div>
                         {health?.high_memory_pressure && (
@@ -855,7 +873,20 @@ export default function ContextStudio() {
                             <span>High RAM Pressure ({health.ram_percent}%)</span>
                           </div>
                         )}
-                        {agentResponse.fallback_used && agentResponse.fallback_reason && (
+                        {agentResponse.abstained && (
+                          <div className="w-full text-xs font-mono text-amber-300 bg-amber-950/40 border border-amber-500/30 rounded p-2.5 mt-1 space-y-1">
+                            <div className="font-semibold text-amber-400 flex items-center gap-1.5">
+                              <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                              <span>Insufficient Evidence: {agentResponse.abstention_reason || "No repository code supports this requested subsystem"}</span>
+                            </div>
+                            {agentResponse.missing_evidence && agentResponse.missing_evidence.length > 0 && (
+                              <div className="text-[11px] text-neutral-300">
+                                <span className="text-neutral-400">Missing Subsystems:</span> {agentResponse.missing_evidence.join(", ")}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        {!agentResponse.abstained && agentResponse.fallback_used && agentResponse.fallback_reason && (
                           <div className="w-full text-[10px] font-mono text-amber-400/80 bg-amber-950/20 border border-amber-500/20 rounded px-2 py-0.5 mt-0.5">
                             <span>Notice: {agentResponse.fallback_reason}</span>
                           </div>
