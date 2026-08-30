@@ -12,14 +12,17 @@ Never imports from other services.
 All Cognee imports stay inside this module.
 """
 
+import hashlib
 import logging
 import asyncio
 import re
 import os
+import time
 from typing import Any, Optional
 
 import cognee
 
+from app.application.domain.memory import MemoryProvenance, SemanticMemoryRecord
 from app.config.settings import Settings, get_settings
 from app.models.errors import CogneeServiceError
 from app.models.responses import RememberResult, RecallResult, RecallResponse, SectionType
@@ -511,9 +514,341 @@ class CogneeService:
             logger.error("Cognify failed for dataset %s: %s", dataset_name, e)
             raise CogneeServiceError(f"Extraction failed: {e}") from e
 
+    def map_semantic_memory(
+        self,
+        item: Any,
+        manifest: Any,
+        repository_id: Optional[str] = None,
+        repository_fingerprint: Optional[str] = None,
+    ) -> tuple[Optional[SemanticMemoryRecord], str]:
+        """Map a single Cognee memory item into a validated SemanticMemoryRecord."""
+        return CogneeSemanticMemoryAdapter.map_item(
+            item=item,
+            manifest=manifest,
+            repository_id=repository_id,
+            repository_fingerprint=repository_fingerprint,
+        )
+
+    def map_semantic_memories(
+        self,
+        items: list[Any],
+        manifest: Any,
+        repository_id: Optional[str] = None,
+        repository_fingerprint: Optional[str] = None,
+    ) -> list[SemanticMemoryRecord]:
+        """Map a batch of Cognee memory items into validated SemanticMemoryRecord entities."""
+        return CogneeSemanticMemoryAdapter.map_items(
+            items=items,
+            manifest=manifest,
+            repository_id=repository_id,
+            repository_fingerprint=repository_fingerprint,
+        )
+
     def _ensure_initialized(self) -> None:
         """Raise if service is not initialized."""
         if not self._initialized:
             raise CogneeServiceError(
                 "CogneeService not initialized. Call initialize() first."
             )
+
+
+class CogneeSemanticMemoryAdapter:
+    """Dedicated adapter for mapping Cognee-derived memory items into canonical SemanticMemoryRecord entities.
+
+    Invariants:
+    - Never fabricates missing files, symbols, hashes, or repository identity.
+    - Authoritative file paths, SHA-256 checksums, and symbols are validated against active repository manifest.
+    - All mapped records are strictly Tier 4 / derived_projection (is_derived=True, is_authoritative=False).
+    - Unanchored or corrupted records are rejected with explicit, observable rejection reasons.
+    """
+
+    @classmethod
+    def map_item(
+        cls,
+        item: Any,
+        manifest: Any,
+        repository_id: Optional[str] = None,
+        repository_fingerprint: Optional[str] = None,
+    ) -> tuple[Optional[SemanticMemoryRecord], str]:
+        """Convert a Cognee memory item into a validated SemanticMemoryRecord.
+
+        Args:
+            item: Raw Cognee result, dictionary, or RecallResult object.
+            manifest: Active RepositoryManifest instance.
+            repository_id: Optional repository identifier override/context.
+            repository_fingerprint: Optional repository fingerprint override/context.
+
+        Returns:
+            Tuple of (Optional[SemanticMemoryRecord], reason_code).
+        """
+        if item is None:
+            return None, "empty_item"
+
+        if manifest is None or not hasattr(manifest, "files") or manifest.files is None:
+            return None, "missing_manifest"
+
+        # 1. Extract memory_id
+        mem_id = (
+            getattr(item, "memory_id", None)
+            or getattr(item, "id", None)
+            or (item.get("memory_id") if isinstance(item, dict) else None)
+            or (item.get("id") if isinstance(item, dict) else None)
+        )
+
+        # 2. Extract semantic_text
+        semantic_text = (
+            getattr(item, "semantic_text", None)
+            or getattr(item, "text", None)
+            or getattr(item, "content", None)
+            or (item.get("semantic_text") if isinstance(item, dict) else None)
+            or (item.get("text") if isinstance(item, dict) else None)
+            or (item.get("content") if isinstance(item, dict) else None)
+        )
+        if semantic_text is None:
+            semantic_text = str(item)
+        semantic_text = str(semantic_text).strip()
+        if not semantic_text:
+            return None, "empty_semantic_text"
+
+        if not mem_id:
+            mem_id = f"cognee_mem_{hashlib.sha256(semantic_text.encode('utf-8')).hexdigest()[:12]}"
+        else:
+            mem_id = str(mem_id)
+
+        # 3. Extract raw container and provenance container if present
+        raw_obj = getattr(item, "raw", None) or (item.get("raw") if isinstance(item, dict) else None)
+        prov = (
+            getattr(item, "provenance", None)
+            or (item.get("provenance") if isinstance(item, dict) else None)
+            or (getattr(raw_obj, "provenance", None) if raw_obj is not None else None)
+            or (raw_obj.get("provenance") if isinstance(raw_obj, dict) else None)
+        )
+
+        # 4. Extract repository identity & fingerprint
+        repo_id = (
+            repository_id
+            or getattr(item, "repository_id", None)
+            or getattr(item, "dataset_name", None)
+            or (getattr(prov, "repository_id", None) if prov else None)
+            or (prov.get("repository_id") if isinstance(prov, dict) else None)
+            or (getattr(raw_obj, "repository_id", None) if raw_obj is not None else None)
+            or (getattr(raw_obj, "dataset_name", None) if raw_obj is not None else None)
+            or (item.get("repository_id") if isinstance(item, dict) else None)
+            or (item.get("dataset_name") if isinstance(item, dict) else None)
+            or (raw_obj.get("repository_id") if isinstance(raw_obj, dict) else None)
+            or (raw_obj.get("dataset_name") if isinstance(raw_obj, dict) else None)
+            or getattr(manifest, "dataset_name", None)
+            or getattr(manifest, "repo_path", None)
+        )
+        if not repo_id:
+            return None, "missing_repository_provenance"
+        repo_id = str(repo_id)
+
+        manifest_fp = getattr(manifest, "repo_fingerprint", "") or ""
+        repo_fp = (
+            repository_fingerprint
+            or getattr(item, "repository_fingerprint", None)
+            or (getattr(prov, "repository_fingerprint", None) if prov else None)
+            or (prov.get("repository_fingerprint") if isinstance(prov, dict) else None)
+            or (getattr(raw_obj, "repository_fingerprint", None) if raw_obj is not None else None)
+            or (item.get("repository_fingerprint") if isinstance(item, dict) else None)
+            or (raw_obj.get("repository_fingerprint") if isinstance(raw_obj, dict) else None)
+            or manifest_fp
+        )
+        if not repo_fp:
+            return None, "missing_repository_fingerprint"
+        repo_fp = str(repo_fp)
+
+        # Check repository fingerprint match against manifest
+        if manifest_fp and repo_fp != manifest_fp:
+            return None, "cross_repository_fingerprint_mismatch"
+
+        # Check repository ID match against manifest if manifest specifies dataset_name
+        manifest_ds = getattr(manifest, "dataset_name", None)
+        if manifest_ds and repo_id:
+            if manifest_ds != repo_id and manifest_ds != repo_id.replace("/", "_"):
+                return None, "cross_repository_id_mismatch"
+
+        # 5. Extract source files (mandatory)
+        raw_files = (
+            getattr(item, "source_files", None)
+            or getattr(item, "source_file", None)
+            or getattr(item, "file_paths", None)
+            or getattr(item, "file_path", None)
+            or (getattr(prov, "source_files", None) if prov else None)
+            or (getattr(prov, "source_file", None) if prov else None)
+            or (getattr(raw_obj, "source_files", None) if raw_obj is not None else None)
+            or (getattr(raw_obj, "source_file", None) if raw_obj is not None else None)
+            or (item.get("source_files") if isinstance(item, dict) else None)
+            or (item.get("source_file") if isinstance(item, dict) else None)
+            or (item.get("file_paths") if isinstance(item, dict) else None)
+            or (item.get("file_path") if isinstance(item, dict) else None)
+            or (prov.get("source_files") if isinstance(prov, dict) else None)
+            or (prov.get("source_file") if isinstance(prov, dict) else None)
+            or (raw_obj.get("source_files") if isinstance(raw_obj, dict) else None)
+            or (raw_obj.get("source_file") if isinstance(raw_obj, dict) else None)
+        )
+
+        source_files: list[str] = []
+        if isinstance(raw_files, list):
+            source_files = [str(f).strip() for f in raw_files if f and str(f).strip()]
+        elif isinstance(raw_files, str) and raw_files.strip():
+            source_files = [raw_files.strip()]
+
+        if not source_files:
+            return None, "missing_source_files"
+
+        # 6. Extract source symbols
+        raw_symbols = (
+            getattr(item, "source_symbols", None)
+            or getattr(item, "source_symbol", None)
+            or getattr(item, "symbols", None)
+            or (getattr(prov, "source_symbols", None) if prov else None)
+            or (getattr(prov, "source_symbol", None) if prov else None)
+            or (getattr(raw_obj, "source_symbols", None) if raw_obj is not None else None)
+            or (getattr(raw_obj, "source_symbol", None) if raw_obj is not None else None)
+            or (getattr(raw_obj, "symbols", None) if raw_obj is not None else None)
+            or (item.get("source_symbols") if isinstance(item, dict) else None)
+            or (item.get("source_symbol") if isinstance(item, dict) else None)
+            or (item.get("symbols") if isinstance(item, dict) else None)
+            or (prov.get("source_symbols") if isinstance(prov, dict) else None)
+            or (prov.get("source_symbol") if isinstance(prov, dict) else None)
+            or (raw_obj.get("source_symbols") if isinstance(raw_obj, dict) else None)
+            or (raw_obj.get("source_symbol") if isinstance(raw_obj, dict) else None)
+            or (raw_obj.get("symbols") if isinstance(raw_obj, dict) else None)
+        )
+
+        source_symbols: list[str] = []
+        if isinstance(raw_symbols, list):
+            source_symbols = [str(s).strip() for s in raw_symbols if s and str(s).strip()]
+        elif isinstance(raw_symbols, str) and raw_symbols.strip():
+            source_symbols = [raw_symbols.strip()]
+
+        # 7. Extract raw source sha256 if supplied in item
+        raw_shas = (
+            getattr(item, "source_sha256", None)
+            or (getattr(prov, "source_sha256", None) if prov else None)
+            or (getattr(raw_obj, "source_sha256", None) if raw_obj is not None else None)
+            or (item.get("source_sha256") if isinstance(item, dict) else None)
+            or (prov.get("source_sha256") if isinstance(prov, dict) else None)
+            or (raw_obj.get("source_sha256") if isinstance(raw_obj, dict) else None)
+        )
+        item_shas: list[str] = []
+        if isinstance(raw_shas, list):
+            item_shas = [str(s).strip() for s in raw_shas if s and str(s).strip()]
+        elif isinstance(raw_shas, str) and raw_shas.strip():
+            item_shas = [raw_shas.strip()]
+
+        # 8. Authoritative Manifest Validation for Files & SHAs
+        resolved_files: list[str] = []
+        resolved_shas: list[str] = []
+
+        for idx, f_path in enumerate(source_files):
+            norm_path = f_path.replace("\\", "/").lstrip("./")
+            if norm_path not in manifest.files:
+                return None, f"unknown_source_file:{norm_path}"
+
+            file_fp = manifest.files[norm_path]
+            actual_sha = getattr(file_fp, "sha256", "") or ""
+
+            if idx < len(item_shas) and item_shas[idx]:
+                expected_sha = item_shas[idx]
+                if actual_sha and expected_sha != actual_sha:
+                    return None, f"source_sha256_stale:{norm_path}"
+
+            resolved_files.append(norm_path)
+            resolved_shas.append(actual_sha)
+
+        # 9. Authoritative Manifest Validation for Symbols
+        if source_symbols:
+            known_symbols: set[str] = set()
+            for f_path in resolved_files:
+                file_fp = manifest.files.get(f_path)
+                if file_fp and getattr(file_fp, "symbols", None):
+                    known_symbols.update(file_fp.symbols)
+
+            for sym in source_symbols:
+                if sym not in known_symbols:
+                    return None, f"unknown_symbol:{sym}"
+
+        # 10. Extract relationship_kind & generated_at
+        rel_kind = (
+            getattr(item, "relationship_kind", None)
+            or (getattr(prov, "relationship_kind", None) if prov else None)
+            or (getattr(raw_obj, "relationship_kind", None) if raw_obj is not None else None)
+            or (item.get("relationship_kind") if isinstance(item, dict) else None)
+            or (prov.get("relationship_kind") if isinstance(prov, dict) else None)
+            or (raw_obj.get("relationship_kind") if isinstance(raw_obj, dict) else None)
+            or (getattr(prov, "kind", None) if prov else None)
+            or (prov.get("kind") if isinstance(prov, dict) else None)
+            or getattr(item, "kind", None)
+            or (item.get("kind") if isinstance(item, dict) else None)
+            or (getattr(raw_obj, "kind", None) if raw_obj is not None else None)
+            or (raw_obj.get("kind") if isinstance(raw_obj, dict) else None)
+        )
+
+        gen_at = (
+            getattr(item, "generated_at", None)
+            or getattr(item, "indexed_at", None)
+            or (getattr(prov, "indexed_at", None) if prov else None)
+            or (getattr(raw_obj, "generated_at", None) if raw_obj is not None else None)
+            or (getattr(raw_obj, "indexed_at", None) if raw_obj is not None else None)
+            or (item.get("generated_at") if isinstance(item, dict) else None)
+            or (item.get("indexed_at") if isinstance(item, dict) else None)
+            or (prov.get("indexed_at") if isinstance(prov, dict) else None)
+            or (raw_obj.get("generated_at") if isinstance(raw_obj, dict) else None)
+            or (raw_obj.get("indexed_at") if isinstance(raw_obj, dict) else None)
+        )
+        try:
+            gen_at_float = float(gen_at) if gen_at is not None else time.time()
+        except (ValueError, TypeError):
+            gen_at_float = time.time()
+
+        # 11. Construct canonical SemanticMemoryRecord
+        record = SemanticMemoryRecord(
+            memory_id=mem_id,
+            repository_id=repo_id,
+            repository_fingerprint=manifest_fp or repo_fp,
+            semantic_text=semantic_text,
+            source_files=resolved_files,
+            source_symbols=source_symbols,
+            source_sha256=resolved_shas,
+            relationship_kind=str(rel_kind) if rel_kind else None,
+            generated_by="cognee_pipeline",
+            generated_at=gen_at_float,
+            evidence_status="derived_projection",
+            is_derived=True,
+            is_authoritative=False,
+        )
+
+        return record, "valid"
+
+    @classmethod
+    def map_items(
+        cls,
+        items: list[Any],
+        manifest: Any,
+        repository_id: Optional[str] = None,
+        repository_fingerprint: Optional[str] = None,
+    ) -> list[SemanticMemoryRecord]:
+        """Convert a batch of Cognee memory items into validated SemanticMemoryRecord entities.
+
+        Invalid or unanchored items are excluded with observable warnings.
+        """
+        records: list[SemanticMemoryRecord] = []
+        for i, it in enumerate(items):
+            rec, reason = cls.map_item(
+                item=it,
+                manifest=manifest,
+                repository_id=repository_id,
+                repository_fingerprint=repository_fingerprint,
+            )
+            if rec is not None:
+                records.append(rec)
+            else:
+                logger.warning(
+                    "Cognee semantic memory item %d rejected: reason=%s",
+                    i,
+                    reason,
+                )
+        return records

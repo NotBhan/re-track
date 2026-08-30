@@ -325,3 +325,131 @@ class MemoryVectorStatsRecord:
             embedding_dimensions=int(data.get("embedding_dimensions", 768)),
             storage_state=str(data.get("storage_state", StorageSubsystemState.HEALTHY.value)),
         )
+
+
+@dataclass
+class SemanticMemoryRecord:
+    """Canonical domain entity for Cognee-derived semantic memory records in RE:Track.
+
+    Invariants:
+    - Strictly derived (Tier-4 representation).
+    - Cannot claim or become Tier-1/Tier-2 authoritative repository evidence.
+    - Must possess verifiable repository provenance anchoring it to one or more source files.
+    - Invalidated upon source file modification, deletion, or symbol removal.
+    """
+
+    memory_id: str
+    repository_id: str
+    repository_fingerprint: str
+    semantic_text: str
+    source_files: list[str] = field(default_factory=list)
+    source_symbols: list[str] = field(default_factory=list)
+    source_sha256: list[str] = field(default_factory=list)
+    relationship_kind: Optional[str] = None
+    generated_by: str = "cognee_pipeline"
+    generated_at: float = 0.0
+    evidence_status: str = "derived_projection"
+    is_derived: bool = True
+    is_authoritative: bool = False
+
+    def validate_against_manifest(self, manifest: Any) -> tuple[bool, str]:
+        """Validate whether this semantic memory record is valid against the active repository manifest."""
+        if not manifest or not hasattr(manifest, "files") or not manifest.files:
+            return False, "missing_manifest"
+
+        if not self.repository_id or not self.repository_fingerprint:
+            return False, "missing_repository_provenance"
+
+        if not self.source_files:
+            return False, "missing_source_files"
+
+        # Check repository fingerprint match
+        if getattr(manifest, "repo_fingerprint", None) and self.repository_fingerprint != manifest.repo_fingerprint:
+            return False, "cross_repository_fingerprint_mismatch"
+
+        # Check repository dataset_name / repo_id match if available
+        if getattr(manifest, "dataset_name", None) and self.repository_id:
+            if manifest.dataset_name != self.repository_id and manifest.dataset_name != self.repository_id.replace("/", "_"):
+                return False, "cross_repository_id_mismatch"
+
+        # Validate all referenced source files exist in manifest with matching SHAs
+        for idx, f_path in enumerate(self.source_files):
+            norm_path = f_path.replace("\\", "/").lstrip("./")
+            if norm_path not in manifest.files:
+                return False, f"source_file_deleted:{norm_path}"
+
+            fp = manifest.files[norm_path]
+            if idx < len(self.source_sha256):
+                expected_sha = self.source_sha256[idx]
+                if expected_sha and getattr(fp, "sha256", None) and expected_sha != fp.sha256:
+                    return False, f"source_sha256_stale:{norm_path}"
+
+        # Validate all referenced symbols exist in manifest
+        if self.source_symbols:
+            known_symbols: set[str] = set()
+            for f_path in self.source_files:
+                norm_path = f_path.replace("\\", "/").lstrip("./")
+                file_fp = manifest.files.get(norm_path)
+                if file_fp and getattr(file_fp, "symbols", None):
+                    known_symbols.update(file_fp.symbols)
+
+            for sym in self.source_symbols:
+                if sym not in known_symbols:
+                    return False, f"source_symbol_missing:{sym}"
+
+        return True, "valid"
+
+    def is_valid_for_manifest(self, manifest: Any) -> bool:
+        """Boolean predicate for manifest validity."""
+        valid, _ = self.validate_against_manifest(manifest)
+        return valid
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize semantic memory record to dictionary format."""
+        return {
+            "memory_id": self.memory_id,
+            "repository_id": self.repository_id,
+            "repository_fingerprint": self.repository_fingerprint,
+            "semantic_text": self.semantic_text,
+            "source_files": list(self.source_files),
+            "source_symbols": list(self.source_symbols),
+            "source_sha256": list(self.source_sha256),
+            "relationship_kind": self.relationship_kind,
+            "generated_by": self.generated_by,
+            "generated_at": self.generated_at,
+            "evidence_status": self.evidence_status,
+            "is_derived": True,
+            "is_authoritative": False,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "SemanticMemoryRecord":
+        """Construct semantic memory record from dictionary format."""
+        return cls(
+            memory_id=str(data.get("memory_id", "")),
+            repository_id=str(data.get("repository_id", "")),
+            repository_fingerprint=str(data.get("repository_fingerprint", "")),
+            semantic_text=str(data.get("semantic_text", "")),
+            source_files=list(data.get("source_files", [])),
+            source_symbols=list(data.get("source_symbols", [])),
+            source_sha256=list(data.get("source_sha256", [])),
+            relationship_kind=data.get("relationship_kind"),
+            generated_by=str(data.get("generated_by", "cognee_pipeline")),
+            generated_at=float(data.get("generated_at", 0.0)),
+            evidence_status=str(data.get("evidence_status", "derived_projection")),
+            is_derived=True,
+            is_authoritative=False,
+        )
+
+    def to_provenance(self) -> MemoryProvenance:
+        """Convert primary provenance anchoring to MemoryProvenance model."""
+        return MemoryProvenance(
+            repository_id=self.repository_id,
+            repository_fingerprint=self.repository_fingerprint,
+            source_file=self.source_files[0] if self.source_files else "",
+            source_sha256=self.source_sha256[0] if self.source_sha256 else "",
+            source_symbol=self.source_symbols[0] if self.source_symbols else None,
+            relationship_kind=self.relationship_kind,
+            indexed_at=self.generated_at,
+            evidence_status=self.evidence_status,
+        )

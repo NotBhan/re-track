@@ -6,13 +6,22 @@ vendor SDKs (Cognee, FastAPI, Starlette) during package import.
 
 from typing import Any
 
-__all__ = ["CogneeService", "ContextService", "IndexingService", "ManifestService"]
+__all__ = [
+    "CogneeSemanticMemoryAdapter",
+    "CogneeService",
+    "ContextService",
+    "IndexingService",
+    "ManifestService",
+]
 
 
 def __getattr__(name: str) -> Any:
     if name == "CogneeService":
         from app.services.cognee_service import CogneeService
         return CogneeService
+    elif name == "CogneeSemanticMemoryAdapter":
+        from app.services.cognee_service import CogneeSemanticMemoryAdapter
+        return CogneeSemanticMemoryAdapter
     elif name == "ContextService":
         from app.services.context_service import ContextService
         return ContextService
