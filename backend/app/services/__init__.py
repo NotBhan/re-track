@@ -11,7 +11,11 @@ __all__ = [
     "CogneeService",
     "ContextService",
     "IndexingService",
+    "JsonSemanticMemoryRepository",
     "ManifestService",
+    "SemanticMemoryGenerationService",
+    "SemanticMemoryGenerator",
+    "SemanticMemoryRepository",
 ]
 
 
@@ -22,6 +26,12 @@ def __getattr__(name: str) -> Any:
     elif name == "CogneeSemanticMemoryAdapter":
         from app.services.cognee_service import CogneeSemanticMemoryAdapter
         return CogneeSemanticMemoryAdapter
+    elif name in ("JsonSemanticMemoryRepository", "SemanticMemoryRepository"):
+        from app.services.semantic_memory_repository import JsonSemanticMemoryRepository
+        return JsonSemanticMemoryRepository
+    elif name in ("SemanticMemoryGenerator", "SemanticMemoryGenerationService"):
+        from app.services.semantic_memory_generator import SemanticMemoryGenerator
+        return SemanticMemoryGenerator
     elif name == "ContextService":
         from app.services.context_service import ContextService
         return ContextService

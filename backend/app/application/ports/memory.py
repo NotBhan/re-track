@@ -1,5 +1,3 @@
-"""Abstract semantic, vector, and graph memory capability ports for RE:Track."""
-
 from typing import Any, Optional, Protocol
 
 from app.application.domain.memory import (
@@ -7,6 +5,8 @@ from app.application.domain.memory import (
     MemoryDatasetRecord,
     MemoryGraphRecord,
     MemoryVectorStatsRecord,
+    SemanticMemoryGenerationResult,
+    SemanticMemoryRecord,
 )
 
 
@@ -114,3 +114,89 @@ class MemoryPort(
 ):
     """Unified composite memory port combining all memory capabilities."""
     ...
+
+
+class SemanticMemoryRepositoryPort(Protocol):
+    """Port for durable persistence and repository-isolated retrieval of SemanticMemoryRecord entities.
+
+    Invariants:
+    - Persists ONLY records that pass provenance validation.
+    - Maintains repository isolation (cross-repo isolation and validation).
+    - Preserves derived-only invariants (generated_by='cognee_pipeline', is_derived=True, is_authoritative=False).
+    - Revalidates records against active manifest on load without silently repairing stale records.
+    """
+
+    def save(self, record: SemanticMemoryRecord, manifest: Optional[Any] = None) -> tuple[bool, str]:
+        """Persist a single validated SemanticMemoryRecord."""
+        ...
+
+    def save_all(self, records: list[SemanticMemoryRecord], manifest: Optional[Any] = None) -> tuple[int, list[str]]:
+        """Persist a batch of validated SemanticMemoryRecords."""
+        ...
+
+    def upsert(self, record: SemanticMemoryRecord, manifest: Optional[Any] = None) -> tuple[bool, str]:
+        """Upsert a single validated SemanticMemoryRecord."""
+        ...
+
+    def get(self, memory_id: str, repository_id: Optional[str] = None, manifest: Optional[Any] = None) -> Optional[SemanticMemoryRecord]:
+        """Retrieve a record by ID, optionally validating against manifest."""
+        ...
+
+    def get_by_repository(self, repository_id: str, manifest: Optional[Any] = None, include_stale: bool = False) -> list[SemanticMemoryRecord]:
+        """Retrieve all records for a repository, optionally validating against manifest."""
+        ...
+
+    def load_all(self, manifest: Optional[Any] = None, include_stale: bool = False) -> list[SemanticMemoryRecord]:
+        """Retrieve all persisted records across all repositories."""
+        ...
+
+    def delete(self, memory_id: str, repository_id: Optional[str] = None) -> bool:
+        """Delete a record by its memory ID."""
+        ...
+
+    def delete_by_repository(self, repository_id: str) -> int:
+        """Delete all records associated with a repository."""
+        ...
+
+    def clear(self) -> None:
+        """Clear all stored semantic memory records."""
+        ...
+
+
+class SemanticMemoryGeneratorPort(Protocol):
+    """Port for generating structured semantic memory records from verified repository evidence."""
+
+    async def generate_semantic_memory(
+        self,
+        repository_id: str,
+        manifest: Any,
+        file_filter: Optional[list[str]] = None,
+        source_snippets: Optional[dict[str, str]] = None,
+        task_intent: Optional[str] = None,
+        frameworks: Optional[list[str]] = None,
+        model_config: Optional[dict[str, Any]] = None,
+        persist: bool = True,
+    ) -> SemanticMemoryGenerationResult:
+        """Generate, validate, and optionally persist semantic memory records from verified repository evidence."""
+        ...
+
+    async def cognify_repository(
+        self,
+        repository_id: str,
+        manifest: Any,
+        delta: Optional[Any] = None,
+        existing_manifest: Optional[Any] = None,
+        source_snippets: Optional[dict[str, str]] = None,
+        frameworks: Optional[list[str]] = None,
+        task_intent: Optional[str] = None,
+        model_config: Optional[dict[str, Any]] = None,
+        cognee_service: Optional[Any] = None,
+    ) -> SemanticMemoryGenerationResult:
+        """Perform end-to-end repository cognification and incremental semantic memory lifecycle."""
+        ...
+
+
+class CognificationPort(SemanticMemoryGeneratorPort, Protocol):
+    """Alias protocol for repository cognification lifecycle."""
+    ...
+

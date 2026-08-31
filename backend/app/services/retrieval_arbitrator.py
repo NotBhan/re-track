@@ -352,7 +352,7 @@ class RetrievalArbitrator:
         # Tier 4: Validated Cognee Semantic Memory
         # ---------------------------------------------------------
         for i, mem in enumerate(cognee_memories):
-            prov = getattr(mem, "provenance", None) or (mem.get("provenance") if isinstance(mem, dict) else None)
+            prov = getattr(mem, "provenance", None) or (mem.to_provenance() if hasattr(mem, "to_provenance") else (mem.get("provenance") if isinstance(mem, dict) else None))
             is_valid, reason = cls.validate_candidate_provenance(prov, manifest)
             if not is_valid:
                 if reason == "cross_repository_mismatch":
@@ -361,7 +361,7 @@ class RetrievalArbitrator:
                     stale_rejected_count += 1
                 continue
 
-            text_content = str(getattr(mem, "text", None) or getattr(mem, "content", None) or (mem.get("text") if isinstance(mem, dict) else str(mem)))
+            text_content = str(getattr(mem, "semantic_text", None) or getattr(mem, "text", None) or getattr(mem, "content", None) or (mem.get("text") if isinstance(mem, dict) else str(mem)))
             src_file = getattr(prov, "source_file", "") if prov else ""
             src_symbol = getattr(prov, "source_symbol", None) if prov else None
             rel_kind = getattr(prov, "relationship_kind", None) if prov else None

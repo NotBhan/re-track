@@ -166,13 +166,6 @@ async def run_mcp_stdio(container: Optional[ApplicationContainer] = None) -> Non
     setup_logging(level=logging.INFO, stream=sys.stderr)
 
     app_container = container or get_container()
-    logger.info("Initializing RE:Track backend services for MCP server...")
-    try:
-        await app_container.initialize()
-        logger.info("Backend services initialized successfully.")
-    except Exception as e:
-        logger.warning("Backend service initialization warning: %s", e)
-
     server = create_mcp_server(container=app_container)
     logger.info("Starting RE:Track MCP stdio server...")
     try:

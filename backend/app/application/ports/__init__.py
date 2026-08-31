@@ -17,12 +17,15 @@ from app.application.ports.indexing_service import IndexingServicePort
 from app.application.ports.intent_parser import IntentParserPort
 from app.application.ports.llm_provider import LLMProviderPort
 from app.application.ports.memory import (
+    CognificationPort,
     MemoryDatasetPort,
     MemoryIngestionPort,
     MemoryLifecyclePort,
     MemoryPort,
     MemoryRetrievalPort,
     MemoryTopologyPort,
+    SemanticMemoryGeneratorPort,
+    SemanticMemoryRepositoryPort,
 )
 from app.application.ports.repository_manager import RepositoryManagerPort
 from app.application.ports.repository_metadata import RepositoryMetadataPort
@@ -33,6 +36,7 @@ from app.application.ports.workspace_authorization import WorkspaceAuthorization
 __all__ = [
     "BenchmarkRunnerPort",
     "CGCServicePort",
+    "CognificationPort",
     "ContextCachePort",
     "ContextPackageRepositoryPort",
     "ContextServicePort",
@@ -50,6 +54,8 @@ __all__ = [
     "MemoryTopologyPort",
     "RepositoryManagerPort",
     "RepositoryMetadataPort",
+    "SemanticMemoryGeneratorPort",
+    "SemanticMemoryRepositoryPort",
     "SourceSearchPort",
     "SummaryGeneratorPort",
     "WorkspaceAuthorizationPort",

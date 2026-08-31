@@ -20,8 +20,6 @@ import os
 import time
 from typing import Any, Optional
 
-import cognee
-
 from app.application.domain.memory import MemoryProvenance, SemanticMemoryRecord
 from app.config.settings import Settings, get_settings
 from app.models.errors import CogneeServiceError
@@ -72,6 +70,7 @@ class CogneeService:
             return
 
         try:
+            import cognee
             self._settings.configure_cognee()
             self._settings.validate_provider()
             self._settings.ensure_directories()
@@ -107,6 +106,7 @@ class CogneeService:
         self._ensure_initialized()
         dataset_name = sanitize_dataset_name(dataset_name)
         try:
+            import cognee
             items = len(data) if isinstance(data, list) else 1
             logger.info("add() | dataset=%s | items=%d", dataset_name, items)
             result = await cognee.add(
@@ -143,6 +143,7 @@ class CogneeService:
         self._ensure_initialized()
         dataset_name = sanitize_dataset_name(dataset_name)
         try:
+            import cognee
             items = len(data) if isinstance(data, list) else 1
             logger.info(
                 "remember() | dataset=%s | items=%d", dataset_name, items
@@ -183,6 +184,7 @@ class CogneeService:
         self._ensure_initialized()
         clean_datasets = [sanitize_dataset_name(d) for d in datasets]
         try:
+            import cognee
             logger.info(
                 "recall() | query=%s | datasets=%s | top_k=%d",
                 query_text[:80],
@@ -235,6 +237,7 @@ class CogneeService:
         self._ensure_initialized()
         clean_dataset = sanitize_dataset_name(dataset) if dataset else None
         try:
+            import cognee
             logger.info("improve() | dataset=%s", clean_dataset or "all")
             kwargs["dataset"] = clean_dataset
             result = await cognee.improve(**kwargs)
@@ -265,6 +268,7 @@ class CogneeService:
         self._ensure_initialized()
         clean_dataset = sanitize_dataset_name(dataset) if dataset else None
         try:
+            import cognee
             logger.info(
                 "forget() | dataset=%s | dataset_id=%s | data_id=%s",
                 clean_dataset,
@@ -300,6 +304,7 @@ class CogneeService:
         """
         self._ensure_initialized()
         try:
+            import cognee
             logger.info("list_datasets()")
             raw_datasets = await cognee.datasets.list_datasets()
             from cognee.modules.data.methods import get_dataset_data
@@ -543,6 +548,51 @@ class CogneeService:
             repository_id=repository_id,
             repository_fingerprint=repository_fingerprint,
         )
+
+    async def retrieve_semantic_memory(
+        self,
+        repository_id: str,
+        query_text: str,
+        manifest: Any,
+        top_k: int = 15,
+        repository_store: Optional[Any] = None,
+        **kwargs: Any,
+    ) -> list[SemanticMemoryRecord]:
+        """Retrieve semantic memory for a repository, validating provenance against active manifest."""
+        clean_ds = sanitize_dataset_name(repository_id)
+        candidates: list[Any] = []
+
+        # 1. Try recalling from Cognee dataset
+        try:
+            recall_resp = await self.recall(
+                query_text=query_text,
+                datasets=[clean_ds],
+                top_k=top_k,
+                **kwargs,
+            )
+            if recall_resp and recall_resp.results:
+                candidates.extend(recall_resp.results)
+        except Exception as e:
+            logger.warning("Cognee recall failed for dataset %s: %s", clean_ds, e)
+
+        # 2. If repository_store provided or no recall results, load from persistent store
+        if repository_store is not None:
+            persisted = repository_store.get_by_repository(
+                repository_id=repository_id,
+                manifest=manifest,
+                include_stale=False,
+            )
+            for p in persisted:
+                if p not in candidates:
+                    candidates.append(p)
+
+        # 3. Map candidates through adapter and validate against manifest
+        valid_records = self.map_semantic_memories(
+            items=candidates,
+            manifest=manifest,
+            repository_id=repository_id,
+        )
+        return valid_records
 
     def _ensure_initialized(self) -> None:
         """Raise if service is not initialized."""
@@ -804,7 +854,25 @@ class CogneeSemanticMemoryAdapter:
         except (ValueError, TypeError):
             gen_at_float = time.time()
 
-        # 11. Construct canonical SemanticMemoryRecord
+        # 11. Extract confidence_score
+        conf_score = (
+            getattr(item, "confidence_score", None)
+            or getattr(item, "score", None)
+            or (getattr(prov, "confidence_score", None) if prov else None)
+            or (getattr(raw_obj, "confidence_score", None) if raw_obj is not None else None)
+            or (getattr(raw_obj, "score", None) if raw_obj is not None else None)
+            or (item.get("confidence_score") if isinstance(item, dict) else None)
+            or (item.get("score") if isinstance(item, dict) else None)
+            or (prov.get("confidence_score") if isinstance(prov, dict) else None)
+            or (raw_obj.get("confidence_score") if isinstance(raw_obj, dict) else None)
+            or (raw_obj.get("score") if isinstance(raw_obj, dict) else None)
+        )
+        try:
+            conf_score_float = float(conf_score) if conf_score is not None else 1.0
+        except (ValueError, TypeError):
+            conf_score_float = 1.0
+
+        # 12. Construct canonical SemanticMemoryRecord
         record = SemanticMemoryRecord(
             memory_id=mem_id,
             repository_id=repo_id,
@@ -819,6 +887,7 @@ class CogneeSemanticMemoryAdapter:
             evidence_status="derived_projection",
             is_derived=True,
             is_authoritative=False,
+            confidence_score=conf_score_float,
         )
 
         return record, "valid"

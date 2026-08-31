@@ -127,17 +127,31 @@ Format as Context Package
 Send to coding LLM
 ```
 
-### File Update
+### File Update & Incremental Cognification (Phase 10D.6)
 
 ```
-File modified
+Manifest Delta Mutation (Add / Mod / Del / Rename)
+      │
+      ├─► Deleted: Invalidate memories referencing deleted files (0 LLM calls)
+      ├─► Renamed (Same SHA): Update provenance paths, preserve memory (0 LLM calls)
+      ├─► Modified / Added: Targeted re-extraction strictly for affected files (1 LLM pass)
+      └─► Unaffected: Preserved in persistent semantic memory store without regeneration
       │
       ▼
-forget(dataset=workspace)
+Cognee Vector/Graph Indexing (`cognee.add(data, dataset_name)`)
       │
       ▼
-remember(data=file, dataset_name=workspace)
+Tier 4 Derived Retrieval via `retrieve_semantic_memory()`
 ```
+
+---
+
+## Cognification Architecture & Invariants (Phase 10D.6)
+
+1. **Strictly Derived (Tier 4)**: Cognee semantic memory is a derived projection and can NEVER define repository truth or override Manifest 2.0 / AST evidence.
+2. **Exactly-Once Semantic Extraction**: A repository cognification cycle executes exactly ONE LLM extraction pass over verified source/AST evidence. Output is indexed via `cognee.add()` without triggering duplicate downstream extraction passes.
+3. **Granular Incremental Lifecycle**: Mutations invalidate only affected memories. Same-SHA renames preserve memory text with 0 LLM calls.
+4. **No Recursive Self-Feeding**: Generated `SemanticMemoryRecord` items are never fed as input prompts to subsequent cognification cycles. Only verified filesystem/AST evidence acts as input.
 
 ---
 

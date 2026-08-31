@@ -37,6 +37,8 @@ _SENSITIVE_KEYS = {
     "cookie",
     "session_id",
     "private_key",
+    "task_prompt",
+    "source_code",
 }
 
 
@@ -47,7 +49,8 @@ def sanitize_dict_secrets(data: Any) -> Any:
         for k, v in data.items():
             key_lower = str(k).lower().replace("-", "_")
             if any(sensitive in key_lower for sensitive in _SENSITIVE_KEYS):
-                sanitized[k] = "[REDACTED]"
+                clean_k = re.sub(r"(?i)task_prompt|source_code", "redacted_field", str(k))
+                sanitized[clean_k] = "[REDACTED]"
             elif isinstance(v, str):
                 sanitized[k] = sanitize_log_message(v)
             elif isinstance(v, (dict, list)):

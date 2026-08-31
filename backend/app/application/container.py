@@ -20,7 +20,11 @@ from app.application.ports.hardware_telemetry import HardwareTelemetryPort
 from app.application.ports.indexing_service import IndexingServicePort
 from app.application.ports.intent_parser import IntentParserPort
 from app.application.ports.llm_provider import LLMProviderPort
-from app.application.ports.memory import MemoryPort
+from app.application.ports.memory import (
+    MemoryPort,
+    SemanticMemoryGeneratorPort,
+    SemanticMemoryRepositoryPort,
+)
 from app.application.ports.repository_manager import RepositoryManagerPort
 from app.application.ports.repository_metadata import RepositoryMetadataPort
 from app.application.ports.source_search import SourceSearchPort
@@ -54,6 +58,8 @@ from app.services.repository_metadata_store import (
     RepositoryMetadataStore,
 )
 from app.services.repository_summary import RepositorySummaryGenerator
+from app.services.semantic_memory_generator import SemanticMemoryGenerator
+from app.services.semantic_memory_repository import JsonSemanticMemoryRepository
 from app.services.source_search_service import SourceSearchService
 from app.services.workspace_authorization_service import WorkspaceAuthorizationService
 
@@ -83,6 +89,8 @@ class ApplicationContainer:
         self.workspace_auth: WorkspaceAuthorizationPort = WorkspaceAuthorizationService(
             metadata_store=self.metadata_store
         )
+        self.semantic_memory_repository: SemanticMemoryRepositoryPort = JsonSemanticMemoryRepository()
+        self.semantic_memory_generator: Optional[SemanticMemoryGeneratorPort] = None
 
         # Concurrency locks and guards
         self.indexing_lock: asyncio.Lock = asyncio.Lock()
@@ -155,6 +163,11 @@ class ApplicationContainer:
         self.context_service = ContextService(
             cognee_service=self.cognee_service,
         )
+        self.semantic_memory_generator = SemanticMemoryGenerator(
+            llm_provider=self.llm_provider,
+            repository=self.semantic_memory_repository,
+            settings=self.settings,
+        )
 
         logger.info(
             "ApplicationContainer initialized | provider=%s | endpoint=%s | model=%s",
@@ -188,6 +201,8 @@ class ApplicationContainer:
             default_model=model,
         )
         self.intent_parser = IntentParserService(self.llm_provider)
+        if self.semantic_memory_generator is not None:
+            self.semantic_memory_generator.llm_provider = self.llm_provider
 
         # Update and persist settings
         if self.settings is None:

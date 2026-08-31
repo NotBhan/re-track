@@ -351,6 +351,7 @@ class SemanticMemoryRecord:
     evidence_status: str = "derived_projection"
     is_derived: bool = True
     is_authoritative: bool = False
+    confidence_score: float = 1.0
 
     def validate_against_manifest(self, manifest: Any) -> tuple[bool, str]:
         """Validate whether this semantic memory record is valid against the active repository manifest."""
@@ -420,6 +421,7 @@ class SemanticMemoryRecord:
             "evidence_status": self.evidence_status,
             "is_derived": True,
             "is_authoritative": False,
+            "confidence_score": self.confidence_score,
         }
 
     @classmethod
@@ -439,6 +441,7 @@ class SemanticMemoryRecord:
             evidence_status=str(data.get("evidence_status", "derived_projection")),
             is_derived=True,
             is_authoritative=False,
+            confidence_score=float(data.get("confidence_score", 1.0)),
         )
 
     def to_provenance(self) -> MemoryProvenance:
@@ -453,3 +456,162 @@ class SemanticMemoryRecord:
             indexed_at=self.generated_at,
             evidence_status=self.evidence_status,
         )
+
+
+@dataclass
+class SemanticMemoryGenerationInput:
+    """Input payload for semantic memory generation, containing only verified repository evidence."""
+
+    repository_id: str
+    repository_fingerprint: str
+    manifest_fingerprint: str
+    source_files: list[str] = field(default_factory=list)
+    source_snippets: dict[str, str] = field(default_factory=dict)
+    ast_symbols: dict[str, list[str]] = field(default_factory=dict)
+    relationships: list[dict[str, Any]] = field(default_factory=list)
+    source_sha256: dict[str, str] = field(default_factory=dict)
+    frameworks: list[str] = field(default_factory=list)
+    task_intent: Optional[str] = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "repository_id": self.repository_id,
+            "repository_fingerprint": self.repository_fingerprint,
+            "manifest_fingerprint": self.manifest_fingerprint,
+            "source_files": list(self.source_files),
+            "source_snippets": dict(self.source_snippets),
+            "ast_symbols": {k: list(v) for k, v in self.ast_symbols.items()},
+            "relationships": list(self.relationships),
+            "source_sha256": dict(self.source_sha256),
+            "frameworks": list(self.frameworks),
+            "task_intent": self.task_intent,
+        }
+
+    @classmethod
+    def from_manifest(
+        cls,
+        manifest: Any,
+        file_filter: Optional[list[str]] = None,
+        source_snippets: Optional[dict[str, str]] = None,
+        task_intent: Optional[str] = None,
+        frameworks: Optional[list[str]] = None,
+    ) -> "SemanticMemoryGenerationInput":
+        """Construct generation input from an active RepositoryManifest."""
+        if not manifest or not hasattr(manifest, "files"):
+            return cls(
+                repository_id="",
+                repository_fingerprint="",
+                manifest_fingerprint="",
+            )
+
+        repo_id = getattr(manifest, "dataset_name", "default")
+        repo_fp = getattr(manifest, "repo_fingerprint", "") or ""
+
+        target_files = file_filter or list(manifest.files.keys())
+        norm_files: list[str] = []
+        ast_symbols: dict[str, list[str]] = {}
+        source_sha256: dict[str, str] = {}
+        relationships: list[dict[str, Any]] = []
+
+        for f_path in target_files:
+            norm_path = f_path.replace("\\", "/").lstrip("./")
+            if norm_path in manifest.files:
+                norm_files.append(norm_path)
+                fp = manifest.files[norm_path]
+                if getattr(fp, "symbols", None):
+                    ast_symbols[norm_path] = list(fp.symbols)
+                if getattr(fp, "sha256", None):
+                    source_sha256[norm_path] = fp.sha256
+                if getattr(fp, "ast_edges", None):
+                    relationships.extend(fp.ast_edges)
+
+        snippets = {}
+        if source_snippets:
+            for k, v in source_snippets.items():
+                norm_k = k.replace("\\", "/").lstrip("./")
+                if norm_k in manifest.files:
+                    snippets[norm_k] = v
+
+        return cls(
+            repository_id=repo_id,
+            repository_fingerprint=repo_fp,
+            manifest_fingerprint=repo_fp,
+            source_files=norm_files,
+            source_snippets=snippets,
+            ast_symbols=ast_symbols,
+            relationships=relationships,
+            source_sha256=source_sha256,
+            frameworks=list(frameworks or []),
+            task_intent=task_intent,
+        )
+
+
+@dataclass
+class SemanticMemoryGenerationTelemetry:
+    """Truthful observability telemetry for a semantic memory generation run."""
+
+    model_invoked: bool = False
+    provider_identity: str = ""
+    model_name: str = ""
+    inference_status: str = "not_configured"  # 'success', 'insufficient_evidence', 'not_configured', 'provider_unavailable', 'generation_failed', 'no_valid_memories', 'noop'
+    inference_time_ms: float = 0.0
+    fallback_used: bool = False
+    fallback_reason: Optional[str] = None
+    candidate_count: int = 0
+    validated_count: int = 0
+    persisted_count: int = 0
+    rejected_count: int = 0
+    rejection_reasons: list[str] = field(default_factory=list)
+    llm_invocation_count: int = 0
+    invalidated_count: int = 0
+    preserved_count: int = 0
+    regenerated_count: int = 0
+    renamed_count: int = 0
+    mode: str = "full"  # 'full', 'incremental', 'noop', 'rename_only', 'deletion_only'
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "model_invoked": self.model_invoked,
+            "provider_identity": self.provider_identity,
+            "model_name": self.model_name,
+            "inference_status": self.inference_status,
+            "inference_time_ms": self.inference_time_ms,
+            "fallback_used": self.fallback_used,
+            "fallback_reason": self.fallback_reason,
+            "candidate_count": self.candidate_count,
+            "validated_count": self.validated_count,
+            "persisted_count": self.persisted_count,
+            "rejected_count": self.rejected_count,
+            "rejection_reasons": list(self.rejection_reasons),
+            "llm_invocation_count": self.llm_invocation_count,
+            "invalidated_count": self.invalidated_count,
+            "preserved_count": self.preserved_count,
+            "regenerated_count": self.regenerated_count,
+            "renamed_count": self.renamed_count,
+            "mode": self.mode,
+        }
+
+
+@dataclass
+class SemanticMemoryGenerationResult:
+    """Result object for semantic memory generation and cognification."""
+
+    success: bool
+    status: str  # 'success', 'insufficient_evidence', 'not_configured', 'provider_unavailable', 'generation_failed', 'no_valid_memories', 'noop'
+    records: list[SemanticMemoryRecord] = field(default_factory=list)
+    telemetry: SemanticMemoryGenerationTelemetry = field(default_factory=SemanticMemoryGenerationTelemetry)
+    message: str = ""
+    vector_indexed: bool = False
+    dataset_name: str = ""
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "success": self.success,
+            "status": self.status,
+            "records": [r.to_dict() for r in self.records],
+            "telemetry": self.telemetry.to_dict(),
+            "message": self.message,
+            "vector_indexed": self.vector_indexed,
+            "dataset_name": self.dataset_name,
+        }
+
