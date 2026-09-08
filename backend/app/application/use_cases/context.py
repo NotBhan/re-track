@@ -29,7 +29,7 @@ from app.application.ports.filesystem import FileSystemPort
 from app.application.ports.indexing_service import IndexingServicePort
 from app.application.ports.intent_parser import IntentParserPort
 from app.application.ports.llm_provider import LLMProviderPort
-from app.application.ports.memory import MemoryPort
+from app.application.ports.memory import MemoryPort, SemanticMemoryRepositoryPort
 from app.application.ports.source_search import SourceSearchPort
 from app.application.ports.summary_generator import SummaryGeneratorPort
 from app.application.ports.workspace_authorization import WorkspaceAuthorizationPort
@@ -100,6 +100,7 @@ class ContextUseCases:
         max_concurrent: int = 1,
         max_queue: int = 5,
         queue_timeout: float = 30.0,
+        semantic_memory_repository: Optional[SemanticMemoryRepositoryPort] = None,
     ) -> None:
         self._context_service = context_service
         self._cognee_service = cognee_service
@@ -113,11 +114,18 @@ class ContextUseCases:
         self._source_search = source_search
         self._fs = filesystem
         self._workspace_auth = workspace_auth
+        self._semantic_memory_repository = semantic_memory_repository
+        self._last_tier3_telemetry: dict[str, Any] = {}
         self._guard = concurrency_guard or BoundedConcurrencyGuard(
             max_concurrent=max_concurrent,
             max_queue=max_queue,
             timeout=queue_timeout,
         )
+
+    @property
+    def last_tier3_telemetry(self) -> dict[str, Any]:
+        """Telemetry from the most recent Tier-3 LanceDB/Kùzu retrieval invocation."""
+        return dict(self._last_tier3_telemetry)
 
     async def generate_context(
         self,
@@ -370,9 +378,87 @@ class ContextUseCases:
                         target_tokens=target_tokens,
                     )
 
-                structural_res, package = await asyncio.gather(
+                async def _get_semantic_memories():
+                    if self._cognee_service is not None and hasattr(self._cognee_service, "retrieve_semantic_memory"):
+                        try:
+                            return await self._cognee_service.retrieve_semantic_memory(
+                                repository_id=dataset_name,
+                                query_text=request.task_prompt,
+                                manifest=manifest_obj,
+                                top_k=15,
+                                repository_store=self._semantic_memory_repository,
+                            )
+                        except Exception as e:
+                            logger.warning("Cognee semantic retrieval warning: %s", e)
+                    if self._semantic_memory_repository is not None:
+                        try:
+                            return self._semantic_memory_repository.get_by_repository(
+                                repository_id=dataset_name,
+                                manifest=manifest_obj,
+                                include_stale=False,
+                            )
+                        except Exception as e:
+                            logger.warning("Semantic memory repository fallback warning: %s", e)
+                            return []
+                    return []
+
+                tier3_telemetry: dict[str, Any] = {
+                    "tier3_retrieval_attempted": False,
+                    "tier3_retrieval_succeeded": False,
+                    "tier3_items_received": 0,
+                    "tier3_items_accepted": 0,
+                    "tier3_items_rejected": 0,
+                    "tier3_rejection_reasons": {},
+                    "tier3_lancedb_count": 0,
+                    "tier3_kuzu_count": 0,
+                    "tier3_lancedb_state": "unavailable",
+                    "tier3_kuzu_state": "unavailable",
+                    "tier3_retrieval_error": None,
+                }
+
+                async def _get_tier3_memories():
+                    tier3_telemetry["tier3_retrieval_attempted"] = True
+                    if self._cognee_service is not None and hasattr(self._cognee_service, "retrieve_tier3_lancedb_kuzu"):
+                        try:
+                            res = await self._cognee_service.retrieve_tier3_lancedb_kuzu(
+                                repository_id=dataset_name,
+                                query_text=request.task_prompt,
+                                manifest=manifest_obj,
+                                top_k=15,
+                                telemetry=tier3_telemetry,
+                            )
+                            if hasattr(res, "candidates"):
+                                return res.candidates
+                            return list(res)
+                        except Exception as e:
+                            logger.warning("Tier-3 LanceDB/Kuzu retrieval warning: %s", e)
+                            tier3_telemetry["tier3_retrieval_error"] = str(e)
+                            tier3_telemetry["tier3_retrieval_succeeded"] = False
+                            return []
+                    return []
+
+                structural_res, package, semantic_memories, tier3_memories = await asyncio.gather(
                     _query_cgc(),
                     _generate_package(),
+                    _get_semantic_memories(),
+                    _get_tier3_memories(),
+                )
+                self._last_tier3_telemetry = dict(tier3_telemetry)
+                log_event(
+                    logger,
+                    logging.INFO,
+                    "context_tier3_retrieval_completed",
+                    component="context_engine",
+                    operation="get_agent_context",
+                    attempted=tier3_telemetry.get("tier3_retrieval_attempted", False),
+                    succeeded=tier3_telemetry.get("tier3_retrieval_succeeded", False),
+                    items_received=tier3_telemetry.get("tier3_items_received", 0),
+                    items_accepted=tier3_telemetry.get("tier3_items_accepted", 0),
+                    items_rejected=tier3_telemetry.get("tier3_items_rejected", 0),
+                    lancedb_count=tier3_telemetry.get("tier3_lancedb_count", 0),
+                    kuzu_count=tier3_telemetry.get("tier3_kuzu_count", 0),
+                    lancedb_state=tier3_telemetry.get("tier3_lancedb_state", "unknown"),
+                    kuzu_state=tier3_telemetry.get("tier3_kuzu_state", "unknown"),
                 )
                 # Rank snippets and matching files
                 t_rank_start = time.perf_counter()
@@ -415,8 +501,8 @@ class ContextUseCases:
                     source_matched_files=matched_file_rels,
                     ast_symbols=symbols_found,
                     ast_call_edges=call_edges,
-                    lancedb_kuzu_memories=[],
-                    cognee_memories=[],
+                    lancedb_kuzu_memories=tier3_memories or [],
+                    cognee_memories=semantic_memories or [],
                     target_tokens=target_tokens,
                     reserve_authoritative_budget=True,
                 )
@@ -505,12 +591,16 @@ class ContextUseCases:
                         synthesis_time_ms=0,
                         total_time_ms=elapsed_ms,
                         model_invoked=False,
-                        provider_identity=None,
-                        model_name=None,
-                        inference_status="not_configured",
+                        provider_identity=getattr(intent, "provider_identity", None),
+                        model_name=getattr(intent, "model_name", None),
+                        inference_status=getattr(intent, "inference_status", "not_configured"),
                         fallback_used=True,
-                        fallback_reason="Deterministic abstention: insufficient repository evidence",
-                        inference_time_ms=0,
+                        fallback_reason=(
+                            getattr(intent, "fallback_reason", None)
+                            if getattr(intent, "inference_status", "") in ("model_not_available", "model_mismatch")
+                            else "Deterministic abstention: insufficient repository evidence"
+                        ),
+                        inference_time_ms=getattr(intent, "inference_time_ms", 0),
                         evidence_state=evidence.evidence_state,
                         evidence_score=evidence.evidence_score,
                         evidence_confidence=evidence.evidence_confidence,

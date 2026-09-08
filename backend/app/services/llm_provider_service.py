@@ -23,6 +23,16 @@ from app.models.provider import (
 logger = logging.getLogger(__name__)
 
 
+class ModelNotAvailableError(ValueError):
+    """Raised when configured or requested model is not verified or available on provider."""
+    pass
+
+
+class ModelMismatchError(ValueError):
+    """Raised when provider executes a model different from requested model."""
+    pass
+
+
 class LLMProviderService:
     """Async client wrapper for OpenAI-compatible inference endpoints."""
 
@@ -39,6 +49,10 @@ class LLMProviderService:
         self.api_key = api_key
         self.default_model = default_model
         self.timeout = timeout
+        self.last_invoked_model: Optional[str] = None
+        self.verified_active_model: Optional[str] = None
+        self.discovered_models: list[str] = []
+        self._health_checked: bool = False
 
     @staticmethod
     def parse_quantization(model_id: str) -> QuantizationLevel:
@@ -225,6 +239,25 @@ class LLMProviderService:
         )
         return result.models
 
+    @staticmethod
+    def _models_match(requested: Optional[str], actual: Optional[str]) -> bool:
+        """Compare requested model identifier with actual/candidate model identifier."""
+        if not requested or not actual:
+            return False
+        if requested == actual:
+            return True
+        req_clean = requested.strip().lower()
+        act_clean = actual.strip().lower()
+        if req_clean == act_clean:
+            return True
+        req_base = req_clean.split(":")[0].strip()
+        act_base = act_clean.split(":")[0].strip()
+        if req_base == act_base:
+            return True
+        req_leaf = req_base.split("/")[-1].strip()
+        act_leaf = act_base.split("/")[-1].strip()
+        return req_leaf == act_leaf
+
     async def check_health(self) -> ProviderHealthStatus:
         """Perform non-blocking health check and inspect loaded model quality."""
         discovery = await self.discover_models_for_endpoint(
@@ -235,16 +268,26 @@ class LLMProviderService:
         )
         models = discovery.models
         is_reachable = discovery.is_reachable
+        self._health_checked = True
+        self.discovered_models = [m.model_id for m in models]
 
-        active_model = self.default_model if self.default_model else None
+        active_model = None
         quant_warning = None
 
-        # Find matching model info if default_model is specified
-        if active_model:
+        # Verify whether default_model is present among discovered models
+        if is_reachable and self.default_model:
             for m in models:
-                if m.model_id == active_model or m.name == active_model:
+                if self._models_match(self.default_model, m.model_id) or (m.name and self._models_match(self.default_model, m.name)):
+                    active_model = m.model_id
                     quant_warning = m.warning
                     break
+            if active_model is None and models:
+                quant_warning = (
+                    f"Configured model '{self.default_model}' is not available on {self.provider_type.value}. "
+                    f"Available models: {', '.join(m.model_id for m in models[:5])}"
+                )
+
+        self.verified_active_model = active_model
 
         return ProviderHealthStatus(
             provider=self.provider_type,
@@ -269,6 +312,25 @@ class LLMProviderService:
         if not clean_base:
             raise ValueError("Provider endpoint URL is not configured.")
 
+        target_model = model or self.default_model or "phi4-mini"
+
+        # Truth boundary enforcement: verify active model before making any HTTP request
+        if not self._health_checked:
+            await self.check_health()
+
+        if self.discovered_models:
+            has_match = any(self._models_match(target_model, m) for m in self.discovered_models)
+            if not has_match:
+                self.last_invoked_model = None
+                raise ModelNotAvailableError(
+                    f"Configured model '{target_model}' is not available on provider '{self.provider_type.value}' at {clean_base}. Active model is null."
+                )
+        elif self._health_checked and not self.verified_active_model and self.default_model:
+            self.last_invoked_model = None
+            raise ModelNotAvailableError(
+                f"Configured model '{target_model}' is not available on provider '{self.provider_type.value}' at {clean_base}. Active model is null."
+            )
+
         chat_url = f"{clean_base}/chat/completions"
         if not clean_base.endswith("/v1") and not chat_url.endswith("/v1/chat/completions"):
             chat_url = f"{clean_base}/v1/chat/completions"
@@ -282,8 +344,6 @@ class LLMProviderService:
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
         messages.append({"role": "user", "content": prompt})
-
-        target_model = model or self.default_model or "phi4-mini"
 
         payload = {
             "model": target_model,
@@ -305,11 +365,27 @@ class LLMProviderService:
                 choices = data.get("choices", [])
                 if not choices or not isinstance(choices, list) or "message" not in choices[0]:
                     raise ValueError(f"Malformed completion response from {clean_base}: missing choices/message.")
+                resp_model = data.get("model") or target_model
+                self.last_invoked_model = resp_model
+
+                # Compare provider response model to requested model
+                if resp_model and not self._models_match(target_model, resp_model):
+                    raise ModelMismatchError(
+                        f"Provider executed model '{resp_model}', which does not match requested model '{target_model}'."
+                    )
+
                 return choices[0]["message"].get("content", "").strip()
         except httpx.ConnectError as ce:
+            self.last_invoked_model = target_model
             raise ConnectionError(f"Connection refused to provider at {clean_base}: {ce}") from ce
         except httpx.TimeoutException as te:
+            self.last_invoked_model = target_model
             raise TimeoutError(f"Inference request to provider at {clean_base} timed out: {te}") from te
+        except (ModelNotAvailableError, ModelMismatchError):
+            raise
+        except Exception:
+            self.last_invoked_model = target_model
+            raise
 
 
     async def discover_models(

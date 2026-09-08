@@ -7,7 +7,7 @@
 
 import { invoke } from "@tauri-apps/api/core";
 
-import type { Repository, ScanResult } from "@/types/repository";
+import type { Repository, ScanResult, CallGraphNode, CallGraphEdge } from "@/types/repository";
 
 // --- Types matching backend schemas ---
 
@@ -264,6 +264,8 @@ export interface RepositorySummaryInfo {
   components?: RepoComponentInfo[];
   call_graph_status?: "not_analyzed" | "analyzing" | "analyzed" | "zero_edges" | "failed";
   call_graph_error?: string | null;
+  call_graph_nodes?: CallGraphNode[];
+  call_graph_edges?: CallGraphEdge[];
 }
 
 export interface RepositoryListResponse {

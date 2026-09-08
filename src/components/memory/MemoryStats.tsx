@@ -39,9 +39,23 @@ export function MemoryStats() {
                 <Cpu className="w-3 h-3 text-neutral-400" />
                 <span>Vector Semantic Index</span>
               </span>
-              <Badge variant="outline" className="text-[9px] uppercase border-emerald-500/30 text-emerald-400 bg-emerald-500/10">
-                Ready
-              </Badge>
+              {stats?.storage_subsystems?.lancedb === "healthy" ? (
+                <Badge variant="outline" className="text-[9px] uppercase border-emerald-500/30 text-emerald-400 bg-emerald-500/10">
+                  Ready
+                </Badge>
+              ) : stats?.storage_subsystems?.lancedb === "degraded" ? (
+                <Badge variant="outline" className="text-[9px] uppercase border-amber-500/30 text-amber-400 bg-amber-500/10">
+                  Degraded
+                </Badge>
+              ) : stats?.storage_subsystems?.lancedb === "unavailable" ? (
+                <Badge variant="outline" className="text-[9px] uppercase border-red-500/30 text-red-400 bg-red-500/10">
+                  Unavailable
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="text-[9px] uppercase border-neutral-800 text-neutral-400 bg-neutral-900">
+                  {stats?.storage_subsystems?.lancedb || "Not Configured"}
+                </Badge>
+              )}
             </div>
             <div className="text-xs text-neutral-300">
               LanceDB Vector Embeddings

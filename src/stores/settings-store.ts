@@ -22,6 +22,7 @@ interface SettingsStore {
   provider: "ollama" | "lmstudio" | "openai_compatible" | string;
   endpoint: string;
   model: string;
+  activeModel: string | null;
   apiKey: string;
   apiKeyConfigured: boolean;
   apiKeyMasked: string;
@@ -77,6 +78,7 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
   provider: "ollama",
   endpoint: "http://localhost:11434/v1",
   model: "phi4-mini",
+  activeModel: null,
   apiKey: "",
   apiKeyConfigured: false,
   apiKeyMasked: "local",
@@ -148,7 +150,7 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
       if (provRes) {
         stateUpdate.provider = provRes.provider;
         stateUpdate.endpoint = provRes.base_url;
-        stateUpdate.model = provRes.active_model || stateUpdate.model;
+        stateUpdate.activeModel = provRes.active_model || null;
         stateUpdate.providerReachable = provRes.is_reachable;
         stateUpdate.providerHealthState = provRes.health_state;
         stateUpdate.availableModels = provRes.loaded_models || [];

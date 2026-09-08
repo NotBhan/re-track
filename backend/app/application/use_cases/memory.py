@@ -304,6 +304,16 @@ class MemoryUseCases:
                 except Exception:
                     kuzu_state = "degraded"
 
+            lancedb_state = "healthy"
+            if hasattr(self._cognee, "get_vector_stats"):
+                try:
+                    await self._cognee.get_vector_stats()
+                    lancedb_state = "healthy"
+                except Exception:
+                    lancedb_state = "unavailable"
+            elif not (self._cognee and self._cognee.is_initialized):
+                lancedb_state = "not_configured"
+
             cognee_state = "healthy" if (self._cognee and self._cognee.is_initialized) else "not_configured"
 
             response = MemoryStatsResponse(
@@ -314,7 +324,7 @@ class MemoryUseCases:
                 graph_nodes=graph_nodes,
                 graph_edges=graph_edges,
                 storage_subsystems={
-                    "lancedb": "healthy",
+                    "lancedb": lancedb_state,
                     "kuzu": kuzu_state,
                     "cognee": cognee_state,
                 },
@@ -519,7 +529,7 @@ class MemoryUseCases:
                 last_repo = last.name or "Unknown"
                 last_time = last.last_indexed or "Recently"
 
-            pkgs = self._pkg_repo.list_all() if self._pkg_repo else []
+            pkgs = (await self._pkg_repo.list_all()) if self._pkg_repo else []
             total_pkgs = len(pkgs)
             avg_gen_ms = round(sum(p.total_time_ms for p in pkgs) / max(total_pkgs, 1), 1) if total_pkgs > 0 else 0.0
 

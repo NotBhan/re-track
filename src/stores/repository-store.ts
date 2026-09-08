@@ -73,11 +73,24 @@ export const useRepositoryStore = create<RepositoryStore>((set, get) => ({
           staleTimeMs: 15_000,
           forceRefresh,
           onBackgroundRevalidate: (fresh) => {
-            set({ repositories: fresh.repositories });
+            const currentSelectedId = get().selectedId;
+            set({
+              repositories: fresh.repositories,
+              selected: currentSelectedId
+                ? fresh.repositories.find((r) => r.id === currentSelectedId)
+                : undefined,
+            });
           },
         }
       );
-      set({ repositories: response.repositories, loading: false });
+      const currentSelectedId = get().selectedId;
+      set({
+        repositories: response.repositories,
+        selected: currentSelectedId
+          ? response.repositories.find((r) => r.id === currentSelectedId)
+          : undefined,
+        loading: false,
+      });
     } catch {
       set({ loading: false });
     }

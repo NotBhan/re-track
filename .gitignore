@@ -120,6 +120,8 @@ examples/generated/
 # ==========================
 
 .cognee/
+.cognee_system/
+.cognee_data/
 cognee_data/
 .mimocode/
 Hackathon/

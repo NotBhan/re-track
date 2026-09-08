@@ -21,6 +21,9 @@ from app.application.dto import (
     RepositorySummaryResponse,
 )
 from app.mcp import tools as mcp_tools
+from app.services.repository_manager import RepositoryManager
+from app.services.repository_metadata_store import JsonRepositoryMetadataStore
+from app.services.workspace_authorization_service import WorkspaceAuthorizationService
 
 
 def _create_mock_repo(tmp_path: Path, name: str) -> Path:
@@ -89,6 +92,20 @@ async def test_prolonged_mcp_mixed_workload_soak(tmp_path: Path):
     repo2 = _create_mock_repo(tmp_path, "soak_repo_2")
 
     container = ApplicationContainer()
+    container.metadata_store = JsonRepositoryMetadataStore(
+        store_path=tmp_path / "indexed_repos.json",
+        legacy_store_path=None,
+    )
+    container.repository_manager = RepositoryManager(
+        store_path=tmp_path / "repositories.json",
+        legacy_store_path=None,
+        repos_dir=tmp_path / "repos",
+        legacy_repos_dir=None,
+    )
+    container.workspace_auth = WorkspaceAuthorizationService(
+        metadata_store=container.metadata_store,
+        workspace_roots=[tmp_path],
+    )
     container.metadata_store.upsert(
         IndexedRepositoryRecord(
             id="repo-1",
@@ -107,6 +124,8 @@ async def test_prolonged_mcp_mixed_workload_soak(tmp_path: Path):
             file_count=2,
         )
     )
+    container.repository_manager.import_repo(name="soak_repo_1", path=str(repo1))
+    container.repository_manager.import_repo(name="soak_repo_2", path=str(repo2))
 
     from unittest.mock import MagicMock
     context_mock = SoakMockContextService()

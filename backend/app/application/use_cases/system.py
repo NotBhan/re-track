@@ -125,20 +125,26 @@ class SystemUseCases:
                     provider_reachable = bool(ollama_cfg.check_connection())
                 else:
                     provider_reachable = False
-                active_model = configured_model
+                active_model = None
 
             # 3. Derive provider health state
             provider_configured = bool(prov_endpoint)
             if not provider_configured:
                 provider_health_state = "not_configured"
-            elif provider_reachable:
-                provider_health_state = "degraded" if quant_warning else "healthy"
-            else:
+            elif not provider_reachable:
                 provider_health_state = "unavailable"
+            elif configured_model and not active_model:
+                provider_health_state = "degraded"
+            elif quant_warning:
+                provider_health_state = "degraded"
+            else:
+                provider_health_state = "healthy"
 
             # 4. Derive active model state
             if active_model and provider_reachable:
                 active_model_state = "active"
+            elif provider_reachable and configured_model:
+                active_model_state = "model_not_found"
             elif discovered_models:
                 active_model_state = "available"
             elif configured_model:
@@ -150,16 +156,18 @@ class SystemUseCases:
             if not provider_configured:
                 engine_state = "not_configured"
                 engine_reason = "No inference provider endpoint configured."
-            elif provider_reachable:
-                if quant_warning:
-                    engine_state = "degraded"
-                    engine_reason = quant_warning
-                else:
-                    engine_state = "healthy"
-                    engine_reason = None
-            else:
+            elif not provider_reachable:
                 engine_state = "unavailable"
                 engine_reason = f"Inference provider '{prov_ident}' at {prov_endpoint} is unreachable."
+            elif configured_model and not active_model:
+                engine_state = "degraded"
+                engine_reason = quant_warning or f"Configured model '{configured_model}' not found on provider '{prov_ident}' at {prov_endpoint}."
+            elif quant_warning:
+                engine_state = "degraded"
+                engine_reason = quant_warning
+            else:
+                engine_state = "healthy"
+                engine_reason = None
 
             # 6. Derive Cognee memory state (independent of inference engine)
             cognee_ok = cognee.is_initialized if cognee else False
@@ -398,18 +406,24 @@ class SystemUseCases:
                     provider_reachable = bool(ollama_cfg.check_connection())
                 else:
                     provider_reachable = False
-                active_model = configured_model
+                active_model = None
 
             provider_configured = bool(prov_endpoint)
             if not provider_configured:
                 provider_health_state = "not_configured"
-            elif provider_reachable:
-                provider_health_state = "degraded" if quant_warning else "healthy"
-            else:
+            elif not provider_reachable:
                 provider_health_state = "unavailable"
+            elif configured_model and not active_model:
+                provider_health_state = "degraded"
+            elif quant_warning:
+                provider_health_state = "degraded"
+            else:
+                provider_health_state = "healthy"
 
             if active_model and provider_reachable:
                 active_model_state = "active"
+            elif provider_reachable and configured_model:
+                active_model_state = "model_not_found"
             elif discovered_models:
                 active_model_state = "available"
             elif configured_model:
@@ -420,12 +434,18 @@ class SystemUseCases:
             if not provider_configured:
                 engine_state = "not_configured"
                 engine_reason = "No inference provider endpoint configured."
-            elif provider_reachable:
-                engine_state = "degraded" if quant_warning else "healthy"
-                engine_reason = quant_warning
-            else:
+            elif not provider_reachable:
                 engine_state = "unavailable"
                 engine_reason = f"Inference provider '{prov_ident}' at {prov_endpoint} is unreachable."
+            elif configured_model and not active_model:
+                engine_state = "degraded"
+                engine_reason = quant_warning or f"Configured model '{configured_model}' not found on provider '{prov_ident}' at {prov_endpoint}."
+            elif quant_warning:
+                engine_state = "degraded"
+                engine_reason = quant_warning
+            else:
+                engine_state = "healthy"
+                engine_reason = None
 
             cognee_ok = cognee.is_initialized if cognee else False
             if cognee_ok:

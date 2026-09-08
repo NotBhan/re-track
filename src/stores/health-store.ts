@@ -87,7 +87,7 @@ export const useHealthStore = create<HealthStore>((set) => ({
 
       const actModel = h?.active_model ?? s?.active_model ?? null;
       const cfgModel =
-        h?.configured_model ?? s?.configured_model ?? s?.llm_model ?? null;
+        h?.configured_model ?? s?.configured_model ?? null;
       const actModelState =
         h?.active_model_state ||
         s?.active_model_state ||

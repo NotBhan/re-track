@@ -94,6 +94,119 @@ class MemoryProvenance:
 
 
 @dataclass
+class Tier3ProjectionCandidate:
+    """Canonical representation of a direct LanceDB or Kùzu projection before arbitration.
+
+    Invariants:
+    - origin must be 'lancedb' or 'kuzu'.
+    - Carries verifiable provenance against active Manifest 2.0.
+    - Represents derived projection evidence strictly subordinate to Tier 1 and Tier 2.
+    """
+
+    id: str
+    origin: str  # 'lancedb' | 'kuzu'
+    text: str
+    relevance: float
+    source_file: str
+    source_sha256: str
+    repository_id: str
+    repository_fingerprint: str
+    source_symbol: Optional[str] = None
+    relationship_kind: Optional[str] = None
+    graph_source_node: Optional[str] = None
+    graph_target_node: Optional[str] = None
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def provenance(self) -> MemoryProvenance:
+        return self.to_provenance()
+
+    @property
+    def similarity(self) -> float:
+        return self.relevance
+
+    @property
+    def score(self) -> float:
+        return self.relevance
+
+    def to_provenance(self) -> MemoryProvenance:
+        """Derive authoritative MemoryProvenance for arbitration."""
+        return MemoryProvenance(
+            repository_id=self.repository_id,
+            repository_fingerprint=self.repository_fingerprint,
+            source_file=self.source_file,
+            source_sha256=self.source_sha256,
+            source_symbol=self.source_symbol,
+            relationship_kind=self.relationship_kind or ("graph_projection" if self.origin == "kuzu" else "vector_projection"),
+            evidence_status="derived_projection",
+        )
+
+    def to_arbitration_dict(self) -> dict[str, Any]:
+        """Convert candidate to normalized dictionary accepted by RetrievalArbitrator."""
+        return {
+            "id": self.id,
+            "origin": self.origin,
+            "text": self.text,
+            "similarity": self.relevance,
+            "score": self.relevance,
+            "source_file": self.source_file,
+            "source_symbol": self.source_symbol,
+            "relationship_kind": self.relationship_kind,
+            "provenance": self.to_provenance(),
+            "metadata": self.metadata,
+        }
+
+
+@dataclass
+class Tier3RetrievalResult:
+    """Unified container for Tier-3 LanceDB and Kùzu projection candidates.
+
+    Preserves subsystem isolation, operational health states, rejection tracking,
+    and exposes list semantics for direct consumption by RetrievalArbitrator.
+    """
+
+    candidates: list[Tier3ProjectionCandidate] = field(default_factory=list)
+    lancedb_count: int = 0
+    kuzu_count: int = 0
+    accepted_count: int = 0
+    rejected_count: int = 0
+    rejection_reasons: dict[str, int] = field(default_factory=dict)
+    lancedb_state: str = "healthy"  # 'healthy' | 'empty' | 'unavailable' | 'corrupt'
+    kuzu_state: str = "healthy"      # 'healthy' | 'empty' | 'unavailable' | 'corrupt'
+    retrieval_errors: list[str] = field(default_factory=list)
+
+    def __iter__(self):
+        return iter(self.candidates)
+
+    def __len__(self) -> int:
+        return len(self.candidates)
+
+    def __getitem__(self, idx: int):
+        return self.candidates[idx]
+
+    def to_telemetry(self) -> dict[str, Any]:
+        """Produce standard Tier-3 telemetry payload."""
+        return {
+            "tier3_retrieval_attempted": True,
+            "tier3_retrieval_succeeded": (
+                self.lancedb_state in ("healthy", "empty")
+                or self.kuzu_state in ("healthy", "empty")
+            ) and len(self.retrieval_errors) < 2,
+            "tier3_items_received": self.lancedb_count + self.kuzu_count,
+            "tier3_items_accepted": self.accepted_count,
+            "tier3_items_rejected": self.rejected_count,
+            "tier3_rejection_reasons": dict(self.rejection_reasons),
+            "tier3_lancedb_count": self.lancedb_count,
+            "tier3_kuzu_count": self.kuzu_count,
+            "tier3_lancedb_state": self.lancedb_state,
+            "tier3_kuzu_state": self.kuzu_state,
+            "tier3_retrieval_error": "; ".join(self.retrieval_errors) if self.retrieval_errors else None,
+        }
+
+
+
+
+@dataclass
 class MemoryDatasetRecord:
     """Domain model representing a persistent dataset in memory."""
 

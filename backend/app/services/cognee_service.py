@@ -20,7 +20,12 @@ import os
 import time
 from typing import Any, Optional
 
-from app.application.domain.memory import MemoryProvenance, SemanticMemoryRecord
+from app.application.domain.memory import (
+    MemoryProvenance,
+    SemanticMemoryRecord,
+    Tier3ProjectionCandidate,
+    Tier3RetrievalResult,
+)
 from app.config.settings import Settings, get_settings
 from app.models.errors import CogneeServiceError
 from app.models.responses import RememberResult, RecallResult, RecallResponse, SectionType
@@ -52,10 +57,22 @@ class CogneeService:
     def __init__(self, settings: Optional[Settings] = None) -> None:
         self._settings = settings or get_settings()
         self._initialized = False
+        self._last_retrieval_telemetry: dict[str, Any] = {}
+        self._last_tier3_telemetry: dict[str, Any] = {}
 
     @property
     def is_initialized(self) -> bool:
         return self._initialized
+
+    @property
+    def last_retrieval_telemetry(self) -> dict[str, Any]:
+        """Telemetry from the most recent retrieve_semantic_memory invocation."""
+        return dict(self._last_retrieval_telemetry)
+
+    @property
+    def last_tier3_telemetry(self) -> dict[str, Any]:
+        """Telemetry from the most recent retrieve_tier3_lancedb_kuzu invocation."""
+        return dict(self._last_tier3_telemetry)
 
     async def initialize(self) -> None:
         """Configure and validate Cognee for local operation.
@@ -83,6 +100,32 @@ class CogneeService:
         except Exception as e:
             logger.error("CogneeService initialization failed: %s", e)
             raise CogneeServiceError(f"Initialization failed: {e}") from e
+
+    async def close(self) -> None:
+        """Release any underlying database engine handles and flush caches."""
+        self._initialized = False
+        try:
+            from cognee.infrastructure.databases.utils.closing_lru_cache import _DECORATED_CACHES
+
+            for cache in list(_DECORATED_CACHES):
+                with cache._lock:
+                    keys = list(cache._cache.keys())
+                for key in keys:
+                    try:
+                        cache.evict_and_close(key)
+                    except Exception:
+                        pass
+                try:
+                    cache.cache_clear()
+                except Exception:
+                    pass
+                try:
+                    await cache.await_pending_closes()
+                except Exception:
+                    pass
+        except Exception as e:
+            logger.debug("CogneeService.close error closing engines: %s", e)
+
 
     async def add(
         self,
@@ -183,6 +226,10 @@ class CogneeService:
         """
         self._ensure_initialized()
         clean_datasets = [sanitize_dataset_name(d) for d in datasets]
+        timeout = float(kwargs.pop("timeout", 3.0))
+        # Support search_type -> query_type alias
+        if "search_type" in kwargs and "query_type" not in kwargs:
+            kwargs["query_type"] = kwargs.pop("search_type")
         try:
             import cognee
             logger.info(
@@ -191,11 +238,14 @@ class CogneeService:
                 clean_datasets,
                 top_k,
             )
-            raw_results = await cognee.recall(
-                query_text=query_text,
-                datasets=clean_datasets,
-                top_k=top_k,
-                **kwargs,
+            raw_results = await asyncio.wait_for(
+                cognee.recall(
+                    query_text=query_text,
+                    datasets=clean_datasets,
+                    top_k=top_k,
+                    **kwargs,
+                ),
+                timeout=timeout,
             )
             results = [
                 RecallResult(
@@ -556,43 +606,644 @@ class CogneeService:
         manifest: Any,
         top_k: int = 15,
         repository_store: Optional[Any] = None,
+        telemetry: Optional[dict[str, Any]] = None,
         **kwargs: Any,
     ) -> list[SemanticMemoryRecord]:
         """Retrieve semantic memory for a repository, validating provenance against active manifest."""
         clean_ds = sanitize_dataset_name(repository_id)
-        candidates: list[Any] = []
+        current_telemetry: dict[str, Any] = {
+            "cognee_recall_attempted": True,
+            "cognee_recall_succeeded": False,
+            "cognee_items_received": 0,
+            "cognee_items_accepted": 0,
+            "cognee_items_rejected": 0,
+            "cognee_rejection_reasons": {},
+        }
+        raw_candidates: list[Any] = []
 
         # 1. Try recalling from Cognee dataset
         try:
+            from cognee.modules.search.types import SearchType
+            query_type = kwargs.pop("query_type", kwargs.pop("search_type", SearchType.CHUNKS))
             recall_resp = await self.recall(
                 query_text=query_text,
                 datasets=[clean_ds],
                 top_k=top_k,
+                query_type=query_type,
+                only_context=kwargs.pop("only_context", True),
                 **kwargs,
             )
+            current_telemetry["cognee_recall_succeeded"] = True
             if recall_resp and recall_resp.results:
-                candidates.extend(recall_resp.results)
+                raw_candidates = list(recall_resp.results)
+                current_telemetry["cognee_items_received"] = len(raw_candidates)
         except Exception as e:
             logger.warning("Cognee recall failed for dataset %s: %s", clean_ds, e)
+            current_telemetry["cognee_recall_succeeded"] = False
 
-        # 2. If repository_store provided or no recall results, load from persistent store
-        if repository_store is not None:
+        # 2. Map Cognee recall items through adapter and validate against manifest
+        cognee_records: list[SemanticMemoryRecord] = []
+        for it in raw_candidates:
+            rec, reason = self.map_semantic_memory(
+                item=it,
+                manifest=manifest,
+                repository_id=repository_id,
+            )
+            if rec is not None:
+                rec.generated_by = "cognee_pipeline"
+                cognee_records.append(rec)
+                current_telemetry["cognee_items_accepted"] += 1
+            else:
+                current_telemetry["cognee_items_rejected"] += 1
+                reasons = current_telemetry["cognee_rejection_reasons"]
+                reasons[reason] = reasons.get(reason, 0) + 1
+
+        # 3. Persistent store fallback: used only if Cognee recall yielded no accepted memories.
+        # Fallback records are explicitly marked so they are distinguishable from genuine Cognee retrieval.
+        final_records: list[SemanticMemoryRecord] = []
+        if cognee_records:
+            final_records = cognee_records
+        elif repository_store is not None:
             persisted = repository_store.get_by_repository(
                 repository_id=repository_id,
                 manifest=manifest,
                 include_stale=False,
             )
+            import copy
             for p in persisted:
-                if p not in candidates:
-                    candidates.append(p)
+                p_copy = copy.deepcopy(p) if hasattr(p, "__dict__") else p
+                if hasattr(p_copy, "generated_by"):
+                    p_copy.generated_by = "persistent_store_fallback"
+                final_records.append(p_copy)
 
-        # 3. Map candidates through adapter and validate against manifest
-        valid_records = self.map_semantic_memories(
-            items=candidates,
-            manifest=manifest,
-            repository_id=repository_id,
+        self._last_retrieval_telemetry = current_telemetry
+        if telemetry is not None and isinstance(telemetry, dict):
+            telemetry.update(current_telemetry)
+
+        return final_records
+
+    @classmethod
+    def _validate_tier3_candidate(
+        cls,
+        candidate: Tier3ProjectionCandidate,
+        manifest: Any,
+    ) -> tuple[bool, str]:
+        """Validate candidate provenance against active repository manifest.
+
+        Rejection reasons:
+        - "missing_provenance": required provenance fields are empty
+        - "cross_repository_mismatch": candidate belongs to a different repository/fingerprint
+        - "file_not_in_manifest": source file is not in active manifest
+        - "stale_sha256_mismatch": source file SHA256 does not match active manifest
+        - "symbol_not_in_manifest": symbol declared but missing from file's symbols
+        """
+        if not candidate.source_file or not candidate.source_sha256:
+            return False, "missing_provenance"
+
+        if manifest is None:
+            return False, "manifest_unavailable"
+
+        manifest_fp = (
+            getattr(manifest, "fingerprint", None)
+            or (manifest.get("fingerprint") if isinstance(manifest, dict) else None)
         )
-        return valid_records
+        manifest_repo_id = (
+            getattr(manifest, "repository_id", None)
+            or getattr(manifest, "repo_id", None)
+            or (manifest.get("repository_id") if isinstance(manifest, dict) else None)
+            or (manifest.get("repo_id") if isinstance(manifest, dict) else None)
+        )
+
+        # Cross-repository check
+        if candidate.repository_fingerprint and manifest_fp:
+            if candidate.repository_fingerprint != manifest_fp:
+                return False, "cross_repository_mismatch"
+        elif candidate.repository_id and manifest_repo_id:
+            if candidate.repository_id != manifest_repo_id:
+                return False, "cross_repository_mismatch"
+
+        # Manifest files lookup
+        manifest_files = (
+            getattr(manifest, "files", None)
+            or (manifest.get("files") if isinstance(manifest, dict) else None)
+        )
+        manifest_hashes = (
+            getattr(manifest, "file_hashes", None)
+            or (manifest.get("file_hashes") if isinstance(manifest, dict) else None)
+        )
+
+        file_key = candidate.source_file
+        file_key_clean = file_key.lstrip("./")
+
+        file_entry = None
+        expected_sha = None
+
+        if isinstance(manifest_files, dict):
+            file_entry = (
+                manifest_files.get(file_key)
+                or manifest_files.get(file_key_clean)
+                or manifest_files.get(f"./{file_key_clean}")
+                or manifest_files.get(f"/{file_key_clean}")
+            )
+            if file_entry is not None:
+                expected_sha = (
+                    getattr(file_entry, "sha256", None)
+                    or getattr(file_entry, "hash", None)
+                    or (file_entry.get("sha256") if isinstance(file_entry, dict) else None)
+                    or (file_entry.get("hash") if isinstance(file_entry, dict) else None)
+                )
+            elif manifest_hashes is None:
+                return False, "file_not_in_manifest"
+        elif isinstance(manifest_files, (list, set)):
+            found = any(f == file_key or f.lstrip("./") == file_key_clean for f in manifest_files)
+            if not found and manifest_hashes is None:
+                return False, "file_not_in_manifest"
+
+        if expected_sha is None and isinstance(manifest_hashes, dict):
+            expected_sha = (
+                manifest_hashes.get(file_key)
+                or manifest_hashes.get(file_key_clean)
+                or manifest_hashes.get(f"./{file_key_clean}")
+            )
+            if expected_sha is None and (manifest_files is None or isinstance(manifest_files, dict)):
+                return False, "file_not_in_manifest"
+
+        if expected_sha and candidate.source_sha256 != expected_sha:
+            return False, "stale_sha256_mismatch"
+
+        if candidate.source_symbol and file_entry is not None:
+            symbols = (
+                getattr(file_entry, "symbols", None)
+                or (file_entry.get("symbols") if isinstance(file_entry, dict) else None)
+            )
+            if symbols is not None and isinstance(symbols, (list, set)):
+                sym_clean = candidate.source_symbol.strip()
+                if sym_clean and not any(
+                    s == sym_clean
+                    or getattr(s, "name", None) == sym_clean
+                    or (s.get("name") if isinstance(s, dict) else None) == sym_clean
+                    for s in symbols
+                ):
+                    return False, "symbol_not_in_manifest"
+
+        return True, "valid"
+
+    @classmethod
+    def _normalize_lancedb_candidate(
+        cls,
+        item: Any,
+        manifest: Any,
+        repository_id: str,
+        index: int,
+    ) -> Optional[Tier3ProjectionCandidate]:
+        """Normalize raw LanceDB record or ScoredResult into canonical Tier3ProjectionCandidate."""
+        if isinstance(item, Tier3ProjectionCandidate):
+            item.origin = "lancedb"
+            return item
+
+        manifest_fp = getattr(manifest, "fingerprint", "") if manifest else ""
+        manifest_repo_id = (
+            getattr(manifest, "repository_id", None)
+            or getattr(manifest, "repo_id", None)
+            or repository_id
+        )
+
+        if isinstance(item, dict):
+            prov = item.get("provenance") if isinstance(item.get("provenance"), dict) else {}
+            item_id = str(item.get("id") or f"lancedb_{index}")
+            text = str(item.get("text") or item.get("content") or item.get("semantic_text") or "")
+            if "similarity" in item:
+                try:
+                    relevance = min(1.0, max(0.1, float(item["similarity"])))
+                except (ValueError, TypeError):
+                    relevance = 0.75
+            elif "relevance" in item:
+                try:
+                    relevance = min(1.0, max(0.1, float(item["relevance"])))
+                except (ValueError, TypeError):
+                    relevance = 0.75
+            elif "score" in item:
+                try:
+                    score_f = float(item["score"])
+                    relevance = min(1.0, max(0.1, 1.0 - score_f if score_f <= 1.0 else 0.1))
+                except (ValueError, TypeError):
+                    relevance = 0.75
+            else:
+                relevance = 0.75
+
+            source_file = str(item.get("source_file") or item.get("file_path") or item.get("path") or prov.get("source_file") or "")
+            source_sha = str(item.get("source_sha256") or item.get("file_hash") or item.get("sha256") or prov.get("source_sha256") or "")
+            repo_id = str(item.get("repository_id") or prov.get("repository_id") or manifest_repo_id or repository_id)
+            repo_fp = str(item.get("repository_fingerprint") or prov.get("repository_fingerprint") or manifest_fp or "")
+            source_sym = item.get("source_symbol") or item.get("symbol") or prov.get("source_symbol")
+            rel_kind = str(item.get("relationship_kind") or prov.get("relationship_kind") or "vector_projection")
+
+            return Tier3ProjectionCandidate(
+                id=item_id,
+                origin="lancedb",
+                text=text,
+                relevance=relevance,
+                source_file=source_file,
+                source_sha256=source_sha,
+                repository_id=repo_id,
+                repository_fingerprint=repo_fp,
+                source_symbol=source_sym,
+                relationship_kind=rel_kind,
+                metadata={k: v for k, v in item.items() if k not in ("id", "text", "source_file", "source_sha256", "repository_id", "repository_fingerprint", "source_symbol", "relationship_kind")},
+            )
+
+        payload = getattr(item, "payload", None) or {}
+        item_id = str(getattr(item, "id", f"lancedb_{index}"))
+        score = getattr(item, "score", 0.25)
+        try:
+            score_f = float(score)
+            relevance = min(1.0, max(0.1, 1.0 - score_f if score_f <= 1.0 else 0.1))
+        except (ValueError, TypeError):
+            relevance = 0.75
+
+        text = str(payload.get("text") or payload.get("content") or "")
+        source_file = str(payload.get("source_file") or payload.get("file_path") or payload.get("path") or "")
+        source_sha = str(payload.get("source_sha256") or payload.get("file_hash") or payload.get("sha256") or "")
+        repo_id = str(payload.get("repository_id") or manifest_repo_id or repository_id)
+        repo_fp = str(payload.get("repository_fingerprint") or manifest_fp or "")
+        source_sym = payload.get("source_symbol") or payload.get("symbol")
+        rel_kind = str(payload.get("relationship_kind") or "vector_projection")
+
+        return Tier3ProjectionCandidate(
+            id=item_id,
+            origin="lancedb",
+            text=text,
+            relevance=relevance,
+            source_file=source_file,
+            source_sha256=source_sha,
+            repository_id=repo_id,
+            repository_fingerprint=repo_fp,
+            source_symbol=source_sym,
+            relationship_kind=rel_kind,
+            metadata=dict(payload),
+        )
+
+    @classmethod
+    def _normalize_kuzu_candidate(
+        cls,
+        item: Any,
+        manifest: Any,
+        repository_id: str,
+        query_text: str,
+        index: int,
+    ) -> Optional[Tier3ProjectionCandidate]:
+        """Normalize raw Kùzu node, edge, or dictionary into canonical Tier3ProjectionCandidate."""
+        if isinstance(item, Tier3ProjectionCandidate):
+            item.origin = "kuzu"
+            return item
+
+        manifest_fp = getattr(manifest, "fingerprint", "") if manifest else ""
+        manifest_repo_id = (
+            getattr(manifest, "repository_id", None)
+            or getattr(manifest, "repo_id", None)
+            or repository_id
+        )
+
+        query_terms = [t.lower() for t in query_text.split()] if query_text else []
+
+        if isinstance(item, tuple):
+            if len(item) == 4:
+                src_id, tgt_id, rel_name, edge_props = str(item[0]), str(item[1]), str(item[2]), item[3] if isinstance(item[3], dict) else {}
+                text = str(edge_props.get("text") or edge_props.get("description") or f"Relationship: {src_id} -[{rel_name}]-> {tgt_id}")
+                sim = edge_props.get("similarity") or edge_props.get("relevance") or edge_props.get("score")
+                if sim is not None:
+                    try:
+                        relevance = min(1.0, max(0.1, float(sim)))
+                    except (ValueError, TypeError):
+                        relevance = 0.75
+                else:
+                    relevance = 0.85 if any(t in f"{src_id} {rel_name} {tgt_id}".lower() for t in query_terms) else 0.70
+
+                source_file = str(edge_props.get("source_file") or edge_props.get("file_path") or edge_props.get("path") or "")
+                source_sha = str(edge_props.get("source_sha256") or edge_props.get("file_hash") or edge_props.get("sha256") or "")
+                repo_id = str(edge_props.get("repository_id") or manifest_repo_id or repository_id)
+                repo_fp = str(edge_props.get("repository_fingerprint") or manifest_fp or "")
+                source_sym = edge_props.get("source_symbol") or edge_props.get("symbol") or src_id
+
+                return Tier3ProjectionCandidate(
+                    id=f"kuzu_edge_{src_id}_{rel_name}_{tgt_id}",
+                    origin="kuzu",
+                    text=text,
+                    relevance=relevance,
+                    source_file=source_file,
+                    source_sha256=source_sha,
+                    repository_id=repo_id,
+                    repository_fingerprint=repo_fp,
+                    source_symbol=source_sym,
+                    relationship_kind=rel_name or "graph_projection",
+                    graph_source_node=src_id,
+                    graph_target_node=tgt_id,
+                    metadata=dict(edge_props),
+                )
+            elif len(item) == 2:
+                node_id, node_props = str(item[0]), item[1] if isinstance(item[1], dict) else {}
+                desc = node_props.get("description") or node_props.get("name") or ""
+                text = str(node_props.get("text") or (f"Node: {node_id} ({desc})" if desc else f"Node: {node_id}"))
+                sim = node_props.get("similarity") or node_props.get("relevance") or node_props.get("score")
+                if sim is not None:
+                    try:
+                        relevance = min(1.0, max(0.1, float(sim)))
+                    except (ValueError, TypeError):
+                        relevance = 0.70
+                else:
+                    relevance = 0.80 if any(t in f"{node_id} {desc}".lower() for t in query_terms) else 0.65
+
+                source_file = str(node_props.get("source_file") or node_props.get("file_path") or node_props.get("path") or "")
+                source_sha = str(node_props.get("source_sha256") or node_props.get("file_hash") or node_props.get("sha256") or "")
+                repo_id = str(node_props.get("repository_id") or manifest_repo_id or repository_id)
+                repo_fp = str(node_props.get("repository_fingerprint") or manifest_fp or "")
+                source_sym = node_props.get("source_symbol") or node_props.get("symbol") or node_props.get("name") or node_id
+
+                return Tier3ProjectionCandidate(
+                    id=f"kuzu_node_{node_id}",
+                    origin="kuzu",
+                    text=text,
+                    relevance=relevance,
+                    source_file=source_file,
+                    source_sha256=source_sha,
+                    repository_id=repo_id,
+                    repository_fingerprint=repo_fp,
+                    source_symbol=source_sym,
+                    relationship_kind=str(node_props.get("relationship_kind") or "graph_node"),
+                    graph_source_node=node_id,
+                    graph_target_node=None,
+                    metadata=dict(node_props),
+                )
+
+        if isinstance(item, dict):
+            prov = item.get("provenance") if isinstance(item.get("provenance"), dict) else {}
+            item_id = str(item.get("id") or f"kuzu_{index}")
+            text = str(item.get("text") or item.get("content") or item.get("description") or "")
+            score = item.get("score") if item.get("score") is not None else item.get("similarity", item.get("relevance", 0.75))
+            try:
+                score_f = float(score)
+                relevance = min(1.0, max(0.1, score_f))
+            except (ValueError, TypeError):
+                relevance = 0.75
+            source_file = str(item.get("source_file") or item.get("file_path") or item.get("path") or prov.get("source_file") or "")
+            source_sha = str(item.get("source_sha256") or item.get("file_hash") or item.get("sha256") or prov.get("source_sha256") or "")
+            repo_id = str(item.get("repository_id") or prov.get("repository_id") or manifest_repo_id or repository_id)
+            repo_fp = str(item.get("repository_fingerprint") or prov.get("repository_fingerprint") or manifest_fp or "")
+            source_sym = item.get("source_symbol") or item.get("symbol") or prov.get("source_symbol")
+            rel_kind = str(item.get("relationship_kind") or prov.get("relationship_kind") or "graph_projection")
+
+            return Tier3ProjectionCandidate(
+                id=item_id,
+                origin="kuzu",
+                text=text,
+                relevance=relevance,
+                source_file=source_file,
+                source_sha256=source_sha,
+                repository_id=repo_id,
+                repository_fingerprint=repo_fp,
+                source_symbol=source_sym,
+                relationship_kind=rel_kind,
+                graph_source_node=item.get("graph_source_node"),
+                graph_target_node=item.get("graph_target_node"),
+                metadata={k: v for k, v in item.items() if k not in ("id", "text", "source_file", "source_sha256", "repository_id", "repository_fingerprint", "source_symbol", "relationship_kind", "graph_source_node", "graph_target_node")},
+            )
+
+        return None
+
+    async def _retrieve_lancedb_projections_internal(
+        self,
+        repository_id: str,
+        query_text: str,
+        manifest: Any,
+        top_k: int = 15,
+        **kwargs: Any,
+    ) -> tuple[list[Tier3ProjectionCandidate], str, list[str], dict[str, int], int]:
+        """Internal worker retrieving, normalizing, and validating LanceDB vector projections."""
+        raw_items: list[Any] = []
+        state = "healthy"
+        errors: list[str] = []
+        rejection_reasons: dict[str, int] = {}
+
+        if "lancedb_records" in kwargs:
+            raw_items = list(kwargs["lancedb_records"] or [])
+        else:
+            clean_ds = sanitize_dataset_name(repository_id)
+            try:
+                from cognee.infrastructure.databases.vector import get_vector_engine_async, get_vector_engine
+                try:
+                    ve = await get_vector_engine_async()
+                except (TypeError, AttributeError):
+                    ve = get_vector_engine()
+                conn = await ve.get_connection()
+                table_names = await conn.table_names()
+            except Exception as e:
+                logger.warning("Failed to access LanceDB storage: %s", e)
+                return [], "unavailable", [f"LanceDB storage unavailable: {e}"], {}, 0
+
+            if not table_names:
+                return [], "empty", [], {}, 0
+
+            matching = [t for t in table_names if clean_ds in t]
+            if not matching:
+                return [], "empty", [], {}, 0
+
+            for tbl in matching:
+                try:
+                    search_res = await ve.search(
+                        collection_name=tbl,
+                        query_text=query_text,
+                        limit=top_k,
+                        include_payload=True,
+                    )
+                    if search_res:
+                        raw_items.extend(search_res)
+                except Exception as e:
+                    logger.warning("LanceDB search error on table %s: %s", tbl, e)
+                    errors.append(f"Table {tbl} read error: {e}")
+
+            if errors and not raw_items:
+                state = "corrupt"
+
+        total_raw = len(raw_items)
+        if total_raw == 0 and state != "corrupt":
+            state = "empty"
+
+        accepted: list[Tier3ProjectionCandidate] = []
+        for i, it in enumerate(raw_items):
+            cand = self._normalize_lancedb_candidate(it, manifest, repository_id, i)
+            if cand is None:
+                rejection_reasons["unparseable_record"] = rejection_reasons.get("unparseable_record", 0) + 1
+                continue
+            is_valid, reason = self._validate_tier3_candidate(cand, manifest)
+            if is_valid:
+                accepted.append(cand)
+            else:
+                rejection_reasons[reason] = rejection_reasons.get(reason, 0) + 1
+
+        return accepted, state, errors, rejection_reasons, total_raw
+
+    async def _retrieve_kuzu_projections_internal(
+        self,
+        repository_id: str,
+        query_text: str,
+        manifest: Any,
+        top_k: int = 15,
+        **kwargs: Any,
+    ) -> tuple[list[Tier3ProjectionCandidate], str, list[str], dict[str, int], int]:
+        """Internal worker retrieving, normalizing, and validating Kùzu graph projections."""
+        raw_items: list[Any] = []
+        state = "healthy"
+        errors: list[str] = []
+        rejection_reasons: dict[str, int] = {}
+
+        if "kuzu_records" in kwargs:
+            raw_items = list(kwargs["kuzu_records"] or [])
+        else:
+            try:
+                from cognee.infrastructure.databases.graph import get_graph_engine
+                ge = await get_graph_engine()
+                is_empty = await ge.is_empty()
+                if is_empty:
+                    return [], "empty", [], {}, 0
+                nodes, edges = await ge.get_graph_data()
+                if edges:
+                    raw_items.extend(edges)
+                if nodes:
+                    raw_items.extend(nodes)
+            except Exception as e:
+                logger.warning("Failed to access Kùzu storage: %s", e)
+                return [], "unavailable", [f"Kùzu storage unavailable: {e}"], {}, 0
+
+        total_raw = len(raw_items)
+        if total_raw == 0:
+            state = "empty"
+
+        accepted: list[Tier3ProjectionCandidate] = []
+        for i, it in enumerate(raw_items):
+            cand = self._normalize_kuzu_candidate(it, manifest, repository_id, query_text, i)
+            if cand is None:
+                rejection_reasons["unparseable_record"] = rejection_reasons.get("unparseable_record", 0) + 1
+                continue
+            is_valid, reason = self._validate_tier3_candidate(cand, manifest)
+            if is_valid:
+                accepted.append(cand)
+            else:
+                rejection_reasons[reason] = rejection_reasons.get(reason, 0) + 1
+
+        # Query-awareness & top_k bounding: sort by relevance descending and slice to top_k
+        accepted.sort(key=lambda c: c.relevance, reverse=True)
+        accepted = accepted[:top_k]
+
+        return accepted, state, errors, rejection_reasons, total_raw
+
+    async def retrieve_lancedb_projections(
+        self,
+        repository_id: str,
+        query_text: str,
+        manifest: Any,
+        top_k: int = 15,
+        **kwargs: Any,
+    ) -> list[Tier3ProjectionCandidate]:
+        """Retrieve direct vector projections from LanceDB, validating provenance against active manifest."""
+        cands, _, _, _, _ = await self._retrieve_lancedb_projections_internal(
+            repository_id=repository_id,
+            query_text=query_text,
+            manifest=manifest,
+            top_k=top_k,
+            **kwargs,
+        )
+        return cands
+
+    async def retrieve_kuzu_projections(
+        self,
+        repository_id: str,
+        query_text: str,
+        manifest: Any,
+        top_k: int = 15,
+        **kwargs: Any,
+    ) -> list[Tier3ProjectionCandidate]:
+        """Retrieve direct graph projections from Kùzu, validating provenance against active manifest."""
+        cands, _, _, _, _ = await self._retrieve_kuzu_projections_internal(
+            repository_id=repository_id,
+            query_text=query_text,
+            manifest=manifest,
+            top_k=top_k,
+            **kwargs,
+        )
+        return cands
+
+    async def retrieve_tier3_lancedb_kuzu(
+        self,
+        repository_id: str,
+        query_text: str,
+        manifest: Any,
+        top_k: int = 15,
+        telemetry: Optional[dict[str, Any]] = None,
+        **kwargs: Any,
+    ) -> Tier3RetrievalResult:
+        """Retrieve unified Tier-3 direct projections from LanceDB and Kùzu for arbitration.
+
+        Invariants:
+        - LanceDB failure does not suppress Kùzu retrieval.
+        - Kùzu failure does not suppress LanceDB retrieval.
+        - Provenance is strictly verified against active manifest.
+        - Never invokes LLM generation, cognify, or persistence mutation.
+        """
+        l_res, k_res = await asyncio.gather(
+            self._retrieve_lancedb_projections_internal(
+                repository_id=repository_id,
+                query_text=query_text,
+                manifest=manifest,
+                top_k=top_k,
+                **kwargs,
+            ),
+            self._retrieve_kuzu_projections_internal(
+                repository_id=repository_id,
+                query_text=query_text,
+                manifest=manifest,
+                top_k=top_k,
+                **kwargs,
+            ),
+            return_exceptions=True,
+        )
+
+        if isinstance(l_res, Exception):
+            l_cands, l_state, l_errors, l_reasons, l_raw = [], "unavailable", [str(l_res)], {}, 0
+        else:
+            l_cands, l_state, l_errors, l_reasons, l_raw = l_res
+
+        if isinstance(k_res, Exception):
+            k_cands, k_state, k_errors, k_reasons, k_raw = [], "unavailable", [str(k_res)], {}, 0
+        else:
+            k_cands, k_state, k_errors, k_reasons, k_raw = k_res
+
+        combined_reasons: dict[str, int] = {}
+        for r_dict in (l_reasons, k_reasons):
+            for k, v in r_dict.items():
+                combined_reasons[k] = combined_reasons.get(k, 0) + v
+
+        # Combine candidates, sorting by relevance descending
+        all_candidates = l_cands + k_cands
+        all_candidates.sort(key=lambda c: c.relevance, reverse=True)
+        selected_candidates = all_candidates[:top_k]
+
+        result = Tier3RetrievalResult(
+            candidates=selected_candidates,
+            lancedb_count=l_raw,
+            kuzu_count=k_raw,
+            accepted_count=len(l_cands) + len(k_cands),
+            rejected_count=(l_raw - len(l_cands)) + (k_raw - len(k_cands)),
+            rejection_reasons=combined_reasons,
+            lancedb_state=l_state,
+            kuzu_state=k_state,
+            retrieval_errors=l_errors + k_errors,
+        )
+
+        self._last_tier3_telemetry = result.to_telemetry()
+        if telemetry is not None and isinstance(telemetry, dict):
+            telemetry.update(result.to_telemetry())
+
+        return result
 
     def _ensure_initialized(self) -> None:
         """Raise if service is not initialized."""
@@ -637,22 +1288,59 @@ class CogneeSemanticMemoryAdapter:
         if manifest is None or not hasattr(manifest, "files") or manifest.files is None:
             return None, "missing_manifest"
 
-        # 1. Extract memory_id
+        # 1. Parse JSON item or raw_obj if present
+        if isinstance(item, str) and item.strip().startswith("{") and item.strip().endswith("}"):
+            try:
+                import json
+                parsed_item = json.loads(item)
+                if isinstance(parsed_item, dict):
+                    item = parsed_item
+            except Exception:
+                pass
+
+        raw_obj = getattr(item, "raw", None) or (item.get("raw") if isinstance(item, dict) else None)
+        if isinstance(raw_obj, str) and raw_obj.strip().startswith("{") and raw_obj.strip().endswith("}"):
+            try:
+                import json
+                parsed_raw = json.loads(raw_obj)
+                if isinstance(parsed_raw, dict):
+                    raw_obj = parsed_raw
+            except Exception:
+                pass
+
+        prov = (
+            getattr(item, "provenance", None)
+            or (item.get("provenance") if isinstance(item, dict) else None)
+            or (getattr(raw_obj, "provenance", None) if raw_obj is not None else None)
+            or (raw_obj.get("provenance") if isinstance(raw_obj, dict) else None)
+        )
+
+        # 2. Extract memory_id
         mem_id = (
             getattr(item, "memory_id", None)
             or getattr(item, "id", None)
+            or (getattr(raw_obj, "memory_id", None) if raw_obj is not None else None)
+            or (getattr(raw_obj, "id", None) if raw_obj is not None else None)
             or (item.get("memory_id") if isinstance(item, dict) else None)
             or (item.get("id") if isinstance(item, dict) else None)
+            or (raw_obj.get("memory_id") if isinstance(raw_obj, dict) else None)
+            or (raw_obj.get("id") if isinstance(raw_obj, dict) else None)
         )
 
-        # 2. Extract semantic_text
+        # 3. Extract semantic_text
         semantic_text = (
             getattr(item, "semantic_text", None)
             or getattr(item, "text", None)
             or getattr(item, "content", None)
+            or (getattr(raw_obj, "semantic_text", None) if raw_obj is not None else None)
+            or (getattr(raw_obj, "text", None) if raw_obj is not None else None)
+            or (getattr(raw_obj, "content", None) if raw_obj is not None else None)
             or (item.get("semantic_text") if isinstance(item, dict) else None)
             or (item.get("text") if isinstance(item, dict) else None)
             or (item.get("content") if isinstance(item, dict) else None)
+            or (raw_obj.get("semantic_text") if isinstance(raw_obj, dict) else None)
+            or (raw_obj.get("text") if isinstance(raw_obj, dict) else None)
+            or (raw_obj.get("content") if isinstance(raw_obj, dict) else None)
         )
         if semantic_text is None:
             semantic_text = str(item)
@@ -665,19 +1353,12 @@ class CogneeSemanticMemoryAdapter:
         else:
             mem_id = str(mem_id)
 
-        # 3. Extract raw container and provenance container if present
-        raw_obj = getattr(item, "raw", None) or (item.get("raw") if isinstance(item, dict) else None)
-        prov = (
-            getattr(item, "provenance", None)
-            or (item.get("provenance") if isinstance(item, dict) else None)
-            or (getattr(raw_obj, "provenance", None) if raw_obj is not None else None)
-            or (raw_obj.get("provenance") if isinstance(raw_obj, dict) else None)
-        )
-
         # 4. Extract repository identity & fingerprint
-        repo_id = (
-            repository_id
-            or getattr(item, "repository_id", None)
+        manifest_ds = getattr(manifest, "dataset_name", None)
+        target_repo_id = repository_id or manifest_ds
+
+        item_repo_id = (
+            getattr(item, "repository_id", None)
             or getattr(item, "dataset_name", None)
             or (getattr(prov, "repository_id", None) if prov else None)
             or (prov.get("repository_id") if isinstance(prov, dict) else None)
@@ -687,37 +1368,36 @@ class CogneeSemanticMemoryAdapter:
             or (item.get("dataset_name") if isinstance(item, dict) else None)
             or (raw_obj.get("repository_id") if isinstance(raw_obj, dict) else None)
             or (raw_obj.get("dataset_name") if isinstance(raw_obj, dict) else None)
-            or getattr(manifest, "dataset_name", None)
-            or getattr(manifest, "repo_path", None)
         )
+
+        if item_repo_id and target_repo_id:
+            clean_item_id = sanitize_dataset_name(str(item_repo_id))
+            clean_target_id = sanitize_dataset_name(str(target_repo_id))
+            if clean_item_id != clean_target_id and str(item_repo_id) != str(target_repo_id):
+                return None, "cross_repository_id_mismatch"
+
+        repo_id = str(target_repo_id or item_repo_id or getattr(manifest, "repo_path", "") or "")
         if not repo_id:
             return None, "missing_repository_provenance"
-        repo_id = str(repo_id)
 
         manifest_fp = getattr(manifest, "repo_fingerprint", "") or ""
-        repo_fp = (
-            repository_fingerprint
-            or getattr(item, "repository_fingerprint", None)
+        target_fp = repository_fingerprint or manifest_fp
+
+        item_fp = (
+            getattr(item, "repository_fingerprint", None)
             or (getattr(prov, "repository_fingerprint", None) if prov else None)
             or (prov.get("repository_fingerprint") if isinstance(prov, dict) else None)
             or (getattr(raw_obj, "repository_fingerprint", None) if raw_obj is not None else None)
             or (item.get("repository_fingerprint") if isinstance(item, dict) else None)
             or (raw_obj.get("repository_fingerprint") if isinstance(raw_obj, dict) else None)
-            or manifest_fp
         )
-        if not repo_fp:
-            return None, "missing_repository_fingerprint"
-        repo_fp = str(repo_fp)
 
-        # Check repository fingerprint match against manifest
-        if manifest_fp and repo_fp != manifest_fp:
+        if item_fp and target_fp and str(item_fp) != str(target_fp):
             return None, "cross_repository_fingerprint_mismatch"
 
-        # Check repository ID match against manifest if manifest specifies dataset_name
-        manifest_ds = getattr(manifest, "dataset_name", None)
-        if manifest_ds and repo_id:
-            if manifest_ds != repo_id and manifest_ds != repo_id.replace("/", "_"):
-                return None, "cross_repository_id_mismatch"
+        repo_fp = str(target_fp or item_fp or "")
+        if not repo_fp:
+            return None, "missing_repository_fingerprint"
 
         # 5. Extract source files (mandatory)
         raw_files = (
@@ -739,11 +1419,88 @@ class CogneeSemanticMemoryAdapter:
             or (raw_obj.get("source_file") if isinstance(raw_obj, dict) else None)
         )
 
+        meta = (
+            getattr(item, "metadata", None)
+            or (item.get("metadata") if isinstance(item, dict) else None)
+            or (getattr(raw_obj, "metadata", None) if raw_obj is not None else None)
+            or (raw_obj.get("metadata") if isinstance(raw_obj, dict) else None)
+        )
+        if isinstance(meta, str) and meta.strip().startswith("{") and meta.strip().endswith("}"):
+            try:
+                import json
+                meta = json.loads(meta)
+            except Exception:
+                pass
+
+        if not raw_files and isinstance(meta, dict):
+            raw_files = (
+                meta.get("source_files")
+                or meta.get("source_file")
+                or meta.get("file_paths")
+                or meta.get("file_path")
+                or meta.get("filePath")
+                or meta.get("file_name")
+                or meta.get("fileName")
+                or meta.get("doc_path")
+                or meta.get("path")
+            )
+
+        explicit_symbols_from_chunk: list[str] = []
+        if not raw_files and semantic_text:
+            text_str = str(semantic_text).strip()
+            # Pattern 1: Bracketed files prefix e.g. "- [src/orders.py] ..." or "[src/orders.py, src/models.py]: ..."
+            m1 = re.match(r"^[-*]?\s*\[\s*([^\]]+?)\s*\](?:\s*:\s*|\s+)?([\s\S]*)$", text_str)
+            if m1:
+                chunk_files_raw = m1.group(1).strip()
+                remainder_text = m1.group(2).strip()
+                tokens = [t.strip() for t in chunk_files_raw.split(",") if t.strip()]
+                extracted_files: list[str] = []
+                for tok in tokens:
+                    sym_match = re.search(r"^(.*?)(?:#|::)([a-zA-Z_][a-zA-Z0-9_]*)$", tok)
+                    if sym_match:
+                        file_part = sym_match.group(1).strip()
+                        sym_part = sym_match.group(2).strip()
+                        if sym_part:
+                            explicit_symbols_from_chunk.append(sym_part)
+                    else:
+                        file_part = tok
+                    file_part = re.sub(r":\d+(?:-\d+)?$", "", file_part).strip()
+                    file_part = file_part.strip("'\"`")
+                    if file_part:
+                        extracted_files.append(file_part)
+                if extracted_files:
+                    raw_files = extracted_files
+                    if remainder_text:
+                        semantic_text = remainder_text
+
+            # Pattern 2: Header prefix e.g. "File: src/orders.py\n..." or "### File: src/orders.py\n..."
+            if not raw_files:
+                m2 = re.match(r"^(?:###?\s*)?(?:File|Source):\s*([^\n\r]+?)(?:\r?\n|\s*:\s*)([\s\S]*)$", text_str)
+                if m2:
+                    file_val = m2.group(1).strip().strip("'\"`")
+                    remainder_text = m2.group(2).strip()
+                    tokens = [t.strip().strip("'\"`") for t in file_val.split(",") if t.strip()]
+                    if tokens:
+                        raw_files = tokens
+                        if remainder_text:
+                            semantic_text = remainder_text
+
+            # Pattern 3: Markdown link prefix e.g. "- [orders.py](src/orders.py): ..."
+            if not raw_files:
+                m3 = re.match(r"^[-*]?\s*\[(?:[^\]]+?)\]\(([^)]+?)\)(?:\s*:\s*|\s+)([\s\S]*)$", text_str)
+                if m3:
+                    file_val = m3.group(1).strip().strip("'\"`")
+                    remainder_text = m3.group(2).strip()
+                    if file_val:
+                        raw_files = [file_val]
+                        if remainder_text:
+                            semantic_text = remainder_text
+
         source_files: list[str] = []
         if isinstance(raw_files, list):
-            source_files = [str(f).strip() for f in raw_files if f and str(f).strip()]
+            source_files = [str(f).strip().replace("\\", "/").lstrip("./") for f in raw_files if f and str(f).strip()]
         elif isinstance(raw_files, str) and raw_files.strip():
-            source_files = [raw_files.strip()]
+            source_files = [raw_files.strip().replace("\\", "/").lstrip("./")]
 
         if not source_files:
             return None, "missing_source_files"
@@ -766,6 +1523,9 @@ class CogneeSemanticMemoryAdapter:
             or (raw_obj.get("source_symbols") if isinstance(raw_obj, dict) else None)
             or (raw_obj.get("source_symbol") if isinstance(raw_obj, dict) else None)
             or (raw_obj.get("symbols") if isinstance(raw_obj, dict) else None)
+            or (meta.get("source_symbols") if isinstance(meta, dict) else None)
+            or (meta.get("source_symbol") if isinstance(meta, dict) else None)
+            or (meta.get("symbols") if isinstance(meta, dict) else None)
         )
 
         source_symbols: list[str] = []
@@ -773,6 +1533,10 @@ class CogneeSemanticMemoryAdapter:
             source_symbols = [str(s).strip() for s in raw_symbols if s and str(s).strip()]
         elif isinstance(raw_symbols, str) and raw_symbols.strip():
             source_symbols = [raw_symbols.strip()]
+
+        for sym in explicit_symbols_from_chunk:
+            if sym not in source_symbols:
+                source_symbols.append(sym)
 
         # 7. Extract raw source sha256 if supplied in item
         raw_shas = (

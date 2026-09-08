@@ -106,17 +106,91 @@ class StructuredJsonFormatter(logging.Formatter):
 class SafeRotatingFileHandler(RotatingFileHandler):
     """RotatingFileHandler that fails gracefully without crashing RE:Track if filesystem errors occur."""
 
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self._is_closing = False
+
+    def shouldRollover(self, record: logging.LogRecord) -> bool:
+        if getattr(self, "_closed", False) or getattr(self, "_is_closing", False) or sys.is_finalizing():
+            return False
+        if self.stream is not None and getattr(self.stream, "closed", False):
+            return False
+        try:
+            return bool(super().shouldRollover(record))
+        except (FileNotFoundError, ValueError, OSError):
+            return False
+
+    def doRollover(self) -> None:
+        if getattr(self, "_closed", False) or getattr(self, "_is_closing", False) or sys.is_finalizing():
+            return
+        if self.stream is not None and getattr(self.stream, "closed", False):
+            return
+        try:
+            super().doRollover()
+        except (FileNotFoundError, ValueError, OSError) as e:
+            if not sys.is_finalizing() and not getattr(self, "_closed", False):
+                try:
+                    sys.stderr.write(f"[RE:Track Log Handler Warning] Failed to rotate log file: {e}\n")
+                except Exception:
+                    pass
+
     def emit(self, record: logging.LogRecord) -> None:
+        if getattr(self, "_closed", False) or getattr(self, "_is_closing", False) or sys.is_finalizing():
+            return
+        if self.stream is not None and getattr(self.stream, "closed", False):
+            return
         try:
             super().emit(record)
+        except (FileNotFoundError, ValueError) as e:
+            if not sys.is_finalizing() and not getattr(self, "_closed", False):
+                try:
+                    sys.stderr.write(f"[RE:Track Log Handler Warning] Failed to write log file: {e}\n")
+                except Exception:
+                    pass
         except (OSError, PermissionError) as e:
             # Degrade gracefully to stderr warning without crashing
+            if not sys.is_finalizing() and not getattr(self, "_closed", False):
+                try:
+                    sys.stderr.write(f"[RE:Track Log Handler Warning] Failed to write log file: {e}\n")
+                except Exception:
+                    pass
+        except Exception:
+            if not sys.is_finalizing() and not getattr(self, "_closed", False):
+                self.handleError(record)
+
+    def flush(self) -> None:
+        if getattr(self, "_closed", False) or getattr(self, "_is_closing", False) or sys.is_finalizing():
+            return
+        try:
+            if self.stream and not getattr(self.stream, "closed", False):
+                super().flush()
+        except (FileNotFoundError, ValueError, OSError):
+            pass
+
+    def close(self) -> None:
+        self._is_closing = True
+        try:
+            super().close()
+        except (FileNotFoundError, ValueError, OSError):
+            pass
+        finally:
+            self._closed = True
+
+    def handleError(self, record: logging.LogRecord) -> None:
+        if sys.is_finalizing() or getattr(self, "_closed", False) or getattr(self, "_is_closing", False):
+            return
+        t, v, tb = sys.exc_info()
+        # Stream closed or tempfile unlinked during teardown
+        if isinstance(v, (ValueError, FileNotFoundError)):
+            if self.stream is None or getattr(self.stream, "closed", False) or not Path(self.baseFilename).parent.exists():
+                return
+        if isinstance(v, (OSError, PermissionError)):
             try:
-                sys.stderr.write(f"[RE:Track Log Handler Warning] Failed to write log file: {e}\n")
+                sys.stderr.write(f"[RE:Track Log Handler Warning] Failed to write log file: {v}\n")
             except Exception:
                 pass
-        except Exception:
-            self.handleError(record)
+            return
+        super().handleError(record)
 
 
 def setup_logging(

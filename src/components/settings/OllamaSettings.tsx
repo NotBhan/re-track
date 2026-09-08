@@ -42,6 +42,7 @@ export function OllamaSettings() {
     model,
     apiKeyConfigured,
     apiKeyMasked,
+    activeModel,
     providerReachable,
     providerHealthState,
     quantizationWarning,
@@ -79,11 +80,21 @@ export function OllamaSettings() {
     if (model) setSelectedModel(model);
   }, [provider, endpoint, model]);
 
-  const handleProviderChange = (newP: string) => {
+  const handleProviderChange = async (newP: string) => {
     setSelectedProvider(newP);
     const def = PROVIDER_DEFAULTS[newP] || PROVIDER_DEFAULTS.ollama;
     setBaseUrl(def.url);
     clearStatus();
+    try {
+      const res = await discoverModels(newP, def.url, newApiKey || undefined);
+      if (res && res.models && res.models.length > 0) {
+        setSelectedModel(res.models[0].model_id);
+      } else {
+        setSelectedModel("");
+      }
+    } catch {
+      setSelectedModel("");
+    }
   };
 
   const handleDiscover = async () => {
@@ -222,7 +233,7 @@ export function OllamaSettings() {
         {/* Model Discovery Section */}
         <div className={rowCls}>
           <div className="md:w-1/3">
-            <label className={labelCls}>Active Model</label>
+            <label className={labelCls}>Configured Model</label>
             <span className={subCls}>
               phi4:mini (Q6_K+) is tuned for optimal reasoning in RE:Track.
             </span>
@@ -267,6 +278,31 @@ export function OllamaSettings() {
                 <span>Discover</span>
               </Button>
             </div>
+
+            {/* Model mismatch or unavailable warning */}
+            {providerReachable && (!activeModel || activeModel !== selectedModel) && (
+              <div
+                data-testid="model-unavailable-warning"
+                className="p-2.5 rounded-md bg-amber-950/30 border border-amber-800/40 text-amber-300 text-xs space-y-1"
+              >
+                <div className="flex items-center gap-1.5 font-medium">
+                  <AlertTriangle className="w-3.5 h-3.5" />
+                  <span>Configured Model Unavailable</span>
+                </div>
+                <p className="text-[11px] text-amber-200/80">
+                  Configured model &apos;{selectedModel}&apos; is not verified on {selectedProvider}.
+                  {activeModel ? ` Active model is '${activeModel}'.` : " Active model is not set."}
+                  {" "}Inference requests will be blocked until verified.
+                </p>
+              </div>
+            )}
+
+            {providerReachable && activeModel && activeModel === selectedModel && (
+              <div className="flex items-center gap-1.5 text-[11px] text-emerald-400 font-mono">
+                <CheckCircle2 className="w-3 h-3" />
+                <span>Verified active model: {activeModel}</span>
+              </div>
+            )}
 
             {/* Discovery Status Feedback */}
             {discoveryStatus === "available" && availableModels.length > 0 && (

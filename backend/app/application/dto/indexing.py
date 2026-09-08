@@ -1,6 +1,6 @@
 """Repository indexing and summary DTOs."""
 
-from typing import Optional
+from typing import Any, Optional
 from pydantic import BaseModel, Field
 
 
@@ -67,6 +67,18 @@ class RepositorySummaryInfo(BaseModel):
     )
     components: Optional[list[RepoComponentInfo]] = Field(
         default=None, description="Key components detected"
+    )
+    call_graph_status: str = Field(
+        default="not_analyzed", description="'not_analyzed' | 'analyzing' | 'analyzed' | 'zero_edges' | 'failed'"
+    )
+    call_graph_error: Optional[str] = Field(
+        default=None, description="Error message if call graph failed"
+    )
+    call_graph_nodes: Optional[list[dict[str, Any]]] = Field(
+        default=None, description="AST call graph nodes"
+    )
+    call_graph_edges: Optional[list[dict[str, Any]]] = Field(
+        default=None, description="AST call graph edges"
     )
 
 

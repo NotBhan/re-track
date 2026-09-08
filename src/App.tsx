@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppShell } from "@/components/layout/AppShell";
 import { PageTransition } from "@/components/layout/PageTransition";
@@ -9,7 +9,6 @@ import { AnimatePresence } from "motion/react";
 import ContextStudio from "@/pages/ContextStudio";
 import Repositories from "@/pages/Repositories";
 import KnowledgeExplorer from "@/pages/KnowledgeExplorer";
-import ContextBuilder from "@/pages/ContextBuilder";
 import ContextPackages from "@/pages/ContextPackages";
 import Memory from "@/pages/Memory";
 import Benchmarks from "@/pages/Benchmarks";
@@ -48,11 +47,7 @@ function AnimatedRoutes() {
         />
         <Route
           path="/context-builder"
-          element={
-            <PageTransition>
-              <ContextBuilder />
-            </PageTransition>
-          }
+          element={<Navigate to="/studio" replace />}
         />
         <Route
           path="/packages"

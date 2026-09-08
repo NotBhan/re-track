@@ -213,6 +213,19 @@ This document tracks the phased development milestones and operational roadmap f
   - Hard token budget guarantees: Authoritative Tier 1/2 evidence is reserved; subordinate Tier 3/4 candidates only fill residual budget and can never evict or displace higher-tier candidates.
   - 7 new adversarial test cases passing in `test_retrieval_arbitration.py` covering stale rejection, lexicographic tier precedence, path-only non-sufficiency, LLM output isolation, budget reservation, cross-repo rejection, and Django abstention contract.
   - Authoritative Phase 10D.5 audit documentation (`docs/architecture/phase-10d5-audit.md`), design spec (`docs/architecture/phase-10d5-design.md`), and user guide (`docs/product/retrieval-arbitration.md`).
+- [x] **Phase 10D.6: Semantic Memory Quality, Cognitive Cognification & Genuine Tier-3 LanceDB/Kùzu Retrieval (COMPLETED & FROZEN)**
+  - **Milestone P0.3 — Genuine Tier-3 LanceDB/Kùzu Retrieval**: Restored genuine derived vector embeddings directly from LanceDB and structural graph projections from Kùzu into `RetrievalArbitrator` as Tier 3 candidates (`lancedb_kuzu_memories`), eliminating the prior empty list placeholder.
+  - Strict **Truth Boundary & Tier Separation**: Pure separation between Tier-3 derived projections (`Tier3ProjectionCandidate`, `Tier3RetrievalResult`) and Tier-4 Cognee semantic memory summaries (`SemanticMemoryRecord`). Tier 3 is NEVER synthesized via `cognee.recall(CHUNKS)`.
+  - Authoritative **Lexicographic Precedence**: Tier 1 (Source: 4) > Tier 2 (AST: 3) > Tier 3 (LanceDB/Kùzu: 2) > Tier 4 (Cognee: 1) > LLM synthesis (0). Tier-3 candidates fill residual token budget and never displace Tier-1/2 evidence.
+  - Manifest 2.0 **Provenance Validation**: Every candidate's file path, SHA-256 hash, and symbol references are validated against the active `RepositoryManifest`; mutated or deleted files are immediately pruned prior to arbitration.
+  - Subsystem Isolation & Resilience: LanceDB and Kùzu operate independently; an outage in either store does not disrupt the other, and failure of both stores never impairs Tier-1/2 deterministic retrieval or causes `EvidenceService` abstention.
+  - Strictly Read-Only: Retrieval path executes zero LLM calls, zero `cognify` operations, and zero disk mutations.
+  - Verified across 13 dedicated adversarial tests in `backend/tests/test_tier3_lancedb_kuzu_retrieval.py` and 866 total backend test cases.
+  - **Post-Audit Remediation (REM-01 to REM-04)**:
+    - **REM-01 (Safe Log Rotation Teardown)**: Hardened `SafeRotatingFileHandler` against `FileNotFoundError`, `ValueError`, and `OSError` during interpreter shutdown/teardown; verified with 3 dedicated teardown test cases in `test_log_rotation.py` (`6 passed in 8.28s`).
+    - **REM-02 (CLI Async Test Cleanup)**: Eliminated unraisable `RuntimeWarning` coroutine warnings in `tests/test_cli.py` by closing unawaited coroutine objects passed to `_run`; verified with zero warnings under `-W error::RuntimeWarning` (`12 passed in 0.58s`).
+    - **REM-03 (Legacy Context Builder Cleanup)**: Pruned dead legacy page `src/pages/ContextBuilder.tsx` and redirected `/context-builder` route to `/studio`; verified clean production build with reduced bundle size (888.13 kB).
+    - **REM-04 (Documentation Contract Synchronization)**: Synchronized verification contracts and test counts across root `AGENTS.md` and `docs/development_plan.md` to 866 passing tests.
 - [ ] **Phase 10D: Adaptive Query-Aware Retrieval** (Task-type-specific token allocation profiles).
 - [ ] **Phase 10E: Agent Workflow Optimization** (Multi-turn conversational context caching).
 
@@ -228,8 +241,8 @@ This document tracks the phased development milestones and operational roadmap f
 
 ## 2. Quality & Verification Metrics
 
-- **Backend Pytest Suite:** 593/593 passing unit/integration/soak tests across 40 test files (`backend/tests/`).
-- **Frontend Vitest Suite:** 51/51 passing behavioral tests across 12 test suites (`src/test/journeys/`).
+- **Backend Pytest Suite:** 866/866 passing unit/integration/acceptance tests across backend test suites (`backend/tests/`).
+- **Frontend Vitest Suite:** 56/56 passing behavioral tests across 13 test suites (`src/test/journeys/` and `src/test/navigation.test.tsx`).
 - **AST Integrity:** 100% passing multi-language AST syntax and symbol resolution tests (`tests/test_ast_integrity.py`).
 - **Frontend Build & Types:** 100% clean TypeScript compile and Vite production build (`npm run build`).
 - **Design System:** Vercel Geist aesthetic with dark mode canvas (`#000000`), micro-animations (`motion/react`), and high-contrast typography.

@@ -426,9 +426,10 @@ class ManifestService:
         repo_path = repo_path.resolve()
 
         if existing_manifest:
-            manifest = existing_manifest
+            manifest = RepositoryManifest.from_dict(existing_manifest.to_dict())
             manifest.dataset_name = dataset_name
             manifest.repo_path = str(repo_path)
+            manifest.updated_at = now
         else:
             manifest = RepositoryManifest(
                 repo_path=str(repo_path),

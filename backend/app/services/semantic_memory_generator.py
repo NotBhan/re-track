@@ -14,6 +14,7 @@ Invariants:
 import hashlib
 import json
 import logging
+from pathlib import Path
 import re
 import time
 from typing import Any, Optional
@@ -138,6 +139,19 @@ def extract_memories_from_response(raw_response: str) -> list[dict[str, Any]]:
     elif isinstance(data, list):
         return [it for it in data if isinstance(it, dict)]
     return []
+
+
+def _normalize_rel_path(p: str | Path, repo_root: str | Path) -> str:
+    """Normalize a path to relative POSIX format against repository root."""
+    path_obj = Path(p)
+    if not path_obj.is_absolute():
+        return str(p).replace("\\", "/").lstrip("./")
+    if repo_root:
+        try:
+            return str(path_obj.resolve().relative_to(Path(repo_root).resolve()).as_posix())
+        except Exception:
+            pass
+    return str(p).replace("\\", "/").lstrip("./")
 
 
 class SemanticMemoryGenerator:
@@ -562,12 +576,8 @@ class SemanticMemoryGenerator:
             # 3a. Handle Renames
             for rename_item in getattr(delta, "renamed", []):
                 old_rel, new_p = rename_item
-                new_rel = str(new_p)
-                if repo_path_root and hasattr(new_p, "is_absolute") and new_p.is_absolute():
-                    try:
-                        new_rel = str(new_p.relative_to(repo_path_root))
-                    except Exception:
-                        new_rel = str(new_p)
+                old_rel = _normalize_rel_path(old_rel, repo_path_root)
+                new_rel = _normalize_rel_path(new_p, repo_path_root)
 
                 old_fp = existing_manifest.files.get(old_rel) if existing_manifest and hasattr(existing_manifest, "files") else None
                 new_fp = manifest.files.get(new_rel) if manifest and hasattr(manifest, "files") else None
@@ -608,35 +618,26 @@ class SemanticMemoryGenerator:
 
             # 3b. Handle Deletions
             for del_rel in getattr(delta, "deleted", []):
+                del_norm = _normalize_rel_path(del_rel, repo_path_root)
                 if self.repository is not None:
                     for rec in existing_records:
-                        if del_rel in rec.source_files:
+                        if del_norm in rec.source_files or del_rel in rec.source_files:
                             self.repository.delete(rec.memory_id, repository_id=repo_id)
                             invalidated_count += 1
 
             # 3c. Handle Modifications
             for mod_p in getattr(delta, "modified", []):
-                mod_rel = str(mod_p)
-                if repo_path_root and hasattr(mod_p, "is_absolute") and mod_p.is_absolute():
-                    try:
-                        mod_rel = str(mod_p.relative_to(repo_path_root))
-                    except Exception:
-                        mod_rel = str(mod_p)
+                mod_rel = _normalize_rel_path(mod_p, repo_path_root)
                 if self.repository is not None:
                     for rec in existing_records:
-                        if mod_rel in rec.source_files:
+                        if mod_rel in rec.source_files or str(mod_p) in rec.source_files:
                             self.repository.delete(rec.memory_id, repository_id=repo_id)
                             invalidated_count += 1
                 target_files.append(mod_rel)
 
             # 3d. Handle Additions
             for add_p in getattr(delta, "added", []):
-                add_rel = str(add_p)
-                if repo_path_root and hasattr(add_p, "is_absolute") and add_p.is_absolute():
-                    try:
-                        add_rel = str(add_p.relative_to(repo_path_root))
-                    except Exception:
-                        add_rel = str(add_p)
+                add_rel = _normalize_rel_path(add_p, repo_path_root)
                 target_files.append(add_rel)
 
             # Refresh fingerprint on all preserved records that remain valid against the new manifest
@@ -644,7 +645,7 @@ class SemanticMemoryGenerator:
                 for rec in existing_records:
                     is_file_valid = True
                     for idx, f_path in enumerate(rec.source_files):
-                        norm_path = f_path.replace("\\", "/").lstrip("./")
+                        norm_path = _normalize_rel_path(f_path, repo_path_root)
                         if norm_path not in manifest.files:
                             is_file_valid = False
                             break

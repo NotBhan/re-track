@@ -3,7 +3,7 @@
 Validates CLI commands delegate to API layer correctly.
 """
 
-import pytest
+import asyncio
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -21,6 +21,16 @@ from app.api.schemas import (
 runner = CliRunner()
 
 
+def mock_run(return_value):
+    """Side effect for app.cli.main._run that cleanly closes passed coroutines."""
+    def _runner(coro, *args, **kwargs):
+        if asyncio.iscoroutine(coro):
+            coro.close()
+        return return_value
+
+    return _runner
+
+
 # --- health ---
 
 
@@ -32,7 +42,7 @@ class TestHealthCommand:
             cognee_initialized=True,
             version="0.1.0",
         )
-        with patch("app.cli.main._run", return_value=response):
+        with patch("app.cli.main._run", side_effect=mock_run(response)):
             with patch("app.cli.main._init_backend"):
                 result = runner.invoke(app, ["health"])
                 assert result.exit_code == 0
@@ -45,7 +55,7 @@ class TestHealthCommand:
             cognee_initialized=True,
             version="0.1.0",
         )
-        with patch("app.cli.main._run", return_value=response):
+        with patch("app.cli.main._run", side_effect=mock_run(response)):
             with patch("app.cli.main._init_backend"):
                 result = runner.invoke(app, ["health"])
                 assert result.exit_code == 0
@@ -53,7 +63,7 @@ class TestHealthCommand:
 
     def test_health_handles_error(self):
         error = ErrorResponse(error="TestError", message="something broke")
-        with patch("app.cli.main._run", return_value=error):
+        with patch("app.cli.main._run", side_effect=mock_run(error)):
             with patch("app.cli.main._init_backend"):
                 result = runner.invoke(app, ["health"])
                 assert result.exit_code == 1
@@ -79,7 +89,7 @@ class TestStatusCommand:
             system_root="/tmp/system",
             cognee_initialized=True,
         )
-        with patch("app.cli.main._run", return_value=response):
+        with patch("app.cli.main._run", side_effect=mock_run(response)):
             with patch("app.cli.main._init_backend"):
                 result = runner.invoke(app, ["status"])
                 assert result.exit_code == 0
@@ -119,7 +129,7 @@ class TestIndexCommand:
             failed_paths=[],
             summary="Indexed 1/1 files",
         )
-        with patch("app.cli.main._run", return_value=response):
+        with patch("app.cli.main._run", side_effect=mock_run(response)):
             with patch("app.cli.main._init_backend"):
                 result = runner.invoke(app, ["index", str(repo), "-d", "my-project"])
                 assert result.exit_code == 0
@@ -148,7 +158,7 @@ class TestContextCommand:
             token_estimate=50,
             dataset="my-project",
         )
-        with patch("app.cli.main._run", return_value=response):
+        with patch("app.cli.main._run", side_effect=mock_run(response)):
             with patch("app.cli.main._init_backend"):
                 result = runner.invoke(
                     app, ["context", "-q", "How does auth work?", "-d", "my-project"]
@@ -169,7 +179,7 @@ class TestForgetCommand:
             assert "at least one" in result.output.lower()
 
     def test_forget_success(self):
-        with patch("app.cli.main._run", return_value=None):
+        with patch("app.cli.main._run", side_effect=mock_run(None)):
             with patch("app.cli.main._init_backend"):
                 result = runner.invoke(app, ["forget", "-d", "old-data"])
                 assert result.exit_code == 0
@@ -177,7 +187,7 @@ class TestForgetCommand:
 
     def test_forget_handles_error(self):
         error = ErrorResponse(error="CogneeServiceError", message="forget failed")
-        with patch("app.cli.main._run", return_value=error):
+        with patch("app.cli.main._run", side_effect=mock_run(error)):
             with patch("app.cli.main._init_backend"):
                 result = runner.invoke(app, ["forget", "-d", "bad-data"])
                 assert result.exit_code == 1

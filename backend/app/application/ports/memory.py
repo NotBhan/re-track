@@ -7,6 +7,8 @@ from app.application.domain.memory import (
     MemoryVectorStatsRecord,
     SemanticMemoryGenerationResult,
     SemanticMemoryRecord,
+    Tier3ProjectionCandidate,
+    Tier3RetrievalResult,
 )
 
 
@@ -56,6 +58,52 @@ class MemoryRetrievalPort(Protocol):
         **kwargs: Any,
     ) -> Any:
         """Retrieve semantically relevant context from specified datasets."""
+        ...
+
+    async def retrieve_semantic_memory(
+        self,
+        repository_id: str,
+        query_text: str,
+        manifest: Any,
+        top_k: int = 15,
+        repository_store: Optional[Any] = None,
+        **kwargs: Any,
+    ) -> list[SemanticMemoryRecord]:
+        """Retrieve semantic memory for a repository, validating provenance against active manifest."""
+        ...
+
+    async def retrieve_lancedb_projections(
+        self,
+        repository_id: str,
+        query_text: str,
+        manifest: Any,
+        top_k: int = 15,
+        **kwargs: Any,
+    ) -> list[Tier3ProjectionCandidate]:
+        """Retrieve direct vector projections from LanceDB, validating provenance against active manifest."""
+        ...
+
+    async def retrieve_kuzu_projections(
+        self,
+        repository_id: str,
+        query_text: str,
+        manifest: Any,
+        top_k: int = 15,
+        **kwargs: Any,
+    ) -> list[Tier3ProjectionCandidate]:
+        """Retrieve direct graph projections from Kùzu, validating provenance against active manifest."""
+        ...
+
+    async def retrieve_tier3_lancedb_kuzu(
+        self,
+        repository_id: str,
+        query_text: str,
+        manifest: Any,
+        top_k: int = 15,
+        telemetry: Optional[dict[str, Any]] = None,
+        **kwargs: Any,
+    ) -> Tier3RetrievalResult | list[Tier3ProjectionCandidate]:
+        """Retrieve unified Tier-3 direct projections from LanceDB and Kùzu for arbitration."""
         ...
 
 

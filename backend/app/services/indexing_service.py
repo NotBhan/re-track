@@ -13,7 +13,7 @@ Responsibilities only:
 import logging
 from pathlib import Path
 import time
-from typing import Callable, Optional
+from typing import Any, Callable, Optional
 
 from app.models.errors import CogneeServiceError
 from app.models.responses import IndexingProgress
@@ -109,14 +109,17 @@ class IndexingService:
         supported_extensions: Optional[frozenset[str]] = None,
         ignored_dirs: Optional[frozenset[str]] = None,
         ignored_patterns: Optional[frozenset[str]] = None,
+        semantic_memory_generator: Optional[Any] = None,
     ) -> None:
         self._cognee = cognee_service
         self._manifest_service = manifest_service or ManifestService()
+        self._semantic_memory_generator = semantic_memory_generator
         self._batch_size = batch_size
         self._supported = supported_extensions or SUPPORTED_EXTENSIONS
         self._ignored_dirs = ignored_dirs or IGNORED_DIRS
         self._ignored_patterns = ignored_patterns or IGNORED_PATTERNS
         self.last_summary = None
+        self.last_cognification_result = None
 
     async def index_repository(
         self,
@@ -281,8 +284,9 @@ class IndexingService:
             progress.failed_files = len(filtered)
 
         # Update and atomically save manifest with per-file AST state if indexing succeeded
+        updated_manifest = None
         if successfully_indexed:
-            self._manifest_service.update_manifest(
+            updated_manifest = self._manifest_service.update_manifest(
                 repo_path=repo,
                 dataset_name=dataset_name,
                 indexed_files=successfully_indexed,
@@ -291,6 +295,66 @@ class IndexingService:
                 file_metadata=summary_gen.file_ast_metadata,
                 renamed_pairs=renamed_pairs,
             )
+
+        # Trigger downstream semantic memory cognification on committed manifest
+        if updated_manifest is not None and self._semantic_memory_generator is not None:
+            if progress_callback:
+                progress_callback("Orchestrating semantic memory cognification...", 5, 5)
+            try:
+                # Extract verified source snippets for target files
+                source_snippets: dict[str, str] = {}
+                target_paths = target_files if mode != "noop" else []
+                for f in target_paths[:50]:
+                    try:
+                        rel = str(f.resolve().relative_to(repo).as_posix())
+                        content = f.read_text(errors="ignore")
+                        snippet = "\n".join(content.splitlines()[:150])
+                        if snippet.strip():
+                            source_snippets[rel] = snippet[:4096]
+                    except Exception:
+                        pass
+
+                # Extract frameworks
+                frameworks: list[str] = []
+                if repo_summary and getattr(repo_summary, "technology_stack", None):
+                    ts = repo_summary.technology_stack
+                    if getattr(ts, "frameworks", None):
+                        frameworks = [
+                            f.name if hasattr(f, "name") else str(f)
+                            for f in ts.frameworks
+                        ]
+
+                cognify_delta = delta if mode == "incremental" else None
+                cognify_existing_manifest = existing_manifest if mode == "incremental" else None
+
+                logger.info(
+                    "index_cognification_dispatch | repo=%s | mode=%s | delta_present=%s",
+                    dataset_name,
+                    mode,
+                    bool(cognify_delta),
+                )
+
+                cognify_res = await self._semantic_memory_generator.cognify_repository(
+                    repository_id=dataset_name,
+                    manifest=updated_manifest,
+                    delta=cognify_delta,
+                    existing_manifest=cognify_existing_manifest,
+                    cognee_service=self._cognee,
+                    source_snippets=source_snippets,
+                    frameworks=frameworks,
+                    model_config=getattr(self._semantic_memory_generator, "model_config", None),
+                )
+                self.last_cognification_result = cognify_res
+                logger.info(
+                    "index_cognification_completed | repo=%s | status=%s | records=%d | llm_calls=%d",
+                    dataset_name,
+                    cognify_res.status,
+                    len(cognify_res.records),
+                    cognify_res.telemetry.llm_invocation_count,
+                )
+            except Exception as e:
+                logger.warning("Cognification orchestration failed gracefully: %s", e)
+                self.last_cognification_result = None
 
         if progress_callback:
             progress_callback("Indexing Completed", 5, 5)

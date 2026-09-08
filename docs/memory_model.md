@@ -47,6 +47,45 @@ The `SemanticMemoryRecord` is the canonical domain model representing Cognee sem
 
 ---
 
+## 2B. Tier-3 Derived LanceDB / Kùzu Projections Contract (`Tier3ProjectionCandidate` & `Tier3RetrievalResult`)
+
+The `Tier3ProjectionCandidate` represents genuine derived vector embeddings from LanceDB and structural graph projections from Kùzu. Unlike Tier-4 natural language semantic summaries, Tier-3 candidates represent direct mathematical/structural projections of repository artifacts.
+
+### 2B.1 Entity Schema
+
+| Field | Type | Description |
+|---|---|---|
+| `candidate_id` | `str` | Unique candidate identifier (prefixed `lancedb_` or `kuzu_`) |
+| `repository_id` | `str` | Logical repository identifier or dataset name |
+| `repository_fingerprint` | `str` | Active repository fingerprint for provenance validation |
+| `source_type` | `str` | Underlying store (`"lancedb_vector"` or `"kuzu_graph"`) |
+| `content` | `str` | Text content of chunk or serialized graph neighborhood |
+| `source_files` | `list[str]` | List of referenced relative repository file paths |
+| `source_symbols` | `list[str]` | List of referenced symbols |
+| `source_sha256` | `list[str]` | SHA-256 hashes of referenced source files |
+| `score` | `float` | Raw engine score (cosine distance in vector; degree/centrality in graph) |
+| `similarity` | `float` | Normalized similarity score $[0.1, 1.0]$ for arbitration ranking |
+| `metadata` | `dict[str, Any]` | Raw projection metadata from storage engine |
+
+### 2B.2 Telemetry & Result Envelope (`Tier3RetrievalResult`)
+
+`Tier3RetrievalResult` implements Python list semantics (`__iter__`, `__len__`, `__getitem__`) wrapping validated candidates, and provides `.to_telemetry()` returning structured execution telemetry:
+- `lancedb_count`: Validated LanceDB vector candidates accepted.
+- `kuzu_count`: Validated Kùzu graph projection candidates accepted.
+- `total_tier3_count`: Total accepted Tier-3 candidates.
+- `lancedb_status`: Subsystem status (`"success"`, `"failed"`, `"skipped"`, `"empty"`).
+- `kuzu_status`: Subsystem status (`"success"`, `"failed"`, `"skipped"`, `"empty"`).
+- `retrieval_time_ms`: Total execution time in milliseconds.
+
+### 2B.3 Subsystem Isolation & Fault Tolerance Invariants
+
+1. **Independent Degraded States**: A failure or timeout in LanceDB does not interrupt Kùzu graph traversal; a Kùzu failure does not interrupt LanceDB vector search.
+2. **Deterministic Evidence Preservation**: Complete failure of both Tier-3 datastores never degrades or interrupts Tier-1 source and Tier-2 AST retrieval.
+3. **Truth Boundary Guarantee**: Tier-3 datastore failure or empty projection is never reported as repository evidence absence; `EvidenceService` never abstains when source/AST evidence is sufficient.
+4. **Strictly Read-Only**: Tier-3 retrieval performs zero LLM calls, zero `cognify` operations, and zero writes to disk or storage engines.
+
+---
+
 ## 3. Provenance & Invalidation Contract
 
 ### 3.1 Mandatory Anchoring

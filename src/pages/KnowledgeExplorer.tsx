@@ -248,6 +248,14 @@ export default function KnowledgeExplorer() {
                           {repo.call_graph_error || "Failed to parse repository abstract syntax tree."}
                         </p>
                       </div>
+                    ) : callGraphNodes.length === 0 ? (
+                      <div className="w-full h-full flex flex-col items-center justify-center bg-[#0a0a0a] rounded-xl border border-[#262626] p-8 text-center">
+                        <Network className="w-8 h-8 text-neutral-600 mb-3" />
+                        <h3 className="text-sm font-semibold text-white mb-1">Zero AST Symbols Found</h3>
+                        <p className="text-xs text-neutral-400 max-w-md">
+                          No AST call graph nodes or function definitions were detected in this repository.
+                        </p>
+                      </div>
                     ) : (
                       <div className="w-full h-full flex flex-col relative">
                         {graphStatus === "zero_edges" && (

@@ -274,11 +274,11 @@ class Settings(BaseSettings):
         )
 
         data_root = os.environ.get("DATA_ROOT_DIRECTORY")
-        if data_root:
+        if data_root and "data_root" not in self.storage.model_fields_set:
             self.storage.data_root = Path(data_root)
 
         system_root = os.environ.get("SYSTEM_ROOT_DIRECTORY")
-        if system_root:
+        if system_root and "system_root" not in self.storage.model_fields_set:
             self.storage.system_root = Path(system_root)
 
         ac = os.environ.get("ENABLE_BACKEND_ACCESS_CONTROL")
@@ -334,6 +334,8 @@ class Settings(BaseSettings):
         import litellm
 
         litellm.drop_params = True
+        litellm.num_retries = 0
+        os.environ["LITELLM_NUM_RETRIES"] = "0"
 
         self.apply_to_environment()
 
@@ -372,8 +374,59 @@ class Settings(BaseSettings):
         cognee.config.set_vector_db_provider(self.storage.vector_db)
         cognee.config.set_graph_database_provider(self.storage.graph_db)
 
-        cognee.config.data_root_directory = str(self.storage.data_root)
-        cognee.config.system_root_directory = str(self.storage.system_root)
+        # Restore staticmethods if previously clobbered and invoke them with target paths
+        try:
+            from cognee.api.v1.config.config import config as cognee_config_cls
+            cognee.config.system_root_directory = cognee_config_cls.system_root_directory
+            cognee.config.data_root_directory = cognee_config_cls.data_root_directory
+            cognee.config.system_root_directory(str(self.storage.system_root))
+            cognee.config.data_root_directory(str(self.storage.data_root))
+        except Exception:
+            pass
+
+        # Invalidate Cognee internal memoized configs so changes take effect immediately
+        try:
+            from cognee.base_config import get_base_config
+            get_base_config.cache_clear()
+        except (ImportError, AttributeError):
+            pass
+        try:
+            from cognee.infrastructure.databases.graph.config import get_graph_config
+            get_graph_config.cache_clear()
+        except (ImportError, AttributeError):
+            pass
+        try:
+            from cognee.infrastructure.databases.vector.config import get_vectordb_config
+            get_vectordb_config.cache_clear()
+        except (ImportError, AttributeError):
+            pass
+        try:
+            from cognee.infrastructure.databases.relational.config import (
+                get_migration_config,
+                get_relational_config,
+            )
+            get_relational_config.cache_clear()
+            get_migration_config.cache_clear()
+        except (ImportError, AttributeError):
+            pass
+        try:
+            from cognee.infrastructure.databases.relational.create_relational_engine import (
+                create_relational_engine,
+            )
+            create_relational_engine.cache_clear()
+        except (ImportError, AttributeError):
+            pass
+        try:
+            from cognee.context_global_variables import (
+                graph_db_config,
+                vector_db_config,
+                current_dataset_id,
+            )
+            graph_db_config.set(None)
+            vector_db_config.set(None)
+            current_dataset_id.set(None)
+        except (ImportError, AttributeError):
+            pass
 
     def validate_provider(self) -> None:
         """Check provider reachability if connection test is not skipped."""

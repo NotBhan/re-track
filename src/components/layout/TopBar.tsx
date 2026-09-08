@@ -22,8 +22,6 @@ export function TopBar({ title, subtitle, children }: TopBarProps) {
 
   const displayModel = activeModel
     ? activeModel.split(":")[0]
-    : configuredModel
-    ? configuredModel.split(":")[0]
     : "No active model";
 
   const isHealthy = engineState === "healthy";
@@ -86,7 +84,11 @@ export function TopBar({ title, subtitle, children }: TopBarProps) {
       <div className="flex items-center gap-2 sm:gap-3 shrink-0">
         <div
           className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-[#222222] bg-[#0a0a0a] text-[11px] font-mono text-neutral-300 shadow-xs"
-          title={`${providerLabel}: ${displayModel} (${statusLabel})`}
+          title={`${providerLabel}: ${displayModel}${
+            configuredModel && configuredModel !== activeModel
+              ? ` (Configured: ${configuredModel})`
+              : ""
+          } (${statusLabel})`}
         >
           <span
             className={cn(

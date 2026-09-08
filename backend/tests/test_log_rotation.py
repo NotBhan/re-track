@@ -105,3 +105,59 @@ def test_unwritable_directory_fails_gracefully_without_crashing(monkeypatch):
         finally:
             # Restore permissions for cleanup
             unwritable_dir.chmod(stat.S_IREAD | stat.S_IWRITE | stat.S_IEXEC)
+
+
+def test_teardown_deleted_file_emits_gracefully():
+    """Verify that emission does not crash if the log directory was unlinked during teardown."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        log_path = Path(tmpdir) / "deleted_teardown.jsonl"
+        handler = SafeRotatingFileHandler(filename=str(log_path), maxBytes=1000, backupCount=1)
+        handler.setFormatter(StructuredJsonFormatter())
+
+        logger = logging.getLogger("test_teardown_deleted_logger")
+        logger.setLevel(logging.INFO)
+        logger.handlers.clear()
+        logger.addHandler(handler)
+
+        logger.info("First message before deletion")
+        assert log_path.exists()
+
+    # tmpdir is now deleted from disk (simulating fixture/tempdir cleanup)
+    assert not log_path.parent.exists()
+
+    # Logging after deletion must not raise unhandled exception
+    logger.info("Second message after temp dir unlinked")
+    handler.close()
+
+
+def test_teardown_closed_stream_emits_gracefully():
+    """Verify that emission does not raise ValueError if underlying stream was closed before emission."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        log_path = Path(tmpdir) / "closed_stream.jsonl"
+        handler = SafeRotatingFileHandler(filename=str(log_path), maxBytes=1000, backupCount=1)
+        handler.setFormatter(StructuredJsonFormatter())
+
+        logger = logging.getLogger("test_teardown_closed_stream_logger")
+        logger.setLevel(logging.INFO)
+        logger.handlers.clear()
+        logger.addHandler(handler)
+
+        logger.info("Message to initialize stream")
+        assert handler.stream is not None
+
+        # Simulate stream closure during interpreter/process shutdown
+        handler.stream.close()
+
+        # Emit after closure must be absorbed cleanly
+        logger.info("Message after stream closed")
+        handler.close()
+
+
+def test_teardown_close_idempotent_and_safe():
+    """Verify that multiple close calls on SafeRotatingFileHandler are idempotent and safe."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        log_path = Path(tmpdir) / "multi_close.jsonl"
+        handler = SafeRotatingFileHandler(filename=str(log_path))
+        handler.close()
+        handler.close()
+        assert handler._closed is True

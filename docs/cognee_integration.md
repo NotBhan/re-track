@@ -152,6 +152,20 @@ Tier 4 Derived Retrieval via `retrieve_semantic_memory()`
 2. **Exactly-Once Semantic Extraction**: A repository cognification cycle executes exactly ONE LLM extraction pass over verified source/AST evidence. Output is indexed via `cognee.add()` without triggering duplicate downstream extraction passes.
 3. **Granular Incremental Lifecycle**: Mutations invalidate only affected memories. Same-SHA renames preserve memory text with 0 LLM calls.
 4. **No Recursive Self-Feeding**: Generated `SemanticMemoryRecord` items are never fed as input prompts to subsequent cognification cycles. Only verified filesystem/AST evidence acts as input.
+5. **Single Authoritative Orchestration Boundary**: Cognification is orchestrated exclusively downstream inside `IndexingService.index_repository(...)` immediately after `ManifestService.update_manifest(...)` atomically commits the post-index state.
+6. **Graceful Failure Isolation**: Any LLM provider or Cognee indexing failure during semantic cognification degrades gracefully without blocking or failing deterministic repository indexing.
+
+
+---
+
+## Test Infrastructure & Storage Isolation
+
+Embedded storage engines (LanceDB, Kùzu/Ladybug, SQLite) maintain exclusive file locks on disk databases. In multi-test and full pytest execution, deterministic resource isolation is guaranteed via:
+
+1. **Per-Test Storage Root Isolation**: Real Cognee acceptance and integration tests configure dynamic `system_root` and `data_root` paths scoped strictly within `tmp_path`.
+2. **Configuration Mutator Integrity**: `Settings.configure_cognee()` invokes `cognee.config.system_root_directory(...)` and `cognee.config.data_root_directory(...)` as callable methods rather than reassigning attributes, cascading root updates to base, relational, graph, and vector database configs.
+3. **Pydantic Model Field Invariance**: `Settings._apply_env_overrides` honors explicitly passed `StorageConfig` roots (`model_fields_set`), preventing ambient or previous test environment variables from overwriting test isolation directories.
+4. **Deterministic Teardown & Handle Eviction**: `reset_cognee_engine_and_caches()` forces key eviction and engine close across `closing_lru_cache._DECORATED_CACHES`, awaits pending close futures, clears factory/config caches, resets context variables, purges storage environment variables (`SYSTEM_ROOT_DIRECTORY`, `DATA_ROOT_DIRECTORY`), and runs garbage collection before temporary directory deletion.
 
 ---
 

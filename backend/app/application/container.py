@@ -156,17 +156,18 @@ class ApplicationContainer:
         self.intent_parser = IntentParserService(self.llm_provider)
         self.cgc_service = CGCService()
         self.manifest_service = ManifestService()
-        self.indexing_service = IndexingService(
-            cognee_service=self.cognee_service,
-            manifest_service=self.manifest_service,
-        )
-        self.context_service = ContextService(
-            cognee_service=self.cognee_service,
-        )
         self.semantic_memory_generator = SemanticMemoryGenerator(
             llm_provider=self.llm_provider,
             repository=self.semantic_memory_repository,
             settings=self.settings,
+        )
+        self.indexing_service = IndexingService(
+            cognee_service=self.cognee_service,
+            manifest_service=self.manifest_service,
+            semantic_memory_generator=self.semantic_memory_generator,
+        )
+        self.context_service = ContextService(
+            cognee_service=self.cognee_service,
         )
 
         logger.info(
@@ -203,6 +204,8 @@ class ApplicationContainer:
         self.intent_parser = IntentParserService(self.llm_provider)
         if self.semantic_memory_generator is not None:
             self.semantic_memory_generator.llm_provider = self.llm_provider
+        if self.indexing_service is not None:
+            self.indexing_service._semantic_memory_generator = self.semantic_memory_generator
 
         # Update and persist settings
         if self.settings is None:
@@ -258,6 +261,7 @@ class ApplicationContainer:
             filesystem=self.filesystem,
             workspace_auth=self.workspace_auth,
             concurrency_guard=self.concurrency_guard,
+            semantic_memory_repository=self.semantic_memory_repository,
         )
 
     def get_indexing_use_cases(self) -> IndexingUseCases:
