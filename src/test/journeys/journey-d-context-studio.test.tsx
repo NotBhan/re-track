@@ -24,15 +24,16 @@ describe("Journey D — Context Studio (Power Mode Workbench)", () => {
 
     // Verify header and workspace badge
     expect(screen.getByText(/Context Studio/i)).toBeInTheDocument();
-    expect(screen.getByText("re-track-core")).toBeInTheDocument();
+    expect(screen.getAllByText("re-track-core").length).toBeGreaterThan(0);
 
     // Verify token budget controls
     expect(screen.getByText(/Token Budget/i)).toBeInTheDocument();
     expect(screen.getByText("8,000 max tokens")).toBeInTheDocument();
 
-    // Verify tab switcher exists
-    expect(screen.getByRole("button", { name: /Prompt Workbench/i })).toBeInTheDocument();
-    expect(screen.getAllByRole("button", { name: /AST Call Graph/i }).length).toBeGreaterThan(0);
+    // Verify column controls exist
+    expect(screen.getByText("Input Workbench")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Evidence Stack/i })).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /Call Graph/i }).length).toBeGreaterThan(0);
   });
 
   it("selects a prompt preset and executes get_agent_context synthesis", async () => {
@@ -176,8 +177,8 @@ describe("Journey D — Context Studio (Power Mode Workbench)", () => {
     const user = userEvent.setup();
     renderWithProviders(<ContextStudio />);
 
-    const callGraphTab = screen.getByRole("button", { name: /AST Call Graph/i });
-    await user.click(callGraphTab);
+    const callGraphTabs = screen.getAllByRole("button", { name: /Call Graph/i });
+    await user.click(callGraphTabs[callGraphTabs.length - 1]);
 
     // Verify Call Graph container is rendered
     await waitFor(() => {

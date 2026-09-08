@@ -12,6 +12,7 @@ import {
 import { useHealthStore } from "@/stores/health-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 const PROVIDER_DEFAULTS: Record<
   string,
@@ -35,7 +36,7 @@ const PROVIDER_DEFAULTS: Record<
 };
 
 export function OllamaSettings() {
-  const { pollHealth } = useHealthStore();
+  const { pollHealth, lastExecutingModel } = useHealthStore();
   const {
     provider,
     endpoint,
@@ -157,6 +158,41 @@ export function OllamaSettings() {
           <span className="text-[10px] font-mono uppercase tracking-wider text-neutral-300">
             {providerHealthState || (providerReachable ? "healthy" : "unavailable")}
           </span>
+        </div>
+      </div>
+
+      {/* 3 Runtime Identities Breakdown */}
+      <div className="p-3.5 rounded-lg bg-[#060606] border border-[#1e1e1e] space-y-2">
+        <div className="text-[11px] font-semibold text-white uppercase tracking-wider font-mono">
+          Runtime Identities (Truth Contract)
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 font-mono text-xs">
+          <div className="p-2.5 rounded bg-[#0a0a0a] border border-[#1a1a1a] space-y-1">
+            <div className="text-[10px] text-neutral-500 uppercase">1. Configured Model</div>
+            <div className="text-neutral-200 font-medium truncate" title={selectedModel || "None"}>
+              {selectedModel || "None"}
+            </div>
+            <div className="text-[10px] text-neutral-500">{selectedProvider}</div>
+          </div>
+          <div className="p-2.5 rounded bg-[#0a0a0a] border border-[#1a1a1a] space-y-1">
+            <div className="text-[10px] text-neutral-500 uppercase">2. Verified Active</div>
+            <div
+              className={cn("font-medium truncate", activeModel ? "text-emerald-400" : "text-amber-400")}
+              title={activeModel || "Unverified"}
+            >
+              {activeModel || "Unverified"}
+            </div>
+            <div className="text-[10px] text-neutral-500">
+              {providerReachable ? "Endpoint Reachable" : "Unreachable"}
+            </div>
+          </div>
+          <div className="p-2.5 rounded bg-[#0a0a0a] border border-[#1a1a1a] space-y-1">
+            <div className="text-[10px] text-neutral-500 uppercase">3. Last Executing</div>
+            <div className="text-neutral-200 font-medium truncate" title={lastExecutingModel || "None"}>
+              {lastExecutingModel || "None"}
+            </div>
+            <div className="text-[10px] text-neutral-500">Latest inference engine</div>
+          </div>
         </div>
       </div>
 

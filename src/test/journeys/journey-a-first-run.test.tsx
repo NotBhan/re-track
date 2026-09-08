@@ -19,14 +19,12 @@ describe("Journey A — First Run & Application Initialization", () => {
   it("launches application and renders complete navigation shell and status telemetry", async () => {
     renderWithProviders(<App />, { withRouter: false });
 
-    // Assert main logo and navigation links
+    // Assert main logo and 4-pillar navigation links
     expect(screen.getAllByText("RE:Track").length).toBeGreaterThan(0);
-    expect(screen.getByText("Repositories")).toBeInTheDocument();
+    expect(screen.getByText("Workspace")).toBeInTheDocument();
     expect(screen.getByText("Context Studio")).toBeInTheDocument();
-    expect(screen.getByText("Context Packages")).toBeInTheDocument();
-    expect(screen.getByText("Memory Graph")).toBeInTheDocument();
-    expect(screen.getByText("Benchmarks")).toBeInTheDocument();
-    expect(screen.getByText("Settings")).toBeInTheDocument();
+    expect(screen.getByText("Memory Engine")).toBeInTheDocument();
+    expect(screen.getByText("System & Telemetry")).toBeInTheDocument();
 
     // Verify health polling populates hardware telemetry and engine status
     await waitFor(() => {

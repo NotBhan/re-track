@@ -587,6 +587,7 @@ export function resetAllStores() {
     configuredModel: null,
     activeModelState: "unknown",
     discoveredModels: [],
+    lastExecutingModel: null,
     engineState: "unavailable",
     engineReason: null,
     cogneeState: "unavailable",

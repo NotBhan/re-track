@@ -35,6 +35,7 @@ interface RepositoryStore {
     name?: string;
   }) => Promise<Repository>;
   indexRepo: (repoId: string) => Promise<void>;
+  scanRepo: (repoId: string) => Promise<ScanResult>;
   pollProgress: (repoId: string) => void;
   clearPoll: () => void;
   removeRepo: (repoId: string) => Promise<void>;
@@ -74,21 +75,23 @@ export const useRepositoryStore = create<RepositoryStore>((set, get) => ({
           forceRefresh,
           onBackgroundRevalidate: (fresh) => {
             const currentSelectedId = get().selectedId;
+            const repos = Array.isArray(fresh?.repositories) ? fresh.repositories : (get().repositories || []);
             set({
-              repositories: fresh.repositories,
+              repositories: repos,
               selected: currentSelectedId
-                ? fresh.repositories.find((r) => r.id === currentSelectedId)
-                : undefined,
+                ? repos.find((r) => r.id === currentSelectedId)
+                : get().selected,
             });
           },
         }
       );
       const currentSelectedId = get().selectedId;
+      const repos = Array.isArray(response?.repositories) ? response.repositories : (get().repositories || []);
       set({
-        repositories: response.repositories,
+        repositories: repos,
         selected: currentSelectedId
-          ? response.repositories.find((r) => r.id === currentSelectedId)
-          : undefined,
+          ? repos.find((r) => r.id === currentSelectedId)
+          : get().selected,
         loading: false,
       });
     } catch {
@@ -212,6 +215,20 @@ export const useRepositoryStore = create<RepositoryStore>((set, get) => ({
           size_bytes: 0,
         },
       });
+    }
+  },
+
+  scanRepo: async (repoId: string) => {
+    set({ scanning: true, error: null });
+    try {
+      const scanResult = await scanRepository(repoId);
+      set({ lastScan: scanResult, scanning: false });
+      await get().fetchRepositories();
+      return scanResult;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Scan failed";
+      set({ scanning: false, error: msg });
+      throw err;
     }
   },
 

@@ -193,7 +193,7 @@ export function KnowledgeGraphView() {
           <div className="text-sm font-semibold text-white uppercase">
             Cognee Graph
           </div>
-          <div className="text-[10px] text-neutral-500 mt-0.5">Embedded Ladybug / Kùzu DB</div>
+          <div className="text-[10px] text-neutral-500 mt-0.5">Derived Memory Graph (Kùzu)</div>
         </div>
 
         <div className="bg-[#0a0a0a] border border-[#1e1e1e] rounded-lg p-3">
@@ -205,7 +205,7 @@ export function KnowledgeGraphView() {
             {graph?.total_nodes ?? 0}
           </div>
           <div className="text-[10px] text-neutral-500 mt-0.5">
-            {activeSelectedDataset ? `in "${activeSelectedDataset.name}"` : "Authoritative graph nodes"}
+            {activeSelectedDataset ? `in "${activeSelectedDataset.name}"` : "Derived graph entities"}
           </div>
         </div>
 

@@ -14,6 +14,8 @@ export interface HealthStore {
   configuredModel: string | null;
   activeModelState: string;
   discoveredModels: string[];
+  lastExecutingModel: string | null;
+  setLastExecutingModel: (model: string | null) => void;
   engineState: "healthy" | "degraded" | "unavailable" | "not_configured" | string;
   engineReason: string | null;
   cogneeState: "healthy" | "degraded" | "unavailable" | "not_configured" | string;
@@ -38,6 +40,8 @@ export const useHealthStore = create<HealthStore>((set) => ({
   configuredModel: null,
   activeModelState: "unknown",
   discoveredModels: [],
+  lastExecutingModel: null,
+  setLastExecutingModel: (model) => set({ lastExecutingModel: model }),
   engineState: "unavailable",
   engineReason: null,
   cogneeState: "unavailable",

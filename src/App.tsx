@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useParams } from "react-router-dom";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppShell } from "@/components/layout/AppShell";
 import { PageTransition } from "@/components/layout/PageTransition";
@@ -7,13 +7,46 @@ import { CreateRepositoryIndexModal } from "@/components/repositories/CreateRepo
 import { Toaster } from "@/components/ui/toast";
 import { AnimatePresence } from "motion/react";
 import ContextStudio from "@/pages/ContextStudio";
-import Repositories from "@/pages/Repositories";
-import KnowledgeExplorer from "@/pages/KnowledgeExplorer";
-import ContextPackages from "@/pages/ContextPackages";
+import Workspace from "@/pages/Workspace";
 import Memory from "@/pages/Memory";
-import Benchmarks from "@/pages/Benchmarks";
-import Settings from "@/pages/Settings";
+import SystemTelemetry from "@/pages/SystemTelemetry";
 import "./App.css";
+
+function PreservingRedirect({
+  to,
+  defaultParams,
+}: {
+  to: string;
+  defaultParams?: Record<string, string>;
+}) {
+  const location = useLocation();
+  const searchParams = new URLSearchParams(location.search);
+
+  if (defaultParams) {
+    for (const [key, value] of Object.entries(defaultParams)) {
+      if (!searchParams.has(key)) {
+        searchParams.set(key, value);
+      }
+    }
+  }
+
+  const query = searchParams.toString();
+  const target = query ? `${to}?${query}` : to;
+  return <Navigate to={target} replace />;
+}
+
+function KnowledgeRedirect() {
+  const { repoId } = useParams<{ repoId: string }>();
+  const location = useLocation();
+  const searchParams = new URLSearchParams(location.search);
+  if (repoId) {
+    searchParams.set("repo", repoId);
+  }
+  if (!searchParams.has("tab")) {
+    searchParams.set("tab", "ast");
+  }
+  return <Navigate to={`/workspace?${searchParams.toString()}`} replace />;
+}
 
 function AnimatedRoutes() {
   const location = useLocation();
@@ -21,13 +54,18 @@ function AnimatedRoutes() {
   return (
     <AnimatePresence mode="wait">
       <Routes location={location} key={location.pathname}>
+        <Route path="/" element={<PreservingRedirect to="/workspace" />} />
         <Route
-          path="/"
+          path="/workspace"
           element={
             <PageTransition>
-              <Repositories />
+              <Workspace />
             </PageTransition>
           }
+        />
+        <Route
+          path="/repositories"
+          element={<PreservingRedirect to="/workspace" />}
         />
         <Route
           path="/studio"
@@ -37,25 +75,14 @@ function AnimatedRoutes() {
             </PageTransition>
           }
         />
-        <Route
-          path="/knowledge/:repoId"
-          element={
-            <PageTransition>
-              <KnowledgeExplorer />
-            </PageTransition>
-          }
-        />
+        <Route path="/knowledge/:repoId" element={<KnowledgeRedirect />} />
         <Route
           path="/context-builder"
-          element={<Navigate to="/studio" replace />}
+          element={<PreservingRedirect to="/studio" />}
         />
         <Route
           path="/packages"
-          element={
-            <PageTransition>
-              <ContextPackages />
-            </PageTransition>
-          }
+          element={<PreservingRedirect to="/studio" defaultParams={{ tab: "history" }} />}
         />
         <Route
           path="/memory"
@@ -66,20 +93,20 @@ function AnimatedRoutes() {
           }
         />
         <Route
-          path="/benchmarks"
+          path="/system"
           element={
             <PageTransition>
-              <Benchmarks />
+              <SystemTelemetry />
             </PageTransition>
           }
         />
         <Route
+          path="/benchmarks"
+          element={<PreservingRedirect to="/system" defaultParams={{ tab: "benchmarks" }} />}
+        />
+        <Route
           path="/settings"
-          element={
-            <PageTransition>
-              <Settings />
-            </PageTransition>
-          }
+          element={<PreservingRedirect to="/system" defaultParams={{ tab: "runtime" }} />}
         />
       </Routes>
     </AnimatePresence>

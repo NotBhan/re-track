@@ -14,7 +14,11 @@ import { Badge } from "@/components/ui/badge";
 import { motion } from "motion/react";
 import { toast } from "@/components/ui/toast";
 
-export default function Benchmarks() {
+export interface BenchmarksProps {
+  embedded?: boolean;
+}
+
+export default function Benchmarks({ embedded = false }: BenchmarksProps = {}) {
   const [suite, setSuite] = useState<BenchmarkSuiteResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -40,43 +44,37 @@ export default function Benchmarks() {
   const contextTokens = firstResult?.context_tokens || firstResult?.token_count || 1200;
   const tokenWidthPercent = Math.min(100, Math.max(3, Math.round((contextTokens / baselineTokens) * 100)));
 
-  return (
-    <div className="flex-1 flex flex-col h-full overflow-hidden bg-black text-foreground antialiased font-sans">
-      <TopBar title="RE:Track | Benchmarks & Telemetry" subtitle="Context Precision & Token Efficiency">
-        <div className="flex items-center gap-2">
+  const content = (
+    <div className="max-w-5xl mx-auto space-y-5 lg:space-y-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#1a1a1a] pb-4">
+        <div>
+          <div className="flex items-center gap-2">
+            <h1 className="text-sm font-semibold tracking-tight text-white">
+              Deterministic Context &amp; Latency Benchmarks
+            </h1>
+            {suite && (
+              <Badge variant="outline" className="text-[10px] font-mono border-emerald-500/30 text-emerald-400 bg-emerald-500/10">
+                {suite.results.length} Queries Evaluated
+              </Badge>
+            )}
+          </div>
+          <p className="text-xs text-neutral-500 mt-0.5">
+            Authoritative token reduction against raw repository source baseline, discrete retrieval timings, and hardware telemetry.
+          </p>
+        </div>
+        {embedded && (
           <Button
             onClick={handleRunSuite}
             disabled={loading}
             size="sm"
-            className="h-8 px-3 text-xs font-mono font-bold bg-white text-black hover:bg-neutral-200 shadow-xs cursor-pointer disabled:opacity-60 gap-1.5"
+            className="h-8 px-3 text-xs font-mono font-bold bg-white text-black hover:bg-neutral-200 shadow-xs cursor-pointer disabled:opacity-60 gap-1.5 shrink-0"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
-            <span className="hidden xs:inline">{loading ? "Running Suite..." : "Execute Benchmarks"}</span>
-            <span className="xs:hidden">{loading ? "Running..." : "Run"}</span>
+            <span>{loading ? "Running Suite..." : "Execute Benchmarks"}</span>
           </Button>
-        </div>
-      </TopBar>
-
-      <main className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-5 lg:p-6">
-        <div className="max-w-5xl mx-auto space-y-5 lg:space-y-6">
-          {/* Header */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#1a1a1a] pb-4">
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-sm font-semibold tracking-tight text-white">
-                  Deterministic Context &amp; Latency Benchmarks
-                </h1>
-                {suite && (
-                  <Badge variant="outline" className="text-[10px] font-mono border-emerald-500/30 text-emerald-400 bg-emerald-500/10">
-                    {suite.results.length} Queries Evaluated
-                  </Badge>
-                )}
-              </div>
-              <p className="text-xs text-neutral-500 mt-0.5">
-                Authoritative token reduction against raw repository source baseline, discrete retrieval timings, and hardware telemetry.
-              </p>
-            </div>
-          </div>
+        )}
+      </div>
 
           {/* Error Notice */}
           {error && (
@@ -289,7 +287,32 @@ export default function Benchmarks() {
               </div>
             </div>
           )}
+    </div>
+  );
+
+  if (embedded) {
+    return content;
+  }
+
+  return (
+    <div className="flex-1 flex flex-col h-full overflow-hidden bg-black text-foreground antialiased font-sans">
+      <TopBar title="RE:Track | Benchmarks & Telemetry" subtitle="Context Precision & Token Efficiency">
+        <div className="flex items-center gap-2">
+          <Button
+            onClick={handleRunSuite}
+            disabled={loading}
+            size="sm"
+            className="h-8 px-3 text-xs font-mono font-bold bg-white text-black hover:bg-neutral-200 shadow-xs cursor-pointer disabled:opacity-60 gap-1.5"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
+            <span className="hidden xs:inline">{loading ? "Running Suite..." : "Execute Benchmarks"}</span>
+            <span className="xs:hidden">{loading ? "Running..." : "Run"}</span>
+          </Button>
         </div>
+      </TopBar>
+
+      <main className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-5 lg:p-6">
+        {content}
       </main>
     </div>
   );

@@ -96,7 +96,7 @@ npm run build
 
 - `docs/` — Project documentation and design. Authoritative source for vision, architecture, implementation plan, repository knowledge model, and project contracts.
 - `backend/` — Python backend: Cognee integration, deterministic AST call graph extraction, context engine, repository summary generation, benchmark runner, API layer.
-- `src/` — React frontend: Context Studio, Knowledge Explorer (AST Topology & Call Graph), Repositories, Memory, Benchmarks, Settings.
+- `src/` — React frontend: 4-Pillar Unified Architecture (Workspace, Context Studio, Memory Engine, System & Telemetry).
 - `src-tauri/` — Desktop runtime and native Tauri IPC integration.
 - `scripts/` — Development and automation scripts.
 - `examples/` — Example projects and demo datasets.

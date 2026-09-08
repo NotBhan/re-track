@@ -187,7 +187,7 @@ export function VectorSpaceView() {
             {vectors?.embedding_model || "nomic-embed-text"}
           </div>
           <div className="text-[10px] text-neutral-500 mt-0.5">
-            {vectors?.embedding_dimensions || 768} dimensions
+            {vectors?.embedding_dimensions || 768} dimensions · Cosine Distance
           </div>
         </div>
 
@@ -346,7 +346,7 @@ export function VectorSpaceView() {
                 </p>
               </div>
             ) : (
-              /* Authoritative Partition Cards Display */
+              /* Vector Partition Cards Display */
               <div
                 className="absolute inset-0 p-6 overflow-auto flex flex-col items-center justify-center"
                 style={{
@@ -494,6 +494,14 @@ export function VectorSpaceView() {
                   <span className="text-neutral-500">Vector Engine:</span>
                   <span className="text-neutral-300 uppercase">{vectors?.vector_db_provider || "LanceDB"}</span>
                 </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-neutral-500">Distance Metric:</span>
+                  <span className="text-neutral-300">Cosine Distance</span>
+                </div>
+              </div>
+
+              <div className="text-[10px] text-neutral-500 p-2 bg-[#050505] rounded border border-[#1a1a1a] leading-tight">
+                Vector proximity is purely spatial cosine distance; it is never treated as authoritative evidence confidence.
               </div>
 
               <div className="pt-2 border-t border-[#1a1a1a] space-y-2">

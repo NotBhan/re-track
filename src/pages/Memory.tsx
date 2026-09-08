@@ -1,19 +1,22 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { TopBar } from "@/components/layout/TopBar";
 import { DatasetTable } from "@/components/memory/DatasetTable";
 import { VectorSpaceView } from "@/components/memory/VectorSpaceView";
 import { KnowledgeGraphView } from "@/components/memory/KnowledgeGraphView";
 import { MemoryStats } from "@/components/memory/MemoryStats";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
-import { Search, Loader2, Database, Layers, Share2 } from "lucide-react";
+import { Search, Loader2, Database, Layers, Share2, ShieldAlert, FolderGit2 } from "lucide-react";
 import { useMemoryStore, type MemoryTabType } from "@/stores/memory-store";
 import { useHealthStore } from "@/stores/health-store";
+import { useRepositoryStore } from "@/stores/repository-store";
 import { forgetDataset as forgetDatasetApi } from "@/lib/api";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
 export default function Memory() {
+  const navigate = useNavigate();
   const [forgetDataset, setForgetDataset] = useState<{
     id: string;
     name: string;
@@ -49,10 +52,16 @@ export default function Memory() {
     setSearchQuery,
   } = useMemoryStore();
 
+  const selectedId = useRepositoryStore((s) => s.selectedId);
+  const selectedRepo = useRepositoryStore((s) =>
+    s.repositories.find((r) => r.id === s.selectedId)
+  );
+
   useEffect(() => {
+    if (!selectedId) return;
     fetchDatasets();
     fetchStats();
-  }, [fetchDatasets, fetchStats]);
+  }, [selectedId, fetchDatasets, fetchStats]);
 
   const handleConfirmForget = async () => {
     if (forgetDataset) {
@@ -69,10 +78,34 @@ export default function Memory() {
     }
   };
 
+  if (!selectedId) {
+    return (
+      <div className="flex-1 flex flex-col h-full bg-black text-foreground antialiased font-sans">
+        <TopBar title="RE:Track | Memory Engine" subtitle="Cognee Semantic Graph & Vectors" />
+        <main className="flex-1 flex flex-col items-center justify-center p-8 text-center">
+          <div className="p-4 rounded-full bg-amber-500/10 border border-amber-500/20 mb-4">
+            <FolderGit2 className="w-8 h-8 text-amber-400" />
+          </div>
+          <h2 className="text-lg font-semibold text-white mb-2">Repository Required</h2>
+          <p className="text-sm text-neutral-400 max-w-md mb-6">
+            Memory Engine requires an active repository scope. Select an indexed repository from the top bar to inspect derived semantic records, vector space projections, and knowledge graphs.
+          </p>
+          <button
+            type="button"
+            onClick={() => navigate("/workspace")}
+            className="px-4 py-2 bg-white text-black text-xs font-semibold rounded-md hover:bg-neutral-200 transition-colors cursor-pointer font-mono"
+          >
+            Go to Workspace Catalog
+          </button>
+        </main>
+      </div>
+    );
+  }
+
   const tabs: { id: MemoryTabType; label: string; icon: typeof Database; badge?: string | number }[] = [
     {
       id: "datasets",
-      label: "Datasets & Files",
+      label: "Semantic Records",
       icon: Database,
       badge: datasets?.length || 0,
     },
@@ -195,6 +228,32 @@ export default function Memory() {
                   </button>
                 );
               })}
+            </div>
+          </div>
+
+          {/* Derived Storage Boundary Notice */}
+          <div className="flex items-start gap-3 p-3.5 rounded-lg border border-indigo-950/40 bg-[#090a12] text-xs text-neutral-300">
+            <ShieldAlert className="w-4 h-4 text-indigo-400 shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0 space-y-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-semibold text-white">Derived Storage Boundary</span>
+                <Badge variant="outline" className="text-[10px] font-mono border-indigo-500/30 text-indigo-300 bg-indigo-500/10">
+                  Derived Storage (Tier 3 &amp; Tier 4)
+                </Badge>
+                {selectedRepo ? (
+                  <span className="text-[11px] font-mono text-neutral-400 flex items-center gap-1">
+                    <FolderGit2 className="w-3 h-3 text-neutral-400" />
+                    Scoped: <span className="text-white font-medium">{selectedRepo.name}</span>
+                  </span>
+                ) : (
+                  <span className="text-[11px] font-mono text-neutral-500">
+                    Global Scope (No active repository selected)
+                  </span>
+                )}
+              </div>
+              <p className="text-[11px] text-neutral-400 leading-relaxed">
+                All three layers (Semantic Records, Vector Space, Knowledge Graph) are derived storage and subordinate to filesystem source (Tier 1) and AST (Tier 2). Vector similarity is an embedding distance metric, never authoritative evidence confidence.
+              </p>
             </div>
           </div>
 

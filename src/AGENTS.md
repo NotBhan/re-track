@@ -10,20 +10,26 @@ Responsible for user interaction, repository visualization, call graph explorati
 
 Owns:
 
+- Workspace (`src/pages/Workspace.tsx`, `src/components/workspace/`)
+  - Workspace Header & Scope Selector
+  - 4-Stage Lifecycle Stepper (`Scan` -> `Manifest` -> `AST Extraction` -> `Cognification`)
+  - 50-Node Bounded AST Call Graph with 1-Hop Neighbor Expansion
+  - Deterministic Manifest & Evidence Table with exact byte counts
 - Context Studio (`src/pages/ContextStudio.tsx`)
-  - Prompt Workbench — suggested prompt presets, live token counters, discrete latencies
-  - Evidence Provenance Layer — extracted symbols, intent parsing, caller/callee links
-  - Progressive Markdown Reveal — token-budgeted Context Package preview & export
-- Knowledge Explorer (`src/pages/KnowledgeExplorer.tsx`)
-  - 5-State AST Call Graph Topology View
-  - Directory & Module Map — framework-aware hierarchy
-  - Key Components & Entry Points
-- Repositories (`src/pages/Repositories.tsx`) — Catalog, indexing telemetry, and deletion
-- Memory (`src/pages/Memory.tsx`) — Multi-layer storage inspector (Ingested files, Vector Index, Knowledge Graph)
-- Benchmarks (`src/pages/Benchmarks.tsx`) — Deterministic token baseline evaluation, compression ratios, latency breakdown, immutable run metadata
-- Settings (`src/pages/Settings.tsx`) — AI provider configuration, storage, and system telemetry
+  - 3-Column Studio Layout (Input Workbench / Retrieval Arbitration & Evidence / Context Package & History)
+  - 4 Authoritative Retrieval Tiers (Filesystem Source, Manifest / AST, LanceDB / Kùzu, Cognee Semantic Memory)
+  - Token Budget allocation & synthesis controls
+  - Package History Drawer (`src/components/context-packages/PackageHistoryDrawer.tsx`)
+- Memory Engine (`src/pages/Memory.tsx`, `src/components/memory/`)
+  - Multi-tier derived storage inspector (Semantic Records, Vector Space, Knowledge Graph)
+  - Provenance Drawer with SHA-256 verification and epistemic status notices
+  - Strict Derived Storage Truth Boundary (`/memory` suppressed when no repo selected)
+- System & Telemetry (`src/pages/SystemTelemetry.tsx`)
+  - Global scope (independent of repository selection)
+  - Three Runtime Identities: Configured Model, Verified Active Model, Last Executing Model
+  - Truthful Hardware & Execution Telemetry (Device, CPU, RAM, GPU/VRAM or None detected, "Unavailable" when offline)
+  - Unified System tabs: Provider & Runtime, Storage & Subsystems, Benchmarks, Diagnostics
 - State Stores (`src/stores/`) — `repository-store`, `context-package-store`, `memory-store`, `health-store`
-- Components (`src/components/`) — `CallGraphView`, `EvidenceProvenanceLayer`, `ProgressiveMarkdownReveal`, `SynthesisProgressBar`, `MemoryStats`
 - Type Definitions (`src/types/repository.ts`)
 
 ---
@@ -63,11 +69,14 @@ npx tsc --noEmit       # Type check
 
 # Child DOX Index
 
-- `src/components/repositories/` — `CallGraphView.tsx`, `RepositoryCard.tsx`, `RepositoryDetailPanel.tsx`, `QuickContextModal.tsx`.
-- `src/components/context-builder/` — `EvidenceProvenanceLayer.tsx`, `ContextPipelineInputs.tsx`.
+- `src/components/workspace/` — `WorkspaceHeader.tsx`, `LifecycleStepper.tsx`, `ManifestEvidenceTable.tsx`.
+- `src/components/repositories/` — `CallGraphView.tsx` (50-node bounded + 1-hop expansion), `RepositoryCard.tsx`, `RepositoryDetailPanel.tsx`, `QuickContextModal.tsx`.
+- `src/components/context-builder/` — `TierEvidenceStack.tsx`, `EvidenceProvenanceLayer.tsx`, `ContextPipelineInputs.tsx`.
+- `src/components/context-packages/` — `PackageHistoryDrawer.tsx`.
 - `src/components/dashboard/` — `ProgressiveMarkdownReveal.tsx`.
-- `src/components/memory/` — `MemoryStats.tsx`.
+- `src/components/memory/` — `ProvenanceDrawer.tsx`, `DatasetTable.tsx`, `KnowledgeGraphView.tsx`, `VectorSpaceView.tsx`, `MemoryStats.tsx`.
+- `src/components/settings/` — `OllamaSettings.tsx`.
 - `src/components/benchmarks/` — `MetricCard.tsx`.
 - `src/components/shared/` — `SynthesisProgressBar.tsx`, `ProviderAlertBanner.tsx`.
 - `src/stores/` — Zustand stores for repositories, packages, memory, and health.
-- `src/pages/` — `ContextStudio.tsx`, `KnowledgeExplorer.tsx`, `Repositories.tsx`, `Memory.tsx`, `Benchmarks.tsx`, `Settings.tsx`.
+- `src/pages/` — `Workspace.tsx`, `ContextStudio.tsx`, `Memory.tsx`, `SystemTelemetry.tsx`.

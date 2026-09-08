@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import Settings from "@/pages/Settings";
+import SystemTelemetry from "@/pages/SystemTelemetry";
 import {
   renderWithProviders,
   resetAllStores,
@@ -10,19 +10,20 @@ import {
   mockAppSettings,
 } from "@/test/test-utils";
 
-describe("Journey I — Settings & Provider Management (Hot-Reloading & Persistence)", () => {
+describe("Journey I — System & Telemetry (Hot-Reloading & Persistence)", () => {
   beforeEach(() => {
     resetAllStores();
     setMockInvokeHandler(null);
   });
 
-  it("renders settings navigation with backend, inference, cognee, storage, and theme tabs", () => {
-    renderWithProviders(<Settings />);
+  it("renders system navigation with Provider & Runtime, Storage & Subsystems, Benchmarks, and Diagnostics tabs", () => {
+    renderWithProviders(<SystemTelemetry />);
 
-    expect(screen.getByText("Backend Configuration")).toBeInTheDocument();
-    expect(screen.getAllByText("Backend").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Inference").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Cognee").length).toBeGreaterThan(0);
+    expect(screen.getByText("System Architecture & Telemetry")).toBeInTheDocument();
+    expect(screen.getByText("Provider & Runtime")).toBeInTheDocument();
+    expect(screen.getByText("Storage & Subsystems")).toBeInTheDocument();
+    expect(screen.getByText("Benchmarks")).toBeInTheDocument();
+    expect(screen.getByText("Diagnostics")).toBeInTheDocument();
   });
 
   it("hot-reloads LLM inference provider and checks reachability", async () => {
@@ -45,18 +46,10 @@ describe("Journey I — Settings & Provider Management (Hot-Reloading & Persiste
       return defaultMock(cmd, args);
     });
 
-    renderWithProviders(<Settings />);
+    renderWithProviders(<SystemTelemetry />);
 
-    // Switch to Inference tab
-    const inferenceTabs = screen.getAllByRole("button", { name: /Inference/i });
-    await user.click(inferenceTabs[0]);
-
-    await waitFor(() => {
-      expect(screen.getByText(/Inference & Provider/i)).toBeInTheDocument();
-    });
-
-    // Click Save & Apply button
-    const applyButton = screen.getByRole("button", { name: /Save & Apply/i });
+    // Click Save & Apply button in Provider & Runtime tab
+    const applyButton = await screen.findByRole("button", { name: /Save & Apply/i });
     await user.click(applyButton);
 
     await waitFor(() => {
@@ -96,18 +89,10 @@ describe("Journey I — Settings & Provider Management (Hot-Reloading & Persiste
       return defaultMock(cmd, args);
     });
 
-    renderWithProviders(<Settings />);
-
-    // Switch to Inference tab
-    const inferenceTabs = screen.getAllByRole("button", { name: /Inference/i });
-    await user.click(inferenceTabs[0]);
-
-    await waitFor(() => {
-      expect(screen.getByText(/Inference & Provider/i)).toBeInTheDocument();
-    });
+    renderWithProviders(<SystemTelemetry />);
 
     // Click Discover button
-    const discoverBtn = screen.getByRole("button", { name: /Discover/i });
+    const discoverBtn = await screen.findByRole("button", { name: /Discover/i });
     await user.click(discoverBtn);
 
     await waitFor(() => {
@@ -116,8 +101,7 @@ describe("Journey I — Settings & Provider Management (Hot-Reloading & Persiste
     });
   });
 
-
-  it("configures and saves Cognee storage & database settings", async () => {
+  it("configures and saves Cognee storage & database settings in Storage tab", async () => {
     const user = userEvent.setup();
     let savedCogneeSettings: unknown = null;
     const defaultMock = createDefaultMockHandler();
@@ -130,11 +114,11 @@ describe("Journey I — Settings & Provider Management (Hot-Reloading & Persiste
       return defaultMock(cmd, args);
     });
 
-    renderWithProviders(<Settings />);
+    renderWithProviders(<SystemTelemetry />);
 
-    // Switch to Cognee tab
-    const cogneeTabs = screen.getAllByRole("button", { name: /Cognee/i });
-    await user.click(cogneeTabs[0]);
+    // Switch to Storage & Subsystems tab
+    const storageTab = screen.getByRole("button", { name: /Storage & Subsystems/i });
+    await user.click(storageTab);
 
     await waitFor(() => {
       expect(screen.getByText("Cognee Integration")).toBeInTheDocument();
@@ -149,7 +133,7 @@ describe("Journey I — Settings & Provider Management (Hot-Reloading & Persiste
     });
   });
 
-  it("tests backend server connectivity and displays live health indicator", async () => {
+  it("tests backend server connectivity and displays live health indicator in Diagnostics tab", async () => {
     const user = userEvent.setup();
     let healthChecked = false;
     const defaultMock = createDefaultMockHandler();
@@ -167,9 +151,13 @@ describe("Journey I — Settings & Provider Management (Hot-Reloading & Persiste
       return defaultMock(cmd, args);
     });
 
-    renderWithProviders(<Settings />);
+    renderWithProviders(<SystemTelemetry />);
 
-    const testBtn = screen.getByRole("button", { name: /Test Connection/i });
+    // Switch to Diagnostics tab
+    const diagTab = screen.getByRole("button", { name: /Diagnostics/i });
+    await user.click(diagTab);
+
+    const testBtn = await screen.findByRole("button", { name: /Test Connection/i });
     await user.click(testBtn);
 
     await waitFor(() => {

@@ -5,10 +5,12 @@
  * Pure React + SVG with a lightweight spring-force simulation.
  *
  * Supports:
+ *  - 5 Explicit Graph States: "not_analyzed" | "analyzing" | "analyzed" | "zero_edges" | "failed"
+ *  - Large-graph bounded presentation: Initial 50 nodes by degree with 1-hop caller/callee expansion
  *  - Node kinds: class (square), function/method (circle), component (diamond)
  *  - Edge kinds: calls (solid), imports (dashed), inherits (thick), renders (dotted)
  *  - Filtering by Node Kind & Edge Kind
- *  - Node search with live highlighting
+ *  - Node search with live highlighting & automatic expansion
  *  - Interactive Node Inspector panel on click
  *  - Drag nodes, scroll to zoom, pan, reset view controls
  */
@@ -21,8 +23,15 @@ import {
   RotateCcw,
   Search,
   X,
+  RefreshCw,
+  Network,
+  AlertCircle,
+  Maximize2,
+  Minimize2,
+  Info,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "@/lib/utils";
 
@@ -62,6 +71,7 @@ const REPULSION = 4500;
 const LINK_DISTANCE = 95;
 const CENTERING = 0.05;
 const DAMPING = 0.85;
+const INITIAL_BOUNDED_LIMIT = 50;
 
 function normalizeKind(kind?: string): string {
   if (!kind) return "function";
@@ -81,13 +91,18 @@ interface SimNode extends CallGraphNode {
   vy: number;
 }
 
-interface Props {
+export type CallGraphState = "not_analyzed" | "analyzing" | "analyzed" | "zero_edges" | "failed";
+
+export interface CallGraphViewProps {
   nodes: CallGraphNode[];
   edges: CallGraphEdge[];
   width?: number;
   height?: number;
   selectedNodeId?: string | null;
   onSelectNode?: (node: CallGraphNode | null) => void;
+  status?: CallGraphState;
+  errorMessage?: string | null;
+  onTriggerAnalyze?: () => void;
 }
 
 function initSim(nodes: CallGraphNode[], w: number, h: number): SimNode[] {
@@ -106,25 +121,107 @@ export function CallGraphView({
   height = 560,
   selectedNodeId,
   onSelectNode,
-}: Props) {
+  status,
+  errorMessage,
+  onTriggerAnalyze,
+}: CallGraphViewProps) {
+  // Determine effective graph state
+  const effectiveState: CallGraphState = useMemo(() => {
+    if (status) return status;
+    if (rawNodes.length === 0) return "not_analyzed";
+    if (rawEdges.length === 0) return "zero_edges";
+    return "analyzed";
+  }, [status, rawNodes.length, rawEdges.length]);
+
   const [selectedKind, setSelectedKind] = useState<string>("all");
   const [selectedEdgeKind, setSelectedEdgeKind] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [activeNode, setActiveNode] = useState<CallGraphNode | null>(null);
 
-  // Filter nodes
+  // Large-graph bounding controls
+  const isLargeGraph = rawNodes.length > INITIAL_BOUNDED_LIMIT;
+  const [isBounded, setIsBounded] = useState<boolean>(isLargeGraph);
+  const [expandedNeighborhoodIds, setExpandedNeighborhoodIds] = useState<Set<string>>(new Set());
+
+  // Degree map (count of connections per node ID)
+  const nodeDegrees = useMemo(() => {
+    const degrees = new Map<string, number>();
+    for (const edge of rawEdges) {
+      degrees.set(edge.source, (degrees.get(edge.source) || 0) + 1);
+      degrees.set(edge.target, (degrees.get(edge.target) || 0) + 1);
+    }
+    return degrees;
+  }, [rawEdges]);
+
+  // Expand 1-hop callers and callees when activeNode changes
+  useEffect(() => {
+    if (!activeNode) return;
+    const directNeighbors = new Set<string>();
+    directNeighbors.add(activeNode.id);
+    for (const edge of rawEdges) {
+      if (edge.source === activeNode.id || edge.source === activeNode.label) {
+        directNeighbors.add(edge.target);
+      }
+      if (edge.target === activeNode.id || edge.target === activeNode.label) {
+        directNeighbors.add(edge.source);
+      }
+    }
+    setExpandedNeighborhoodIds((prev) => {
+      const next = new Set(prev);
+      directNeighbors.forEach((id) => next.add(id));
+      return next;
+    });
+  }, [activeNode, rawEdges]);
+
+  // Initial bounded 50 nodes by degree + search matches + 1-hop expansions
+  const boundedNodeIdSet = useMemo(() => {
+    if (!isBounded) return null; // all nodes allowed
+
+    // Sort by degree descending, take first 50
+    const sorted = [...rawNodes].sort((a, b) => {
+      const degA = nodeDegrees.get(a.id) || 0;
+      const degB = nodeDegrees.get(b.id) || 0;
+      return degB - degA;
+    });
+
+    const allowed = new Set<string>(sorted.slice(0, INITIAL_BOUNDED_LIMIT).map((n) => n.id));
+
+    // Always include expanded neighborhood IDs
+    expandedNeighborhoodIds.forEach((id) => allowed.add(id));
+
+    // Always include nodes matching search query
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      rawNodes.forEach((n) => {
+        if (
+          n.label.toLowerCase().includes(q) ||
+          n.id.toLowerCase().includes(q) ||
+          n.file.toLowerCase().includes(q)
+        ) {
+          allowed.add(n.id);
+        }
+      });
+    }
+
+    return allowed;
+  }, [isBounded, rawNodes, nodeDegrees, expandedNeighborhoodIds, searchQuery]);
+
+  // Filter nodes (kind + search + large-graph bounding)
   const filteredNodes = useMemo(() => {
     return rawNodes.filter((node) => {
+      if (boundedNodeIdSet && !boundedNodeIdSet.has(node.id)) {
+        return false;
+      }
       const nodeKind = normalizeKind(node.kind);
       const matchesKind = selectedKind === "all" || nodeKind === selectedKind.toLowerCase();
       const matchesSearch =
         !searchQuery ||
-        node.label.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (node.label || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
         node.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        node.file.toLowerCase().includes(searchQuery.toLowerCase());
+        (node.file || "").toLowerCase().includes(searchQuery.toLowerCase());
       return matchesKind && matchesSearch;
     });
-  }, [rawNodes, selectedKind, searchQuery]);
+  }, [rawNodes, boundedNodeIdSet, selectedKind, searchQuery]);
 
   const activeNodeIds = useMemo(() => new Set(filteredNodes.map((n) => n.id)), [filteredNodes]);
 
@@ -196,12 +293,12 @@ export function CallGraphView({
     if (!selectedNodeId) {
       setActiveNode(null);
     } else {
-      const found = filteredNodes.find((n) => n.id === selectedNodeId);
+      const found = rawNodes.find((n) => n.id === selectedNodeId);
       if (found) {
         setActiveNode(found);
       }
     }
-  }, [selectedNodeId, filteredNodes]);
+  }, [selectedNodeId, rawNodes]);
 
   // Global Escape key listener to clear selection
   useEffect(() => {
@@ -282,8 +379,8 @@ export function CallGraphView({
         n.vy *= DAMPING;
         n.x += n.vx;
         n.y += n.vy;
-        n.x = Math.max(RADIUS + 10, Math.min(width - RADIUS - 10, n.x));
-        n.y = Math.max(RADIUS + 10, Math.min(height - RADIUS - 10, n.y));
+        n.x = Math.max(RADIUS + 10, Math.min(canvasSize.w - RADIUS - 10, n.x));
+        n.y = Math.max(RADIUS + 10, Math.min(canvasSize.h - RADIUS - 10, n.y));
       }
 
       nodesRef.current = ns;
@@ -291,7 +388,7 @@ export function CallGraphView({
     }, 25);
 
     return () => clearInterval(id);
-  }, [filteredEdges, width, height]);
+  }, [filteredEdges, canvasSize.w, canvasSize.h]);
 
   // Drag handlers
   const handleNodeMouseDown = useCallback(
@@ -299,16 +396,16 @@ export function CallGraphView({
       e.stopPropagation();
       setDragging({ id: node.id, ox: e.clientX - node.x * zoom - pan.x, oy: e.clientY - node.y * zoom - pan.y });
     },
-    [pan, zoom]
+    [zoom, pan]
   );
 
-  const handleNodeClick = useCallback(
-    (e: React.MouseEvent, node: CallGraphNode) => {
-      e.stopPropagation();
-      setActiveNode(node);
-      onSelectNode?.(node);
+  const handleSvgMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      if (e.button !== 0) return;
+      panStartRef.current = { x: e.clientX, y: e.clientY, time: Date.now() };
+      setPanDrag({ sx: e.clientX, sy: e.clientY, px: pan.x, py: pan.y });
     },
-    [onSelectNode]
+    [pan]
   );
 
   const handleMouseMove = useCallback(
@@ -316,115 +413,158 @@ export function CallGraphView({
       if (dragging) {
         const nx = (e.clientX - dragging.ox - pan.x) / zoom;
         const ny = (e.clientY - dragging.oy - pan.y) / zoom;
-        nodesRef.current = nodesRef.current.map((n) =>
-          n.id === dragging.id ? { ...n, x: nx, y: ny, vx: 0, vy: 0 } : n
-        );
+        nodesRef.current = nodesRef.current.map((n) => (n.id === dragging.id ? { ...n, x: nx, y: ny, vx: 0, vy: 0 } : n));
         setSimNodes([...nodesRef.current]);
+        alphaRef.current = 0.15;
       } else if (panDrag) {
-        setPan({
-          x: panDrag.px + (e.clientX - panDrag.sx),
-          y: panDrag.py + (e.clientY - panDrag.sy),
-        });
+        setPan({ x: panDrag.px + (e.clientX - panDrag.sx), y: panDrag.py + (e.clientY - panDrag.sy) });
       }
     },
-    [dragging, panDrag, pan, zoom]
+    [dragging, panDrag, pan.x, pan.y, zoom]
   );
 
-  const handleMouseUp = useCallback(() => {
-    setDragging(null);
-    setPanDrag(null);
-  }, []);
-
-  const handleSvgMouseDown = useCallback(
+  const handleMouseUp = useCallback(
     (e: React.MouseEvent) => {
-      const target = e.target as HTMLElement;
-      const isBackground = target.tagName === "svg" || target.id === "canvas-bg";
-      if (isBackground) {
-        panStartRef.current = { sx: e.clientX, sy: e.clientY, time: Date.now() } as unknown as { x: number; y: number; time: number };
-        setPanDrag({ sx: e.clientX, sy: e.clientY, px: pan.x, py: pan.y });
-      }
-    },
-    [pan]
-  );
-
-  const handleCanvasClick = useCallback(
-    (e: React.MouseEvent) => {
-      const target = e.target as HTMLElement;
-      const isBackground = target.tagName === "svg" || target.id === "canvas-bg";
-      if (isBackground && panStartRef.current) {
-        const p = panStartRef.current as unknown as { sx: number; sy: number };
-        const dist = Math.hypot(e.clientX - p.sx, e.clientY - p.sy);
-        if (dist < 5) {
-          // Deselect active node when clicking empty canvas space
+      if (panDrag && panStartRef.current) {
+        const dx = Math.abs(e.clientX - panStartRef.current.x);
+        const dy = Math.abs(e.clientY - panStartRef.current.y);
+        const dt = Date.now() - panStartRef.current.time;
+        if (dx < 4 && dy < 4 && dt < 250) {
           setActiveNode(null);
           onSelectNode?.(null);
         }
       }
+      setDragging(null);
+      setPanDrag(null);
+      panStartRef.current = null;
     },
-    [onSelectNode]
+    [panDrag, onSelectNode]
   );
 
   const handleWheel = useCallback((e: React.WheelEvent) => {
     e.preventDefault();
-    setZoom((z) => Math.max(0.4, Math.min(2.5, z - e.deltaY * 0.001)));
+    const factor = e.deltaY < 0 ? 1.1 : 0.9;
+    setZoom((z) => Math.min(3, Math.max(0.2, z * factor)));
   }, []);
 
-  const resetView = () => {
+  const handleResetView = () => {
     setPan({ x: 0, y: 0 });
     setZoom(1);
     alphaRef.current = 0.35;
   };
 
+  const handleSelectNodeClick = (e: React.MouseEvent, node: SimNode) => {
+    e.stopPropagation();
+    setActiveNode(node);
+    onSelectNode?.(node);
+  };
+
+  // Node position map
   const posMap = useMemo(() => {
-    const m = new Map<string, { x: number; y: number }>();
-    for (const n of simNodes) m.set(n.id, { x: n.x, y: n.y });
-    return m;
+    const map = new Map<string, { x: number; y: number }>();
+    for (const n of simNodes) map.set(n.id, { x: n.x, y: n.y });
+    return map;
   }, [simNodes]);
 
-  const focusedNodeId = activeNode?.id || selectedNodeId || hovered;
-
-  // Set of connected node IDs to highlight
-  const connectedNodeIds = useMemo(() => {
-    if (!focusedNodeId) return null;
-    const s = new Set<string>([focusedNodeId]);
-    for (const e of filteredEdges) {
-      if (e.source === focusedNodeId) s.add(e.target);
-      if (e.target === focusedNodeId) s.add(e.source);
+  // Callers and callees for the active node inspector
+  const { activeIncoming, activeOutgoing } = useMemo(() => {
+    if (!activeNode) return { activeIncoming: [], activeOutgoing: [] };
+    const inc: CallGraphEdge[] = [];
+    const out: CallGraphEdge[] = [];
+    for (const edge of rawEdges) {
+      if (edge.target === activeNode.id || edge.target === activeNode.label) {
+        inc.push(edge);
+      }
+      if (edge.source === activeNode.id || edge.source === activeNode.label) {
+        out.push(edge);
+      }
     }
-    return s;
-  }, [focusedNodeId, filteredEdges]);
+    return { activeIncoming: inc, activeOutgoing: out };
+  }, [activeNode, rawEdges]);
 
-  // Connected edges for the active/selected node
-  const activeIncoming = useMemo(() => {
-    if (!activeNode) return [];
-    return filteredEdges.filter((e) => e.target === activeNode.id);
-  }, [activeNode, filteredEdges]);
+  // =========================================================================
+  // STATE 1: NOT ANALYZED
+  // =========================================================================
+  if (effectiveState === "not_analyzed") {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-[#070707] h-full min-h-[400px]">
+        <Network className="w-10 h-10 text-neutral-600 mb-3" />
+        <h3 className="text-sm font-semibold text-white tracking-tight">AST Analysis Not Available</h3>
+        <p className="text-xs text-neutral-500 max-w-sm mt-1 mb-4">
+          Repository has not been parsed for AST symbols. Trigger re-indexing to extract the call graph.
+        </p>
+        {onTriggerAnalyze && (
+          <Button
+            size="sm"
+            onClick={onTriggerAnalyze}
+            className="h-8 px-4 text-xs font-mono bg-white text-black hover:bg-neutral-200 cursor-pointer"
+          >
+            Extract AST Now
+          </Button>
+        )}
+      </div>
+    );
+  }
 
-  const activeOutgoing = useMemo(() => {
-    if (!activeNode) return [];
-    return filteredEdges.filter((e) => e.source === activeNode.id);
-  }, [activeNode, filteredEdges]);
+  // =========================================================================
+  // STATE 2: ANALYZING
+  // =========================================================================
+  if (effectiveState === "analyzing") {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-[#070707] h-full min-h-[400px]">
+        <RefreshCw className="w-8 h-8 text-amber-400 animate-spin mb-3" />
+        <h3 className="text-sm font-semibold text-white tracking-tight">Analyzing AST Call Graph</h3>
+        <p className="text-xs text-neutral-500 max-w-sm mt-1">
+          Extracting tree-sitter classes, methods, and functions...
+        </p>
+      </div>
+    );
+  }
 
+  // =========================================================================
+  // STATE 3: FAILED
+  // =========================================================================
+  if (effectiveState === "failed") {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-[#070707] h-full min-h-[400px]">
+        <AlertCircle className="w-10 h-10 text-red-500 mb-3" />
+        <h3 className="text-sm font-semibold text-white tracking-tight">AST Analysis Failed</h3>
+        <p className="text-xs text-red-400 max-w-sm mt-1 mb-4 font-mono">
+          {errorMessage || "Tree-sitter AST extraction failed for this repository."}
+        </p>
+        {onTriggerAnalyze && (
+          <Button
+            size="sm"
+            onClick={onTriggerAnalyze}
+            className="h-8 px-4 text-xs font-mono bg-white text-black hover:bg-neutral-200 cursor-pointer"
+          >
+            Retry AST Extraction
+          </Button>
+        )}
+      </div>
+    );
+  }
+
+  // =========================================================================
+  // STATES 4 & 5: ANALYZED & ZERO_EDGES (Full Interactive Graph Canvas)
+  // =========================================================================
   return (
-    <div ref={containerRef} className="relative w-full h-full select-none bg-black rounded-xl border border-[#262626] overflow-hidden flex flex-col">
-      {/* Top Filter & Search Controls Bar */}
-      <div
-        onClick={(e) => e.stopPropagation()}
-        onMouseDown={(e) => e.stopPropagation()}
-        className="p-3 border-b border-[#222222] bg-[#0c0c0c] flex flex-wrap items-center justify-between gap-3 shrink-0 z-10"
-      >
+    <div className="flex-1 flex flex-col h-full overflow-hidden bg-[#070707] relative select-none">
+      {/* Top Controls Toolbar */}
+      <div className="px-4 py-2.5 border-b border-[#1e1e1e] bg-[#0a0a0a] flex flex-wrap items-center justify-between gap-3 shrink-0 z-10">
         <div className="flex items-center gap-2 flex-wrap">
           {/* Node Kind Filter */}
-          <div className="flex items-center gap-1 bg-black p-1 rounded-lg border border-[#262626]">
+          <div className="flex items-center gap-1 text-xs font-mono text-neutral-400">
+            <span className="text-[11px] text-neutral-500">Kind:</span>
             {["all", "class", "function", "method", "component"].map((kind) => (
               <button
                 key={kind}
                 onClick={() => setSelectedKind(kind)}
                 className={cn(
-                  "text-[11px] font-mono px-2 py-0.5 rounded capitalize transition-all cursor-pointer",
+                  "px-2 py-0.5 rounded text-[10px] uppercase font-mono transition-colors cursor-pointer",
                   selectedKind === kind
-                    ? "bg-white text-black font-semibold shadow-xs"
-                    : "text-neutral-400 hover:text-white"
+                    ? "bg-white text-black font-bold"
+                    : "text-neutral-400 hover:text-white hover:bg-[#1f1f1f]"
                 )}
               >
                 {kind}
@@ -433,16 +573,17 @@ export function CallGraphView({
           </div>
 
           {/* Edge Kind Filter */}
-          <div className="hidden sm:flex items-center gap-1 bg-black p-1 rounded-lg border border-[#262626]">
+          <div className="flex items-center gap-1 text-xs font-mono text-neutral-400 ml-2">
+            <span className="text-[11px] text-neutral-500">Edge:</span>
             {["all", "calls", "imports", "inherits", "renders"].map((ek) => (
               <button
                 key={ek}
                 onClick={() => setSelectedEdgeKind(ek)}
                 className={cn(
-                  "text-[11px] font-mono px-2 py-0.5 rounded capitalize transition-all cursor-pointer",
+                  "px-2 py-0.5 rounded text-[10px] uppercase font-mono transition-colors cursor-pointer",
                   selectedEdgeKind === ek
-                    ? "bg-white text-black font-semibold shadow-xs"
-                    : "text-neutral-400 hover:text-white"
+                    ? "bg-neutral-200 text-black font-bold"
+                    : "text-neutral-400 hover:text-white hover:bg-[#1f1f1f]"
                 )}
               >
                 {ek}
@@ -451,152 +592,175 @@ export function CallGraphView({
           </div>
         </div>
 
-        {/* Search & Zoom Controls */}
+        {/* Right Tools: Search, Zoom, Bounding */}
         <div className="flex items-center gap-2">
+          {/* Search Box */}
           <div className="relative w-40 sm:w-48">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-neutral-400" />
+            <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-neutral-500" />
             <input
               type="text"
               placeholder="Search symbols..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="h-7 w-full pl-7 text-xs font-mono bg-black border border-[#262626] rounded-md text-white placeholder:text-neutral-500 focus:outline-none focus:border-white"
+              className="w-full h-7 pl-6 pr-6 text-xs font-mono bg-[#141414] border border-[#262626] rounded text-neutral-200 placeholder:text-neutral-500 focus:outline-none focus:border-neutral-400"
             />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery("")}
+                className="absolute right-1.5 top-1/2 -translate-y-1/2 text-neutral-500 hover:text-white p-0.5 cursor-pointer"
+              >
+                <X className="w-2.5 h-2.5" />
+              </button>
+            )}
           </div>
 
-          <div className="flex items-center gap-1 bg-black p-0.5 rounded-lg border border-[#262626]">
+          {/* Large-Graph Presentation Bounding Toggle */}
+          {isLargeGraph && (
             <button
-              onClick={() => setZoom((z) => Math.min(2.5, z + 0.15))}
-              title="Zoom in"
-              className="p-1 rounded hover:bg-[#222] text-neutral-400 hover:text-white cursor-pointer"
+              onClick={() => setIsBounded(!isBounded)}
+              className={cn(
+                "h-7 px-2 text-[10px] font-mono rounded border transition-colors flex items-center gap-1 cursor-pointer",
+                isBounded
+                  ? "bg-amber-950/40 text-amber-300 border-amber-800/60 hover:bg-amber-950/60"
+                  : "bg-[#141414] text-neutral-300 border-[#262626] hover:bg-[#1f1f1f]"
+              )}
+              title={
+                isBounded
+                  ? `Presentation bounded to top 50 nodes + 1-hop expansions. Click to show all ${rawNodes.length} nodes.`
+                  : `Showing all ${rawNodes.length} nodes. Click to bound to top 50.`
+              }
             >
-              <ZoomIn className="w-3.5 h-3.5" />
+              {isBounded ? <Minimize2 className="w-3 h-3" /> : <Maximize2 className="w-3 h-3" />}
+              <span>{isBounded ? `Bounded (${filteredNodes.length}/${rawNodes.length})` : `All (${rawNodes.length})`}</span>
+            </button>
+          )}
+
+          {/* Zoom & Reset Controls */}
+          <div className="flex items-center border border-[#262626] rounded bg-[#141414] overflow-hidden">
+            <button
+              onClick={() => setZoom((z) => Math.min(3, z * 1.2))}
+              className="p-1.5 text-neutral-400 hover:text-white hover:bg-[#202020] cursor-pointer"
+              title="Zoom In"
+            >
+              <ZoomIn className="w-3 h-3" />
             </button>
             <button
-              onClick={() => setZoom((z) => Math.max(0.4, z - 0.15))}
-              title="Zoom out"
-              className="p-1 rounded hover:bg-[#222] text-neutral-400 hover:text-white cursor-pointer"
+              onClick={() => setZoom((z) => Math.max(0.2, z * 0.8))}
+              className="p-1.5 text-neutral-400 hover:text-white hover:bg-[#202020] cursor-pointer"
+              title="Zoom Out"
             >
-              <ZoomOut className="w-3.5 h-3.5" />
+              <ZoomOut className="w-3 h-3" />
             </button>
             <button
-              onClick={resetView}
+              onClick={handleResetView}
+              className="p-1.5 text-neutral-400 hover:text-white hover:bg-[#202020] cursor-pointer"
               title="Reset View"
-              className="p-1 rounded hover:bg-[#222] text-neutral-400 hover:text-white cursor-pointer"
             >
-              <RotateCcw className="w-3.5 h-3.5" />
+              <RotateCcw className="w-3 h-3" />
             </button>
           </div>
         </div>
       </div>
 
-      {/* Main SVG Visualization Canvas */}
+      {/* Notice Banner for Zero Edges State */}
+      {effectiveState === "zero_edges" && (
+        <div className="px-4 py-1.5 bg-[#141414] border-b border-[#222222] flex items-center justify-between text-xs font-mono text-neutral-400 shrink-0">
+          <div className="flex items-center gap-2">
+            <Info className="w-3.5 h-3.5 text-amber-400" />
+            <span>Zero Call Graph Edges: Symbols are isolated or inter-procedural calls were not detected in AST parsing.</span>
+          </div>
+          <span className="text-[10px] text-neutral-500">{filteredNodes.length} symbols loaded</span>
+        </div>
+      )}
+
+      {/* SVG Canvas Container */}
       <div
-        className="relative flex-1 min-h-0 w-full overflow-hidden cursor-grab active:cursor-grabbing"
+        ref={containerRef}
+        className="flex-1 w-full h-full relative cursor-grab active:cursor-grabbing overflow-hidden"
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onWheel={handleWheel}
+        onMouseDown={handleSvgMouseDown}
       >
-        <svg
-          width="100%"
-          height="100%"
-          onMouseDown={handleSvgMouseDown}
-          onClick={handleCanvasClick}
-          className="w-full h-full"
-        >
-          <rect id="canvas-bg" width="100%" height="100%" fill="transparent" />
-          <defs>
-            <marker
-              id="cg-arrow"
-              viewBox="0 0 10 10"
-              refX="14"
-              refY="5"
-              markerWidth="5"
-              markerHeight="5"
-              orient="auto-start-reverse"
-            >
-              <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#737373" />
-            </marker>
-            <marker
-              id="cg-arrow-renders"
-              viewBox="0 0 10 10"
-              refX="14"
-              refY="5"
-              markerWidth="5"
-              markerHeight="5"
-              orient="auto-start-reverse"
-            >
-              <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#10b981" />
-            </marker>
-          </defs>
+        <svg className="w-full h-full block">
+          <g transform={`translate(${pan.x}, ${pan.y}) scale(${zoom})`}>
+            {/* Edge Definitions & Arrows */}
+            <defs>
+              <marker
+                id="arrowhead-calls"
+                markerWidth="8"
+                markerHeight="8"
+                refX="22"
+                refY="4"
+                orient="auto"
+              >
+                <polygon points="0 0, 8 4, 0 8" fill="#737373" />
+              </marker>
+              <marker
+                id="arrowhead-imports"
+                markerWidth="8"
+                markerHeight="8"
+                refX="22"
+                refY="4"
+                orient="auto"
+              >
+                <polygon points="0 0, 8 4, 0 8" fill="#3b82f6" />
+              </marker>
+            </defs>
 
-          <g transform={`translate(${pan.x},${pan.y}) scale(${zoom})`}>
-            {/* Edges */}
-            {filteredEdges.map((edge, i) => {
+            {/* Render Edges */}
+            {filteredEdges.map((edge, idx) => {
               const sp = posMap.get(edge.source);
               const tp = posMap.get(edge.target);
               if (!sp || !tp) return null;
 
               const style = EDGE_KIND_STYLE[edge.kind] || EDGE_KIND_STYLE.calls;
-              const isHighlight =
-                focusedNodeId &&
-                (edge.source === focusedNodeId || edge.target === focusedNodeId);
-
-              const isDimmed = focusedNodeId && !isHighlight;
+              const isHighlighted =
+                activeNode &&
+                (edge.source === activeNode.id || edge.target === activeNode.id);
 
               return (
                 <line
-                  key={`${edge.source}-${edge.target}-${i}`}
+                  key={`${edge.source}-${edge.target}-${idx}`}
                   x1={sp.x}
                   y1={sp.y}
                   x2={tp.x}
                   y2={tp.y}
-                  stroke={isHighlight ? "#ffffff" : style.stroke}
-                  strokeWidth={isHighlight ? style.width + 1.2 : style.width}
+                  stroke={isHighlighted ? "#ffffff" : style.stroke}
+                  strokeWidth={isHighlighted ? style.width + 1.2 : style.width}
                   strokeDasharray={style.dash === "none" ? undefined : style.dash}
-                  markerEnd={edge.kind === "renders" ? "url(#cg-arrow-renders)" : "url(#cg-arrow)"}
-                  opacity={isHighlight ? 1 : isDimmed ? 0.12 : 0.45}
-                  className="transition-opacity duration-150"
+                  markerEnd={edge.kind === "imports" ? "url(#arrowhead-imports)" : "url(#arrowhead-calls)"}
+                  opacity={isHighlighted ? 1 : 0.6}
                 />
               );
             })}
 
-            {/* Nodes */}
+            {/* Render Nodes */}
             {simNodes.map((node) => {
-              const isHovered = hovered === node.id;
-              const isSelected = activeNode?.id === node.id || selectedNodeId === node.id;
-              const isConnected = connectedNodeIds ? connectedNodeIds.has(node.id) : true;
-              const isDimmed = connectedNodeIds !== null && !isConnected;
-
               const kind = normalizeKind(node.kind);
               const fill = NODE_KIND_BG[kind] || "#171717";
-              const stroke = isSelected
-                ? "#ffffff"
-                : isHovered
-                ? "#ffffff"
-                : NODE_KIND_STROKE[kind] || "#737373";
+              const stroke = NODE_KIND_STROKE[kind] || "#ffffff";
+              const isSelected = activeNode?.id === node.id;
+              const isHovered = hovered === node.id;
 
               return (
                 <g
                   key={node.id}
-                  transform={`translate(${node.x},${node.y})`}
-                  onMouseDown={(e) => handleNodeMouseDown(e, node)}
-                  onClick={(e) => handleNodeClick(e, node)}
+                  transform={`translate(${node.x}, ${node.y})`}
                   onMouseEnter={() => setHovered(node.id)}
                   onMouseLeave={() => setHovered(null)}
+                  onMouseDown={(e) => handleNodeMouseDown(e, node)}
+                  onClick={(e) => handleSelectNodeClick(e, node)}
                   className="cursor-pointer"
-                  opacity={isDimmed ? 0.2 : 1}
                 >
-                  {/* Selection halo */}
+                  {/* Selection Ring */}
                   {isSelected && (
                     <circle
                       r={RADIUS + 6}
                       fill="none"
                       stroke="#ffffff"
-                      strokeWidth={1.5}
+                      strokeWidth={2}
                       strokeDasharray="3 3"
-                      className="animate-spin"
-                      style={{ animationDuration: "12s" }}
                     />
                   )}
 
@@ -658,7 +822,10 @@ export function CallGraphView({
                     fontWeight={isSelected ? "bold" : "normal"}
                     className="pointer-events-none"
                   >
-                    {node.label.length > 18 ? node.label.slice(0, 16) + "…" : node.label}
+                    {(() => {
+                      const text = node.label || node.id || "";
+                      return text.length > 18 ? text.slice(0, 16) + "…" : text;
+                    })()}
                   </text>
                 </g>
               );
@@ -726,7 +893,7 @@ export function CallGraphView({
                 ) : (
                   <div className="flex flex-col gap-1 max-h-28 overflow-y-auto">
                     {activeIncoming.map((edge, idx) => {
-                      const matched = filteredNodes.find((n) => n.id === edge.source);
+                      const matched = rawNodes.find((n) => n.id === edge.source || n.label === edge.source);
                       return (
                         <button
                           key={`${edge.source}-${idx}`}
@@ -754,7 +921,7 @@ export function CallGraphView({
                 ) : (
                   <div className="flex flex-col gap-1 max-h-28 overflow-y-auto">
                     {activeOutgoing.map((edge, idx) => {
-                      const matched = filteredNodes.find((n) => n.id === edge.target);
+                      const matched = rawNodes.find((n) => n.id === edge.target || n.label === edge.target);
                       return (
                         <button
                           key={`${edge.target}-${idx}`}
@@ -791,7 +958,7 @@ export function CallGraphView({
           </div>
           <div className="hidden sm:flex items-center gap-1">
             <span className="text-neutral-500">|</span>
-            <span>Nodes: {filteredNodes.length}</span>
+            <span>Visible Nodes: {filteredNodes.length}</span>
             <span>Edges: {filteredEdges.length}</span>
           </div>
         </div>

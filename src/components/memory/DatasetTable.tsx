@@ -16,6 +16,7 @@ import { useMemoryStore } from "@/stores/memory-store";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { DatasetItemsModal } from "./DatasetItemsModal";
+import { ProvenanceDrawer, type ProvenanceRecord } from "./ProvenanceDrawer";
 
 interface DatasetTableProps {
   onForget: (dataset: { id: string; name: string }) => void;
@@ -75,6 +76,8 @@ export function DatasetTable({ onForget }: DatasetTableProps) {
     id: string;
     name: string;
   } | null>(null);
+
+  const [inspectingProvenanceRecord, setInspectingProvenanceRecord] = useState<ProvenanceRecord | null>(null);
 
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -436,11 +439,27 @@ export function DatasetTable({ onForget }: DatasetTableProps) {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2.5 shrink-0 text-[11px]">
+                  <div className="flex items-center gap-2 shrink-0 text-[11px]">
                     <span className="text-neutral-400">{formatBytes(item.data_size)}</span>
                     <Badge variant="outline" className="text-[9px] uppercase border-emerald-500/20 text-emerald-400 bg-emerald-500/5">
                       Ingested
                     </Badge>
+                    <button
+                      type="button"
+                      onClick={() => setInspectingProvenanceRecord({
+                        id: item.id,
+                        name: item.name,
+                        source_file: item.name,
+                        generation_sha: item.content_hash,
+                        validity_state: "fresh",
+                        mime_type: item.mime_type,
+                        data_size: item.data_size,
+                      })}
+                      className="px-2 py-0.5 text-[10px] font-mono rounded bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 hover:bg-indigo-500/20 transition-colors cursor-pointer"
+                      title="Inspect AI-derived record provenance & validity"
+                    >
+                      Provenance
+                    </button>
                   </div>
                 </div>
               ))}
@@ -461,6 +480,12 @@ export function DatasetTable({ onForget }: DatasetTableProps) {
           onClose={() => setInspectingModalDataset(null)}
         />
       )}
+
+      <ProvenanceDrawer
+        record={inspectingProvenanceRecord}
+        open={!!inspectingProvenanceRecord}
+        onClose={() => setInspectingProvenanceRecord(null)}
+      />
     </div>
   );
 }

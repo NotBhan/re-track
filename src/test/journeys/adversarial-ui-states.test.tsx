@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import Repositories from "@/pages/Repositories";
+import Workspace from "@/pages/Workspace";
 import ContextStudio from "@/pages/ContextStudio";
 import {
   renderWithProviders,
@@ -116,7 +116,7 @@ describe("Adversarial UI States & Race Conditions", () => {
       return defaultMock(cmd, args);
     });
 
-    const { unmount } = renderWithProviders(<Repositories />);
+    const { unmount } = renderWithProviders(<Workspace />);
 
     expect(slowFetchStarted).toBe(true);
 

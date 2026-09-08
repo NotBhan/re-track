@@ -1,12 +1,10 @@
-import { NavLink } from "react-router-dom";
+import { NavLink, useLocation } from "react-router-dom";
 import { useState } from "react";
 import {
-  LayoutDashboard,
-  FolderOpen,
-  FileText,
+  FolderGit2,
+  Sparkles,
   Brain,
-  BarChart3,
-  Settings,
+  Gauge,
   Plus,
   Layers,
   RefreshCw,
@@ -19,12 +17,37 @@ import { useHealthStore } from "@/stores/health-store";
 import { cn } from "@/lib/utils";
 
 const navItems = [
-  { to: "/", icon: FolderOpen, label: "Repositories" },
-  { to: "/studio", icon: LayoutDashboard, label: "Context Studio" },
-  { to: "/packages", icon: FileText, label: "Context Packages" },
-  { to: "/memory", icon: Brain, label: "Memory Graph" },
-  { to: "/benchmarks", icon: BarChart3, label: "Benchmarks" },
-  { to: "/settings", icon: Settings, label: "Settings" },
+  {
+    to: "/workspace",
+    icon: FolderGit2,
+    label: "Workspace",
+    description: "Repositories & AST",
+    match: (pathname: string) =>
+      pathname === "/" || pathname.startsWith("/workspace") || pathname.startsWith("/repositories"),
+  },
+  {
+    to: "/studio",
+    icon: Sparkles,
+    label: "Context Studio",
+    description: "Context Engine",
+    match: (pathname: string) =>
+      pathname.startsWith("/studio") || pathname.startsWith("/context-builder") || pathname.startsWith("/packages"),
+  },
+  {
+    to: "/memory",
+    icon: Brain,
+    label: "Memory Engine",
+    description: "Cognee & Vectors",
+    match: (pathname: string) => pathname.startsWith("/memory"),
+  },
+  {
+    to: "/system",
+    icon: Gauge,
+    label: "System & Telemetry",
+    description: "Settings & Benchmarks",
+    match: (pathname: string) =>
+      pathname.startsWith("/system") || pathname.startsWith("/settings") || pathname.startsWith("/benchmarks"),
+  },
 ];
 
 interface SidebarProps {
@@ -34,6 +57,7 @@ interface SidebarProps {
 }
 
 export function Sidebar({ onNewIndex, onCloseMobile, isMobile = false }: SidebarProps) {
+  const location = useLocation();
   const {
     health,
     backendOnline,
@@ -41,11 +65,14 @@ export function Sidebar({ onNewIndex, onCloseMobile, isMobile = false }: Sidebar
     providerIdentity,
     activeModel,
     configuredModel,
+    activeModelState,
+    lastExecutingModel,
     cogneeState,
     cogneeInitialized,
     fetchDashboardStats,
     pollHealth,
   } = useHealthStore();
+
   const [refreshing, setRefreshing] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
 
@@ -60,12 +87,6 @@ export function Sidebar({ onNewIndex, onCloseMobile, isMobile = false }: Sidebar
   const vramUsed = health?.vram_used_gb ?? 0;
   const vramTotal = health?.vram_total_gb ?? 0;
   const cpuPct = health?.cpu_percent ?? 0;
-
-  const displayModel = activeModel
-    ? activeModel.split(":")[0]
-    : configuredModel
-    ? configuredModel.split(":")[0]
-    : "No active model";
 
   const isHealthy = engineState === "healthy";
   const isDegraded = engineState === "degraded";
@@ -85,6 +106,8 @@ export function Sidebar({ onNewIndex, onCloseMobile, isMobile = false }: Sidebar
       ? "Ollama"
       : providerIdentity === "openai_compatible"
       ? "OpenAI Compatible"
+      : providerIdentity
+      ? providerIdentity.charAt(0).toUpperCase() + providerIdentity.slice(1)
       : "Local";
 
   const handleNavClick = () => {
@@ -121,7 +144,8 @@ export function Sidebar({ onNewIndex, onCloseMobile, isMobile = false }: Sidebar
         {isMobile && (
           <button
             onClick={onCloseMobile}
-            className="p-1 rounded-md text-neutral-400 hover:text-white hover:bg-[#141414] transition-colors"
+            className="p-1 rounded-md text-neutral-400 hover:text-white hover:bg-[#141414] transition-colors cursor-pointer"
+            aria-label="Close navigation"
           >
             <X className="w-4 h-4" />
           </button>
@@ -142,54 +166,58 @@ export function Sidebar({ onNewIndex, onCloseMobile, isMobile = false }: Sidebar
         </button>
       </div>
 
-      {/* Navigation Links */}
+      {/* 4-Pillar Navigation Links */}
       <ScrollArea className="flex-1 px-3 py-2">
         <div className="space-y-1">
-          {navItems.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              end={item.to === "/"}
-              onClick={handleNavClick}
-              className={({ isActive }) =>
-                cn(
-                  "flex items-center justify-between px-3 py-2.25 rounded-lg text-xs font-normal group transition-colors",
-                  isActive
+          {navItems.map((item) => {
+            const active = item.match(location.pathname);
+            return (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                onClick={handleNavClick}
+                className={cn(
+                  "flex items-center justify-between px-3 py-2.5 rounded-lg text-xs group transition-colors",
+                  active
                     ? "bg-[#181818] text-white font-medium shadow-xs"
                     : "text-neutral-400 hover:text-white hover:bg-[#121212]"
-                )
-              }
-            >
-              {({ isActive }) => (
-                <>
-                  <div className="flex items-center gap-2.5">
-                    <item.icon
-                      className={cn(
-                        "w-4 h-4 transition-colors",
-                        isActive
-                          ? "text-white"
-                          : "text-neutral-500 group-hover:text-neutral-300"
-                      )}
-                    />
-                    <span>{item.label}</span>
+                )}
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <item.icon
+                    className={cn(
+                      "w-4 h-4 shrink-0 transition-colors",
+                      active
+                        ? "text-white"
+                        : "text-neutral-500 group-hover:text-neutral-300"
+                    )}
+                  />
+                  <div className="min-w-0">
+                    <div className="truncate font-medium leading-tight">
+                      {item.label}
+                    </div>
+                    <div className="text-[10px] text-neutral-500 font-mono truncate leading-none mt-0.5">
+                      {item.description}
+                    </div>
                   </div>
-                  {isActive && (
-                    <span className="w-1 h-1 rounded-full bg-white" />
-                  )}
-                </>
-              )}
-            </NavLink>
-          ))}
+                </div>
+                {active && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-white shrink-0 ml-1" />
+                )}
+              </NavLink>
+            );
+          })}
         </div>
       </ScrollArea>
 
-      {/* Engine Core Status Deck (Restrained & Calm) */}
-      <div className="p-3.5 border-t border-[#1a1a1a] bg-[#050505] space-y-2.5 shrink-0">
+      {/* Provider Runtime Truth Deck (Footer) */}
+      <div className="p-3 border-t border-[#1a1a1a] bg-[#050505] space-y-2 shrink-0">
+        {/* Header: Engine Status & Telemetry Controls */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 min-w-0">
             <span
               className={cn(
-                "w-1.5 h-1.5 rounded-full shrink-0",
+                "w-2 h-2 rounded-full shrink-0",
                 isHealthy
                   ? "bg-emerald-400"
                   : isDegraded
@@ -198,11 +226,11 @@ export function Sidebar({ onNewIndex, onCloseMobile, isMobile = false }: Sidebar
               )}
             />
             <div className="min-w-0">
-              <div className="text-xs font-medium text-neutral-200 truncate">
+              <div className="text-xs font-semibold text-neutral-200 truncate">
                 {engineLabel}
               </div>
-              <div className="text-[11px] text-neutral-500 font-mono truncate">
-                {displayModel} · {providerLabel}
+              <div className="text-[10px] text-neutral-500 font-mono truncate">
+                {providerLabel}
               </div>
             </div>
           </div>
@@ -212,22 +240,69 @@ export function Sidebar({ onNewIndex, onCloseMobile, isMobile = false }: Sidebar
               onClick={handleRefresh}
               className="text-neutral-500 hover:text-white p-1 rounded hover:bg-[#141414] transition-colors cursor-pointer"
               title="Refresh telemetry"
+              aria-label="Refresh telemetry"
             >
               <RefreshCw className={cn("w-3 h-3", refreshing && "animate-spin text-white")} />
             </button>
             <button
               onClick={() => setShowDetails(!showDetails)}
               className="text-neutral-500 hover:text-white p-1 rounded hover:bg-[#141414] transition-colors cursor-pointer"
-              title={showDetails ? "Hide hardware stats" : "Show hardware stats"}
+              title={showDetails ? "Hide telemetry details" : "Show telemetry details"}
+              aria-label={showDetails ? "Hide telemetry details" : "Show telemetry details"}
             >
               {showDetails ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />}
             </button>
           </div>
         </div>
 
-        {/* Detailed Hardware Stats (Collapsible/Flattened) */}
+        {/* 3 Independent Runtime Identities */}
+        <div className="rounded-md border border-[#1a1a1a] bg-[#0a0a0a] p-2 space-y-1.5 text-[10px] font-mono">
+          {/* Configured Identity */}
+          <div className="flex items-start justify-between gap-1">
+            <span className="text-neutral-500 uppercase tracking-wider shrink-0 text-[9px]">
+              Configured:
+            </span>
+            <span className="text-neutral-300 truncate max-w-[130px] text-right" title={configuredModel || "None"}>
+              {configuredModel || "None"}
+            </span>
+          </div>
+
+          {/* Verified Active Identity */}
+          <div className="flex items-start justify-between gap-1">
+            <span className="text-neutral-500 uppercase tracking-wider shrink-0 text-[9px]">
+              Verified Active:
+            </span>
+            <span
+              className={cn(
+                "truncate max-w-[130px] text-right font-medium",
+                activeModel ? "text-emerald-400" : "text-neutral-500"
+              )}
+              title={activeModel ? `${activeModel} (${activeModelState})` : "None verified"}
+            >
+              {activeModel ? `${activeModel}` : "None verified"}
+            </span>
+          </div>
+
+          {/* Executing Identity */}
+          <div className="flex items-start justify-between gap-1">
+            <span className="text-neutral-500 uppercase tracking-wider shrink-0 text-[9px]">
+              Last Executing:
+            </span>
+            <span
+              className={cn(
+                "truncate max-w-[130px] text-right",
+                lastExecutingModel ? "text-cyan-400 font-medium" : "text-neutral-500"
+              )}
+              title={lastExecutingModel || "None (Idle)"}
+            >
+              {lastExecutingModel || "None (Idle)"}
+            </span>
+          </div>
+        </div>
+
+        {/* Collapsible Hardware Telemetry */}
         {showDetails && (
-          <div className="pt-2 border-t border-[#181818] space-y-1.5 text-[11px] font-mono text-neutral-400">
+          <div className="pt-2 border-t border-[#181818] space-y-1 text-[10px] font-mono text-neutral-400">
             <div className="flex items-center justify-between">
               <span className="text-neutral-500">RAM</span>
               <span className="text-neutral-200">
@@ -241,8 +316,12 @@ export function Sidebar({ onNewIndex, onCloseMobile, isMobile = false }: Sidebar
             <div className="flex items-center justify-between">
               <span className="text-neutral-500">VRAM</span>
               <span className="text-neutral-200">
-                {vramTotal > 0 ? `${vramUsed.toFixed(1)} / ${vramTotal.toFixed(0)} GB` : "--"}
+                {vramTotal > 0 ? `${vramUsed.toFixed(1)} / ${vramTotal.toFixed(0)} GB` : "None"}
               </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-neutral-500">Device</span>
+              <span className="text-neutral-200">{health?.execution_device || "Unavailable"}</span>
             </div>
             <div className="flex items-center justify-between pt-1 border-t border-[#181818]">
               <span className="text-neutral-500">Cognee</span>
@@ -256,4 +335,3 @@ export function Sidebar({ onNewIndex, onCloseMobile, isMobile = false }: Sidebar
     </aside>
   );
 }
-

@@ -123,9 +123,9 @@ export function IndexProgress({ repositoryName, repoId }: IndexProgressProps) {
         )}
 
         {/* Language/framework badges */}
-        {progress && (progress.languages.length > 0 || progress.frameworks.length > 0) && (
+        {progress && ((progress.languages?.length || 0) > 0 || (progress.frameworks?.length || 0) > 0) && (
           <div className="flex flex-wrap gap-1.5 pt-1">
-            {progress.languages.map((lang) => (
+            {progress.languages?.map((lang) => (
               <span
                 key={lang}
                 className="inline-flex items-center rounded-md bg-[#141414] border border-[#262626] px-2 py-0.5 text-[10px] text-neutral-300 font-mono"
@@ -133,7 +133,7 @@ export function IndexProgress({ repositoryName, repoId }: IndexProgressProps) {
                 {lang}
               </span>
             ))}
-            {progress.frameworks.map((fw) => (
+            {progress.frameworks?.map((fw) => (
               <span
                 key={fw}
                 className="inline-flex items-center rounded-md bg-[#141414] border border-[#262626] px-2 py-0.5 text-[10px] text-neutral-300 font-mono"

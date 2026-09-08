@@ -2,7 +2,6 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { TopBar } from "@/components/layout/TopBar";
 import {
-  GitBranch,
   Play,
   Copy,
   Check,
@@ -10,20 +9,18 @@ import {
   Gauge,
   Code2,
   FileText,
-  ChevronDown,
-  ChevronLeft,
   Network,
   Sparkles,
   BookmarkPlus,
-  ShieldCheck,
   Loader2,
   AlertCircle,
   AlertTriangle,
-  PanelRightClose,
-  PanelRightOpen,
   X,
+  History,
+  FolderGit2,
+  Sliders,
 } from "lucide-react";
-import { getAgentContext, AgentContextResponse } from "@/lib/api";
+import { getAgentContext, AgentContextResponse, SavedContextPackage } from "@/lib/api";
 import { useRepositoryStore } from "@/stores/repository-store";
 import { useContextPackageStore } from "@/stores/context-package-store";
 import { useHealthStore } from "@/stores/health-store";
@@ -34,7 +31,8 @@ import { Badge } from "@/components/ui/badge";
 import { CallGraphView } from "@/components/repositories/CallGraphView";
 import { SynthesisProgressBar } from "@/components/shared/SynthesisProgressBar";
 import { ProgressiveMarkdownReveal } from "@/components/dashboard/ProgressiveMarkdownReveal";
-import { EvidenceProvenanceLayer } from "@/components/context-builder/EvidenceProvenanceLayer";
+import { TierEvidenceStack } from "@/components/context-builder/TierEvidenceStack";
+import { PackageHistoryDrawer } from "@/components/context-packages/PackageHistoryDrawer";
 import type { CallGraphNode, CallGraphEdge } from "@/types/repository";
 import { motion } from "motion/react";
 import { cn } from "@/lib/utils";
@@ -43,6 +41,7 @@ export default function ContextStudio() {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const repoIdParam = searchParams.get("repo");
+  const tabParam = searchParams.get("tab");
 
   const recommendedPrompts = useContextStore((s) => s.recommendedPrompts);
   const promptSource = useContextStore((s) => s.promptSource);
@@ -59,18 +58,22 @@ export default function ContextStudio() {
   const [copied, setCopied] = useState(false);
   const [saved, setSaved] = useState(false);
 
-  // Responsive mode tabs: on mobile/tablet, user can switch between 'prompt', 'topology', and 'package'
-  const [mobileTab, setMobileTab] = useState<"prompt" | "topology" | "package">("prompt");
-  // Desktop inner tab: 'workspace' (prompt) vs 'tree' (AST/topology)
-  const [desktopTab, setDesktopTab] = useState<"workspace" | "tree">("workspace");
-  // User-controlled collapsible right-side context package pane
-  const [isContextPaneCollapsed, setIsContextPaneCollapsed] = useState(false);
+  // Center column view: "workbench" (Tier Evidence Stack) vs "tree" (AST Call Graph)
+  const [centerTab, setCenterTab] = useState<"workbench" | "tree">("workbench");
 
-  const [repoDropdownOpen, setRepoDropdownOpen] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
+  // Right column tab: "package" vs "history"
+  const [rightTab, setRightTab] = useState<"package" | "history">(
+    tabParam === "history" ? "history" : "package"
+  );
+
+  // Mobile navigation tabs (< 1024px)
+  const [mobileTab, setMobileTab] = useState<"prompt" | "evidence" | "topology" | "package">("prompt");
+
   const activeRequestIdRef = useRef<number>(0);
 
   const repositories = useRepositoryStore((s) => s.repositories);
+  const selectedId = useRepositoryStore((s) => s.selectedId);
+  const selected = useRepositoryStore((s) => s.selected);
   const fetchRepositories = useRepositoryStore((s) => s.fetchRepositories);
   const savePackage = useContextPackageStore((s) => s.savePackage);
   const health = useHealthStore((s) => s.health);
@@ -79,18 +82,12 @@ export default function ContextStudio() {
     fetchRepositories();
   }, [fetchRepositories]);
 
-  // Click outside repository selector dropdown
+  // Sync tab with search params
   useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        setRepoDropdownOpen(false);
-      }
+    if (tabParam === "history") {
+      setRightTab("history");
     }
-    if (repoDropdownOpen) {
-      document.addEventListener("mousedown", handleClickOutside);
-    }
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [repoDropdownOpen]);
+  }, [tabParam]);
 
   // Cooldown countdown timer
   useEffect(() => {
@@ -101,15 +98,23 @@ export default function ContextStudio() {
     return () => clearInterval(interval);
   }, [cooldown]);
 
-  const activeRepo =
-    repositories?.find((r) => r.id === repoIdParam) ||
-    repositories?.[0] || {
-      id: "local",
-      name: "re-track",
-      local_path: "/home/chandrabhan/Documents/Personal Projects/re-track",
-    };
+  const repoList = Array.isArray(repositories) ? repositories : [];
 
-  // Extract call graph nodes and edges
+  // Resolve active repository
+  const activeRepo = useMemo(() => {
+    if (selected) return selected;
+    if (repoIdParam) {
+      const found = repoList.find((r) => r.id === repoIdParam);
+      if (found) return found;
+    }
+    if (selectedId) {
+      const found = repoList.find((r) => r.id === selectedId);
+      if (found) return found;
+    }
+    return null;
+  }, [selected, repoIdParam, selectedId, repoList]);
+
+  // Zero synthetic AST nodes: only use authentic repository metadata
   const callGraphNodes: CallGraphNode[] = useMemo(() => {
     if (activeRepo?.call_graph_nodes && Array.isArray(activeRepo.call_graph_nodes)) {
       return activeRepo.call_graph_nodes;
@@ -117,13 +122,7 @@ export default function ContextStudio() {
     if (activeRepo?.metadata?.call_graph_nodes && Array.isArray(activeRepo.metadata.call_graph_nodes)) {
       return activeRepo.metadata.call_graph_nodes as CallGraphNode[];
     }
-    return [
-      { id: "App", label: "App", file: "src/App.tsx", kind: "component" },
-      { id: "ContextStudio", label: "ContextStudio", file: "src/pages/ContextStudio.tsx", kind: "component" },
-      { id: "ContextService", label: "ContextService", file: "backend/app/services/context_service.py", kind: "class" },
-      { id: "CogneeService", label: "CogneeService", file: "backend/app/services/cognee_service.py", kind: "class" },
-      { id: "PackageBuilder", label: "PackageBuilder", file: "backend/app/services/package_builder.py", kind: "class" },
-    ];
+    return [];
   }, [activeRepo]);
 
   const callGraphEdges: CallGraphEdge[] = useMemo(() => {
@@ -133,15 +132,10 @@ export default function ContextStudio() {
     if (activeRepo?.metadata?.call_graph_edges && Array.isArray(activeRepo.metadata.call_graph_edges)) {
       return activeRepo.metadata.call_graph_edges as CallGraphEdge[];
     }
-    return [
-      { source: "App", target: "ContextStudio", kind: "renders" },
-      { source: "ContextStudio", target: "ContextService", kind: "calls" },
-      { source: "ContextService", target: "CogneeService", kind: "calls" },
-      { source: "ContextService", target: "PackageBuilder", kind: "calls" },
-    ];
+    return [];
   }, [activeRepo]);
 
-  // Initialize recommended prompts once on Context Studio initialization
+  // Initialize recommended prompts when active repository is available
   useEffect(() => {
     if (activeRepo?.id) {
       initializeRecommendedPrompts(activeRepo.id);
@@ -149,7 +143,12 @@ export default function ContextStudio() {
   }, [activeRepo?.id, initializeRecommendedPrompts]);
 
   const handleSynthesize = async () => {
+    if (!activeRepo) {
+      toast.error("Repository Required: Select a repository to synthesize context.");
+      return;
+    }
     if (!taskPrompt.trim() || loading || cooldown > 0) return;
+
     setLoading(true);
     setSaved(false);
     setSynthesisError(null);
@@ -166,12 +165,13 @@ export default function ContextStudio() {
         include_structural_graph: true,
       });
 
-      // Ignore stale response if request was cancelled
+      // Ignore if user cancelled
       if (activeRequestIdRef.current !== requestId) return;
 
       if (response && response.success) {
         setAgentResponse(response);
         setCooldown(1);
+        setRightTab("package");
         toast.success("Context Package synthesized successfully!");
       } else {
         throw new Error(response?.context_markdown || "Context generation returned no content.");
@@ -220,14 +220,14 @@ export default function ContextStudio() {
         tags: [agentResponse.intent_category || "context"],
       });
       setSaved(true);
-      toast.success("Package saved to Context Library (/packages)!");
+      toast.success("Package saved to Context Library!");
     } catch {
       toast.error("Failed to save context package");
     }
   };
 
   const handleDownload = () => {
-    if (!agentResponse?.context_markdown) return;
+    if (!agentResponse?.context_markdown || !activeRepo) return;
     const blob = new Blob([agentResponse.context_markdown], { type: "text/markdown" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -238,7 +238,25 @@ export default function ContextStudio() {
     toast.success("Downloaded Context Package Markdown file");
   };
 
-  // Keyboard shortcut Ctrl+Enter to trigger synthesis
+  const handleSelectPackageFromHistory = (pkg: SavedContextPackage) => {
+    setTaskPrompt(pkg.task || pkg.name);
+    setAgentResponse({
+      success: true,
+      context_markdown: pkg.markdown,
+      task_summary: pkg.objective || pkg.task,
+      intent_category: pkg.tags?.[0] || "saved",
+      extracted_symbols: [],
+      callers: [],
+      callees: [],
+      related_files: [],
+      estimated_tokens: pkg.token_estimate || 0,
+      generation_time_ms: pkg.total_time_ms || 0,
+      model_invoked: false,
+    });
+    setRightTab("package");
+    toast.info(`Loaded package: "${pkg.name}"`);
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
       e.preventDefault();
@@ -250,81 +268,80 @@ export default function ContextStudio() {
     <div className="flex-1 flex flex-col h-full overflow-hidden bg-black text-foreground antialiased font-sans">
       <TopBar
         title="RE:Track | Context Studio"
-        subtitle="Prompt Workbench & Context Package Synthesizer"
+        subtitle="Prompt Workbench, Retrieval Arbitration & Context Packages"
       >
-        <div className="flex items-center gap-2 sm:gap-2.5">
-          {/* Active Workspace Selector Dropdown */}
-          <div ref={dropdownRef} className="relative">
-            <button
-              onClick={() => setRepoDropdownOpen(!repoDropdownOpen)}
-              className="h-8 px-2.5 sm:px-3 rounded-lg border border-[#262626] bg-[#0a0a0a] text-white hover:border-[#404040] transition-colors flex items-center gap-2 text-xs font-mono cursor-pointer"
+        <div className="flex items-center gap-2">
+          {activeRepo && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => navigate(`/workspace?repo=${activeRepo.id}&tab=ast`)}
+              className="h-8 px-2.5 text-xs font-mono border-[#262626] bg-black text-neutral-300 hover:text-white hover:bg-[#1a1a1a] gap-1 cursor-pointer"
             >
-              <GitBranch className="w-3.5 h-3.5 text-white shrink-0" />
-              <span className="font-semibold truncate max-w-[110px] xs:max-w-[150px] sm:max-w-[200px]">{activeRepo.name}</span>
-              <ChevronDown className="w-3 h-3 text-neutral-400 shrink-0" />
-            </button>
-
-            {repoDropdownOpen && (
-              <div className="absolute right-0 top-full mt-1.5 w-64 bg-black border border-[#2e2e2e] rounded-xl shadow-2xl z-50 py-1.5 overflow-hidden">
-                <div className="px-3 py-1.5 border-b border-[#222]">
-                  <span className="text-[10px] font-mono uppercase text-neutral-400">Select Codebase</span>
-                </div>
-                <div className="max-h-48 overflow-y-auto py-1">
-                  {repositories.map((r) => (
-                    <button
-                      key={r.id}
-                      onClick={() => {
-                        setSearchParams({ repo: r.id });
-                        setRepoDropdownOpen(false);
-                      }}
-                      className={cn(
-                        "w-full px-3 py-2 text-left text-xs font-mono flex items-center justify-between hover:bg-[#1a1a1a] transition-colors cursor-pointer",
-                        r.id === activeRepo.id ? "text-white bg-[#141414] font-bold" : "text-neutral-300"
-                      )}
-                    >
-                      <span className="truncate">{r.name}</span>
-                      {r.id === activeRepo.id && <Check className="w-3.5 h-3.5 text-emerald-400" />}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => navigate(`/knowledge/${activeRepo.id}`)}
-            className="h-8 px-2.5 text-xs font-mono border-[#262626] bg-black text-neutral-300 hover:text-white hover:bg-[#1a1a1a] gap-1 cursor-pointer"
-          >
-            <Network className="w-3.5 h-3.5 shrink-0" />
-            <span className="hidden xs:inline">AST Map</span>
-          </Button>
+              <Network className="w-3.5 h-3.5 shrink-0" />
+              <span className="hidden xs:inline">AST Topology</span>
+            </Button>
+          )}
         </div>
       </TopBar>
 
+      {/* Null Repository Guard Banner */}
+      {!activeRepo && (
+        <div className="px-4 py-2.5 bg-amber-950/40 border-b border-amber-500/30 flex items-center justify-between text-xs font-mono text-amber-300 shrink-0">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+            <span>
+              Repository Required: No active repository selected. Please select a codebase from the TopBar to synthesize context.
+            </span>
+          </div>
+          <Button
+            size="xs"
+            variant="outline"
+            onClick={() => navigate("/workspace")}
+            className="h-6 px-2 text-[11px] border-amber-500/30 text-amber-200 hover:bg-amber-900/30"
+          >
+            Go to Catalog
+          </Button>
+        </div>
+      )}
+
       {/* Mobile/Tablet Segmented Tab Controller (< 1024px) */}
       <div className="lg:hidden px-4 pt-3 pb-1 border-b border-[#222222] bg-[#080808]">
-        <div className="grid grid-cols-3 gap-1 bg-[#121212] p-1 rounded-lg border border-[#262626]">
+        <div className="grid grid-cols-4 gap-1 bg-[#121212] p-1 rounded-lg border border-[#262626]">
           <button
             onClick={() => setMobileTab("prompt")}
-            className={`py-1.5 px-2 text-xs font-mono font-medium rounded-md transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+            className={cn(
+              "py-1.5 px-2 text-xs font-mono rounded-md transition-all flex items-center justify-center gap-1 cursor-pointer",
               mobileTab === "prompt"
-                ? "bg-white text-black font-semibold shadow-sm"
+                ? "bg-white text-black font-semibold shadow-xs"
                 : "text-neutral-400 hover:text-white"
-            }`}
+            )}
           >
             <Play className="w-3 h-3" />
             <span>Prompt</span>
           </button>
 
           <button
-            onClick={() => setMobileTab("topology")}
-            className={`py-1.5 px-2 text-xs font-mono font-medium rounded-md transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-              mobileTab === "topology"
-                ? "bg-white text-black font-semibold shadow-sm"
+            onClick={() => setMobileTab("evidence")}
+            className={cn(
+              "py-1.5 px-2 text-xs font-mono rounded-md transition-all flex items-center justify-center gap-1 cursor-pointer",
+              mobileTab === "evidence"
+                ? "bg-white text-black font-semibold shadow-xs"
                 : "text-neutral-400 hover:text-white"
-            }`}
+            )}
+          >
+            <Sliders className="w-3 h-3" />
+            <span>Evidence</span>
+          </button>
+
+          <button
+            onClick={() => setMobileTab("topology")}
+            className={cn(
+              "py-1.5 px-2 text-xs font-mono rounded-md transition-all flex items-center justify-center gap-1 cursor-pointer",
+              mobileTab === "topology"
+                ? "bg-white text-black font-semibold shadow-xs"
+                : "text-neutral-400 hover:text-white"
+            )}
           >
             <Network className="w-3 h-3" />
             <span>Call Graph</span>
@@ -332,11 +349,12 @@ export default function ContextStudio() {
 
           <button
             onClick={() => setMobileTab("package")}
-            className={`py-1.5 px-2 text-xs font-mono font-medium rounded-md transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+            className={cn(
+              "py-1.5 px-2 text-xs font-mono rounded-md transition-all flex items-center justify-center gap-1 cursor-pointer",
               mobileTab === "package"
-                ? "bg-white text-black font-semibold shadow-sm"
+                ? "bg-white text-black font-semibold shadow-xs"
                 : "text-neutral-400 hover:text-white"
-            }`}
+            )}
           >
             <FileText className="w-3 h-3" />
             <span>Package</span>
@@ -347,251 +365,142 @@ export default function ContextStudio() {
         </div>
       </div>
 
-      {/* Main Studio Body — Responsive 2/3-Column Layout */}
-      <main className="flex-1 min-h-0 flex flex-col lg:flex-row overflow-hidden p-4 sm:p-5 lg:p-6 gap-5 lg:gap-6 max-w-[1900px] w-full mx-auto">
-        {/* Left Column: Prompt Workbench & AST Topology */}
+      {/* Main Studio Body — 3-Column Responsive Layout */}
+      <main className="flex-1 min-h-0 flex flex-col lg:flex-row overflow-hidden p-4 sm:p-5 gap-4 max-w-[2000px] w-full mx-auto">
+        {/* COLUMN 1: Input Workbench */}
         <div
           className={cn(
-            "flex flex-col h-full min-h-0 bg-[#0a0a0a] rounded-lg border border-[#1e1e1e] overflow-hidden flex-1 min-w-0 transition-all duration-300 ease-in-out",
-            mobileTab === "package" ? "hidden lg:flex" : "flex"
+            "flex flex-col h-full min-h-0 bg-[#0a0a0a] rounded-lg border border-[#1e1e1e] overflow-hidden w-full lg:w-[32%] xl:w-[30%] min-w-[320px] max-w-[500px] shrink-0",
+            mobileTab !== "prompt" ? "hidden lg:flex" : "flex"
           )}
         >
-          {/* Inner Tab Control (Prompt Workbench vs Call Graph) */}
-          <div className="p-3 border-b border-[#1a1a1a] bg-[#080808] flex items-center justify-between gap-3 shrink-0">
-            <div className="flex items-center gap-1 bg-black p-0.5 rounded-md border border-[#222222]">
-              <button
-                onClick={() => {
-                  setDesktopTab("workspace");
-                  setMobileTab("prompt");
-                }}
-                className={cn(
-                  "px-2.5 py-1 text-xs rounded transition-colors flex items-center gap-1.5 cursor-pointer",
-                  desktopTab === "workspace"
-                    ? "bg-white text-black font-medium shadow-xs"
-                    : "text-neutral-400 hover:text-white"
-                )}
-              >
-                <Code2 className="w-3.5 h-3.5" />
-                <span>Prompt Workbench</span>
-              </button>
-
-              <button
-                onClick={() => {
-                  setDesktopTab("tree");
-                  setMobileTab("topology");
-                }}
-                className={cn(
-                  "px-2.5 py-1 text-xs rounded transition-colors flex items-center gap-1.5 cursor-pointer",
-                  desktopTab === "tree"
-                    ? "bg-white text-black font-medium shadow-xs"
-                    : "text-neutral-400 hover:text-white"
-                )}
-              >
-                <Network className="w-3.5 h-3.5" />
-                <span>AST Call Graph</span>
-              </button>
-            </div>
-
+          {/* Workbench Header */}
+          <div className="p-3 border-b border-[#1a1a1a] bg-[#080808] flex items-center justify-between gap-2 shrink-0">
             <div className="flex items-center gap-2">
-              <span className="text-[11px] text-neutral-500 hidden sm:flex items-center gap-1.5 font-mono">
-                <span>Shortcut:</span>
-                <kbd className="px-1 py-0.5 rounded bg-[#141414] border border-[#262626] text-neutral-300 text-[10px]">
-                  ⌘↵
-                </kbd>
-              </span>
-
-              {isContextPaneCollapsed && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    setIsContextPaneCollapsed(false);
-                  }}
-                  className="h-7 px-2.5 text-xs gap-1.5 border-[#262626] text-neutral-300 hover:text-white hover:border-neutral-500 cursor-pointer hidden lg:flex"
-                  title="Expand Synthesized Context Package"
-                >
-                  <PanelRightOpen className="w-3.5 h-3.5 text-neutral-400" />
-                  <span>Show Context Pane</span>
-                  {agentResponse && (
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_4px_#34d399]" />
-                  )}
-                </Button>
-              )}
+              <Code2 className="w-4 h-4 text-white" />
+              <h3 className="text-xs font-semibold text-white tracking-tight">Input Workbench</h3>
             </div>
+            {activeRepo && (
+              <span className="text-[11px] font-mono text-neutral-400 flex items-center gap-1 truncate max-w-[150px]">
+                <FolderGit2 className="w-3 h-3 text-neutral-500 shrink-0" />
+                <span className="truncate">{activeRepo.name}</span>
+              </span>
+            )}
           </div>
 
-          {/* Workbench Tab Content */}
-          <div
-            className={cn(
-              "flex-1 min-h-0",
-              desktopTab === "workspace" ? "overflow-y-auto p-4 space-y-4" : "p-4 flex flex-col"
-            )}
-          >
-            {desktopTab === "workspace" ? (
-              <>
-                {/* Synthesis Error Recovery Banner */}
-                {synthesisError && !loading && (
-                  <div className="bg-red-950/25 border border-red-500/30 rounded-md p-3 flex items-start gap-2.5">
-                    <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
-                    <div className="flex-1 text-xs">
-                      <span className="font-semibold text-red-300 block">Synthesis Error</span>
-                      <p className="text-red-400/90 mt-0.5">{synthesisError}</p>
-                    </div>
-                    <Button
-                      variant="outline"
-                      size="xs"
-                      onClick={handleSynthesize}
-                      className="h-6 px-2 text-[11px] text-neutral-200 border-[#333] hover:text-white"
-                    >
-                      Retry
-                    </Button>
-                  </div>
-                )}
-
-                {/* Suggested Prompts */}
-                <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <label className="text-xs font-medium text-neutral-300 flex items-center gap-2">
-                      <span>Suggested Prompts</span>
-                      {promptSource === "ai" && (
-                        <Badge variant="success" className="text-[10px] font-mono px-1 py-0">
-                          AI Generated
-                        </Badge>
-                      )}
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() => generateRecommendedPrompts(activeRepo.id, true)}
-                      disabled={loadingPrompts || loading}
-                      className="text-xs text-neutral-400 hover:text-white disabled:opacity-40 disabled:pointer-events-none flex items-center gap-1 cursor-pointer transition-colors px-2 py-0.5 rounded border border-[#222222] bg-[#0c0c0c]"
-                      title="Generate fresh prompts grounded in AST symbols"
-                    >
-                      {loadingPrompts ? (
-                        <Loader2 className="w-3 h-3 animate-spin text-white" />
-                      ) : (
-                        <Sparkles className="w-3 h-3 text-amber-400" />
-                      )}
-                      <span>{loadingPrompts ? "Generating..." : "AI Generate"}</span>
-                    </button>
-                  </div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {recommendedPrompts.map((p) => (
-                      <button
-                        key={p.label + p.prompt}
-                        disabled={loading}
-                        onClick={() => setTaskPrompt(p.prompt)}
-                        className={cn(
-                          "text-xs px-2.5 py-1 rounded-md border transition-colors cursor-pointer text-left disabled:opacity-50 disabled:pointer-events-none",
-                          taskPrompt === p.prompt
-                            ? "bg-white text-black border-white font-medium shadow-xs"
-                            : "bg-[#0c0c0c] border-[#222222] text-neutral-300 hover:text-white hover:border-[#333333]"
-                        )}
-                      >
-                        {p.label}
-                      </button>
-                    ))}
-                  </div>
+          {/* Workbench Scroll Area */}
+          <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4">
+            {/* Synthesis Error Recovery Banner */}
+            {synthesisError && !loading && (
+              <div className="bg-red-950/25 border border-red-500/30 rounded-md p-3 flex items-start gap-2.5">
+                <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+                <div className="flex-1 text-xs">
+                  <span className="font-semibold text-red-300 block">Synthesis Error</span>
+                  <p className="text-red-400/90 mt-0.5 font-mono">{synthesisError}</p>
                 </div>
-
-                {/* Prompt Textarea */}
-                <div>
-                  <label className="text-xs font-medium text-neutral-300 block mb-1.5">
-                    Development Task or Technical Question
-                  </label>
-                  <textarea
-                    rows={5}
-                    value={taskPrompt}
-                    disabled={loading}
-                    onChange={(e) => setTaskPrompt(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                    placeholder="Type the feature, refactoring, or question for your local memory..."
-                    className="w-full bg-[#050505] border border-[#222222] rounded-md p-3 text-xs font-mono text-neutral-200 placeholder:text-neutral-600 focus:outline-none focus:border-neutral-400 focus:ring-1 focus:ring-neutral-400 transition-colors resize-none leading-relaxed disabled:opacity-50 disabled:cursor-not-allowed"
-                  />
-                </div>
-
-                {/* Token Budget Constraint */}
-                <div className="bg-[#050505] p-3 rounded-md border border-[#1a1a1a] space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-neutral-300 flex items-center gap-1.5">
-                      <Gauge className="w-3.5 h-3.5 text-neutral-400" />
-                      Token Budget Constraint
-                    </span>
-                    <span className="text-xs font-mono font-medium text-neutral-200">
-                      {maxTokens.toLocaleString()} max tokens
-                    </span>
-                  </div>
-
-                  <input
-                    type="range"
-                    min={2000}
-                    max={32000}
-                    step={1000}
-                    value={maxTokens}
-                    disabled={loading}
-                    onChange={(e) => setMaxTokens(Number(e.target.value))}
-                    className="w-full accent-white h-1 bg-[#1a1a1a] rounded cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                  />
-                </div>
-
-                {/* Intent Parser & Guardrails Feedback */}
-                {agentResponse && !loading && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 4 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="bg-[#050505] rounded-md border border-[#1a1a1a] p-3 space-y-2.5"
-                  >
-                    <div className="flex items-center justify-between border-b border-[#181818] pb-1.5">
-                      <span className="text-xs font-medium text-neutral-200 flex items-center gap-1.5">
-                        <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-                        Intent Parser &amp; Guardrails
-                      </span>
-                      <Badge variant="outline" className="text-[10px] font-mono">
-                        {agentResponse.intent_category || "Semantic Query"}
-                      </Badge>
-                    </div>
-
-                    <p className="text-xs text-neutral-300 leading-relaxed">
-                      {agentResponse.task_summary}
-                    </p>
-
-                    {agentResponse.extracted_symbols && agentResponse.extracted_symbols.length > 0 && (
-                      <div>
-                        <span className="text-[11px] text-neutral-500 block mb-1">
-                          Extracted Symbols:
-                        </span>
-                        <div className="flex flex-wrap gap-1">
-                          {agentResponse.extracted_symbols.map((sym) => (
-                            <span
-                              key={sym}
-                              className="text-[11px] font-mono bg-[#101010] border border-[#222222] px-1.5 py-0.5 rounded text-neutral-300"
-                            >
-                              {sym}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </motion.div>
-                )}
-              </>
-            ) : (
-              /* AST Call Graph Tab */
-              <div className="flex-1 min-h-[400px] h-full">
-                <CallGraphView
-                  nodes={callGraphNodes}
-                  edges={callGraphEdges}
-                />
+                <Button
+                  variant="outline"
+                  size="xs"
+                  onClick={handleSynthesize}
+                  className="h-6 px-2 text-[11px] text-neutral-200 border-[#333] hover:text-white shrink-0"
+                >
+                  Retry
+                </Button>
               </div>
             )}
+
+            {/* Suggested Prompts */}
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-xs font-medium text-neutral-300 flex items-center gap-2">
+                  <span>Suggested Prompts</span>
+                  {promptSource === "ai" && (
+                    <Badge variant="success" className="text-[10px] font-mono px-1 py-0">
+                      AI Generated
+                    </Badge>
+                  )}
+                </label>
+                {activeRepo && (
+                  <button
+                    type="button"
+                    onClick={() => generateRecommendedPrompts(activeRepo.id, true)}
+                    disabled={loadingPrompts || loading || !activeRepo}
+                    className="text-xs text-neutral-400 hover:text-white disabled:opacity-40 disabled:pointer-events-none flex items-center gap-1 cursor-pointer transition-colors px-2 py-0.5 rounded border border-[#222222] bg-[#0c0c0c]"
+                    title="Generate fresh prompts grounded in AST symbols"
+                  >
+                    {loadingPrompts ? (
+                      <Loader2 className="w-3 h-3 animate-spin text-white" />
+                    ) : (
+                      <Sparkles className="w-3 h-3 text-amber-400" />
+                    )}
+                    <span>{loadingPrompts ? "Generating..." : "AI Generate"}</span>
+                  </button>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {recommendedPrompts.map((p) => (
+                  <button
+                    key={p.label + p.prompt}
+                    disabled={loading || !activeRepo}
+                    onClick={() => setTaskPrompt(p.prompt)}
+                    className={cn(
+                      "text-xs px-2.5 py-1 rounded-md border transition-colors cursor-pointer text-left disabled:opacity-50 disabled:pointer-events-none",
+                      taskPrompt === p.prompt
+                        ? "bg-white text-black border-white font-medium shadow-xs"
+                        : "bg-[#0c0c0c] border-[#222222] text-neutral-300 hover:text-white hover:border-[#333333]"
+                    )}
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Prompt Textarea */}
+            <div>
+              <label className="text-xs font-medium text-neutral-300 block mb-1.5">
+                Development Task or Technical Question
+              </label>
+              <textarea
+                rows={5}
+                value={taskPrompt}
+                disabled={loading || !activeRepo}
+                onChange={(e) => setTaskPrompt(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder="Type the feature, refactoring, or question for your local memory..."
+                className="w-full bg-[#050505] border border-[#222222] rounded-md p-3 text-xs font-mono text-neutral-200 placeholder:text-neutral-600 focus:outline-none focus:border-neutral-400 focus:ring-1 focus:ring-neutral-400 transition-colors resize-none leading-relaxed disabled:opacity-50 disabled:cursor-not-allowed"
+              />
+            </div>
+
+            {/* Token Budget Constraint */}
+            <div className="bg-[#050505] p-3 rounded-md border border-[#1a1a1a] space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-neutral-300 flex items-center gap-1.5">
+                  <Gauge className="w-3.5 h-3.5 text-neutral-400" />
+                  <span>Token Budget</span>
+                </span>
+                <span className="text-xs font-mono font-medium text-neutral-200">
+                  {maxTokens.toLocaleString()} max tokens
+                </span>
+              </div>
+
+              <input
+                type="range"
+                min={2000}
+                max={32000}
+                step={1000}
+                value={maxTokens}
+                disabled={loading || !activeRepo}
+                onChange={(e) => setMaxTokens(Number(e.target.value))}
+                className="w-full accent-white h-1 bg-[#1a1a1a] rounded cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              />
+            </div>
           </div>
 
           {/* Workbench Footer Action */}
-          <div className="p-3 border-t border-[#1a1a1a] bg-[#080808] flex items-center justify-between gap-3 shrink-0">
-            <span className="text-xs text-neutral-500 hidden sm:inline">
-              {loading ? "Processing local memory graph..." : "Ready to query Cognee memory graph"}
+          <div className="p-3 border-t border-[#1a1a1a] bg-[#080808] flex items-center justify-between gap-2 shrink-0">
+            <span className="text-[11px] text-neutral-500 font-mono hidden sm:inline">
+              ⌘↵ to trigger
             </span>
 
             {loading ? (
@@ -617,169 +526,181 @@ export default function ContextStudio() {
               </div>
             ) : (
               <Button
-                disabled={cooldown > 0 || !taskPrompt.trim()}
+                disabled={cooldown > 0 || !taskPrompt.trim() || !activeRepo}
                 onClick={handleSynthesize}
                 size="sm"
-                className="w-full sm:w-auto h-8 px-4 text-xs font-medium bg-white text-black hover:bg-neutral-200 gap-1.5 shadow-xs cursor-pointer ml-auto"
+                className="w-full sm:w-auto h-8 px-4 text-xs font-medium bg-white text-black hover:bg-neutral-200 gap-1.5 shadow-xs cursor-pointer ml-auto disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Play className="w-3.5 h-3.5 fill-black" />
-                <span>{agentResponse ? "Re-synthesize Context" : "Synthesize Context Package"}</span>
+                <span>{agentResponse ? "Re-synthesize Context" : "Synthesize Context"}</span>
               </Button>
             )}
           </div>
         </div>
 
-        {/* Right Column: Unified Collapsible Context Package Pane */}
+        {/* COLUMN 2: Retrieval Arbitration & Evidence Stack */}
         <div
           className={cn(
-            "flex flex-col h-full min-h-0 bg-[#0a0a0a] rounded-lg border border-[#1e1e1e] overflow-hidden transition-[width,min-width,max-width] duration-300 ease-in-out shrink-0 relative",
-            isContextPaneCollapsed
-              ? "w-full lg:w-11 lg:min-w-[44px] lg:max-w-[44px]"
-              : "w-full lg:w-[48%] xl:w-[46%] 2xl:w-[44%] lg:min-w-[440px] lg:max-w-[850px]",
+            "flex flex-col h-full min-h-0 bg-[#0a0a0a] rounded-lg border border-[#1e1e1e] overflow-hidden flex-1 min-w-[340px]",
+            mobileTab !== "evidence" && mobileTab !== "topology" ? "hidden lg:flex" : "flex"
+          )}
+        >
+          {/* Arbitration Header & View Switcher */}
+          <div className="p-3 border-b border-[#1a1a1a] bg-[#080808] flex items-center justify-between gap-3 shrink-0">
+            <div className="flex items-center gap-2">
+              <Sliders className="w-4 h-4 text-white" />
+              <h3 className="text-xs font-semibold text-white tracking-tight">
+                Retrieval Arbitration &amp; Evidence
+              </h3>
+            </div>
+
+            <div className="flex items-center gap-1 bg-black p-0.5 rounded-md border border-[#222222]">
+              <button
+                onClick={() => {
+                  setCenterTab("workbench");
+                  setMobileTab("evidence");
+                }}
+                className={cn(
+                  "px-2.5 py-1 text-xs rounded transition-colors flex items-center gap-1.5 cursor-pointer font-sans",
+                  centerTab === "workbench"
+                    ? "bg-white text-black font-medium shadow-xs"
+                    : "text-neutral-400 hover:text-white"
+                )}
+              >
+                <Sliders className="w-3.5 h-3.5" />
+                <span>Evidence Stack</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setCenterTab("tree");
+                  setMobileTab("topology");
+                }}
+                className={cn(
+                  "px-2.5 py-1 text-xs rounded transition-colors flex items-center gap-1.5 cursor-pointer font-sans",
+                  centerTab === "tree"
+                    ? "bg-white text-black font-medium shadow-xs"
+                    : "text-neutral-400 hover:text-white"
+                )}
+              >
+                <Network className="w-3.5 h-3.5" />
+                <span>Call Graph</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Center Column Content */}
+          <div className="flex-1 min-h-0 overflow-hidden">
+            {centerTab === "workbench" ? (
+              <TierEvidenceStack agentResponse={agentResponse} className="h-full" />
+            ) : (
+              <div className="h-full p-4">
+                <CallGraphView nodes={callGraphNodes} edges={callGraphEdges} />
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* COLUMN 3: Context Package Viewer & History */}
+        <div
+          className={cn(
+            "flex flex-col h-full min-h-0 bg-[#0a0a0a] rounded-lg border border-[#1e1e1e] overflow-hidden w-full lg:w-[38%] xl:w-[38%] min-w-[380px] max-w-[700px] shrink-0",
             mobileTab !== "package" ? "hidden lg:flex" : "flex"
           )}
         >
-          {isContextPaneCollapsed ? (
-            /* Collapsed Vertical Rail (Visible on desktop) */
-            <div
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                setIsContextPaneCollapsed(false);
-              }}
-              className="hidden lg:flex flex-col items-center justify-between w-full h-full py-3 px-1 hover:bg-[#0f0f0f] transition-colors cursor-pointer select-none group"
-              title="Click to expand Synthesized Context Package"
-            >
-              <div className="flex flex-col items-center gap-3">
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    setIsContextPaneCollapsed(false);
-                  }}
-                  className="p-1 rounded text-neutral-400 group-hover:text-white hover:bg-[#1a1a1a] transition-colors cursor-pointer"
-                  title="Expand Context Pane"
-                >
-                  <PanelRightOpen className="w-4 h-4" />
-                </button>
-
-                {agentResponse && (
-                  <span
-                    className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_5px_#34d399]"
-                    title="Context is ready"
-                  />
-                )}
-              </div>
-
-              <div className="[writing-mode:vertical-rl] rotate-180 flex items-center gap-2 text-[11px] font-mono text-neutral-400 group-hover:text-neutral-200 tracking-wider">
-                <FileText className="w-3.5 h-3.5 rotate-90" />
-                <span>Context Package</span>
-              </div>
-
-              <div className="w-6 h-6 rounded flex items-center justify-center text-neutral-500 group-hover:text-white">
-                <ChevronLeft className="w-3.5 h-3.5" />
-              </div>
+          {/* Column Header & View Switcher */}
+          <div className="p-3 border-b border-[#1a1a1a] bg-[#080808] flex items-center justify-between gap-2 shrink-0">
+            <div className="flex items-center gap-2">
+              <FileText className="w-4 h-4 text-white" />
+              <h3 className="text-xs font-semibold text-white tracking-tight">
+                Context Package &amp; History
+              </h3>
             </div>
-          ) : (
-            /* Full Expanded Context Package Content */
-            <div className="flex flex-col h-full w-full min-w-[440px] overflow-hidden">
-              {/* Header & Export Actions */}
-              <div className="p-3 border-b border-[#1a1a1a] bg-[#080808] flex items-center justify-between gap-3 shrink-0">
-                <div className="flex items-center gap-2">
-                  <FileText className="w-3.5 h-3.5 text-neutral-300" />
-                  <h3 className="text-xs font-semibold text-white tracking-tight">
-                    Synthesized Context Package
-                  </h3>
-                  {loading ? (
-                    <Badge variant="warning" className="text-[10px] font-mono flex items-center gap-1">
-                      <Loader2 className="w-2.5 h-2.5 animate-spin" />
-                      <span>Re-synthesizing</span>
-                    </Badge>
-                  ) : agentResponse?.abstained ? (
-                    <Badge variant="outline" className="text-[10px] font-mono flex items-center gap-1 border-amber-500/40 text-amber-400 bg-amber-950/20" title={agentResponse.abstention_reason || "Insufficient repository evidence"}>
-                      <AlertTriangle className="w-3 h-3 text-amber-400" />
-                      <span>Insufficient Repository Evidence</span>
-                    </Badge>
-                  ) : agentResponse?.evidence_state === "partial" ? (
-                    <Badge variant="warning" className="text-[10px] font-mono flex items-center gap-1">
-                      <span>Partial Evidence</span>
-                    </Badge>
-                  ) : agentResponse?.model_invoked && agentResponse?.inference_status === "completed" ? (
-                    <Badge variant="success" className="text-[10px] font-mono flex items-center gap-1">
-                      <Sparkles className="w-3 h-3 text-emerald-400" />
-                      <span>Model Synthesized</span>
-                    </Badge>
-                  ) : agentResponse?.fallback_used ? (
-                    <Badge variant="warning" className="text-[10px] font-mono flex items-center gap-1" title={agentResponse.fallback_reason || "Deterministic AST fallback"}>
-                      <span>Deterministic Fallback</span>
-                    </Badge>
-                  ) : agentResponse ? (
-                    <Badge variant="success" className="text-[10px] font-mono">
-                      Ready
-                    </Badge>
-                  ) : null}
-                </div>
 
-                <div className="flex items-center gap-1.5">
-                  {agentResponse && !loading && (
-                    <>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        disabled={saved}
-                        onClick={handleSaveToLibrary}
-                        className="h-7 px-2 text-xs gap-1 cursor-pointer disabled:opacity-60"
-                      >
-                        <BookmarkPlus className={cn("w-3 h-3", saved ? "text-emerald-400" : "text-amber-400")} />
-                        <span>{saved ? "Saved" : "Save"}</span>
-                      </Button>
+            <div className="flex items-center gap-1 bg-black p-0.5 rounded-md border border-[#222222]">
+              <button
+                onClick={() => {
+                  setRightTab("package");
+                  setSearchParams({ repo: activeRepo?.id || "" });
+                }}
+                className={cn(
+                  "px-2.5 py-1 text-xs rounded transition-colors flex items-center gap-1.5 cursor-pointer font-sans",
+                  rightTab === "package"
+                    ? "bg-white text-black font-medium shadow-xs"
+                    : "text-neutral-400 hover:text-white"
+                )}
+              >
+                <FileText className="w-3.5 h-3.5" />
+                <span>Package</span>
+              </button>
 
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={handleDownload}
-                        className="h-7 px-2 text-xs gap-1 cursor-pointer"
-                      >
-                        <Download className="w-3 h-3" />
-                        <span className="hidden sm:inline">Export</span>
-                      </Button>
+              <button
+                onClick={() => {
+                  setRightTab("history");
+                  setSearchParams({ repo: activeRepo?.id || "", tab: "history" });
+                }}
+                className={cn(
+                  "px-2.5 py-1 text-xs rounded transition-colors flex items-center gap-1.5 cursor-pointer font-sans",
+                  rightTab === "history"
+                    ? "bg-white text-black font-medium shadow-xs"
+                    : "text-neutral-400 hover:text-white"
+                )}
+              >
+                <History className="w-3.5 h-3.5" />
+                <span>History</span>
+              </button>
+            </div>
 
-                      <Button
-                        type="button"
-                        size="sm"
-                        onClick={handleCopy}
-                        className="h-7 px-2.5 text-xs font-medium bg-white text-black hover:bg-neutral-200 gap-1 shadow-xs cursor-pointer"
-                      >
-                        {copied ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
-                        <span>{copied ? "Copied!" : "Copy Context"}</span>
-                      </Button>
-                    </>
-                  )}
+            {/* Action Buttons for Package View */}
+            {rightTab === "package" && agentResponse && !loading && (
+              <div className="flex items-center gap-1.5">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={saved}
+                  onClick={handleSaveToLibrary}
+                  className="h-7 px-2 text-xs gap-1 cursor-pointer disabled:opacity-60"
+                >
+                  <BookmarkPlus className={cn("w-3 h-3", saved ? "text-emerald-400" : "text-amber-400")} />
+                  <span>{saved ? "Saved" : "Save"}</span>
+                </Button>
 
-                  {/* Collapse Right Pane Toggle */}
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      setIsContextPaneCollapsed(true);
-                    }}
-                    className="h-7 w-7 p-0 text-neutral-400 hover:text-white hover:bg-[#1a1a1a] cursor-pointer hidden lg:flex"
-                    title="Collapse Context Package Pane"
-                  >
-                    <PanelRightClose className="w-4 h-4" />
-                  </Button>
-                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleDownload}
+                  className="h-7 px-2 text-xs gap-1 cursor-pointer"
+                >
+                  <Download className="w-3 h-3" />
+                  <span className="hidden sm:inline">Export</span>
+                </Button>
+
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={handleCopy}
+                  className="h-7 px-2.5 text-xs font-medium bg-white text-black hover:bg-neutral-200 gap-1 shadow-xs cursor-pointer"
+                >
+                  {copied ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                  <span>{copied ? "Copied!" : "Copy Context"}</span>
+                </Button>
               </div>
+            )}
+          </div>
 
-              {/* Package Content & Telemetry */}
-              <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4 relative">
-                {/* If synthesizing and already has a package, show live re-synthesis card overlay */}
+          {/* Right Column Body */}
+          <div className="flex-1 min-h-0 overflow-y-auto relative">
+            {rightTab === "history" ? (
+              <PackageHistoryDrawer
+                activeRepoId={activeRepo?.id || null}
+                activeRepoName={activeRepo?.name}
+                onSelectPackage={handleSelectPackageFromHistory}
+              />
+            ) : (
+              <div className="p-4 space-y-4">
+                {/* Live Re-synthesis Progress Bar */}
                 {loading && agentResponse && (
                   <div className="sticky top-0 z-20 mb-3">
                     <SynthesisProgressBar
@@ -792,7 +713,6 @@ export default function ContextStudio() {
                   </div>
                 )}
 
-                {/* If synthesizing and NO previous response */}
                 {loading && !agentResponse ? (
                   <div className="h-full flex flex-col items-center justify-center p-6 max-w-xl mx-auto">
                     <SynthesisProgressBar
@@ -810,27 +730,36 @@ export default function ContextStudio() {
                     transition={{ duration: 0.2 }}
                     className="space-y-3"
                   >
-                    {/* Task -> Codebase -> Context Package Relationship Strip */}
+                    {/* Telemetry Strip */}
                     <div className="bg-[#050505] border border-[#1a1a1a] rounded-lg p-3 space-y-2">
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#141414] pb-2">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <span className="text-[10px] uppercase font-mono tracking-wider text-neutral-500 shrink-0">
-                            Task Target
-                          </span>
-                          <span className="text-xs text-neutral-200 font-medium truncate">
-                            &ldquo;{agentResponse.task_summary || taskPrompt}&rdquo;
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-1.5 shrink-0 text-xs font-mono text-neutral-400">
-                          <GitBranch className="w-3 h-3 text-neutral-300" />
-                          <span className="text-white font-medium">{activeRepo.name}</span>
+                      <div className="flex items-center justify-between border-b border-[#141414] pb-2">
+                        <span className="text-xs font-semibold text-white truncate">
+                          Synthesized Context Package
+                        </span>
+                        <div className="flex items-center gap-1.5">
+                          {agentResponse.abstained ? (
+                            <Badge
+                              variant="outline"
+                              className="text-[10px] font-mono border-amber-500/40 text-amber-400 bg-amber-950/20"
+                            >
+                              Abstained
+                            </Badge>
+                          ) : agentResponse.model_invoked ? (
+                            <Badge variant="success" className="text-[10px] font-mono">
+                              Model Synthesized
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="text-[10px] font-mono text-neutral-400">
+                              Deterministic AST
+                            </Badge>
+                          )}
                         </div>
                       </div>
 
-                      {/* Compact Metadata Row */}
+                      {/* Telemetry Metrics Row */}
                       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5 text-xs font-mono text-neutral-400">
                         <div className="flex items-center gap-1.5">
-                          <span className="text-neutral-500">Context:</span>
+                          <span className="text-neutral-500">Tokens:</span>
                           <span className="text-neutral-200 font-medium">
                             ~{agentResponse.estimated_tokens.toLocaleString()} tokens
                           </span>
@@ -840,11 +769,6 @@ export default function ContextStudio() {
                           <span className="text-emerald-400 font-medium">
                             {agentResponse.total_time_ms || agentResponse.generation_time_ms}ms
                           </span>
-                          {agentResponse.retrieval_time_ms !== undefined && (
-                            <span className="text-[10px] text-neutral-500 hidden sm:inline">
-                              (retrieval: {agentResponse.retrieval_time_ms}ms · synthesis: {agentResponse.synthesis_time_ms || 0}ms)
-                            </span>
-                          )}
                         </div>
                         <div className="flex items-center gap-1.5">
                           <span className="text-neutral-500">Sources:</span>
@@ -854,50 +778,30 @@ export default function ContextStudio() {
                         </div>
                         <div className="flex items-center gap-1.5">
                           <span className="text-neutral-500">Inference:</span>
-                          <span className={cn("font-medium", agentResponse.model_invoked ? "text-emerald-400" : agentResponse.abstained ? "text-amber-400" : "text-amber-400")}>
+                          <span className="text-emerald-400 font-medium truncate max-w-[120px]">
                             {agentResponse.model_invoked
-                              ? `${agentResponse.model_name || "Model"} (${agentResponse.provider_identity || "LLM"}) · ${agentResponse.inference_time_ms || 0}ms`
-                              : agentResponse.abstained
-                              ? "Abstained (zero hallucination)"
-                              : "Deterministic AST (model bypassed)"}
+                              ? agentResponse.model_name || "None"
+                              : "None"}
                           </span>
                         </div>
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-neutral-500">Evidence:</span>
-                          <span className={cn("font-medium", agentResponse.evidence_state === "sufficient" ? "text-emerald-400" : agentResponse.evidence_state === "partial" ? "text-amber-400" : "text-neutral-300")}>
-                            {agentResponse.evidence_state || "sufficient"} ({Math.round((agentResponse.evidence_score ?? 1.0) * 100)}%)
-                          </span>
-                        </div>
-                        {health?.high_memory_pressure && (
-                          <div className="flex items-center gap-1 text-[10px] text-amber-400">
-                            <span>High RAM Pressure ({health.ram_percent}%)</span>
-                          </div>
-                        )}
-                        {agentResponse.abstained && (
-                          <div className="w-full text-xs font-mono text-amber-300 bg-amber-950/40 border border-amber-500/30 rounded p-2.5 mt-1 space-y-1">
-                            <div className="font-semibold text-amber-400 flex items-center gap-1.5">
-                              <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-                              <span>Insufficient Evidence: {agentResponse.abstention_reason || "No repository code supports this requested subsystem"}</span>
-                            </div>
-                            {agentResponse.missing_evidence && agentResponse.missing_evidence.length > 0 && (
-                              <div className="text-[11px] text-neutral-300">
-                                <span className="text-neutral-400">Missing Subsystems:</span> {agentResponse.missing_evidence.join(", ")}
-                              </div>
-                            )}
-                          </div>
-                        )}
-                        {!agentResponse.abstained && agentResponse.fallback_used && agentResponse.fallback_reason && (
-                          <div className="w-full text-[10px] font-mono text-amber-400/80 bg-amber-950/20 border border-amber-500/20 rounded px-2 py-0.5 mt-0.5">
-                            <span>Notice: {agentResponse.fallback_reason}</span>
+                        {typeof agentResponse.evidence_score === "number" && (
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-neutral-500">Score:</span>
+                            <span className="text-neutral-200 font-medium">
+                              {Math.round(agentResponse.evidence_score * 100)}%
+                            </span>
                           </div>
                         )}
                       </div>
+
+                      {health?.high_memory_pressure && (
+                        <div className="text-[10px] font-mono text-amber-400 pt-1">
+                          Notice: High RAM pressure ({health.ram_percent}%) on host machine.
+                        </div>
+                      )}
                     </div>
 
-                    {/* What RE:Track Found - Evidence & Source Provenance Layer */}
-                    <EvidenceProvenanceLayer agentResponse={agentResponse} />
-
-                    {/* Generated Context Package Markdown */}
+                    {/* Markdown Reveal */}
                     <ProgressiveMarkdownReveal markdown={agentResponse.context_markdown} />
                   </motion.div>
                 ) : (
@@ -909,13 +813,13 @@ export default function ContextStudio() {
                       No Context Package Generated Yet
                     </h4>
                     <p className="text-xs text-neutral-500 mt-1 max-w-sm leading-relaxed">
-                      Enter your task in the Prompt Workbench on the left and click &ldquo;Synthesize Context Package&rdquo; to retrieve compact memories.
+                      Enter your task in the Input Workbench on the left and click &ldquo;Synthesize Context&rdquo; to retrieve compact memories.
                     </p>
                   </div>
                 )}
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </main>
     </div>

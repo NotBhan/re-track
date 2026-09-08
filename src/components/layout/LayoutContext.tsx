@@ -5,11 +5,17 @@ interface LayoutContextType {
   setMobileMenuOpen: (open: boolean) => void;
   toggleMobileMenu: () => void;
   closeMobileMenu: () => void;
+  openNewIndexModal?: () => void;
 }
 
 const LayoutContext = createContext<LayoutContextType | undefined>(undefined);
 
-export function LayoutProvider({ children }: { children: ReactNode }) {
+interface LayoutProviderProps {
+  children: ReactNode;
+  onNewIndex?: () => void;
+}
+
+export function LayoutProvider({ children, onNewIndex }: LayoutProviderProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const toggleMobileMenu = () => setMobileMenuOpen((prev) => !prev);
@@ -22,6 +28,7 @@ export function LayoutProvider({ children }: { children: ReactNode }) {
         setMobileMenuOpen,
         toggleMobileMenu,
         closeMobileMenu,
+        openNewIndexModal: onNewIndex,
       }}
     >
       {children}

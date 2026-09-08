@@ -7,13 +7,26 @@ import {
   resetAllStores,
   setMockInvokeHandler,
   createDefaultMockHandler,
+  mockRepositories,
 } from "@/test/test-utils";
 import { useMemoryStore } from "@/stores/memory-store";
+import { useRepositoryStore } from "@/stores/repository-store";
 
 describe("Journey G — Memory Inspector (3-Tier Cognee Architecture)", () => {
   beforeEach(() => {
     resetAllStores();
     setMockInvokeHandler(null);
+    useRepositoryStore.setState({
+      selectedId: "repo-1",
+      repositories: mockRepositories,
+    });
+  });
+
+  it("renders Repository Required state when selectedId is null and does not query memory", async () => {
+    useRepositoryStore.setState({ selectedId: null });
+    renderWithProviders(<Memory />);
+    expect(screen.getByText("Repository Required")).toBeInTheDocument();
+    expect(screen.getByText(/requires an active repository scope/i)).toBeInTheDocument();
   });
 
   it("renders 3-tier memory inspector with overview statistics and storage layers", async () => {
@@ -24,7 +37,7 @@ describe("Journey G — Memory Inspector (3-Tier Cognee Architecture)", () => {
     });
 
     // Check 3 tier tab buttons
-    expect(screen.getByRole("button", { name: /Datasets & Files/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Semantic Records/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Vector Space/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Knowledge Graph/i })).toBeInTheDocument();
 

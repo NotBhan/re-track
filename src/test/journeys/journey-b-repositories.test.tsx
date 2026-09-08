@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import Repositories from "@/pages/Repositories";
+import Workspace from "@/pages/Workspace";
 import { CreateRepositoryIndexModal } from "@/components/repositories/CreateRepositoryIndexModal";
 import {
   renderWithProviders,
@@ -19,7 +19,7 @@ describe("Journey B — Repository Registration, Indexing & Management", () => {
   });
 
   it("renders repository catalog with metadata badges and details", async () => {
-    renderWithProviders(<Repositories />);
+    renderWithProviders(<Workspace />);
 
     // Wait for repositories to load
     await waitFor(() => {
@@ -34,7 +34,7 @@ describe("Journey B — Repository Registration, Indexing & Management", () => {
 
   it("filters repositories by search query and shows clear button", async () => {
     const user = userEvent.setup();
-    renderWithProviders(<Repositories />);
+    renderWithProviders(<Workspace />);
 
     await waitFor(() => {
       expect(screen.getByText("re-track-core")).toBeInTheDocument();
@@ -48,7 +48,7 @@ describe("Journey B — Repository Registration, Indexing & Management", () => {
     });
 
     // Clear search
-    const clearButton = screen.getByRole("button", { name: "Clear search filter" });
+    const clearButton = screen.getAllByRole("button", { name: /Clear search filter/i })[0];
     await user.click(clearButton);
 
     await waitFor(() => {

@@ -1,7 +1,8 @@
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import { Sidebar } from "./Sidebar";
 import { useHealthPoll } from "@/hooks/use-health-poll";
 import { LayoutProvider, useLayout } from "./LayoutContext";
+import { useRepositoryStore } from "@/stores/repository-store";
 import { cn } from "@/lib/utils";
 
 interface AppShellProps {
@@ -12,6 +13,11 @@ interface AppShellProps {
 function AppShellContent({ children, onNewIndex }: AppShellProps) {
   useHealthPoll(10000);
   const { mobileMenuOpen, closeMobileMenu } = useLayout();
+  const fetchRepositories = useRepositoryStore((s) => s.fetchRepositories);
+
+  useEffect(() => {
+    fetchRepositories();
+  }, [fetchRepositories]);
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-black text-foreground antialiased select-none">
@@ -52,7 +58,7 @@ function AppShellContent({ children, onNewIndex }: AppShellProps) {
 
 export function AppShell(props: AppShellProps) {
   return (
-    <LayoutProvider>
+    <LayoutProvider onNewIndex={props.onNewIndex}>
       <AppShellContent {...props} />
     </LayoutProvider>
   );
