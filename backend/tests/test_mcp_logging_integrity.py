@@ -27,7 +27,7 @@ async def test_mcp_stdout_is_strictly_valid_jsonrpc_under_logging():
     from mcp.client.session import ClientSession
 
     params = StdioServerParameters(
-        command="python",
+        command=_get_python_executable(),
         args=["mcp_server.py"],
         cwd=str(backend_dir),
     )

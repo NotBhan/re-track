@@ -38,14 +38,7 @@ export function TopBar({ title, subtitle, children }: TopBarProps) {
   const triggerRef = useRef<HTMLButtonElement>(null);
 
   const [searchParams, setSearchParams] = useSearchParams();
-  const repoParam = searchParams.get("repo");
 
-  // Keep repository store in sync with URL
-  useEffect(() => {
-    if (repoParam && repoParam !== selectedId) {
-      select(repoParam);
-    }
-  }, [repoParam, selectedId, select]);
 
   // Click outside and Escape handler for dropdown
   useEffect(() => {

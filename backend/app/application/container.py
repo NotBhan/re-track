@@ -177,6 +177,20 @@ class ApplicationContainer:
             llm_model,
         )
 
+    async def shutdown(self) -> None:
+        """Release long-lived resources held by the composition root.
+
+        Symmetric counterpart to initialize(). Releases memory-engine handles
+        (LanceDB vector engine, Kùzu graph engine) deterministically on shutdown
+        rather than leaving them to be reclaimed by process exit.
+        """
+        if self.cognee_service is not None:
+            try:
+                await self.cognee_service.close()
+                logger.info("CogneeService closed; memory engines released")
+            except Exception as e:
+                logger.warning("CogneeService shutdown failed: %s", e)
+
     async def update_provider(
         self,
         provider: str,

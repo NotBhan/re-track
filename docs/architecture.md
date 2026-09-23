@@ -93,6 +93,35 @@ The architecture follows six primary principles:
 
 ---
 
+# Frontend Interface Topology
+
+All inbound interface implementations live under `frontend/` and are separate adapters over the same backend contract. No interface owns domain logic, and interfaces never depend on each other.
+
+```text
+frontend/
+├── gui/       Tauri + React desktop application (Vite root; bundle → dist/)
+│   ├── index.html
+│   ├── public/
+│   └── src/   → renders via Tauri IPC (@tauri-apps/api) and src/lib/api.ts
+├── cli/       Command-line interface (plain Node ESM, zero dependencies)
+├── tui/       Terminal user interface (plain Node ESM, ANSI presentation)
+└── shared/    Interface-agnostic backend contract client (used by cli + tui)
+```
+
+Dependency rules:
+
+- `gui/` → Tauri IPC → backend. It imports neither `cli/`, `tui/`, nor `shared/`.
+- `cli/` and `tui/` → `shared/backend-client.mjs` → backend HTTP contract.
+- `tui/` never imports React/Tauri; `cli/` never imports GUI/TUI presentation.
+- Repository indexing, AST extraction, retrieval, ranking, and memory statistics are never re-implemented in `frontend/`.
+
+Lifecycle contract:
+
+- The backend composition root (`ApplicationContainer`) exposes `initialize()` / `shutdown()` symmetry. `shutdown()` releases memory-engine handles (LanceDB vector engine, Kùzu graph engine) and is invoked from both the FastAPI lifespan and the MCP stdio shutdown path.
+- Terminal interfaces restore the terminal (cursor, alternate screen, raw mode) on every exit path, including Ctrl+C, EOF, and uncaught errors.
+
+---
+
 # Verification & Test Coverage
 
 The system is validated through 415 automated unit, integration, security, and benchmark tests:

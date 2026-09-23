@@ -11,7 +11,7 @@ interface AppShellProps {
 }
 
 function AppShellContent({ children, onNewIndex }: AppShellProps) {
-  useHealthPoll(10000);
+  useHealthPoll(15000);
   const { mobileMenuOpen, closeMobileMenu } = useLayout();
   const fetchRepositories = useRepositoryStore((s) => s.fetchRepositories);
 

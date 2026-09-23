@@ -7,13 +7,22 @@ import path from "path";
 const host = process.env.TAURI_DEV_HOST;
 
 // https://vite.dev/config/
+// The GUI interface lives under frontend/gui (see frontend/AGENTS.md).
 export default defineConfig(async () => ({
+  root: "frontend/gui",
   plugins: [react(), tailwindcss()],
 
   resolve: {
     alias: {
-      "@": path.resolve(__dirname, "./src"),
+      "@": path.resolve(__dirname, "./frontend/gui/src"),
     },
+  },
+
+  build: {
+    // Keep the bundled GUI at the repository root so the Tauri runtime
+    // (src-tauri/tauri.conf.json -> frontendDist: "../dist") is unaffected.
+    outDir: path.resolve(__dirname, "./dist"),
+    emptyOutDir: true,
   },
 
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`

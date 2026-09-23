@@ -139,4 +139,51 @@ describe("Journey E — AST Call Graph Topology & 5-State Handling", () => {
 
     expect(searchInput).toHaveValue("generate_context");
   });
+
+  it("supports back navigation through visited symbols in CallGraphView inspector", async () => {
+    const user = userEvent.setup();
+    useRepositoryStore.setState({
+      repositories: mockRepositories,
+      selectedId: "repo-1",
+      selected: mockRepositories[0],
+    });
+
+    renderExplorer();
+
+    // Wait for nodes to be present
+    await waitFor(() => {
+      expect(screen.getByText("generate_context")).toBeInTheDocument();
+    });
+
+    // Click on a node text to open inspector
+    const nodeText = screen.getByText("generate_context");
+    await user.click(nodeText);
+
+    // Inspector drawer displays the active node id
+    await waitFor(() => {
+      expect(screen.getByText("node-1")).toBeInTheDocument();
+    });
+
+    // Find and click a connected callee button in the inspector (node-2: ContextService)
+    const calleeBtn = screen.getByRole("button", { name: /ContextService/i });
+    expect(calleeBtn).toBeInTheDocument();
+    await user.click(calleeBtn);
+
+    // Inspector now shows ContextService
+    await waitFor(() => {
+      expect(screen.getByText("node-2")).toBeInTheDocument();
+    });
+
+    // Back button is now visible in the inspector
+    const backBtn = screen.getByTitle("Back to previous inspected node");
+    expect(backBtn).toBeInTheDocument();
+
+    // Click Back button
+    await user.click(backBtn);
+
+    // Previous node (generate_context / node-1) is restored
+    await waitFor(() => {
+      expect(screen.getByText("node-1")).toBeInTheDocument();
+    });
+  });
 });

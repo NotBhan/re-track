@@ -59,15 +59,14 @@ describe("Phase 10D.7 — 4-Pillar Unified Architecture & Specification Conforma
       });
     });
 
-    it("redirects legacy /settings to /system?tab=runtime preserving additional params", async () => {
-      window.history.pushState({}, "", "/settings?foo=bar");
+    it("renders dedicated /settings page with configuration options", async () => {
+      window.history.pushState({}, "", "/settings");
 
       renderWithProviders(<App />, { withRouter: false });
 
       await waitFor(() => {
-        expect(window.location.pathname).toBe("/system");
-        expect(window.location.search).toContain("tab=runtime");
-        expect(window.location.search).toContain("foo=bar");
+        expect(window.location.pathname).toBe("/settings");
+        expect(screen.getByText(/Settings & Engine Models/i)).toBeInTheDocument();
       });
     });
 

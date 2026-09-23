@@ -11,6 +11,7 @@ import {
   X,
   ChevronDown,
   ChevronUp,
+  Settings,
 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useHealthStore } from "@/stores/health-store";
@@ -44,9 +45,16 @@ const navItems = [
     to: "/system",
     icon: Gauge,
     label: "System & Telemetry",
-    description: "Settings & Benchmarks",
+    description: "Hardware & Health",
     match: (pathname: string) =>
-      pathname.startsWith("/system") || pathname.startsWith("/settings") || pathname.startsWith("/benchmarks"),
+      pathname.startsWith("/system") || pathname.startsWith("/benchmarks"),
+  },
+  {
+    to: "/settings",
+    icon: Settings,
+    label: "Settings",
+    description: "Provider & Preferences",
+    match: (pathname: string) => pathname.startsWith("/settings"),
   },
 ];
 

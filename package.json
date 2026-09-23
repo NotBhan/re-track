@@ -10,7 +10,9 @@
     "test:watch": "vitest",
     "preview": "vite preview",
     "tauri": "node scripts/tauri.mjs",
-    "lint": "oxlint src"
+    "cli": "node frontend/cli/retrack.mjs",
+    "tui": "node frontend/tui/retrack.mjs",
+    "lint": "oxlint frontend/gui/src frontend/cli frontend/tui frontend/shared"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.2",

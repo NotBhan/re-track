@@ -29,6 +29,7 @@ import {
   Maximize2,
   Minimize2,
   Info,
+  ArrowLeft,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -105,13 +106,97 @@ export interface CallGraphViewProps {
   onTriggerAnalyze?: () => void;
 }
 
-function initSim(nodes: CallGraphNode[], w: number, h: number): SimNode[] {
-  const n = nodes.length || 1;
-  return nodes.map((node, i) => {
+function initSim(nodes: CallGraphNode[], edges: CallGraphEdge[], w: number, h: number): SimNode[] {
+  const n = nodes.length;
+  if (n === 0) return [];
+  if (n === 1) {
+    return [{ ...nodes[0], x: w / 2, y: h / 2, vx: 0, vy: 0 }];
+  }
+
+  const cx = w / 2;
+  const cy = h / 2;
+  const r = Math.min(w, h) * 0.32;
+  const simNodes: SimNode[] = nodes.map((node, i) => {
     const angle = (2 * Math.PI * i) / n;
-    const r = Math.min(w, h) * 0.32;
-    return { ...node, x: w / 2 + r * Math.cos(angle), y: h / 2 + r * Math.sin(angle), vx: 0, vy: 0 };
+    return {
+      ...node,
+      x: cx + r * Math.cos(angle),
+      y: cy + r * Math.sin(angle),
+      vx: 0,
+      vy: 0,
+    };
   });
+
+  const idxMap = new Map<string, number>();
+  simNodes.forEach((node, i) => idxMap.set(node.id, i));
+
+  // Pre-simulate 35 relaxation iterations in memory synchronously (< 0.5ms).
+  // Graph enters view in settled organic equilibrium with zero cold-load delay.
+  const iterations = 35;
+  for (let step = 0; step < iterations; step++) {
+    const alpha = 0.4 * Math.pow(0.94, step);
+
+    // Centering force
+    for (let i = 0; i < n; i++) {
+      simNodes[i].vx += (cx - simNodes[i].x) * CENTERING * alpha;
+      simNodes[i].vy += (cy - simNodes[i].y) * CENTERING * alpha;
+    }
+
+    // Pairwise repulsion
+    for (let i = 0; i < n; i++) {
+      for (let j = i + 1; j < n; j++) {
+        const dx = simNodes[j].x - simNodes[i].x;
+        const dy = simNodes[j].y - simNodes[i].y;
+        const dist = Math.hypot(dx, dy) || 1;
+        if (dist < 260) {
+          const force = (REPULSION / (dist * dist)) * alpha;
+          const fx = (dx / dist) * force;
+          const fy = (dy / dist) * force;
+          simNodes[i].vx -= fx;
+          simNodes[i].vy -= fy;
+          simNodes[j].vx += fx;
+          simNodes[j].vy += fy;
+        }
+      }
+    }
+
+    // Edge springs
+    for (let e = 0; e < edges.length; e++) {
+      const si = idxMap.get(edges[e].source);
+      const ti = idxMap.get(edges[e].target);
+      if (si !== undefined && ti !== undefined && si !== ti) {
+        const dx = simNodes[ti].x - simNodes[si].x;
+        const dy = simNodes[ti].y - simNodes[si].y;
+        const dist = Math.hypot(dx, dy) || 1;
+        const diff = dist - LINK_DISTANCE;
+        const force = diff * 0.08 * alpha;
+        const fx = (dx / dist) * force;
+        const fy = (dy / dist) * force;
+        simNodes[si].vx += fx;
+        simNodes[si].vy += fy;
+        simNodes[ti].vx -= fx;
+        simNodes[ti].vy -= fy;
+      }
+    }
+
+    // Damping and position update
+    for (let i = 0; i < n; i++) {
+      simNodes[i].vx *= DAMPING;
+      simNodes[i].vy *= DAMPING;
+      simNodes[i].x += simNodes[i].vx;
+      simNodes[i].y += simNodes[i].vy;
+      simNodes[i].x = Math.max(RADIUS + 10, Math.min(w - RADIUS - 10, simNodes[i].x));
+      simNodes[i].y = Math.max(RADIUS + 10, Math.min(h - RADIUS - 10, simNodes[i].y));
+    }
+  }
+
+  // Zero final velocities
+  for (let i = 0; i < n; i++) {
+    simNodes[i].vx = 0;
+    simNodes[i].vy = 0;
+  }
+
+  return simNodes;
 }
 
 export function CallGraphView({
@@ -275,7 +360,7 @@ export function CallGraphView({
     return () => observer.disconnect();
   }, []);
 
-  const [simNodes, setSimNodes] = useState<SimNode[]>(() => initSim(filteredNodes, canvasSize.w, canvasSize.h));
+  const [simNodes, setSimNodes] = useState<SimNode[]>(() => initSim(filteredNodes, filteredEdges, canvasSize.w, canvasSize.h));
   const [hovered, setHovered] = useState<string | null>(null);
   const [dragging, setDragging] = useState<{ id: string; ox: number; oy: number } | null>(null);
   const [pan, setPan] = useState({ x: 0, y: 0 });
@@ -284,14 +369,41 @@ export function CallGraphView({
   const panStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
 
   const nodesRef = useRef<SimNode[]>(simNodes);
-  const alphaRef = useRef(0.35);
+  const alphaRef = useRef(0.0);
   const idxRef = useRef<Map<string, number>>(new Map());
+  const rafIdRef = useRef<number | null>(null);
+
+  // Inspection history stack for back button navigation in the inspector panel
+  const [inspectionHistory, setInspectionHistory] = useState<CallGraphNode[]>([]);
+
+  const navigateToNode = useCallback(
+    (targetNode: CallGraphNode) => {
+      if (activeNode && activeNode.id !== targetNode.id) {
+        setInspectionHistory((prev) => [...prev, activeNode]);
+      }
+      setActiveNode(targetNode);
+      onSelectNode?.(targetNode);
+    },
+    [activeNode, onSelectNode]
+  );
+
+  const handleNavigateBack = useCallback(() => {
+    setInspectionHistory((prev) => {
+      if (prev.length === 0) return prev;
+      const next = [...prev];
+      const previousNode = next.pop()!;
+      setActiveNode(previousNode);
+      onSelectNode?.(previousNode);
+      return next;
+    });
+  }, [onSelectNode]);
 
   // Sync external selectedNodeId prop with internal activeNode
   useEffect(() => {
     if (selectedNodeId === undefined) return;
     if (!selectedNodeId) {
       setActiveNode(null);
+      setInspectionHistory([]);
     } else {
       const found = rawNodes.find((n) => n.id === selectedNodeId);
       if (found) {
@@ -306,6 +418,7 @@ export function CallGraphView({
       if (e.key === "Escape") {
         if (activeNode || selectedNodeId) {
           setActiveNode(null);
+          setInspectionHistory([]);
           onSelectNode?.(null);
         }
       }
@@ -314,81 +427,104 @@ export function CallGraphView({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [activeNode, selectedNodeId, onSelectNode]);
 
+  // Zero-idle RAF simulation engine: runs only when disturbed (drag/filter) and shuts off at rest
+  const kickSim = useCallback(
+    (targetAlpha = 0.1) => {
+      alphaRef.current = Math.max(alphaRef.current, targetAlpha);
+      if (rafIdRef.current !== null) return;
+
+      const tick = () => {
+        if (alphaRef.current < 0.005) {
+          if (rafIdRef.current !== null) {
+            cancelAnimationFrame(rafIdRef.current);
+            rafIdRef.current = null;
+          }
+          return;
+        }
+
+        alphaRef.current *= 0.93;
+        const ns = nodesRef.current;
+        const cx = canvasSize.w / 2;
+        const cy = canvasSize.h / 2;
+
+        for (let i = 0; i < ns.length; i++) {
+          ns[i].vx += (cx - ns[i].x) * CENTERING * alphaRef.current;
+          ns[i].vy += (cy - ns[i].y) * CENTERING * alphaRef.current;
+        }
+
+        for (let i = 0; i < ns.length; i++) {
+          for (let j = i + 1; j < ns.length; j++) {
+            const dx = ns[j].x - ns[i].x;
+            const dy = ns[j].y - ns[i].y;
+            const dist = Math.hypot(dx, dy) || 1;
+            if (dist < 260) {
+              const force = (REPULSION / (dist * dist)) * alphaRef.current;
+              const fx = (dx / dist) * force;
+              const fy = (dy / dist) * force;
+              ns[i].vx -= fx;
+              ns[i].vy -= fy;
+              ns[j].vx += fx;
+              ns[j].vy += fy;
+            }
+          }
+        }
+
+        for (let k = 0; k < filteredEdges.length; k++) {
+          const e = filteredEdges[k];
+          const si = idxRef.current.get(e.source);
+          const ti = idxRef.current.get(e.target);
+          if (si !== undefined && ti !== undefined && si !== ti) {
+            const dx = ns[ti].x - ns[si].x;
+            const dy = ns[ti].y - ns[si].y;
+            const dist = Math.hypot(dx, dy) || 1;
+            const diff = dist - LINK_DISTANCE;
+            const force = diff * 0.08 * alphaRef.current;
+            const fx = (dx / dist) * force;
+            const fy = (dy / dist) * force;
+            ns[si].vx += fx;
+            ns[si].vy += fy;
+            ns[ti].vx -= fx;
+            ns[ti].vy -= fy;
+          }
+        }
+
+        for (let i = 0; i < ns.length; i++) {
+          ns[i].vx *= DAMPING;
+          ns[i].vy *= DAMPING;
+          ns[i].x += ns[i].vx;
+          ns[i].y += ns[i].vy;
+          ns[i].x = Math.max(RADIUS + 10, Math.min(canvasSize.w - RADIUS - 10, ns[i].x));
+          ns[i].y = Math.max(RADIUS + 10, Math.min(canvasSize.h - RADIUS - 10, ns[i].y));
+        }
+
+        setSimNodes([...ns]);
+        rafIdRef.current = requestAnimationFrame(tick);
+      };
+
+      rafIdRef.current = requestAnimationFrame(tick);
+    },
+    [canvasSize.w, canvasSize.h, filteredEdges]
+  );
+
+  // Clean up RAF on unmount
+  useEffect(() => {
+    return () => {
+      if (rafIdRef.current !== null) {
+        cancelAnimationFrame(rafIdRef.current);
+        rafIdRef.current = null;
+      }
+    };
+  }, []);
+
   // Re-sync simulation when filtered nodes or canvas dimensions change
   useEffect(() => {
     const map = new Map<string, number>();
     filteredNodes.forEach((n, i) => map.set(n.id, i));
     idxRef.current = map;
-    const s = initSim(filteredNodes, canvasSize.w, canvasSize.h);
+    const s = initSim(filteredNodes, filteredEdges, canvasSize.w, canvasSize.h);
     nodesRef.current = s;
-    setSimNodes([...s]);
-    alphaRef.current = 0.35;
-  }, [filteredNodes, canvasSize.w, canvasSize.h]);
-
-  // Spring physics loop
-  useEffect(() => {
-    const id = setInterval(() => {
-      if (alphaRef.current < 0.004) return;
-      alphaRef.current *= 0.97;
-      const ns = nodesRef.current.map((n) => ({ ...n }));
-      const cx = canvasSize.w / 2,
-        cy = canvasSize.h / 2;
-
-      for (const n of ns) {
-        n.vx += (cx - n.x) * CENTERING * alphaRef.current;
-        n.vy += (cy - n.y) * CENTERING * alphaRef.current;
-      }
-
-      for (let i = 0; i < ns.length; i++) {
-        for (let j = i + 1; j < ns.length; j++) {
-          const dx = ns[j].x - ns[i].x;
-          const dy = ns[j].y - ns[i].y;
-          const dist = Math.hypot(dx, dy) || 1;
-          if (dist < 260) {
-            const force = (REPULSION / (dist * dist)) * alphaRef.current;
-            const fx = (dx / dist) * force;
-            const fy = (dy / dist) * force;
-            ns[i].vx -= fx;
-            ns[i].vy -= fy;
-            ns[j].vx += fx;
-            ns[j].vy += fy;
-          }
-        }
-      }
-
-      for (const e of filteredEdges) {
-        const si = idxRef.current.get(e.source);
-        const ti = idxRef.current.get(e.target);
-        if (si !== undefined && ti !== undefined && si !== ti) {
-          const dx = ns[ti].x - ns[si].x;
-          const dy = ns[ti].y - ns[si].y;
-          const dist = Math.hypot(dx, dy) || 1;
-          const diff = dist - LINK_DISTANCE;
-          const force = diff * 0.08 * alphaRef.current;
-          const fx = (dx / dist) * force;
-          const fy = (dy / dist) * force;
-          ns[si].vx += fx;
-          ns[si].vy += fy;
-          ns[ti].vx -= fx;
-          ns[ti].vy -= fy;
-        }
-      }
-
-      for (const n of ns) {
-        n.vx *= DAMPING;
-        n.vy *= DAMPING;
-        n.x += n.vx;
-        n.y += n.vy;
-        n.x = Math.max(RADIUS + 10, Math.min(canvasSize.w - RADIUS - 10, n.x));
-        n.y = Math.max(RADIUS + 10, Math.min(canvasSize.h - RADIUS - 10, n.y));
-      }
-
-      nodesRef.current = ns;
-      setSimNodes(ns);
-    }, 25);
-
-    return () => clearInterval(id);
-  }, [filteredEdges, canvasSize.w, canvasSize.h]);
+    setSimNodes(s);
+  }, [filteredNodes, filteredEdges, canvasSize.w, canvasSize.h]);
 
   // Drag handlers
   const handleNodeMouseDown = useCallback(
@@ -413,14 +549,20 @@ export function CallGraphView({
       if (dragging) {
         const nx = (e.clientX - dragging.ox - pan.x) / zoom;
         const ny = (e.clientY - dragging.oy - pan.y) / zoom;
-        nodesRef.current = nodesRef.current.map((n) => (n.id === dragging.id ? { ...n, x: nx, y: ny, vx: 0, vy: 0 } : n));
-        setSimNodes([...nodesRef.current]);
-        alphaRef.current = 0.15;
+        const target = nodesRef.current.find((n) => n.id === dragging.id);
+        if (target) {
+          target.x = nx;
+          target.y = ny;
+          target.vx = 0;
+          target.vy = 0;
+          setSimNodes([...nodesRef.current]);
+          kickSim(0.12);
+        }
       } else if (panDrag) {
         setPan({ x: panDrag.px + (e.clientX - panDrag.sx), y: panDrag.py + (e.clientY - panDrag.sy) });
       }
     },
-    [dragging, panDrag, pan.x, pan.y, zoom]
+    [dragging, panDrag, pan.x, pan.y, zoom, kickSim]
   );
 
   const handleMouseUp = useCallback(
@@ -431,6 +573,7 @@ export function CallGraphView({
         const dt = Date.now() - panStartRef.current.time;
         if (dx < 4 && dy < 4 && dt < 250) {
           setActiveNode(null);
+          setInspectionHistory([]);
           onSelectNode?.(null);
         }
       }
@@ -450,13 +593,11 @@ export function CallGraphView({
   const handleResetView = () => {
     setPan({ x: 0, y: 0 });
     setZoom(1);
-    alphaRef.current = 0.35;
   };
 
   const handleSelectNodeClick = (e: React.MouseEvent, node: SimNode) => {
     e.stopPropagation();
-    setActiveNode(node);
-    onSelectNode?.(node);
+    navigateToNode(node);
   };
 
   // Node position map
@@ -846,24 +987,39 @@ export function CallGraphView({
               className="absolute right-4 top-4 w-72 sm:w-84 max-w-[calc(100%-2rem)] bg-black/95 backdrop-blur-md border border-[#333] rounded-xl shadow-2xl p-4 text-xs font-mono z-20 space-y-3"
             >
               <div className="flex items-start justify-between pb-2 border-b border-[#262626]">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-bold text-white tracking-tight">{activeNode.label}</span>
-                    <Badge variant="outline" className="text-[10px] uppercase border-[#333] text-neutral-300">
-                      {activeNode.kind}
-                    </Badge>
+                <div className="flex items-center gap-2 min-w-0">
+                  {inspectionHistory.length > 0 && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleNavigateBack();
+                      }}
+                      className="p-1 rounded hover:bg-[#222] text-neutral-400 hover:text-white cursor-pointer transition-colors shrink-0"
+                      title="Back to previous inspected node"
+                    >
+                      <ArrowLeft className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-bold text-white tracking-tight truncate">{activeNode.label}</span>
+                      <Badge variant="outline" className="text-[10px] uppercase border-[#333] text-neutral-300 shrink-0">
+                        {activeNode.kind}
+                      </Badge>
+                    </div>
+                    <p className="text-[10px] text-neutral-500 font-mono mt-0.5 break-all">
+                      {activeNode.id}
+                    </p>
                   </div>
-                  <p className="text-[10px] text-neutral-500 font-mono mt-0.5 break-all">
-                    {activeNode.id}
-                  </p>
                 </div>
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
                     setActiveNode(null);
+                    setInspectionHistory([]);
                     onSelectNode?.(null);
                   }}
-                  className="p-1 rounded hover:bg-[#222] text-neutral-400 hover:text-white cursor-pointer"
+                  className="p-1 rounded hover:bg-[#222] text-neutral-400 hover:text-white cursor-pointer shrink-0"
                   title="Close Inspector"
                 >
                   <X className="w-3.5 h-3.5" />
@@ -897,7 +1053,7 @@ export function CallGraphView({
                       return (
                         <button
                           key={`${edge.source}-${idx}`}
-                          onClick={() => matched && setActiveNode(matched)}
+                          onClick={() => matched && navigateToNode(matched)}
                           className="flex items-center justify-between px-2 py-1 rounded bg-[#141414] border border-[#2a2a2a] text-neutral-300 text-[10px] hover:border-neutral-400 text-left cursor-pointer"
                         >
                           <span className="truncate max-w-[160px]">{matched?.label || edge.source}</span>
@@ -925,7 +1081,7 @@ export function CallGraphView({
                       return (
                         <button
                           key={`${edge.target}-${idx}`}
-                          onClick={() => matched && setActiveNode(matched)}
+                          onClick={() => matched && navigateToNode(matched)}
                           className="flex items-center justify-between px-2 py-1 rounded bg-[#141414] border border-[#2a2a2a] text-neutral-300 text-[10px] hover:border-neutral-400 text-left cursor-pointer"
                         >
                           <span className="truncate max-w-[160px]">{matched?.label || edge.target}</span>

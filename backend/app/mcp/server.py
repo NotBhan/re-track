@@ -175,6 +175,11 @@ async def run_mcp_stdio(container: Optional[ApplicationContainer] = None) -> Non
     except Exception as e:
         logger.error("MCP stdio server encountered fatal error: %s", e, exc_info=True)
         raise
+    finally:
+        try:
+            await app_container.shutdown()
+        except Exception as e:
+            logger.warning("MCP shutdown failed to release resources: %s", e)
 
 
 def main() -> None:

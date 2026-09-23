@@ -29,7 +29,7 @@ async def test_mcp_process_terminates_on_stdin_eof():
     from mcp.client.session import ClientSession
 
     params = StdioServerParameters(
-        command="python",
+        command=_get_python_executable(),
         args=["mcp_server.py"],
         cwd=str(backend_dir),
     )

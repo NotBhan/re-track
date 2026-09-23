@@ -23,9 +23,9 @@
     /* Path aliases */
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./frontend/gui/src/*"]
     }
   },
-  "include": ["src"],
+  "include": ["frontend/gui/src"],
   "references": [{ "path": "./tsconfig.node.json" }]
 }

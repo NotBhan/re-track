@@ -213,4 +213,107 @@ describe("Journey B — Repository Registration, Indexing & Management", () => {
     expect(deletedRepoId).toBe("repo-1");
     expect(useRepositoryStore.getState().repositories.length).toBe(0);
   });
+
+  it("navigates back to catalog when clicking Back to Repositories in WorkspaceHeader", async () => {
+    const user = userEvent.setup();
+    useRepositoryStore.setState({
+      selectedId: "repo-1",
+      selected: mockRepositories[0],
+      repositories: mockRepositories,
+    });
+
+    renderWithProviders(<Workspace />);
+
+    // Active workspace is shown
+    expect(screen.getByRole("heading", { name: "re-track-core" })).toBeInTheDocument();
+    const backBtn = screen.getByTitle("Back to Repositories");
+    expect(backBtn).toBeInTheDocument();
+
+    await user.click(backBtn);
+
+    // After clicking back, selection is cleared and catalog is shown
+    await waitFor(() => {
+      expect(screen.getByText("Select Active Workspace")).toBeInTheDocument();
+    });
+  });
+
+  it("opens delete confirmation modal from WorkspaceHeader and deletes repository", async () => {
+    const user = userEvent.setup();
+    let deletedRepoId: string | null = null;
+    let repoList = [...mockRepositories];
+    const defaultMock = createDefaultMockHandler();
+
+    setMockInvokeHandler(async (cmd: string, args) => {
+      if (cmd === "delete_repository") {
+        deletedRepoId = (args as { repoId: string })?.repoId;
+        repoList = repoList.filter((r) => r.id !== deletedRepoId);
+        return { success: true };
+      }
+      if (cmd === "list_repositories") {
+        return { success: true, repositories: repoList, total_count: repoList.length };
+      }
+      return defaultMock(cmd, args);
+    });
+
+    useRepositoryStore.setState({
+      selectedId: "repo-1",
+      selected: mockRepositories[0],
+      repositories: mockRepositories,
+    });
+
+    renderWithProviders(<Workspace />);
+
+    // Click delete in WorkspaceHeader
+    const deleteBtn = screen.getByTitle("Delete Repository");
+    expect(deleteBtn).toBeInTheDocument();
+    await user.click(deleteBtn);
+
+    // Modal opens with safety warning and repository name
+    expect(screen.getByRole("heading", { name: "Delete Repository" })).toBeInTheDocument();
+    expect(screen.getByText(/Your local source code files on disk will NOT be deleted/i)).toBeInTheDocument();
+
+    // Click confirm delete in modal
+    const confirmBtn = screen.getAllByRole("button", { name: /Delete Repository/i }).find(
+      (b) => b.classList.contains("bg-red-600")
+    );
+    expect(confirmBtn).toBeDefined();
+    await user.click(confirmBtn!);
+
+    await waitFor(() => {
+      expect(deletedRepoId).toBe("repo-1");
+      expect(screen.getByText("Select Active Workspace")).toBeInTheDocument();
+    });
+  });
+
+  it("cancels deletion when clicking Cancel in delete modal from catalog card", async () => {
+    const user = userEvent.setup();
+    useRepositoryStore.setState({
+      selectedId: null,
+      selected: undefined,
+      repositories: mockRepositories,
+    });
+
+    renderWithProviders(<Workspace />);
+
+    await waitFor(() => {
+      expect(screen.getByText("re-track-core")).toBeInTheDocument();
+    });
+
+    // Click trash button on catalog card
+    const cardDeleteBtn = screen.getByRole("button", { name: "Delete re-track-core" });
+    await user.click(cardDeleteBtn);
+
+    // Modal appears
+    expect(screen.getByRole("heading", { name: "Delete Repository" })).toBeInTheDocument();
+
+    // Click Cancel
+    const cancelBtn = screen.getByRole("button", { name: "Cancel" });
+    await user.click(cancelBtn);
+
+    // Modal dismissed, repo still in catalog
+    await waitFor(() => {
+      expect(screen.queryByRole("heading", { name: "Delete Repository" })).not.toBeInTheDocument();
+      expect(screen.getByText("re-track-core")).toBeInTheDocument();
+    });
+  });
 });

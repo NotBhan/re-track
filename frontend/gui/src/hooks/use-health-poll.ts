@@ -6,7 +6,7 @@ import { useHealthStore } from "@/stores/health-store";
  * Automatically pauses when window is minimized / hidden,
  * and refreshes immediately when the user focuses the app.
  */
-export function useHealthPoll(intervalMs = 8000) {
+export function useHealthPoll(intervalMs = 15000) {
   const pollHealth = useHealthStore((s) => s.pollHealth);
 
   useEffect(() => {

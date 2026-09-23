@@ -86,8 +86,18 @@ cd backend && uv run pytest tests/ -q
 # AST integrity tests
 cd backend && uv run pytest tests/test_ast_integrity.py -v
 
+# Shutdown resource-release regression tests
+cd backend && uv run pytest tests/test_shutdown_resource_release.py -v
+
 # Frontend TypeScript & build check
 npm run build
+
+# Frontend unit/integration & resource-lifecycle tests
+npm run test
+
+# Interface entry points
+node frontend/cli/retrack.mjs help
+node frontend/tui/retrack.mjs | cat
 ```
 
 ---
@@ -95,8 +105,12 @@ npm run build
 # Child DOX Index
 
 - `docs/` — Project documentation and design. Authoritative source for vision, architecture, implementation plan, repository knowledge model, and project contracts.
-- `backend/` — Python backend: Cognee integration, deterministic AST call graph extraction, context engine, repository summary generation, benchmark runner, API layer.
-- `src/` — React frontend: 4-Pillar Unified Architecture (Workspace, Context Studio, Memory Engine, System & Telemetry).
+- `backend/` — Python backend: Cognee integration, deterministic AST call graph extraction, context engine, repository summary generation, benchmark runner, API layer. Also owns the Python CLI and MCP server.
+- `frontend/` — All interface implementations. See `frontend/AGENTS.md` for layer boundaries.
+  - `frontend/gui/` — Desktop GUI (Tauri/React, 4-Pillar Unified Architecture).
+  - `frontend/cli/` — Command-line interface.
+  - `frontend/tui/` — Terminal user interface.
+  - `frontend/shared/` — Interface-agnostic backend contract client.
 - `src-tauri/` — Desktop runtime and native Tauri IPC integration.
 - `scripts/` — Development and automation scripts.
 - `examples/` — Example projects and demo datasets.

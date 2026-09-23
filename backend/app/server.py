@@ -28,6 +28,10 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error("Backend initialization failed: %s", e)
     yield
+    try:
+        await container.shutdown()
+    except Exception as e:
+        logger.error("Backend shutdown failed to release resources: %s", e)
     logger.info("Shutting down RE:Track HTTP server")
 
 

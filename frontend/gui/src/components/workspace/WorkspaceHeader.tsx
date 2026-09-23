@@ -1,4 +1,4 @@
-import { FolderGit2, RefreshCw, Layers, GitBranch, GitCommit, ArrowLeftRight } from "lucide-react";
+import { FolderGit2, RefreshCw, Layers, GitBranch, GitCommit, ArrowLeftRight, ArrowLeft, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -11,6 +11,7 @@ interface WorkspaceHeaderProps {
   onTriggerScan: () => void;
   onOpenReindex: () => void;
   onClearSelection: () => void;
+  onOpenDelete?: () => void;
 }
 
 export function WorkspaceHeader({
@@ -19,6 +20,7 @@ export function WorkspaceHeader({
   onTriggerScan,
   onOpenReindex,
   onClearSelection,
+  onOpenDelete,
 }: WorkspaceHeaderProps) {
   const branchName = repository.branch || (repository.metadata?.branch as string) || null;
   const commitHash = repository.commit_hash || (repository.metadata?.commit_hash as string) || (repository.metadata?.commit as string) || null;
@@ -30,6 +32,16 @@ export function WorkspaceHeader({
       <div className="px-4 sm:px-6 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         {/* Left: Identity and Git metadata */}
         <div className="flex items-center gap-3 min-w-0">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onClearSelection}
+            className="h-8 px-2.5 text-xs font-mono text-neutral-300 hover:text-white border-[#262626] bg-[#0c0c0c] hover:bg-[#1a1a1a] cursor-pointer gap-1.5 shrink-0"
+            title="Back to Repositories"
+          >
+            <ArrowLeft className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Back</span>
+          </Button>
           <div className="w-10 h-10 rounded-lg bg-[#121212] border border-[#262626] flex items-center justify-center text-white shrink-0">
             <FolderGit2 className="w-5 h-5" />
           </div>
@@ -130,6 +142,19 @@ export function WorkspaceHeader({
             <ArrowLeftRight className="w-3 h-3" />
             <span>Switch</span>
           </Button>
+
+          {onOpenDelete && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onOpenDelete}
+              className="h-8 px-2.5 text-xs font-mono gap-1.5 border-red-900/30 bg-[#0a0a0a] text-red-400 hover:bg-red-950/30 hover:border-red-800/60 hover:text-red-300 cursor-pointer"
+              title="Delete Repository"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Delete</span>
+            </Button>
+          )}
         </div>
       </div>
 

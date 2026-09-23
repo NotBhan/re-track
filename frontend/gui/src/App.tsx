@@ -10,6 +10,7 @@ import ContextStudio from "@/pages/ContextStudio";
 import Workspace from "@/pages/Workspace";
 import Memory from "@/pages/Memory";
 import SystemTelemetry from "@/pages/SystemTelemetry";
+import Settings from "@/pages/Settings";
 import "./App.css";
 
 function PreservingRedirect({
@@ -106,7 +107,11 @@ function AnimatedRoutes() {
         />
         <Route
           path="/settings"
-          element={<PreservingRedirect to="/system" defaultParams={{ tab: "runtime" }} />}
+          element={
+            <PageTransition>
+              <Settings />
+            </PageTransition>
+          }
         />
       </Routes>
     </AnimatePresence>

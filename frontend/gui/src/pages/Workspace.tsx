@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import { TopBar } from "@/components/layout/TopBar";
 import { useRepositoryStore } from "@/stores/repository-store";
@@ -10,7 +10,9 @@ import { ProviderAlertBanner } from "@/components/shared/ProviderAlertBanner";
 import { WorkspaceHeader } from "@/components/workspace/WorkspaceHeader";
 import { LifecycleStepper } from "@/components/workspace/LifecycleStepper";
 import { ManifestEvidenceTable } from "@/components/workspace/ManifestEvidenceTable";
-import type { CallGraphNode, CallGraphEdge } from "@/types/repository";
+import { DeleteRepositoryDialog } from "@/components/repositories/DeleteRepositoryDialog";
+import { useToastStore } from "@/components/ui/toast";
+import type { Repository, CallGraphNode, CallGraphEdge } from "@/types/repository";
 import {
   FolderGit2,
   RefreshCw,
@@ -23,6 +25,8 @@ import {
   ArrowRight,
   CheckCircle2,
   FolderOpen,
+  Trash2,
+  AlertTriangle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -38,6 +42,7 @@ export default function Workspace() {
     selectedId,
     selected,
     select,
+    removeRepo,
     fetchRepositories,
     scanRepo,
     scanning,
@@ -48,6 +53,8 @@ export default function Workspace() {
 
   const { openNewIndexModal } = useLayout();
   const [showReindexModal, setShowReindexModal] = useState(false);
+  const [repoToDelete, setRepoToDelete] = useState<Repository | null>(null);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [selectedAstNode, setSelectedAstNode] = useState<CallGraphNode | null>(null);
 
   // Active tab from URL query param (?tab=...)
@@ -59,20 +66,25 @@ export default function Workspace() {
     setSearchParams(next);
   };
 
+  const isClearingRef = useRef(false);
+
   // Synchronize URL ?repo=<id> with store.selectedId
   useEffect(() => {
+    if (isClearingRef.current) {
+      if (!searchParams.has("repo")) {
+        isClearingRef.current = false;
+      }
+      return;
+    }
     const urlRepoId = searchParams.get("repo");
     if (urlRepoId && urlRepoId !== selectedId) {
-      const match = repositories.find((r) => r.id === urlRepoId);
-      if (match) {
-        select(urlRepoId);
-      }
+      select(urlRepoId);
     } else if (!urlRepoId && selectedId) {
       const next = new URLSearchParams(searchParams);
       next.set("repo", selectedId);
       setSearchParams(next, { replace: true });
     }
-  }, [searchParams, selectedId, repositories, select, setSearchParams]);
+  }, [searchParams, selectedId, select, setSearchParams]);
 
   useEffect(() => {
     fetchRepositories();
@@ -123,6 +135,7 @@ export default function Workspace() {
   };
 
   const handleClearSelection = () => {
+    isClearingRef.current = true;
     select(null);
     const next = new URLSearchParams(searchParams);
     next.delete("repo");
@@ -136,6 +149,19 @@ export default function Workspace() {
     } catch {
       // Handled in store
     }
+  };
+
+  const handleConfirmDelete = async (repoId: string) => {
+    const target = repositories.find((r) => r.id === repoId) || selected;
+    await removeRepo(repoId);
+    if (selectedId === repoId) {
+      handleClearSelection();
+    }
+    useToastStore.getState().addToast({
+      type: "success",
+      title: "Repository Deleted",
+      message: `Successfully removed ${target?.name ?? "repository"} from workspace.`,
+    });
   };
 
   return (
@@ -257,17 +283,32 @@ export default function Workspace() {
                           <h3 className="text-sm font-semibold text-white group-hover:text-white transition-colors truncate">
                             {repo.name}
                           </h3>
-                          <Badge
-                            variant="outline"
-                            className={cn(
-                              "text-[10px] font-mono capitalize",
-                              repo.status === "indexed"
-                                ? "bg-emerald-950/40 text-emerald-400 border-emerald-800/60"
-                                : "bg-neutral-900 text-neutral-400 border-neutral-800"
-                            )}
-                          >
-                            {repo.status}
-                          </Badge>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <Badge
+                              variant="outline"
+                              className={cn(
+                                "text-[10px] font-mono capitalize",
+                                repo.status === "indexed"
+                                  ? "bg-emerald-950/40 text-emerald-400 border-emerald-800/60"
+                                  : "bg-neutral-900 text-neutral-400 border-neutral-800"
+                              )}
+                            >
+                              {repo.status}
+                            </Badge>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setRepoToDelete(repo);
+                                setShowDeleteDialog(true);
+                              }}
+                              className="p-1 rounded text-neutral-500 hover:text-red-400 hover:bg-red-950/40 transition-colors cursor-pointer"
+                              title={`Delete ${repo.name}`}
+                              aria-label={`Delete ${repo.name}`}
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </div>
                         <p className="text-[11px] font-mono text-neutral-500 truncate mb-3">
                           {repo.local_path}
@@ -312,6 +353,10 @@ export default function Workspace() {
               onTriggerScan={handleTriggerScan}
               onOpenReindex={() => setShowReindexModal(true)}
               onClearSelection={handleClearSelection}
+              onOpenDelete={() => {
+                setRepoToDelete(selected);
+                setShowDeleteDialog(true);
+              }}
             />
 
             {/* Sub-Navigation Tabs */}
@@ -546,6 +591,31 @@ export default function Workspace() {
                       </div>
                     </div>
                   </div>
+
+                  {/* Danger Zone: Codebase Deletion */}
+                  <div className="p-4 sm:p-5 rounded-xl bg-[#0a0a0a] border border-red-950/50 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div>
+                      <div className="flex items-center gap-2 text-red-400 font-semibold text-xs tracking-tight uppercase font-mono">
+                        <AlertTriangle className="w-4 h-4" />
+                        Danger Zone
+                      </div>
+                      <p className="text-xs text-neutral-400 mt-1 max-w-xl leading-relaxed">
+                        Remove this codebase registration and delete all derived AST topology, vectors, and memory records. Local source files on your machine will remain untouched.
+                      </p>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setRepoToDelete(selected);
+                        setShowDeleteDialog(true);
+                      }}
+                      className="h-8 px-3 text-xs font-mono font-medium border-red-800/60 text-red-400 hover:bg-red-950/40 hover:text-red-300 hover:border-red-700 shrink-0 gap-1.5 cursor-pointer"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Delete Repository</span>
+                    </Button>
+                  </div>
                 </div>
               )}
 
@@ -597,6 +667,14 @@ export default function Workspace() {
           onOpenChange={setShowReindexModal}
         />
       )}
+
+      {/* Delete Repository Modal */}
+      <DeleteRepositoryDialog
+        repository={repoToDelete}
+        open={showDeleteDialog}
+        onOpenChange={setShowDeleteDialog}
+        onConfirm={handleConfirmDelete}
+      />
     </div>
   );
 }
