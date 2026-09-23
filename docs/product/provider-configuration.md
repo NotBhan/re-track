@@ -48,3 +48,71 @@ RE:Track supports local and remote OpenAI-compatible inference runners:
 - Parent directory `~/.retrack` enforces `0700` permissions.
 - Raw API keys are masked in status and telemetry responses (`sk-...123` or `configured`).
 - Browser `localStorage` does not retain backend credentials or provider configuration.
+
+---
+
+## Configuration Precedence (Deterministic)
+
+Exactly one precedence model governs every provider field — LLM provider/endpoint/model/API key,
+embedding provider/endpoint/model/API key/dimensions, and the dedicated semantic-memory model.
+Highest priority wins, per field:
+
+1. **explicit constructor arguments** (`Settings(...)`)
+2. **operator environment variables** — only values the operator actually set, never values
+   RE:Track wrote itself
+3. **persisted settings** (`~/.retrack/settings.json`)
+4. **`backend/.env`**
+5. **field defaults**
+
+`Settings.apply_to_environment()` still exports provider identity into `os.environ` for Cognee
+compatibility, but RE:Track records what it wrote. A later `Settings` instance therefore never
+inherits an earlier instance's provider configuration, so provider/embedding availability no
+longer depends on what a previous component did at runtime or on startup order.
+
+`backend/.env` is resolved relative to the backend package, **not** the process working directory,
+so identical launches produce identical configuration regardless of where they were started.
+
+### LLM and embedding identity are independent
+
+Changing the LLM identity never moves the embedding identity, and vice versa. No provider,
+endpoint, or model is ever substituted. The configured embedding provider is mapped to the Cognee
+embedding engine by a fixed, documented table — never a fallback:
+
+| Configured embedding provider | Cognee engine | Endpoint requirement |
+|---|---|---|
+| `ollama` | `ollama` | optional; defaults to `http://<host>:<port>/api/embed` |
+| `openai_compatible` (aliases `lmstudio`, `lm-studio`) | `openai_compatible` | required, must end in `/v1` |
+| `fastembed` | `fastembed` | none (local) |
+| any other value | LiteLLM provider of that name | provider-specific |
+
+Every non-Ollama embedding provider requires an explicit endpoint: an unconfigured one reports
+`not_configured` instead of borrowing the LLM endpoint.
+
+### Embedding availability states
+
+`Settings.probe_embedding_provider()` — surfaced on `/health` and `/status` as `embedding_state` —
+reports exactly one truthful state and performs no substitution:
+
+| State | Meaning |
+|---|---|
+| `available` | endpoint reachable and the configured model is listed |
+| `model_missing` | endpoint reachable but the configured model is absent |
+| `unreachable` | endpoint could not be reached |
+| `not_configured` | endpoint or model is not configured |
+
+Embedding health is evaluated separately from LLM health; a reachable LLM does not imply usable
+embeddings and vice versa.
+
+### Semantic-memory stage model
+
+`memory_model` (environment variable `SEMANTIC_MEMORY_MODEL`) selects a dedicated model for
+semantic-memory extraction. When empty it falls back to the configured inference model. A
+reasoning model can consume its entire generation budget on hidden reasoning and never emit the
+required JSON, so a non-reasoning instruct model is recommended for this stage.
+
+### LM Studio and structured output
+
+LM Studio is reached through litellm's `lm_studio` provider, for which litellm reports schema
+support. Cognee therefore constrains structured output with `response_format: json_schema`, which
+LM Studio accepts. Routing LM Studio through the generic `openai` provider makes Cognee send
+`response_format: json_object`, which LM Studio rejects with HTTP 400.

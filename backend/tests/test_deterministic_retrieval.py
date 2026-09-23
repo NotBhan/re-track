@@ -198,7 +198,10 @@ async def test_embedding_probe_reports_truthful_states(monkeypatch):
     monkeypatch.setattr(
         _httpx_module,
         "AsyncClient",
-        lambda **kw: FakeClient({"models": [{"name": "nomic-embed-text:latest"}, {"name": "other"}]}),
+        # The configured model is what a reachable provider must serve.
+        lambda **kw: FakeClient(
+            {"models": [{"name": settings.ollama.embedding_model}, {"name": "other"}]}
+        ),
         raising=False,
     )
     state = await settings.probe_embedding_provider(max_age_seconds=0)

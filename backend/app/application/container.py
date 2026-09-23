@@ -118,7 +118,10 @@ class ApplicationContainer:
             self.settings = settings
         else:
             self.settings = self.settings or get_settings()
-            self.settings.load_persisted_settings()
+            # Re-resolve through the full precedence chain (not persisted-only), so
+            # reloading picks up external settings changes without demoting an
+            # operator environment override below a persisted value.
+            self.settings.reload_configuration()
 
         provider_str = (self.settings.llm_provider or "ollama").lower()
         llm_endpoint = self.settings.llm_endpoint or ""

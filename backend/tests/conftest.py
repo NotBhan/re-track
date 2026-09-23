@@ -177,6 +177,7 @@ _PROVIDER_ENV_KEYS = (
     "LLM_ENDPOINT",
     "LLM_API_KEY",
     "LLM_MODEL",
+    "SEMANTIC_MEMORY_MODEL",
     "EMBEDDING_PROVIDER",
     "EMBEDDING_ENDPOINT",
     "EMBEDDING_API_KEY",
@@ -196,13 +197,25 @@ _PROVIDER_ENV_KEYS = (
 
 @pytest.fixture(autouse=True)
 def _isolate_provider_environment():
-    """Restore provider identity env vars after each test."""
+    """Give every test a clean provider environment and restore the developer's on exit.
+
+    Managed keys are removed *before* each test (not only restored after it), so a
+    value written by a previous test — or re-added by that test's own monkeypatch
+    teardown — can never bleed into the next test. The developer's original values
+    are restored afterwards.
+    """
     import os
 
+    from app.config.settings import clear_applied_environment
+
     snapshot = {key: os.environ.get(key) for key in _PROVIDER_ENV_KEYS}
+    for key in _PROVIDER_ENV_KEYS:
+        os.environ.pop(key, None)
+    clear_applied_environment()
     yield
     for key, value in snapshot.items():
         if value is None:
             os.environ.pop(key, None)
         else:
             os.environ[key] = value
+    clear_applied_environment()

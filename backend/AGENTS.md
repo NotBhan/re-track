@@ -77,6 +77,18 @@ Production services implemented and verified:
    / `ContextResponse.retrieval_state` are `ok` or `unavailable` with a truthful
    `retrieval_error`, while authoritative tiers (Tier 1 source, Tier 2 AST) remain the
    source of truth and evidence gating is unchanged.
+9. **Single deterministic configuration precedence** (`app/config/settings.py`), highest wins
+   per field: explicit constructor arguments → operator environment variables → persisted
+   settings (`~/.retrack/settings.json`) → `backend/.env` → field defaults. `backend/.env` is
+   resolved relative to the backend package, never the process working directory.
+10. **No process-global provider contamination**: `Settings.apply_to_environment()` records the
+    environment variables it writes, and construction removes those self-written values, so a
+    prior `Settings` instance can never configure a later one. Env keywords remain a supported
+    override only when the operator set them.
+11. **Semantic-memory stage model is explicit**: `ollama.memory_model` / `SEMANTIC_MEMORY_MODEL`
+    selects the extraction model; empty falls back to the inference model. LM Studio maps to
+    litellm's `lm_studio` provider so Cognee uses `response_format: json_schema` (LM Studio
+    rejects `json_object` with HTTP 400).
 
 ---
 

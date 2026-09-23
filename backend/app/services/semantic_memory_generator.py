@@ -46,7 +46,8 @@ CRITICAL RULES AND CONSTRAINTS:
 5. NEVER invent missing architecture, APIs, endpoints, classes, methods, or files.
 6. NEVER generate speculative plans or future work.
 7. NEVER include reasoning, thinking traces, or <think>...</think> tags.
-8. Output MUST be strictly valid JSON matching the following schema:
+8. Output MUST be strictly valid JSON matching the following schema. The values shown are
+   illustrative placeholders describing what belongs in each field — never copy them:
 
 {
   "memories": [
@@ -58,6 +59,10 @@ CRITICAL RULES AND CONSTRAINTS:
     }
   ]
 }
+
+9. source_files and source_symbols MUST be copied verbatim from the supplied evidence.
+   Never emit placeholder text (such as anything wrapped in angle brackets) and never
+   invent a path or symbol that does not appear in the evidence.
 """
 
 

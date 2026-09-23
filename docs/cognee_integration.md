@@ -64,29 +64,39 @@ await cognee.forget(dataset="workspace")
 
 ## Local Stack
 
+Provider identity is configuration, not a hard-coded stack. The LLM provider, embedding provider,
+and their endpoints/models are resolved by the precedence model documented in
+`docs/product/provider-configuration.md`. The validated local deployment is:
+
 | Component | Provider | Model/DB |
 |-----------|----------|----------|
-| LLM | Ollama | phi3:mini |
-| Embeddings | Ollama | nomic-embed-text:latest |
+| LLM | LM Studio (`lmstudio`) | `unsloth/phi-4-mini-reasoning` |
+| Semantic-memory stage | LM Studio (`memory_model`) | `phi-4-mini-instruct` |
+| Embeddings | `openai_compatible` at `http://127.0.0.1:1234/v1` | `text-embedding-nomic-embed-text-v1.5` (768-dim) |
 | Vector DB | LanceDB | local file |
 | Graph DB | Kuzu | local file |
 | Relational DB | SQLite | local file |
 
+The embedding provider is configured independently of the LLM provider and is never substituted.
+
 ---
 
-## Required Environment Variables
+## Configuration Environment Variables
 
-| Variable | Value | Reason |
-|----------|-------|--------|
-| `LLM_PROVIDER` | ollama | Local inference |
-| `LLM_MODEL` | phi3:mini | Compatible with structured output |
-| `EMBEDDING_MODEL` | nomic-embed-text:latest | 768-dim embeddings |
-| `VECTOR_DB_PROVIDER` | lancedb | Local vector storage |
-| `GRAPH_DB_PROVIDER` | kuzu | Local graph storage |
-| `HUGGINGFACE_TOKENIZER` | nomic-ai/nomic-embed-text-v1 | Token counting for embedding engine |
-| `COGNEE_SKIP_CONNECTION_TEST` | true | Skip startup connection tests |
-| `ENABLE_BACKEND_ACCESS_CONTROL` | false | Single-user local mode |
-| `CACHING` | false | Disable session memory overhead |
+`Settings.apply_to_environment()` writes the resolved values below into `os.environ` for Cognee
+compatibility. The written values are tracked, so they are never read back as operator overrides by
+a later `Settings` instance.
+
+| Variable | Purpose |
+|----------|---------|
+| `LLM_PROVIDER` / `LLM_MODEL` / `LLM_ENDPOINT` / `LLM_API_KEY` | Active inference identity |
+| `SEMANTIC_MEMORY_MODEL` | Dedicated semantic-memory extraction model (empty = inference model) |
+| `EMBEDDING_PROVIDER` / `EMBEDDING_MODEL` / `EMBEDDING_ENDPOINT` / `EMBEDDING_API_KEY` / `EMBEDDING_DIMENSIONS` | Independent embedding identity |
+| `VECTOR_DB_PROVIDER` / `GRAPH_DB_PROVIDER` / `RELATIONAL_DB_PROVIDER` | Storage providers |
+| `HUGGINGFACE_TOKENIZER` | Token counting for the embedding engine |
+| `COGNEE_SKIP_CONNECTION_TEST` | Skip startup connection tests |
+| `ENABLE_BACKEND_ACCESS_CONTROL` | Multi-user access control |
+| `CACHING` | Session memory caching |
 
 See `references/cognee/verified_notes.md` for full details on why each variable exists.
 
@@ -164,7 +174,10 @@ Embedded storage engines (LanceDB, Kùzu/Ladybug, SQLite) maintain exclusive fil
 
 1. **Per-Test Storage Root Isolation**: Real Cognee acceptance and integration tests configure dynamic `system_root` and `data_root` paths scoped strictly within `tmp_path`.
 2. **Configuration Mutator Integrity**: `Settings.configure_cognee()` invokes `cognee.config.system_root_directory(...)` and `cognee.config.data_root_directory(...)` as callable methods rather than reassigning attributes, cascading root updates to base, relational, graph, and vector database configs.
-3. **Pydantic Model Field Invariance**: `Settings._apply_env_overrides` honors explicitly passed `StorageConfig` roots (`model_fields_set`), preventing ambient or previous test environment variables from overwriting test isolation directories.
+3. **Explicit-Argument Invariance**: `Settings._resolve_configuration_precedence` skips the
+   persisted and environment layers for fields (or whole groups such as `storage`) supplied
+   explicitly to the constructor, preventing ambient or previous test environment variables from
+   overwriting test isolation directories.
 4. **Deterministic Teardown & Handle Eviction**: `reset_cognee_engine_and_caches()` forces key eviction and engine close across `closing_lru_cache._DECORATED_CACHES`, awaits pending close futures, clears factory/config caches, resets context variables, purges storage environment variables (`SYSTEM_ROOT_DIRECTORY`, `DATA_ROOT_DIRECTORY`), and runs garbage collection before temporary directory deletion.
 
 ---
