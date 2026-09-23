@@ -508,25 +508,41 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .manage(BackendProcess(Mutex::new(None)))
         .setup(|app| {
-            let mut child = start_backend().expect("Failed to start Python backend");
+            let child = start_backend().expect("Failed to start Python backend");
 
-            let ready = wait_for_backend(60);
-            if !ready {
-                child.kill().ok();
+            // Register the child before waiting so every teardown path can reap it.
+            {
+                let state = app.state::<BackendProcess>();
+                *state.0.lock().unwrap() = Some(child);
+            }
+
+            // Readiness is polled on a background thread. Waiting here (the Tauri
+            // setup hook, before the event loop starts) blocked window creation and
+            // WebView startup for as long as the backend needed to become healthy —
+            // up to 60 attempts — which presented as a frozen application on launch.
+            let app_handle = app.handle().clone();
+            std::thread::spawn(move || {
+                if wait_for_backend(60) {
+                    return;
+                }
+                let state = app_handle.state::<BackendProcess>();
+                {
+                    let mut process = state.0.lock().unwrap();
+                    stop_backend(&mut process);
+                }
                 let log = std::env::temp_dir().join("retrack-backend.log");
-                panic!(
-                    "Python backend did not become ready within 60 seconds. \
+                eprintln!(
+                    "[RE:Track] Python backend did not become ready within 60 seconds. \
                      Check logs: {}",
                     log.display()
                 );
-            }
-
-            let state = app.state::<BackendProcess>();
-            *state.0.lock().unwrap() = Some(child);
+                app_handle.exit(1);
+            });
 
             Ok(())
         })
         .on_window_event(|app, event| {
+            // Normal window close.
             if let tauri::WindowEvent::Destroyed = event {
                 let state = app.state::<BackendProcess>();
                 let mut process = state.0.lock().unwrap();
@@ -569,7 +585,19 @@ pub fn run() {
             get_diagnostics,
             export_diagnostics,
         ])
-        .run(tauri::generate_context!())
-
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app, event| {
+            // Application exit (menu quit, last window closed, programmatic exit).
+            // Without this the Python backend outlived the GUI, holding ~400 MB and
+            // port 8765, so the next launch attached to a stale orphaned backend.
+            if matches!(
+                event,
+                tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit
+            ) {
+                let state = app.state::<BackendProcess>();
+                let mut process = state.0.lock().unwrap();
+                stop_backend(&mut process);
+            }
+        });
 }

@@ -191,6 +191,14 @@ class ApplicationContainer:
             except Exception as e:
                 logger.warning("CogneeService shutdown failed: %s", e)
 
+        # Release the bounded worker pool used for blocking repository/AST work.
+        try:
+            from app.application.use_cases.context import shutdown_offload_executor
+
+            shutdown_offload_executor()
+        except Exception as e:
+            logger.warning("Offload executor shutdown failed: %s", e)
+
     async def update_provider(
         self,
         provider: str,

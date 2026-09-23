@@ -7,6 +7,17 @@ from pydantic import BaseModel, Field
 class HealthResponse(BaseModel):
     """System health check response."""
 
+    # Embedding provider identity is reported explicitly and separately from the LLM
+    # provider, so an unusable embedding configuration is visible rather than silent.
+    embedding_provider: str = Field(default="ollama", description="Configured embedding provider")
+    embedding_endpoint: str = Field(default="", description="Configured embedding endpoint")
+    embedding_model: str = Field(default="", description="Configured embedding model")
+    embedding_state: str = Field(
+        default="unknown",
+        description="Embedding availability: available | model_missing | unreachable | not_configured",
+    )
+    embedding_detail: Optional[str] = Field(default=None, description="Truthful embedding availability detail")
+
     status: str = Field(description="Health status: 'ok' or 'degraded'")
     ollama_reachable: bool = Field(description="Legacy alias for provider_reachable")
     cognee_initialized: bool = Field(description="Whether CogneeService is initialized")
@@ -74,6 +85,13 @@ class BackendStatusResponse(BaseModel):
     llm_endpoint: str = Field(default="http://localhost:11434/v1", description="Active LLM endpoint")
     llm_model: str = Field(description="Current LLM model name")
     embedding_model: str = Field(description="Current embedding model name")
+    embedding_provider: str = Field(default="ollama", description="Configured embedding provider (independent of the LLM provider)")
+    embedding_endpoint: str = Field(default="", description="Configured embedding endpoint")
+    embedding_state: str = Field(
+        default="unknown",
+        description="Embedding availability: available | model_missing | unreachable | not_configured",
+    )
+    embedding_detail: Optional[str] = Field(default=None, description="Truthful embedding availability detail")
     vector_db: str = Field(description="Vector database provider")
     graph_db: str = Field(description="Graph database provider")
     relational_db: str = Field(description="Relational database provider")

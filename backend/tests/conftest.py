@@ -137,3 +137,72 @@ def _reset_command_singletons():
     cmds._indexing_service = None
     cmds._context_service = None
     reset_cognee_engine_and_caches()
+
+
+@pytest.fixture(autouse=True)
+def _isolate_persisted_settings(tmp_path, monkeypatch):
+    """Prevent tests from reading or writing the developer's real settings store.
+
+    Provider configuration flows through ``Settings.save_persisted_settings()``
+    (e.g. update_provider), which defaults to ``~/.retrack/settings.json``. Without
+    isolation a test run silently rewrites the live provider/model configuration of
+    the machine it runs on.
+    """
+    from app.config import settings as settings_module
+
+    # The Settings fields are declared as `default_factory=lambda: DEFAULT_...`, which
+    # resolves these module globals at construction time, so patching them redirects
+    # every default-configured Settings instance.
+    monkeypatch.setattr(
+        settings_module,
+        "DEFAULT_SETTINGS_STORE_PATH",
+        tmp_path / "isolated_settings.json",
+    )
+    monkeypatch.setattr(
+        settings_module,
+        "DEFAULT_LEGACY_SETTINGS_STORE_PATH",
+        tmp_path / "isolated_legacy_settings.json",
+    )
+
+    settings_module.get_settings.cache_clear()
+    yield
+    settings_module.get_settings.cache_clear()
+
+
+# Provider identity env vars written by Settings.apply_to_environment() (for Cognee
+# compatibility). Because `Settings` reads these back on construction, a leak makes one
+# test's provider configuration override another test's explicit arguments.
+_PROVIDER_ENV_KEYS = (
+    "LLM_PROVIDER",
+    "LLM_ENDPOINT",
+    "LLM_API_KEY",
+    "LLM_MODEL",
+    "EMBEDDING_PROVIDER",
+    "EMBEDDING_ENDPOINT",
+    "EMBEDDING_API_KEY",
+    "EMBEDDING_MODEL",
+    "EMBEDDING_DIMENSIONS",
+    "HUGGINGFACE_TOKENIZER",
+    "VECTOR_DB_PROVIDER",
+    "GRAPH_DB_PROVIDER",
+    "RELATIONAL_DB_PROVIDER",
+    "DATA_ROOT_DIRECTORY",
+    "SYSTEM_ROOT_DIRECTORY",
+    "CACHING",
+    "COGNEE_SKIP_CONNECTION_TEST",
+    "ENABLE_BACKEND_ACCESS_CONTROL",
+)
+
+
+@pytest.fixture(autouse=True)
+def _isolate_provider_environment():
+    """Restore provider identity env vars after each test."""
+    import os
+
+    snapshot = {key: os.environ.get(key) for key in _PROVIDER_ENV_KEYS}
+    yield
+    for key, value in snapshot.items():
+        if value is None:
+            os.environ.pop(key, None)
+        else:
+            os.environ[key] = value

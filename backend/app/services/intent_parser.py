@@ -5,8 +5,10 @@ symbols, intent categories, and specificity scores from developer requests
 with strict anti-hallucination guardrails.
 """
 
+import asyncio
 import json
 import logging
+import os
 import re
 import time
 from typing import Optional
@@ -21,12 +23,32 @@ logger = logging.getLogger(__name__)
 # Re-export for backward compatibility
 ParsedIntent = ParsedIntentRecord
 
+# Intent parsing is optional enrichment: `rule_based_fallback` already produces a
+# complete ParsedIntentRecord. On a slow local runner the LLM call must not be able
+# to consume the entire request budget (previously it hard-blocked for the full
+# 60s provider timeout, then discarded the model's output).
+DEFAULT_INTENT_TIMEOUT_SEC = 20.0
+
+
+def resolve_intent_timeout() -> float:
+    """Resolve the intent enrichment budget from env, then the default."""
+    try:
+        value = float(os.environ.get("RETRACK_INTENT_TIMEOUT_SEC", DEFAULT_INTENT_TIMEOUT_SEC))
+    except (TypeError, ValueError):
+        value = DEFAULT_INTENT_TIMEOUT_SEC
+    return value if value > 0 else DEFAULT_INTENT_TIMEOUT_SEC
+
 
 class IntentParserService:
     """Parses developer prompts using local LLM with rule-based fallbacks."""
 
-    def __init__(self, llm_service: Optional[LLMProviderPort] = None) -> None:
+    def __init__(
+        self,
+        llm_service: Optional[LLMProviderPort] = None,
+        intent_timeout: Optional[float] = None,
+    ) -> None:
         self._llm = llm_service
+        self._intent_timeout = intent_timeout if intent_timeout and intent_timeout > 0 else resolve_intent_timeout()
 
     @staticmethod
     def rule_based_fallback(prompt: str) -> ParsedIntentRecord:
@@ -75,12 +97,18 @@ class IntentParserService:
         )
 
         try:
-            raw = await self._llm.generate_completion(
-                prompt=prompt,
-                system_prompt=system_prompt,
-                model=model_name,
-                temperature=0.0,
-                max_tokens=1024,
+            # The budget is enforced caller-side so it applies to any provider
+            # implementation without extending the LLMProviderPort contract.
+            # Cancelling this await aborts the underlying HTTP request.
+            raw = await asyncio.wait_for(
+                self._llm.generate_completion(
+                    prompt=prompt,
+                    system_prompt=system_prompt,
+                    model=model_name,
+                    temperature=0.0,
+                    max_tokens=1024,
+                ),
+                timeout=self._intent_timeout,
             )
             elapsed_ms = int((time.perf_counter() - t_start) * 1000)
             actual_model = getattr(self._llm, "last_invoked_model", None) or model_name
@@ -216,6 +244,44 @@ class IntentParserService:
             fallback.inference_status = "model_mismatch"
             fallback.fallback_used = True
             fallback.fallback_reason = str(e)
+            fallback.inference_time_ms = elapsed_ms
+            return fallback
+        except TimeoutError as e:
+            # Enrichment budget exceeded: degrade to the deterministic fallback and
+            # report the real reason instead of the previous generic failure status.
+            elapsed_ms = int((time.perf_counter() - t_start) * 1000)
+            actual_model = getattr(self._llm, "last_invoked_model", None) or model_name
+            reason = (
+                f"Intent enrichment exceeded its {self._intent_timeout:.0f}s budget on a slow local "
+                f"provider; deterministic intent parsing used instead. Set RETRACK_INTENT_TIMEOUT_SEC "
+                f"to allow more time."
+            )
+            logger.warning("Intent parsing timed out after %dms: %s", elapsed_ms, e)
+            log_event(
+                logger,
+                logging.WARNING,
+                "context_model_invocation_timeout",
+                component="intent_parser",
+                operation="parse_intent",
+                duration_ms=elapsed_ms,
+                provider_identity=p_name,
+                model_name=actual_model,
+                timeout_seconds=self._intent_timeout,
+            )
+            log_event(
+                logger,
+                logging.INFO,
+                "context_deterministic_fallback",
+                component="intent_parser",
+                operation="parse_intent",
+                fallback_reason=reason,
+            )
+            fallback.model_invoked = False
+            fallback.provider_identity = p_name
+            fallback.model_name = actual_model
+            fallback.inference_status = "timeout"
+            fallback.fallback_used = True
+            fallback.fallback_reason = reason
             fallback.inference_time_ms = elapsed_ms
             return fallback
         except (json.JSONDecodeError, ValueError) as e:

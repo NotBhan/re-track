@@ -65,6 +65,18 @@ Production services implemented and verified:
 3. All Cognee interactions must go through `CogneeService`.
 4. Call graph extraction must stay inside `RepositorySummaryGenerator._build_call_graph`.
 5. Benchmark calculations must use exact codebase tokenization against the configured tokenizer.
+6. **Deterministic retrieval mode**: `CogneeService.recall` always passes an explicit
+   `SearchType` with `auto_route=False` (default `SearchType.CHUNKS` → `ChunksRetriever`).
+   Retrieval must never let Cognee's query router select an LLM-backed strategy
+   (`GRAPH_COMPLETION_COT` and friends) merely to choose a retrieval mode.
+7. **Embedding provider identity is separate from the LLM provider identity.**
+   `Settings.embedding_identity()` / `probe_embedding_provider()` report the configured
+   embedding provider, endpoint, model and availability (`available` | `model_missing` |
+   `unreachable` | `not_configured`). No provider/model substitution is ever performed.
+8. **Retrieval failure is reported, never masked**: `ContextPackage.metadata.retrieval_state`
+   / `ContextResponse.retrieval_state` are `ok` or `unavailable` with a truthful
+   `retrieval_error`, while authoritative tiers (Tier 1 source, Tier 2 AST) remain the
+   source of truth and evidence gating is unchanged.
 
 ---
 

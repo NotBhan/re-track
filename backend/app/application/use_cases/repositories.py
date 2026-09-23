@@ -4,8 +4,10 @@ Coordinates creating, listing, scanning, deleting repositories, and generating p
 All dependencies are explicitly injected via constructor capability ports.
 """
 
+import asyncio
 import json
 import logging
+import os
 from pathlib import Path
 import time
 from typing import Any, Optional
@@ -31,6 +33,21 @@ from app.application.ports.workspace_authorization import WorkspaceAuthorization
 from app.models.repository import Repository
 
 logger = logging.getLogger(__name__)
+
+#: Budget for the optional AI prompt-suggestion enrichment (heuristic fallback exists).
+#: Enforced caller-side so the LLMProviderPort contract stays unchanged.
+DEFAULT_SUGGESTED_PROMPTS_TIMEOUT_SEC = 30.0
+
+
+def resolve_suggested_prompts_timeout() -> float:
+    """Resolve the prompt-suggestion enrichment budget from env, then the default."""
+    try:
+        value = float(
+            os.environ.get("RETRACK_SUGGESTED_PROMPTS_TIMEOUT_SEC", DEFAULT_SUGGESTED_PROMPTS_TIMEOUT_SEC)
+        )
+    except (TypeError, ValueError):
+        value = DEFAULT_SUGGESTED_PROMPTS_TIMEOUT_SEC
+    return value if value > 0 else DEFAULT_SUGGESTED_PROMPTS_TIMEOUT_SEC
 
 
 class RepositoryUseCases:
@@ -368,11 +385,17 @@ class RepositoryUseCases:
                         f"Discovered Classes & Symbols: {symbols_str or 'Core codebase'}\n\n"
                         "Generate 4-5 focused developer questions or implementation tasks referencing these exact symbols."
                     )
-                    raw = await self._llm_provider.generate_completion(
-                        prompt=user_prompt,
-                        system_prompt=system_prompt,
-                        temperature=0.2,
-                        max_tokens=500,
+                    # Optional enrichment with a heuristic fallback below: bound it so a
+                    # slow local provider cannot stall the request for the full
+                    # generation budget. Cancelling aborts the provider request.
+                    raw = await asyncio.wait_for(
+                        self._llm_provider.generate_completion(
+                            prompt=user_prompt,
+                            system_prompt=system_prompt,
+                            temperature=0.2,
+                            max_tokens=500,
+                        ),
+                        timeout=resolve_suggested_prompts_timeout(),
                     )
                     raw = raw.strip()
                     if raw.startswith("```"):

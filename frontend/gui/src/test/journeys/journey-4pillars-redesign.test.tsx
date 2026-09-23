@@ -66,7 +66,10 @@ describe("Phase 10D.7 — 4-Pillar Unified Architecture & Specification Conforma
 
       await waitFor(() => {
         expect(window.location.pathname).toBe("/settings");
-        expect(screen.getByText(/Settings & Engine Models/i)).toBeInTheDocument();
+        expect(
+          screen.getByRole("heading", { name: /RE:Track \| Settings/i })
+        ).toBeInTheDocument();
+        expect(screen.getByRole("button", { name: /Provider & Runtime/i })).toBeInTheDocument();
       });
     });
 

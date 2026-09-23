@@ -13,6 +13,7 @@ import hashlib
 import logging
 from pathlib import Path
 import re
+import threading
 from datetime import datetime, timezone
 from typing import Any, Optional
 
@@ -106,6 +107,10 @@ class RepositorySummaryGenerator:
             "relinked_files": 0,
         }
         self.file_ast_metadata: dict[str, dict[str, Any]] = {}
+        # `generate` mutates per-call state (last_parse_stats, file_ast_metadata).
+        # A single instance is shared by the container, and callers may invoke it
+        # from a worker thread to keep the event loop responsive, so calls serialize.
+        self._lock = threading.Lock()
 
     def generate(
         self,
@@ -114,7 +119,21 @@ class RepositorySummaryGenerator:
         existing_manifest: Optional[RepositoryManifest] = None,
         delta: Optional[IndexDelta] = None,
     ) -> RepositorySummary:
-        """Generate a RepositorySummary from a repository and its files with incremental AST reuse."""
+        """Generate a RepositorySummary from a repository and its files with incremental AST reuse.
+
+        Serialized with an internal lock: a single instance is shared by the container
+        and callers may run it on a worker thread to keep the event loop responsive.
+        """
+        with self._lock:
+            return self._generate_impl(repo_path, files, existing_manifest, delta)
+
+    def _generate_impl(
+        self,
+        repo_path: Path,
+        files: list[Path],
+        existing_manifest: Optional[RepositoryManifest] = None,
+        delta: Optional[IndexDelta] = None,
+    ) -> RepositorySummary:
         logger.info("generating repository summary | path=%s | files=%d", repo_path, len(files))
 
         # Filter files by gitignore patterns

@@ -284,7 +284,27 @@ class SystemUseCases:
 
             exec_device = "GPU" if (gpu_presence != "None" and (vram_used > 0.1 or vram_total > 0)) else "CPU"
 
+            # Explicit embedding-provider availability (independent of the LLM provider).
+            embedding_state = "unknown"
+            embedding_detail = None
+            embedding_identity = settings.embedding_identity()
+            if cognee is not None and hasattr(cognee, "embedding_availability"):
+                try:
+                    probe = await cognee.embedding_availability()
+                    if isinstance(probe, dict):
+                        embedding_state = str(probe.get("state") or "unknown")
+                        detail = probe.get("detail")
+                        embedding_detail = str(detail) if detail else None
+                except Exception as e:  # pragma: no cover - probe reports, does not raise
+                    embedding_state = "unreachable"
+                    embedding_detail = f"{type(e).__name__}: {e}"
+
             response = HealthResponse(
+                embedding_provider=str(embedding_identity["provider"]),
+                embedding_endpoint=str(embedding_identity["endpoint"]),
+                embedding_model=str(embedding_identity["model"]),
+                embedding_state=embedding_state,
+                embedding_detail=embedding_detail,
                 status=overall_status,
                 ollama_reachable=provider_reachable,
                 cognee_initialized=cognee_ok,
@@ -469,6 +489,20 @@ class SystemUseCases:
 
             display_model = active_model or configured_model or ""
 
+            # Embedding provider availability, reported independently of the LLM provider.
+            status_embedding_state = "unknown"
+            status_embedding_detail = None
+            if cognee is not None and hasattr(cognee, "embedding_availability"):
+                try:
+                    probe = await cognee.embedding_availability()
+                    if isinstance(probe, dict):
+                        status_embedding_state = str(probe.get("state") or "unknown")
+                        detail = probe.get("detail")
+                        status_embedding_detail = str(detail) if detail else None
+                except Exception as e:  # pragma: no cover - probe reports, does not raise
+                    status_embedding_state = "unreachable"
+                    status_embedding_detail = f"{type(e).__name__}: {e}"
+
             response = BackendStatusResponse(
                 status=overall_status,
                 ollama_reachable=provider_reachable,
@@ -478,6 +512,10 @@ class SystemUseCases:
                 llm_endpoint=prov_endpoint,
                 llm_model=display_model,
                 embedding_model=str(getattr(settings.ollama, "embedding_model", "nomic-embed-text:latest")),
+                embedding_provider=str(settings.embedding_identity()["provider"]),
+                embedding_endpoint=str(settings.embedding_identity()["endpoint"]),
+                embedding_state=status_embedding_state,
+                embedding_detail=status_embedding_detail,
                 vector_db=str(getattr(settings.storage, "vector_db", "lancedb")),
                 graph_db=str(getattr(settings.storage, "graph_db", "kuzu")),
                 relational_db=str(getattr(settings.storage, "relational_db", "sqlite")),

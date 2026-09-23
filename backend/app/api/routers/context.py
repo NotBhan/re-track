@@ -4,7 +4,7 @@ Exposes indexing orchestration, context package synthesis, and AI agent middlewa
 """
 
 from typing import Any
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 
 from app.api.schemas import (
     ErrorResponse,
@@ -54,14 +54,21 @@ async def context_endpoint(
 @router.post("/api/v1/context")
 async def agent_context_endpoint(
     request: AgentContextRequest,
+    http_request: Request,
     context_use_cases: ContextUseCases = Depends(get_context_use_cases),
 ) -> dict[str, Any]:
     """Generate an optimized context package for external AI coding agents.
 
     Parses task intent and code symbols, merges CGC structural call graphs
     with Cognee semantic memory, and applies adaptive budgeting for 8GB VRAM/RAM hardware.
+
+    A client disconnect (navigation away, timeout, closed panel) cancels the
+    in-flight provider request instead of letting it complete discarded work.
     """
-    result = await context_use_cases.get_agent_context(request)
+    result = await context_use_cases.get_agent_context(
+        request,
+        disconnect_probe=http_request.is_disconnected,
+    )
     if isinstance(result, ErrorResponse):
         raise HTTPException(status_code=500, detail=result.model_dump())
     return result.model_dump()

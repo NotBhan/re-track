@@ -33,6 +33,20 @@ from app.models.responses import RememberResult, RecallResult, RecallResponse, S
 logger = logging.getLogger(__name__)
 
 
+def default_recall_query_type() -> Any:
+    """Deterministic retrieval mode for every RE:Track retrieval tier.
+
+    RE:Track retrieval is vector/chunk retrieval: Tier-3 projections (LanceDB/Kùzu)
+    and Tier-4 Cognee semantic memory are both derived storage that must be recalled
+    without invoking the LLM. `SearchType.CHUNKS` maps to `ChunksRetriever` (no LLM),
+    whereas Cognee's automatic router can select LLM-backed strategies such as
+    `GRAPH_COMPLETION_COT`.
+    """
+    from cognee.modules.search.types import SearchType
+
+    return SearchType.CHUNKS
+
+
 def sanitize_dataset_name(name: str | None) -> str:
     """Sanitize a dataset name for Cognee and vector databases.
     Removes .git suffix, and replaces dots, spaces, slashes, and non-alphanumerics with underscores.
@@ -203,6 +217,26 @@ class CogneeService:
             logger.error("remember() failed: %s", e)
             raise CogneeServiceError(f"remember() failed: {e}") from e
 
+    async def embedding_availability(self) -> dict[str, Any]:
+        """Report the configured embedding provider identity and availability.
+
+        Never substitutes a provider or model; a failure to probe is itself
+        reported as an unavailable state.
+        """
+        try:
+            return await self._settings.probe_embedding_provider()
+        except Exception as e:  # pragma: no cover - probe failures are reported, not raised
+            identity = self._settings.embedding_identity()
+            return {
+                "provider": identity["provider"],
+                "endpoint": identity["endpoint"],
+                "model": identity["model"],
+                "dimensions": identity["dimensions"],
+                "state": "unreachable",
+                "detail": f"Embedding probe failed: {type(e).__name__}: {e}",
+                "available_models": [],
+            }
+
     async def recall(
         self,
         query_text: str,
@@ -210,19 +244,27 @@ class CogneeService:
         top_k: int = 15,
         **kwargs: Any,
     ) -> RecallResponse:
-        """Retrieve context from persistent memory.
+        """Retrieve context from persistent memory using a deterministic retrieval mode.
+
+        The retrieval mode is explicit: RE:Track's retrieval tiers are vector/chunk
+        retrieval, so `SearchType.CHUNKS` is requested and Cognee's automatic
+        query router is disabled. This prevents a retrieval operation from silently
+        selecting an LLM-backed strategy (e.g. GRAPH_COMPLETION_COT) just to pick a
+        search mode.
 
         Args:
             query_text: Natural language query.
             datasets: List of dataset names to search.
             top_k: Maximum number of results.
-            **kwargs: Additional arguments passed to cognee.recall().
+            **kwargs: Additional arguments passed to cognee.recall(). `query_type`
+                (alias `search_type`) and `auto_route` may be overridden explicitly.
 
         Returns:
             RecallResponse with parsed results.
 
         Raises:
-            CogneeServiceError: If retrieval fails.
+            CogneeServiceError: If retrieval fails, or if the configured embedding
+                provider cannot serve the configured embedding model.
         """
         self._ensure_initialized()
         clean_datasets = [sanitize_dataset_name(d) for d in datasets]
@@ -230,10 +272,26 @@ class CogneeService:
         # Support search_type -> query_type alias
         if "search_type" in kwargs and "query_type" not in kwargs:
             kwargs["query_type"] = kwargs.pop("search_type")
+        query_type = kwargs.pop("query_type", None)
+        if query_type is None:
+            query_type = default_recall_query_type()
+        auto_route = bool(kwargs.pop("auto_route", False))
+
+        embedding_state = await self.embedding_availability()
+        if embedding_state.get("state") in ("model_missing", "not_configured"):
+            # Deterministically unusable configuration: fail with an explicit reason
+            # rather than attempting retrieval and reporting an empty success.
+            raise CogneeServiceError(
+                f"Embedding provider unusable: {embedding_state.get('detail')} "
+                f"(state={embedding_state.get('state')})"
+            )
+
         try:
             import cognee
             logger.info(
-                "recall() | query=%s | datasets=%s | top_k=%d",
+                "recall() | mode=%s | auto_route=%s | query=%s | datasets=%s | top_k=%d",
+                getattr(query_type, "value", query_type),
+                auto_route,
                 query_text[:80],
                 clean_datasets,
                 top_k,
@@ -243,6 +301,8 @@ class CogneeService:
                     query_text=query_text,
                     datasets=clean_datasets,
                     top_k=top_k,
+                    query_type=query_type,
+                    auto_route=auto_route,
                     **kwargs,
                 ),
                 timeout=timeout,
@@ -263,9 +323,39 @@ class CogneeService:
                 dataset=", ".join(clean_datasets),
                 results=results,
             )
+        except asyncio.TimeoutError as e:
+            logger.error(
+                "recall() timed out | mode=%s | after=%ss | embedding_state=%s",
+                getattr(query_type, "value", query_type),
+                timeout,
+                embedding_state.get("state"),
+            )
+            raise CogneeServiceError(
+                f"recall() timed out after {timeout}s "
+                f"(mode={getattr(query_type, 'value', query_type)}, "
+                f"embedding_provider={embedding_state.get('provider')}, "
+                f"embedding_state={embedding_state.get('state')})"
+            ) from e
         except Exception as e:
-            logger.error("recall() failed: %s", e)
-            raise CogneeServiceError(f"recall() failed: {e}") from e
+            detail = f"{type(e).__name__}: {e}" if str(e) else type(e).__name__
+            logger.error(
+                "recall() failed | mode=%s | embedding_state=%s | %s",
+                getattr(query_type, "value", query_type),
+                embedding_state.get("state"),
+                detail,
+            )
+            embedding_note = (
+                ""
+                if embedding_state.get("state") == "available"
+                else (
+                    f" [embedding_provider={embedding_state.get('provider')} "
+                    f"state={embedding_state.get('state')}: {embedding_state.get('detail')}]"
+                )
+            )
+            raise CogneeServiceError(
+                f"recall() failed ({detail}) "
+                f"[mode={getattr(query_type, 'value', query_type)}]{embedding_note}"
+            ) from e
 
     async def improve(
         self,
@@ -630,6 +720,9 @@ class CogneeService:
                 datasets=[clean_ds],
                 top_k=top_k,
                 query_type=query_type,
+                # Deterministic mode: never let Cognee's query router choose an
+                # LLM-backed strategy for a retrieval operation.
+                auto_route=False,
                 only_context=kwargs.pop("only_context", True),
                 **kwargs,
             )

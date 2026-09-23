@@ -8,9 +8,10 @@ and performs startup checks. Singleton via get_settings().
 import os
 import socket
 import logging
+import time
 from pathlib import Path
 from functools import lru_cache
-from typing import Optional
+from typing import Any, Optional
 
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings
@@ -111,6 +112,20 @@ class Settings(BaseSettings):
     llm_provider: str = Field(default="ollama", description="Active LLM provider: ollama, lmstudio, openai_compatible")
     llm_endpoint: str = Field(default="http://localhost:11434/v1", description="Active LLM endpoint base URL")
     llm_api_key: str = Field(default="local", description="Active LLM API key")
+
+    # Embedding provider identity is intentionally independent from the LLM provider.
+    # These are explicit so the retrieval tier can report the provider/model it is
+    # actually configured to use, instead of assuming it matches the LLM.
+    embedding_provider: str = Field(
+        default="ollama",
+        description="Embedding provider: ollama or openai-compatible (openai/lmstudio)",
+    )
+    embedding_endpoint: str = Field(
+        default="",
+        description="Embedding endpoint. Empty resolves to the Ollama /api/embed endpoint.",
+    )
+    embedding_api_key: str = Field(default="ollama", description="Embedding provider API key")
+
     settings_store_path: Path = Field(default_factory=lambda: DEFAULT_SETTINGS_STORE_PATH)
     legacy_settings_store_path: Path = Field(default_factory=lambda: DEFAULT_LEGACY_SETTINGS_STORE_PATH)
 
@@ -296,14 +311,36 @@ class Settings(BaseSettings):
         return self
 
 
+    def resolve_embedding_endpoint(self) -> str:
+        """Resolve the embedding endpoint without substituting another provider.
+
+        An explicitly configured endpoint always wins. Otherwise the Ollama
+        embedding endpoint is used, which is the historical default.
+        """
+        explicit = (self.embedding_endpoint or "").strip()
+        if explicit:
+            return explicit
+        return self.ollama.embedding_endpoint
+
+    def embedding_identity(self) -> dict[str, Any]:
+        """Return the authoritative embedding provider identity (never inferred from the LLM)."""
+        return {
+            "provider": (self.embedding_provider or "ollama").strip().lower(),
+            "endpoint": self.resolve_embedding_endpoint(),
+            "model": self.ollama.embedding_model,
+            "dimensions": self.ollama.embedding_dimensions,
+            "api_key": self.embedding_api_key or "ollama",
+        }
+
     def apply_to_environment(self) -> None:
         """Write current settings into os.environ for Cognee compatibility."""
         llm_endpoint = self.llm_endpoint or self.ollama.llm_endpoint
-        embedding_endpoint = os.environ.get("EMBEDDING_ENDPOINT", self.ollama.embedding_endpoint)
+        embedding = self.embedding_identity()
+        embedding_endpoint = embedding["endpoint"]
         llm_provider = self.llm_provider or "ollama"
-        embedding_provider = os.environ.get("EMBEDDING_PROVIDER", "ollama")
+        embedding_provider = embedding["provider"]
         llm_api_key = self.llm_api_key or "local"
-        embedding_api_key = os.environ.get("EMBEDDING_API_KEY", "ollama")
+        embedding_api_key = embedding["api_key"]
 
         env = {
             "LLM_PROVIDER": llm_provider,
@@ -357,10 +394,11 @@ class Settings(BaseSettings):
         cognee.config.set_llm_api_key(llm_api_key)
         cognee.config.set_llm_endpoint(llm_endpoint)
 
-        embedding_provider = os.environ.get("EMBEDDING_PROVIDER", "ollama")
-        embedding_endpoint = os.environ.get("EMBEDDING_ENDPOINT", self.ollama.embedding_endpoint)
-        embedding_api_key = os.environ.get("EMBEDDING_API_KEY", "ollama")
-        embedding_model = self.ollama.embedding_model
+        embedding = self.embedding_identity()
+        embedding_provider = embedding["provider"]
+        embedding_endpoint = embedding["endpoint"]
+        embedding_api_key = embedding["api_key"]
+        embedding_model = embedding["model"]
 
         if embedding_provider == "openai" and not (embedding_model.startswith("openai/") or embedding_model.startswith("lm_studio/")):
             embedding_model = f"openai/{embedding_model}"
@@ -427,6 +465,105 @@ class Settings(BaseSettings):
             current_dataset_id.set(None)
         except (ImportError, AttributeError):
             pass
+
+    async def probe_embedding_provider(self, timeout: float = 3.0, max_age_seconds: float = 20.0) -> dict[str, Any]:
+        """Explicitly verify the configured embedding provider and model are usable.
+
+        Reports one truthful state and never substitutes another provider, endpoint,
+        or model:
+
+            available       - endpoint reachable and the configured model is listed
+            model_missing   - endpoint reachable but the configured model is absent
+            unreachable     - endpoint could not be reached
+            not_configured  - endpoint or model is not configured
+
+        Results are cached briefly so health polling does not add an outbound
+        request on every call.
+        """
+        now = time.monotonic()
+        cached = getattr(self, "_embedding_probe_cache", None)
+        if cached is not None and (now - cached[0]) < max_age_seconds:
+            return cached[1]
+
+        identity = self.embedding_identity()
+        provider = identity["provider"]
+        endpoint = (identity["endpoint"] or "").rstrip("/")
+        model = identity["model"]
+        result: dict[str, Any] = {
+            "provider": provider,
+            "endpoint": endpoint,
+            "model": model,
+            "dimensions": identity["dimensions"],
+            "state": "not_configured",
+            "detail": None,
+            "available_models": [],
+        }
+
+        if not endpoint or not model:
+            result["detail"] = "Embedding endpoint or embedding model is not configured."
+            self._embedding_probe_cache = (now, result)
+            return result
+
+        try:
+            import httpx
+
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                if provider == "ollama":
+                    base = endpoint[: -len("/api/embed")] if endpoint.endswith("/api/embed") else endpoint
+                    resp = await client.get(f"{base}/api/tags")
+                    resp.raise_for_status()
+                    payload = resp.json()
+                    names = [str(m.get("name", "")) for m in (payload.get("models") or [])]
+                else:
+                    models_url = endpoint if endpoint.endswith("/models") else f"{endpoint}/models"
+                    resp = await client.get(
+                        models_url,
+                        headers={"Authorization": f"Bearer {identity['api_key']}"},
+                    )
+                    resp.raise_for_status()
+                    payload = resp.json()
+                    names = [str(m.get("id", "")) for m in (payload.get("data") or [])]
+        except Exception as e:
+            result["state"] = "unreachable"
+            result["detail"] = f"Embedding provider '{provider}' unreachable at {endpoint}: {type(e).__name__}: {e}"
+            self._embedding_probe_cache = (now, result)
+            return result
+
+        available = [n for n in names if n]
+        result["available_models"] = available[:10]
+        if not available:
+            result["state"] = "model_missing"
+            result["detail"] = (
+                f"Embedding provider '{provider}' is reachable at {endpoint} but reports no models, "
+                f"so '{model}' cannot be used."
+            )
+            self._embedding_probe_cache = (now, result)
+            return result
+
+        target = model
+        for prefix in ("openai/", "lm_studio/", "lmstudio/", "ollama/"):
+            if target.startswith(prefix):
+                target = target[len(prefix):]
+
+        def _matches(candidate: str, wanted: str) -> bool:
+            cand, want = candidate.strip(), wanted.strip()
+            return cand == want or cand.split(":")[0] == want.split(":")[0]
+
+        if any(_matches(name, target) for name in available):
+            result["state"] = "available"
+        else:
+            result["state"] = "model_missing"
+            result["detail"] = (
+                f"Embedding model '{model}' is not available at {endpoint}. "
+                f"Available embeddings: {', '.join(available[:5])}. "
+                "RE:Track will not substitute a different embedding model."
+            )
+        self._embedding_probe_cache = (now, result)
+        return result
+
+    def clear_embedding_probe_cache(self) -> None:
+        """Invalidate the cached embedding availability probe."""
+        self._embedding_probe_cache = None
 
     def validate_provider(self) -> None:
         """Check provider reachability if connection test is not skipped."""

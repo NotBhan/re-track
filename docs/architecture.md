@@ -115,6 +115,21 @@ Dependency rules:
 - `tui/` never imports React/Tauri; `cli/` never imports GUI/TUI presentation.
 - Repository indexing, AST extraction, retrieval, ranking, and memory statistics are never re-implemented in `frontend/`.
 
+Retrieval-mode contract (derived memory):
+
+- Every retrieval tier is **vector/chunk retrieval**. `CogneeService.recall` always passes an
+  explicit `SearchType` (`CHUNKS`) with `auto_route=False`, so Cognee's rule-based query
+  router can never substitute an LLM-backed strategy such as `GRAPH_COMPLETION_COT` for a
+  retrieval operation.
+- The **embedding provider identity is configured and reported independently** of the LLM
+  provider (`embedding_provider` / `embedding_endpoint` in settings; surfaced as
+  `embedding_provider|endpoint|model|state|detail` on `/health` and `/status`). States are
+  `available`, `model_missing`, `unreachable`, `not_configured`; no substitution or silent
+  alignment of the two identities occurs.
+- When the embedding provider cannot serve the configured model, the retrieval tier reports
+  a degraded state (`retrieval_state="unavailable"` with a reason) instead of an apparently
+  successful empty result. Authoritative Tiers 1–2 and evidence gating are unaffected.
+
 Lifecycle contract:
 
 - The backend composition root (`ApplicationContainer`) exposes `initialize()` / `shutdown()` symmetry. `shutdown()` releases memory-engine handles (LanceDB vector engine, Kùzu graph engine) and is invoked from both the FastAPI lifespan and the MCP stdio shutdown path.

@@ -5,8 +5,11 @@ All dependencies are explicitly injected via constructor capability ports.
 """
 
 import asyncio
+from concurrent.futures import ThreadPoolExecutor
+import functools
 import logging
 from pathlib import Path
+import threading
 import time
 from typing import Any, Callable, Optional
 
@@ -39,6 +42,46 @@ from app.services.evidence_service import EvidenceService
 from app.services.retrieval_arbitrator import RetrievalArbitrator
 
 logger = logging.getLogger(__name__)
+
+#: Sentinel returned when the client disconnected and work was cancelled.
+_CLIENT_DISCONNECTED = object()
+
+# Repository walking, AST parsing and snippet extraction are synchronous CPU/IO work.
+# They are offloaded so the event loop (and therefore concurrent IPC such as health
+# polling) stays responsive. The pool is explicitly bounded and process-owned:
+# `asyncio.to_thread` would instead grow the loop's default executor to
+# min(32, cpu_count + 4) threads and retain them for the process lifetime.
+_OFFLOAD_MAX_WORKERS = 2
+_offload_executor: Optional[ThreadPoolExecutor] = None
+_offload_executor_lock = threading.Lock()
+
+
+def get_offload_executor() -> ThreadPoolExecutor:
+    """Return the bounded, lazily created executor used for blocking repository work."""
+    global _offload_executor
+    if _offload_executor is None:
+        with _offload_executor_lock:
+            if _offload_executor is None:
+                _offload_executor = ThreadPoolExecutor(
+                    max_workers=_OFFLOAD_MAX_WORKERS,
+                    thread_name_prefix="retrack-offload",
+                )
+    return _offload_executor
+
+
+def shutdown_offload_executor() -> None:
+    """Release offload worker threads (called from composition-root shutdown)."""
+    global _offload_executor
+    with _offload_executor_lock:
+        executor, _offload_executor = _offload_executor, None
+    if executor is not None:
+        executor.shutdown(wait=False)
+
+
+async def run_offloaded(fn: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
+    """Run synchronous work on the bounded offload pool without blocking the loop."""
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(get_offload_executor(), functools.partial(fn, *args, **kwargs))
 
 
 class BoundedConcurrencyGuard:
@@ -127,6 +170,43 @@ class ContextUseCases:
         """Telemetry from the most recent Tier-3 LanceDB/Kùzu retrieval invocation."""
         return dict(self._last_tier3_telemetry)
 
+    async def _await_or_disconnect(
+        self,
+        awaitable: Any,
+        disconnect_probe: Optional[Callable[[], Any]] = None,
+        poll_interval: float = 0.25,
+    ) -> Any:
+        """Await `awaitable`, aborting it if the client disconnects.
+
+        Cancelling the in-flight work closes the provider HTTP request, so the local
+        model stops generating instead of completing output nobody will receive.
+        Returns the `_CLIENT_DISCONNECTED` sentinel when the client went away.
+        """
+        if disconnect_probe is None:
+            return await awaitable
+
+        task = asyncio.ensure_future(awaitable)
+        try:
+            while True:
+                done, _ = await asyncio.wait({task}, timeout=poll_interval)
+                if task in done:
+                    return task.result()
+                try:
+                    gone = await disconnect_probe()
+                except Exception:
+                    gone = False
+                if gone:
+                    task.cancel()
+                    try:
+                        await task
+                    except BaseException:  # noqa: BLE001 - cancellation/timeout during teardown
+                        pass
+                    logger.info("client disconnected; cancelled in-flight context synthesis")
+                    return _CLIENT_DISCONNECTED
+        finally:
+            if not task.done():
+                task.cancel()
+
     async def generate_context(
         self,
         request: GenerateContextRequest,
@@ -195,6 +275,8 @@ class ContextUseCases:
                 compression_ratio=ratio,
                 retrieval_time_ms=retrieval_ms,
                 total_time_ms=total_ms,
+                retrieval_state=getattr(meta, "retrieval_state", "ok") if meta else "ok",
+                retrieval_error=getattr(meta, "retrieval_error", None) if meta else None,
                 reference_count=len(references),
                 section_headings=headings,
                 model_invoked=False,
@@ -239,11 +321,18 @@ class ContextUseCases:
     async def get_agent_context(
         self,
         request: AgentContextRequest,
+        disconnect_probe: Optional[Callable[[], Any]] = None,
     ) -> AgentContextResponse | ErrorResponse:
         """Generate compact, high-precision context for external AI coding agents.
 
         Parses prompt intent, checks file relevance, synthesizes semantic
         memory via Cognee, and builds a compact Markdown Context Package.
+
+        Args:
+            disconnect_probe: Optional awaitable returning True once the caller has
+                gone away (e.g. FastAPI ``Request.is_disconnected``). When supplied,
+                in-flight provider work is cancelled on disconnect instead of
+                completing output nobody will receive.
         """
         start = time.monotonic()
         logger.info("use_case: get_agent_context() | prompt=%s", request.task_prompt[:80])
@@ -335,9 +424,15 @@ class ContextUseCases:
                     return fallback_record
 
                 async def _get_repo_summary():
-                    raw_files = self._indexing_service.discover_files(repo_path)
-                    indexed = self._indexing_service.filter_files(raw_files, repo_path)
-                    summary = await self._summary_generator.generate(repo_path, indexed) if asyncio.iscoroutinefunction(self._summary_generator.generate) else self._summary_generator.generate(repo_path, indexed)
+                    # Repository walking and AST parsing are synchronous CPU/IO work.
+                    # Run them on a worker thread so concurrent IPC (health polling,
+                    # status, telemetry) is not blocked while a package is assembled.
+                    raw_files = await run_offloaded(self._indexing_service.discover_files, repo_path)
+                    indexed = await run_offloaded(self._indexing_service.filter_files, raw_files, repo_path)
+                    if asyncio.iscoroutinefunction(self._summary_generator.generate):
+                        summary = await self._summary_generator.generate(repo_path, indexed)
+                    else:
+                        summary = await run_offloaded(self._summary_generator.generate, repo_path, indexed)
                     return indexed, summary
 
                 async def _get_provider_health():
@@ -348,11 +443,20 @@ class ContextUseCases:
                             return None
                     return None
 
-                intent, (indexed_files, repo_summary), health_status = await asyncio.gather(
-                    _get_intent(),
-                    _get_repo_summary(),
-                    _get_provider_health(),
+                gathered = await self._await_or_disconnect(
+                    asyncio.gather(
+                        _get_intent(),
+                        _get_repo_summary(),
+                        _get_provider_health(),
+                    ),
+                    disconnect_probe,
                 )
+                if gathered is _CLIENT_DISCONNECTED:
+                    return ErrorResponse(
+                        error="ClientDisconnected",
+                        message="Client disconnected; context synthesis was cancelled.",
+                    )
+                intent, (indexed_files, repo_summary), health_status = gathered
 
                 # Retrieve graph context and base context package
                 t_retrieval_start = time.perf_counter()
@@ -437,12 +541,21 @@ class ContextUseCases:
                             return []
                     return []
 
-                structural_res, package, semantic_memories, tier3_memories = await asyncio.gather(
-                    _query_cgc(),
-                    _generate_package(),
-                    _get_semantic_memories(),
-                    _get_tier3_memories(),
+                gathered_retrieval = await self._await_or_disconnect(
+                    asyncio.gather(
+                        _query_cgc(),
+                        _generate_package(),
+                        _get_semantic_memories(),
+                        _get_tier3_memories(),
+                    ),
+                    disconnect_probe,
                 )
+                if gathered_retrieval is _CLIENT_DISCONNECTED:
+                    return ErrorResponse(
+                        error="ClientDisconnected",
+                        message="Client disconnected; context synthesis was cancelled.",
+                    )
+                structural_res, package, semantic_memories, tier3_memories = gathered_retrieval
                 self._last_tier3_telemetry = dict(tier3_telemetry)
                 log_event(
                     logger,
@@ -470,7 +583,9 @@ class ContextUseCases:
                         extracted_symbols=intent.extracted_symbols,
                         relevant_file_hints=intent.relevant_file_hints,
                     )
-                    relevant_snippets, matched_file_rels = self._source_search.extract_relevant_snippets(
+                    # Synchronous multi-file reads + regex scoring; keep off the loop.
+                    relevant_snippets, matched_file_rels = await run_offloaded(
+                        self._source_search.extract_relevant_snippets,
                         repo_path=repo_path,
                         indexed_files=indexed_files,
                         search_terms=search_terms,
@@ -781,8 +896,8 @@ class ContextUseCases:
                 )
 
             if self._indexing_service:
-                raw_files = self._indexing_service.discover_files(repo_path)
-                indexed_files = self._indexing_service.filter_files(raw_files, repo_path)
+                raw_files = await run_offloaded(self._indexing_service.discover_files, repo_path)
+                indexed_files = await run_offloaded(self._indexing_service.filter_files, raw_files, repo_path)
             else:
                 repo_canon = repo_path.resolve()
                 indexed_files = [
@@ -793,7 +908,8 @@ class ContextUseCases:
 
             results: list[SourceSearchResultItem] = []
             if self._source_search:
-                raw_results = self._source_search.search(
+                raw_results = await run_offloaded(
+                    self._source_search.search,
                     repo_path=repo_path,
                     indexed_files=indexed_files,
                     query=query,

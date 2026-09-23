@@ -36,6 +36,14 @@ class ContextResponse(BaseModel):
     compression_ratio: float = Field(default=1.0, description="Input/output token ratio")
     retrieval_time_ms: int = Field(default=0, description="Time spent in Cognee recall")
     total_time_ms: int = Field(default=0, description="Total generation time")
+    retrieval_state: str = Field(
+        default="ok",
+        description="Derived-memory retrieval outcome: ok | unavailable",
+    )
+    retrieval_error: Optional[str] = Field(
+        default=None,
+        description="Truthful reason the retrieval tier could not be queried",
+    )
     # Reference fields
     reference_count: int = Field(default=0, description="Number of traceable references")
     section_headings: list[str] = Field(default_factory=list, description="Headings of generated sections")

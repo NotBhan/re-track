@@ -7,6 +7,7 @@ without initiating unapproved model downloads.
 """
 
 import logging
+import os
 import re
 from typing import Any, Optional
 import httpx
@@ -21,6 +22,23 @@ from app.models.provider import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Local model generation budgets are configurable: a slow local runner (or a host
+# under memory pressure) legitimately needs far longer than a hosted API request.
+# The previous hard-coded 60s budget abandoned completed-work-in-progress whenever
+# a local model could not finish in time.
+DEFAULT_INFERENCE_TIMEOUT_SEC = 180.0
+
+
+def resolve_inference_timeout(explicit: Optional[float] = None) -> float:
+    """Resolve the generation budget from an explicit value, then env, then default."""
+    if explicit is not None and explicit > 0:
+        return float(explicit)
+    try:
+        env_value = float(os.environ.get("RETRACK_INFERENCE_TIMEOUT_SEC", DEFAULT_INFERENCE_TIMEOUT_SEC))
+    except (TypeError, ValueError):
+        env_value = DEFAULT_INFERENCE_TIMEOUT_SEC
+    return env_value if env_value > 0 else DEFAULT_INFERENCE_TIMEOUT_SEC
 
 
 class ModelNotAvailableError(ValueError):
@@ -306,8 +324,14 @@ class LLMProviderService:
         model: Optional[str] = None,
         temperature: float = 0.1,
         max_tokens: int = 1024,
+        timeout: Optional[float] = None,
     ) -> str:
-        """Execute a completion via OpenAI-compatible /chat/completions API."""
+        """Execute a completion via OpenAI-compatible /chat/completions API.
+
+        Args:
+            timeout: Optional generation budget in seconds. Falls back to
+                RETRACK_INFERENCE_TIMEOUT_SEC, then DEFAULT_INFERENCE_TIMEOUT_SEC.
+        """
         clean_base = (self.base_url or "").strip().rstrip("/")
         if not clean_base:
             raise ValueError("Provider endpoint URL is not configured.")
@@ -353,8 +377,10 @@ class LLMProviderService:
             "stream": False,
         }
 
+        budget = resolve_inference_timeout(timeout)
+
         try:
-            async with httpx.AsyncClient(timeout=60.0) as client:
+            async with httpx.AsyncClient(timeout=budget) as client:
                 resp = await client.post(chat_url, headers=headers, json=payload)
                 if resp.status_code == 404:
                     raise ValueError(f"Model '{target_model}' not found on provider at {clean_base} (HTTP 404).")
@@ -380,7 +406,10 @@ class LLMProviderService:
             raise ConnectionError(f"Connection refused to provider at {clean_base}: {ce}") from ce
         except httpx.TimeoutException as te:
             self.last_invoked_model = target_model
-            raise TimeoutError(f"Inference request to provider at {clean_base} timed out: {te}") from te
+            raise TimeoutError(
+                f"Inference request to provider at {clean_base} exceeded the {budget:.0f}s generation "
+                f"budget (set RETRACK_INFERENCE_TIMEOUT_SEC to raise it): {te}"
+            ) from te
         except (ModelNotAvailableError, ModelMismatchError):
             raise
         except Exception:

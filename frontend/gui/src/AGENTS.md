@@ -29,7 +29,11 @@ Owns:
   - Three Runtime Identities: Configured Model, Verified Active Model, Last Executing Model
   - Truthful Hardware & Execution Telemetry (Device, CPU, RAM, GPU/VRAM or None detected, "Unavailable" when offline)
   - Unified System tabs: Provider & Runtime, Storage & Subsystems, Benchmarks, Diagnostics
-- State Stores (`src/stores/`) — `repository-store`, `context-package-store`, `memory-store`, `health-store`
+- Settings (`src/pages/Settings.tsx`, `src/components/settings/`)
+  - Dedicated first-class destination, reached from the global sidebar (`/settings`)
+  - URL-driven sections (`?tab=provider|storage|diagnostics`) with legacy tab aliases resolved
+  - Sections: Provider & Runtime, Storage & Memory, Diagnostics (backed by the shared settings components below)
+- State Stores (`src/stores/`) — `repository-store`, `context-package-store`, `memory-store`, `health-store`, `settings-store`
 - Type Definitions (`src/types/repository.ts`)
 
 ---
@@ -55,6 +59,7 @@ Owns:
 3. **Data Types**: All repository data types live in `src/types/repository.ts`.
 4. **State Management**: Keep local UI state inside components; use Zustand stores for cross-page persistence.
 5. **CallGraphView Ownership**: `CallGraphView.tsx` owns the spring-force simulation loop. Do not move simulation state into a global store.
+6. **Settings Page Ownership**: `Settings.tsx` composes the shared `components/settings/` sections; it must not fork configuration logic or duplicate backend calls. Settings sections are URL-driven (`?tab=`) and only expose options backed by the existing backend contract.
 
 ---
 
@@ -75,8 +80,8 @@ npx tsc --noEmit       # Type check
 - `src/components/context-packages/` — `PackageHistoryDrawer.tsx`.
 - `src/components/dashboard/` — `ProgressiveMarkdownReveal.tsx`.
 - `src/components/memory/` — `ProvenanceDrawer.tsx`, `DatasetTable.tsx`, `KnowledgeGraphView.tsx`, `VectorSpaceView.tsx`, `MemoryStats.tsx`.
-- `src/components/settings/` — `OllamaSettings.tsx`.
+- `src/components/settings/` — `OllamaSettings.tsx` (provider/model config, shared with System & Telemetry), `StorageSettings.tsx`, `CogneeSettings.tsx`, `DiagnosticsSettings.tsx`, `BackendSettings.tsx`, `ConnectivityCheck.tsx` (Settings-only backend probe).
 - `src/components/benchmarks/` — `MetricCard.tsx`.
 - `src/components/shared/` — `SynthesisProgressBar.tsx`, `ProviderAlertBanner.tsx`.
 - `src/stores/` — Zustand stores for repositories, packages, memory, and health.
-- `src/pages/` — `Workspace.tsx`, `ContextStudio.tsx`, `Memory.tsx`, `SystemTelemetry.tsx`.
+- `src/pages/` — `Workspace.tsx`, `ContextStudio.tsx`, `Memory.tsx`, `SystemTelemetry.tsx`, `Settings.tsx`.

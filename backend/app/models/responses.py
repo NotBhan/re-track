@@ -343,6 +343,11 @@ class PackageMetadata:
     pipeline_version: str
     retrieval_time_ms: int
     total_time_ms: int
+    # Derived-memory retrieval outcome. "ok" means recall answered; "unavailable"
+    # means the retrieval tier could not be queried (e.g. embedding provider
+    # unusable). Authoritative tiers (source + AST) are unaffected either way.
+    retrieval_state: str = "ok"
+    retrieval_error: str | None = None
 
 
 @dataclass(frozen=True)
