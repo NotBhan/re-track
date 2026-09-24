@@ -77,9 +77,11 @@ class IntentParserService:
             "Analyze the developer's request and respond ONLY in valid JSON format matching this schema:\n"
             "{\n"
             '  "task_summary": "One line summary of the goal",\n'
-            '  "category": "bug_fix" | "feature_addition" | "refactoring" | "architecture_query" | "explanation",\n'
-            '  "extracted_symbols": ["list", "of", "exact", "code_symbols_mentioned"],\n'
-            '  "relevant_file_hints": ["mentioned_file_names.py"],\n'
+            '  "category": "Descriptive category of the task (e.g. bug_fix, feature_addition, investigation, refactoring, modification, api_design, unclassified)",\n'
+            '  "actions": ["requested actions/verbs, e.g. add, fix, trace, explain, refactor, retry"],\n'
+            '  "target_entities": ["core technical concepts, modules, or entities targeted, e.g. payment webhook, auth middleware, checkout flow"],\n'
+            '  "extracted_symbols": ["list of exact code symbols if mentioned"],\n'
+            '  "relevant_file_hints": ["mentioned file names if any"],\n'
             '  "is_vague": true | false\n'
             "}\n"
             "Do NOT invent code identifiers not present or referenced in the user text."
@@ -134,25 +136,24 @@ class IntentParserService:
             if not isinstance(data, dict):
                 raise ValueError("Model response root is not a JSON object")
 
-            # Strict schema validation of parsed intent record
+            # Schema parsing of parsed intent record
             task_summary = str(data.get("task_summary", fallback.task_summary)).strip()
             category = str(data.get("category", fallback.category)).strip()
+            raw_actions = data.get("actions", [])
+            raw_entities = data.get("target_entities", [])
             raw_symbols = data.get("extracted_symbols", [])
             raw_hints = data.get("relevant_file_hints", [])
             is_vague = data.get("is_vague", fallback.is_vague)
 
-            valid_categories = {
-                "bug_fix",
-                "feature_addition",
-                "refactoring",
-                "architecture_query",
-                "explanation",
-                "feature",
-            }
             if not task_summary:
                 task_summary = fallback.task_summary
-            if category not in valid_categories:
-                category = fallback.category
+            # Category is a descriptive label, not a gate
+            if not category:
+                category = fallback.category or "unclassified"
+            if not isinstance(raw_actions, list):
+                raw_actions = []
+            if not isinstance(raw_entities, list):
+                raw_entities = []
             if not isinstance(raw_symbols, list):
                 raw_symbols = []
             if not isinstance(raw_hints, list):
@@ -175,6 +176,9 @@ class IntentParserService:
                 category=category,
                 extracted_symbols=list(dict.fromkeys([str(s) for s in raw_symbols if s] + fallback.extracted_symbols)),
                 relevant_file_hints=list(dict.fromkeys([str(h) for h in raw_hints if h] + fallback.relevant_file_hints)),
+                actions=list(dict.fromkeys([str(a) for a in raw_actions if a] + fallback.actions)),
+                target_entities=list(dict.fromkeys([str(e) for e in raw_entities if e] + fallback.target_entities)),
+                constraints=[],
                 is_vague=is_vague,
                 model_invoked=True,
                 provider_identity=p_name,

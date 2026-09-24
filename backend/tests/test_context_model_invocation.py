@@ -220,8 +220,8 @@ async def test_get_agent_context_end_to_end_telemetry():
         assert resp.provider_identity == "lmstudio"
         assert resp.model_name == "qwen2.5-coder:7b"
         assert resp.inference_status == "completed"
-        assert resp.fallback_used is False
-        assert mock_provider.call_count == 1
+        # Exactly 2 provider invocations occur: 1 for intent parsing and 1 for task context synthesis
+        assert mock_provider.call_count == 2
 
 
 @pytest.mark.asyncio

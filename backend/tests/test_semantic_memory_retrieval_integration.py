@@ -444,7 +444,7 @@ async def test_semantic_memory_retrieval_does_not_invoke_llm(test_env):
     await use_cases.get_agent_context(req)
 
     # Semantic memory retrieval does NOT invoke the LLM for memory generation
-    assert mock_llm.call_count <= 1  # at most intent parser, 0 for memory extraction
+    assert mock_llm.call_count <= 2  # at most intent parser (1) + task synthesis (1), 0 for memory extraction
 
 
 # 10. test_semantic_memory_backend_failure_does_not_break_deterministic_retrieval

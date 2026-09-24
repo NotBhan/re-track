@@ -1,138 +1,47 @@
 import { useState } from "react";
-import { BrowserRouter, Routes, Route, Navigate, useLocation, useParams } from "react-router-dom";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import { AppShell } from "@/components/layout/AppShell";
-import { PageTransition } from "@/components/layout/PageTransition";
-import { CreateRepositoryIndexModal } from "@/components/repositories/CreateRepositoryIndexModal";
-import { Toaster } from "@/components/ui/toast";
-import { AnimatePresence } from "motion/react";
-import ContextStudio from "@/pages/ContextStudio";
-import Workspace from "@/pages/Workspace";
-import Memory from "@/pages/Memory";
-import SystemTelemetry from "@/pages/SystemTelemetry";
-import Settings from "@/pages/Settings";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { AppShell } from "./app/shell/AppShell";
+import { ToastProvider } from "./app/providers/ToastProvider";
+import { RepositoryCatalog } from "./features/code/RepositoryCatalog";
+import { ContextWorkbench } from "./features/context/ContextWorkbench";
+import { MemoryHub } from "./features/memory/MemoryHub";
+import { SystemHub } from "./features/system/SystemHub";
+import { RepositoryAddModal } from "./features/code/RepositoryAddModal";
 import "./App.css";
 
-function PreservingRedirect({
-  to,
-  defaultParams,
-}: {
-  to: string;
-  defaultParams?: Record<string, string>;
-}) {
-  const location = useLocation();
-  const searchParams = new URLSearchParams(location.search);
-
-  if (defaultParams) {
-    for (const [key, value] of Object.entries(defaultParams)) {
-      if (!searchParams.has(key)) {
-        searchParams.set(key, value);
-      }
-    }
-  }
-
-  const query = searchParams.toString();
-  const target = query ? `${to}?${query}` : to;
-  return <Navigate to={target} replace />;
-}
-
-function KnowledgeRedirect() {
-  const { repoId } = useParams<{ repoId: string }>();
-  const location = useLocation();
-  const searchParams = new URLSearchParams(location.search);
-  if (repoId) {
-    searchParams.set("repo", repoId);
-  }
-  if (!searchParams.has("tab")) {
-    searchParams.set("tab", "ast");
-  }
-  return <Navigate to={`/workspace?${searchParams.toString()}`} replace />;
-}
-
-function AnimatedRoutes() {
-  const location = useLocation();
-
-  return (
-    <AnimatePresence mode="wait">
-      <Routes location={location} key={location.pathname}>
-        <Route path="/" element={<PreservingRedirect to="/workspace" />} />
-        <Route
-          path="/workspace"
-          element={
-            <PageTransition>
-              <Workspace />
-            </PageTransition>
-          }
-        />
-        <Route
-          path="/repositories"
-          element={<PreservingRedirect to="/workspace" />}
-        />
-        <Route
-          path="/studio"
-          element={
-            <PageTransition>
-              <ContextStudio />
-            </PageTransition>
-          }
-        />
-        <Route path="/knowledge/:repoId" element={<KnowledgeRedirect />} />
-        <Route
-          path="/context-builder"
-          element={<PreservingRedirect to="/studio" />}
-        />
-        <Route
-          path="/packages"
-          element={<PreservingRedirect to="/studio" defaultParams={{ tab: "history" }} />}
-        />
-        <Route
-          path="/memory"
-          element={
-            <PageTransition>
-              <Memory />
-            </PageTransition>
-          }
-        />
-        <Route
-          path="/system"
-          element={
-            <PageTransition>
-              <SystemTelemetry />
-            </PageTransition>
-          }
-        />
-        <Route
-          path="/benchmarks"
-          element={<PreservingRedirect to="/system" defaultParams={{ tab: "benchmarks" }} />}
-        />
-        <Route
-          path="/settings"
-          element={
-            <PageTransition>
-              <Settings />
-            </PageTransition>
-          }
-        />
-      </Routes>
-    </AnimatePresence>
-  );
-}
-
-function App() {
-  const [createModalOpen, setCreateModalOpen] = useState(false);
+export function App() {
+  const [addModalOpen, setAddModalOpen] = useState(false);
 
   return (
     <BrowserRouter>
-      <TooltipProvider>
-        <AppShell onNewIndex={() => setCreateModalOpen(true)}>
-          <AnimatedRoutes />
+      <ToastProvider>
+        <AppShell>
+          <Routes>
+            <Route path="/" element={<Navigate to="/code" replace />} />
+            <Route
+              path="/code"
+              element={<RepositoryCatalog onOpenAddModal={() => setAddModalOpen(true)} />}
+            />
+            {/* Backward-compatible redirects */}
+            <Route path="/workspace" element={<Navigate to="/code" replace />} />
+            <Route path="/repositories" element={<Navigate to="/code" replace />} />
+
+            <Route path="/context" element={<ContextWorkbench />} />
+            <Route path="/studio" element={<Navigate to="/context" replace />} />
+            <Route path="/context-builder" element={<Navigate to="/context" replace />} />
+            <Route path="/packages" element={<Navigate to="/context" replace />} />
+
+            <Route path="/memory" element={<MemoryHub />} />
+
+            <Route path="/system" element={<SystemHub />} />
+            <Route path="/settings" element={<Navigate to="/system" replace />} />
+            <Route path="/benchmarks" element={<Navigate to="/system" replace />} />
+
+            <Route path="*" element={<Navigate to="/code" replace />} />
+          </Routes>
         </AppShell>
-        <CreateRepositoryIndexModal
-          open={createModalOpen}
-          onOpenChange={setCreateModalOpen}
-        />
-        <Toaster />
-      </TooltipProvider>
+        <RepositoryAddModal open={addModalOpen} onOpenChange={setAddModalOpen} />
+      </ToastProvider>
     </BrowserRouter>
   );
 }

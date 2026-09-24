@@ -1,87 +1,39 @@
-# Purpose
+# RE:Track Modern Desktop GUI — Source Contract
 
-Owns the React frontend for RE:Track (RefinedEngine Track).
+## Architecture & Ownership
 
-Responsible for user interaction, repository visualization, call graph exploration, context generation, and telemetry presentation.
+This directory contains the completely redesigned modern GUI for RE:Track.
+It is organized into clean architectural layers:
 
----
-
-# Ownership
-
-Owns:
-
-- Workspace (`src/pages/Workspace.tsx`, `src/components/workspace/`)
-  - Workspace Header & Scope Selector
-  - 4-Stage Lifecycle Stepper (`Scan` -> `Manifest` -> `AST Extraction` -> `Cognification`)
-  - 50-Node Bounded AST Call Graph with 1-Hop Neighbor Expansion
-  - Deterministic Manifest & Evidence Table with exact byte counts
-- Context Studio (`src/pages/ContextStudio.tsx`)
-  - 3-Column Studio Layout (Input Workbench / Retrieval Arbitration & Evidence / Context Package & History)
-  - 4 Authoritative Retrieval Tiers (Filesystem Source, Manifest / AST, LanceDB / Kùzu, Cognee Semantic Memory)
-  - Token Budget allocation & synthesis controls
-  - Package History Drawer (`src/components/context-packages/PackageHistoryDrawer.tsx`)
-- Memory Engine (`src/pages/Memory.tsx`, `src/components/memory/`)
-  - Multi-tier derived storage inspector (Semantic Records, Vector Space, Knowledge Graph)
-  - Provenance Drawer with SHA-256 verification and epistemic status notices
-  - Strict Derived Storage Truth Boundary (`/memory` suppressed when no repo selected)
-- System & Telemetry (`src/pages/SystemTelemetry.tsx`)
-  - Global scope (independent of repository selection)
-  - Three Runtime Identities: Configured Model, Verified Active Model, Last Executing Model
-  - Truthful Hardware & Execution Telemetry (Device, CPU, RAM, GPU/VRAM or None detected, "Unavailable" when offline)
-  - Unified System tabs: Provider & Runtime, Storage & Subsystems, Benchmarks, Diagnostics
-- Settings (`src/pages/Settings.tsx`, `src/components/settings/`)
-  - Dedicated first-class destination, reached from the global sidebar (`/settings`)
-  - URL-driven sections (`?tab=provider|storage|diagnostics`) with legacy tab aliases resolved
-  - Sections: Provider & Runtime, Storage & Memory, Diagnostics (backed by the shared settings components below)
-- State Stores (`src/stores/`) — `repository-store`, `context-package-store`, `memory-store`, `health-store`, `settings-store`
-- Type Definitions (`src/types/repository.ts`)
+- `app/` — Global application shell, navigation header, and notification/toast provider.
+- `components/` — Quiet, atomic design system primitives (`Button`, `Input`, `Badge`, `Dialog`, `Tabs`, `EmptyState`).
+- `features/` — High-cohesion, domain-focused user journey features:
+  - `features/code/` — Repository Catalog, CallGraphView (5-state integrity), ManifestTable, IndexingProgressView, RepositoryAddModal.
+  - `features/context/` — ContextWorkbench, EvidenceViewer (5-tier evidence breakdown), SynthesisOutput, PackageDrawer.
+  - `features/memory/` — MemoryHub (with explicit Derived Storage notice), IngestedFilesView, VectorSpaceView, KnowledgeGraphView.
+  - `features/system/` — SystemHub, TelemetryGauges (truth boundary enforced), ProviderSettings, StorageSettings, DisplaySettings (UI scaling), DiagnosticsViewer, BenchmarkRunner.
+- `stores/` — Lightweight Zustand domain stores (`repositoryStore`, `contextStore`, `memoryStore`, `systemStore`, `uiScaleStore`).
+- `lib/` — Tauri IPC bridge (`api.ts`), styling utilities (`utils.ts`).
+- `test/` — Full regression test suite verifying core user journeys.
 
 ---
 
-# Current Status
+## Local Contracts
 
-- [x] **Visual Design System**: Vercel Geist monochrome dark palette, `#262626` hairline borders, `Geist Sans` & `Geist Mono` typography.
-- [x] **Product Interaction Quality**: Keyboard accessibility, active request cancellation, toast feedback, non-blocking telemetry.
-- [x] **Information Density & Workflow Clarity**: Task → Repository → Evidence → Context relationship strips, Symbol Inspector drawer, progressive synthesis progress bar.
-- [x] **Validation & Integrity (Truth Boundary)**:
-  - Strict 5-state AST call graph rendering (`not_analyzed`, `analyzing`, `analyzed`, `zero_edges`, `failed`).
-  - No synthetic fallback nodes or mock edges; node IDs are strictly authoritative.
-  - Connected path highlighting on hover/selection with inactive element dimming.
-  - Multi-tier memory topology separation (Ingested files vs Vector index vs Knowledge graph).
-  - Deterministic token reduction benchmarks against full source baseline.
+1. **Visual System Contract (DESIGN-vercel.md)**:
+   The visual system strictly adheres to the Geist design language:
+   - High-contrast black-and-white duet with near-black `#000000`/`#0a0a0a` canvas and `#ededed` primary text.
+   - Zero gratuitous chromatic chrome, glowing neon borders, or rainbow badges.
+   - Strict semantic-only colors (blue for focus/links, emerald for success/active, amber for warning/degraded, red for errors/destructive).
+   - Generous 36px+ interactive control target heights and user-controlled zoom scaling.
 
----
+2. **Truth Boundary Guarantee**:
+   The backend is the sole authority for repository analysis, graph identity, memory statistics, benchmark measurements, and hardware telemetry.
+   The frontend must NEVER invent missing nodes/edges, infer status from empty arrays, substitute static metrics, or recover missing data with synthetic fallbacks.
+   When telemetry is unavailable or backend is offline, components must display "Unavailable" rather than fabricated readings.
 
-# Local Contracts
+3. **Epistemic Clarity**:
+   The memory engine features (`features/memory/`) must explicitly declare to the user that LanceDB vector chunks and Kùzu graphs represent derived knowledge rather than source ground truth.
 
-1. **Truth Boundary Invariant**: The frontend must never invent missing graph nodes/edges, infer graph status from empty arrays, substitute static benchmark scores, or reinterpret unextracted states with fake zeroes.
-2. **Backend Communication**: Communicate with backend exclusively through Tauri IPC (`src/lib/api.ts`).
-3. **Data Types**: All repository data types live in `src/types/repository.ts`.
-4. **State Management**: Keep local UI state inside components; use Zustand stores for cross-page persistence.
-5. **CallGraphView Ownership**: `CallGraphView.tsx` owns the spring-force simulation loop. Do not move simulation state into a global store.
-6. **Settings Page Ownership**: `Settings.tsx` composes the shared `components/settings/` sections; it must not fork configuration logic or duplicate backend calls. Settings sections are URL-driven (`?tab=`) and only expose options backed by the existing backend contract.
-
----
-
-# Verification
-
-```bash
-npm run build          # Must complete with 0 TypeScript/Vite errors
-npx tsc --noEmit       # Type check
-```
-
----
-
-# Child DOX Index
-
-- `src/components/workspace/` — `WorkspaceHeader.tsx`, `LifecycleStepper.tsx`, `ManifestEvidenceTable.tsx`.
-- `src/components/repositories/` — `CallGraphView.tsx` (50-node bounded + 1-hop expansion), `RepositoryCard.tsx`, `RepositoryDetailPanel.tsx`, `QuickContextModal.tsx`.
-- `src/components/context-builder/` — `TierEvidenceStack.tsx`, `EvidenceProvenanceLayer.tsx`, `ContextPipelineInputs.tsx`.
-- `src/components/context-packages/` — `PackageHistoryDrawer.tsx`.
-- `src/components/dashboard/` — `ProgressiveMarkdownReveal.tsx`.
-- `src/components/memory/` — `ProvenanceDrawer.tsx`, `DatasetTable.tsx`, `KnowledgeGraphView.tsx`, `VectorSpaceView.tsx`, `MemoryStats.tsx`.
-- `src/components/settings/` — `OllamaSettings.tsx` (provider/model config, shared with System & Telemetry), `StorageSettings.tsx`, `CogneeSettings.tsx`, `DiagnosticsSettings.tsx`, `BackendSettings.tsx`, `ConnectivityCheck.tsx` (Settings-only backend probe).
-- `src/components/benchmarks/` — `MetricCard.tsx`.
-- `src/components/shared/` — `SynthesisProgressBar.tsx`, `ProviderAlertBanner.tsx`.
-- `src/stores/` — Zustand stores for repositories, packages, memory, and health.
-- `src/pages/` — `Workspace.tsx`, `ContextStudio.tsx`, `Memory.tsx`, `SystemTelemetry.tsx`, `Settings.tsx`.
+4. **Presentation Independence**:
+   Components only handle presentation and user interactions. No business logic, AST parsing, or graph traversal algorithms reside in the frontend. All data access flows through `src/lib/api.ts` directly to Tauri IPC invoke handlers.

@@ -5,10 +5,6 @@ Transport layer only — business logic is encapsulated in application use cases
 """
 
 import logging
-import os
-import signal
-import threading
-import time
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -16,46 +12,9 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routers import register_routers
 from app.application.container import get_container
+from app.core.watchdog import start_parent_watchdog as _start_parent_watchdog
 
 logger = logging.getLogger(__name__)
-
-
-def _start_parent_watchdog() -> None:
-    """Launch a background thread to terminate backend if parent process dies abruptly."""
-    parent_pid_str = os.environ.get("RETRACK_PARENT_PID")
-    if not parent_pid_str:
-        return
-    try:
-        parent_pid = int(parent_pid_str)
-    except ValueError:
-        return
-
-    def _watchdog_loop() -> None:
-        while True:
-            time.sleep(1.0)
-            try:
-                current_ppid = os.getppid()
-                if current_ppid != parent_pid:
-                    logger.warning(
-                        "Parent process %d terminated (current ppid=%d). Terminating orphaned backend.",
-                        parent_pid,
-                        current_ppid,
-                    )
-                    os.kill(os.getpid(), signal.SIGTERM)
-                    break
-                # Verify parent process still exists
-                os.kill(parent_pid, 0)
-            except (ProcessLookupError, PermissionError):
-                logger.warning(
-                    "Parent process %d is no longer reachable. Terminating orphaned backend.",
-                    parent_pid,
-                )
-                os.kill(os.getpid(), signal.SIGTERM)
-                break
-
-    thread = threading.Thread(target=_watchdog_loop, name="retrack-parent-watchdog", daemon=True)
-    thread.start()
-    logger.info("Parent-death watchdog thread registered for parent PID %d", parent_pid)
 
 
 @asynccontextmanager

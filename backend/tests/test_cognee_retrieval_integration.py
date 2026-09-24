@@ -534,7 +534,7 @@ async def test_cognee_retrieval_does_not_invoke_memory_llm(test_env):
     await use_cases.get_agent_context(req)
 
     # Memory extraction LLM was NOT invoked during context retrieval
-    assert mock_llm.call_count <= 1  # at most intent parser (1), 0 for memory generation
+    assert mock_llm.call_count <= 2  # at most intent parser (1) + task synthesis (1), 0 for memory generation
 
 
 # 11. test_cognee_retrieval_does_not_trigger_cognify

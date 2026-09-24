@@ -12,8 +12,9 @@ class SourceSearchPort(Protocol):
         task_prompt: str,
         extracted_symbols: Sequence[str] = (),
         relevant_file_hints: Sequence[str] = (),
+        target_entities: Sequence[str] = (),
     ) -> list[str]:
-        """Generate deduplicated ranked search terms from prompt, symbols, and hints."""
+        """Generate deduplicated ranked search terms from prompt, symbols, hints, and target entities."""
         ...
 
     def extract_relevant_snippets(

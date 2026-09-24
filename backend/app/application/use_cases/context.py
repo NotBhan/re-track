@@ -8,7 +8,9 @@ import asyncio
 from concurrent.futures import ThreadPoolExecutor
 import functools
 import logging
+import os
 from pathlib import Path
+import re
 import threading
 import time
 from typing import Any, Callable, Optional
@@ -582,6 +584,7 @@ class ContextUseCases:
                         task_prompt=request.task_prompt,
                         extracted_symbols=intent.extracted_symbols,
                         relevant_file_hints=intent.relevant_file_hints,
+                        target_entities=getattr(intent, "target_entities", []),
                     )
                     # Synchronous multi-file reads + regex scoring; keep off the loop.
                     relevant_snippets, matched_file_rels = await run_offloaded(
@@ -763,14 +766,119 @@ class ContextUseCases:
                 )
 
                 t_synth_start = time.perf_counter()
-                final_markdown = package.markdown
-                if relevant_snippets:
-                    final_markdown += "\n\n---\n\n# Relevant Code Snippets & Target Implementations\n\n" + "\n\n".join(relevant_snippets)
+                synth_model_invoked = False
+                synth_model_name = None
+                synth_provider_identity = None
+                synth_inference_status = "not_configured"
+                synth_fallback_used = True
+                synth_fallback_reason = "No active LLM provider configured"
+                synth_inference_time_ms = 0
+                final_markdown = ""
 
-                if structural_res and structural_res.symbols_found:
-                    struct_md = structural_res.to_markdown()
-                    if struct_md:
-                        final_markdown += f"\n\n---\n\n# Structural Code Relationships\n\n{struct_md}\n"
+                # Task-Specific Context Synthesis via LLM Provider
+                if self._llm_provider:
+                    p_type = getattr(self._llm_provider, "provider_type", None)
+                    synth_provider_identity = p_type.value if hasattr(p_type, "value") else str(p_type or "llm_provider")
+                    synth_model_name = getattr(self._llm_provider, "default_model", None)
+
+                    synth_system_prompt = (
+                        "You are an expert repository-intelligence coding assistant. "
+                        "Your mission is to synthesize high-precision, task-specific context answering the developer's exact request.\n"
+                        "STRICT GROUNDING RULES:\n"
+                        "1. Rely ONLY on the authoritative repository evidence, source snippets, and AST symbols provided below.\n"
+                        "2. Answer the developer's specific task directly. Do NOT merely summarize the whole repository.\n"
+                        "3. Identify the exact files, entry points, and functions/classes that must be inspected or modified.\n"
+                        "4. Explain the call flow and interactions between the identified components.\n"
+                        "5. If any dependencies or evidence are missing or uncertain, explicitly state what is missing."
+                    )
+
+                    evidence_blocks = []
+                    if relevant_snippets:
+                        evidence_blocks.append("### Grounded Code Snippets\n" + "\n\n".join(relevant_snippets[:6]))
+                    if structural_res and structural_res.symbols_found:
+                        struct_md = structural_res.to_markdown()
+                        if struct_md:
+                            evidence_blocks.append(f"### Verified AST Symbols & Call Graph\n{struct_md}")
+                    if matched_file_rels:
+                        files_formatted = "\n".join(f"- `{f}`" for f in matched_file_rels[:10])
+                        evidence_blocks.append(f"### Relevant Files in Repository\n{files_formatted}")
+                    if tier3_memories:
+                        mem_formatted = "\n".join(
+                            f"- {getattr(m, 'text', str(m))[:160]}" for m in tier3_memories[:4]
+                        )
+                        evidence_blocks.append(f"### Semantic Memory Context\n{mem_formatted}")
+
+                    evidence_text = "\n\n".join(evidence_blocks) if evidence_blocks else "General repository structure and indexed files."
+
+                    synth_user_prompt = (
+                        f"# Developer Task\n{request.task_prompt}\n\n"
+                        f"## Intent Understanding\n"
+                        f"- Objective: {intent.task_summary}\n"
+                        f"- Category: {intent.category}\n"
+                        f"- Target Entities: {', '.join(getattr(intent, 'target_entities', [])) or 'General'}\n"
+                        f"- Identified Symbols: {', '.join(intent.extracted_symbols or evidence.evidence_symbols) or 'None'}\n\n"
+                        f"## Authoritative Repository Evidence\n{evidence_text}\n\n"
+                        "## Required Output Format\n"
+                        "Synthesize structured context for this task:\n"
+                        "1. **Task Analysis & Entry Points**: Direct answer to the task and where execution begins.\n"
+                        "2. **Key Components & Functions**: Relevant symbols, their roles, and callers/callees.\n"
+                        "3. **Proposed Action / Modifications**: Specific functions/classes to inspect, modify, or add.\n"
+                        "4. **Architectural Constraints & Observations**: Edge cases, missing evidence, or potential pitfalls."
+                    )
+
+                    try:
+                        t_model_start = time.perf_counter()
+                        synth_raw = await self._await_or_disconnect(
+                            self._llm_provider.generate_completion(
+                                prompt=synth_user_prompt,
+                                system_prompt=synth_system_prompt,
+                                model=synth_model_name,
+                                temperature=0.1,
+                                max_tokens=min(target_tokens, 2048),
+                            ),
+                            disconnect_probe,
+                        )
+                        if synth_raw is _CLIENT_DISCONNECTED:
+                            return ErrorResponse(
+                                error="ClientDisconnected",
+                                message="Client disconnected; context synthesis was cancelled.",
+                            )
+                        synth_inference_time_ms = int((time.perf_counter() - t_model_start) * 1000)
+
+                        # Strip thinking tags
+                        synth_clean = re.sub(r"<think>.*?</think>", "", synth_raw, flags=re.DOTALL).strip()
+                        synth_clean = re.sub(r"\[THINKING\].*?\[/THINKING\]", "", synth_clean, flags=re.DOTALL).strip()
+
+                        if synth_clean and len(synth_clean) > 20:
+                            actual_model = getattr(self._llm_provider, "last_invoked_model", None) or synth_model_name
+                            synth_model_invoked = True
+                            synth_model_name = actual_model
+                            synth_inference_status = "completed"
+                            synth_fallback_used = False
+                            synth_fallback_reason = None
+
+                            # Assemble final markdown: Task-specific synthesis first, followed by grounded evidence
+                            final_markdown = f"# Task Context: {intent.task_summary}\n\n{synth_clean}\n\n"
+                            if relevant_snippets:
+                                final_markdown += "---\n\n# Relevant Code Snippets & Target Implementations\n\n" + "\n\n".join(relevant_snippets) + "\n\n"
+                            if structural_res and structural_res.symbols_found:
+                                struct_md = structural_res.to_markdown()
+                                if struct_md:
+                                    final_markdown += f"---\n\n# Structural Code Relationships\n\n{struct_md}\n\n"
+                    except Exception as e:
+                        logger.warning("LLM task context synthesis failed, falling back to deterministic assembly: %s", e)
+                        synth_fallback_used = True
+                        synth_fallback_reason = f"Model synthesis error: {e}"
+
+                # Fallback to deterministic package if model was not invoked
+                if not final_markdown:
+                    final_markdown = package.markdown
+                    if relevant_snippets:
+                        final_markdown += "\n\n---\n\n# Relevant Code Snippets & Target Implementations\n\n" + "\n\n".join(relevant_snippets)
+                    if structural_res and structural_res.symbols_found:
+                        struct_md = structural_res.to_markdown()
+                        if struct_md:
+                            final_markdown += f"\n\n---\n\n# Structural Code Relationships\n\n{struct_md}\n"
 
                 # Sanitize reasoning tags
                 final_markdown = EvidenceService.sanitize_and_validate_grounded_response(
@@ -802,13 +910,13 @@ class ContextUseCases:
                     ranking_time_ms=ranking_time_ms,
                     synthesis_time_ms=synthesis_time_ms,
                     total_time_ms=elapsed_ms,
-                    model_invoked=getattr(intent, "model_invoked", False),
-                    provider_identity=getattr(intent, "provider_identity", None),
-                    model_name=getattr(intent, "model_name", None),
-                    inference_status=getattr(intent, "inference_status", "not_configured"),
-                    fallback_used=getattr(intent, "fallback_used", False),
-                    fallback_reason=getattr(intent, "fallback_reason", None),
-                    inference_time_ms=getattr(intent, "inference_time_ms", 0),
+                    model_invoked=synth_model_invoked or getattr(intent, "model_invoked", False),
+                    provider_identity=synth_provider_identity or getattr(intent, "provider_identity", None),
+                    model_name=synth_model_name or getattr(intent, "model_name", None),
+                    inference_status=synth_inference_status if synth_model_invoked else getattr(intent, "inference_status", "not_configured"),
+                    fallback_used=synth_fallback_used and getattr(intent, "fallback_used", False),
+                    fallback_reason=synth_fallback_reason if not synth_model_invoked else None,
+                    inference_time_ms=synth_inference_time_ms or getattr(intent, "inference_time_ms", 0),
                     evidence_state=evidence.evidence_state,
                     evidence_score=evidence.evidence_score,
                     evidence_confidence=evidence.evidence_confidence,

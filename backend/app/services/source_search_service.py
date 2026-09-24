@@ -30,15 +30,17 @@ class SourceSearchService(SourceSearchPort):
         task_prompt: str,
         extracted_symbols: Sequence[str] = (),
         relevant_file_hints: Sequence[str] = (),
+        target_entities: Sequence[str] = (),
     ) -> list[str]:
-        """Generate deduplicated, prioritized search terms from prompt, symbols, and hints."""
+        """Generate deduplicated, prioritized search terms from prompt, symbols, hints, and target entities."""
         clean_hints = [h.strip() for h in relevant_file_hints if h.strip()]
         clean_symbols = [s.strip() for s in extracted_symbols if s.strip()]
+        clean_entities = [e.strip() for e in target_entities if e.strip()]
 
-        # Sub-token expansion from camelCase / snake_case symbols
+        # Sub-token expansion from camelCase / snake_case symbols and entities
         sub_tokens: list[str] = []
-        for sym in clean_symbols:
-            parts = [p for p in re.split(r"[_./\\]|(?<=[a-z])(?=[A-Z])", sym) if len(p) > 2]
+        for sym in clean_symbols + clean_entities:
+            parts = [p for p in re.split(r"[_./\\]|(?<=[a-z])(?=[A-Z])|\s+", sym) if len(p) > 2]
             for p in parts:
                 p_low = p.lower()
                 if p_low not in STOP_WORDS and p not in clean_symbols and p not in sub_tokens:
@@ -76,9 +78,9 @@ class SourceSearchService(SourceSearchPort):
                 if len(r) > 2 and r not in STOP_WORDS and r not in root_variants and r not in prompt_words:
                     root_variants.append(r)
 
-        # High-specificity terms first: file hints -> extracted symbols -> symbol parts -> root variants -> prompt words
-        all_terms = clean_hints + clean_symbols + sub_tokens + root_variants + prompt_words
-        return list(dict.fromkeys(all_terms))[:35]
+        # High-specificity terms first: file hints -> extracted symbols -> target entities -> symbol parts -> root variants -> prompt words
+        all_terms = clean_hints + clean_symbols + clean_entities + sub_tokens + root_variants + prompt_words
+        return list(dict.fromkeys(all_terms))[:40]
 
     def extract_relevant_snippets(
         self,
