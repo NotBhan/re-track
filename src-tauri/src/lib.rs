@@ -459,11 +459,33 @@ fn start_backend() -> Result<Child, String> {
         ])
         .current_dir(&backend_dir)
         .env("PYTHONPATH", &backend_dir)
+        .env("RETRACK_PARENT_PID", std::process::id().to_string())
         .stdout(Stdio::from(log_file))
         .stderr(Stdio::from(log_err));
 
     for (key, value) in &env_vars {
         command.env(key, value);
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        use std::os::unix::process::CommandExt;
+        let parent_pid = std::process::id();
+        unsafe {
+            command.pre_exec(move || {
+                // Instruct Linux kernel to deliver SIGTERM to the backend child
+                // immediately if the Tauri parent process dies (e.g. SIGKILL, crash).
+                let ret = libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGTERM);
+                if ret != 0 {
+                    return Err(std::io::Error::last_os_error());
+                }
+                // Guard against race condition where parent dies before prctl completes
+                if libc::getppid() != parent_pid as libc::pid_t {
+                    libc::_exit(1);
+                }
+                Ok(())
+            });
+        }
     }
 
     eprintln!(
@@ -495,7 +517,39 @@ fn wait_for_backend(max_attempts: u32) -> bool {
 
 fn stop_backend(process: &mut Option<Child>) {
     if let Some(mut child) = process.take() {
-        let _ = child.kill();
+        #[cfg(unix)]
+        {
+            let pid = child.id() as libc::pid_t;
+            // Send SIGTERM to let FastAPI lifespan / container.shutdown() complete cleanly
+            unsafe {
+                libc::kill(pid, libc::SIGTERM);
+            }
+            let start = std::time::Instant::now();
+            let timeout = Duration::from_millis(3000);
+            loop {
+                match child.try_wait() {
+                    Ok(Some(_status)) => break,
+                    Ok(None) => {
+                        if start.elapsed() >= timeout {
+                            eprintln!("[RE:Track] Backend graceful shutdown timed out; terminating with SIGKILL");
+                            let _ = child.kill();
+                            let _ = child.wait();
+                            break;
+                        }
+                        std::thread::sleep(Duration::from_millis(50));
+                    }
+                    Err(_) => {
+                        let _ = child.kill();
+                        break;
+                    }
+                }
+            }
+        }
+        #[cfg(not(unix))]
+        {
+            let _ = child.kill();
+            let _ = child.wait();
+        }
     }
 }
 

@@ -114,10 +114,13 @@ def reset_cognee_engine_and_caches(timeout: float = 5.0) -> None:
     except Exception:
         pass
 
-    # 6. Clean up storage environment variable leaks from apply_to_environment()
-    import os
-    for env_key in ("DATA_ROOT_DIRECTORY", "SYSTEM_ROOT_DIRECTORY"):
-        os.environ.pop(env_key, None)
+    # 6. Clean up environment variables RE:Track wrote into os.environ
+    try:
+        from app.config.settings import purge_applied_environment
+
+        purge_applied_environment()
+    except Exception:
+        pass
 
     # 7. Force garbage collection to drop unpinned proxies and handles
     gc.collect()
@@ -169,32 +172,6 @@ def _isolate_persisted_settings(tmp_path, monkeypatch):
     settings_module.get_settings.cache_clear()
 
 
-# Provider identity env vars written by Settings.apply_to_environment() (for Cognee
-# compatibility). Because `Settings` reads these back on construction, a leak makes one
-# test's provider configuration override another test's explicit arguments.
-_PROVIDER_ENV_KEYS = (
-    "LLM_PROVIDER",
-    "LLM_ENDPOINT",
-    "LLM_API_KEY",
-    "LLM_MODEL",
-    "SEMANTIC_MEMORY_MODEL",
-    "EMBEDDING_PROVIDER",
-    "EMBEDDING_ENDPOINT",
-    "EMBEDDING_API_KEY",
-    "EMBEDDING_MODEL",
-    "EMBEDDING_DIMENSIONS",
-    "HUGGINGFACE_TOKENIZER",
-    "VECTOR_DB_PROVIDER",
-    "GRAPH_DB_PROVIDER",
-    "RELATIONAL_DB_PROVIDER",
-    "DATA_ROOT_DIRECTORY",
-    "SYSTEM_ROOT_DIRECTORY",
-    "CACHING",
-    "COGNEE_SKIP_CONNECTION_TEST",
-    "ENABLE_BACKEND_ACCESS_CONTROL",
-)
-
-
 @pytest.fixture(autouse=True)
 def _isolate_provider_environment():
     """Give every test a clean provider environment and restore the developer's on exit.
@@ -206,13 +183,19 @@ def _isolate_provider_environment():
     """
     import os
 
-    from app.config.settings import clear_applied_environment
+    from app.config.settings import (
+        MANAGED_ENVIRONMENT_KEYS,
+        clear_applied_environment,
+        purge_applied_environment,
+    )
 
-    snapshot = {key: os.environ.get(key) for key in _PROVIDER_ENV_KEYS}
-    for key in _PROVIDER_ENV_KEYS:
+    snapshot = {key: os.environ.get(key) for key in MANAGED_ENVIRONMENT_KEYS}
+    purge_applied_environment()
+    for key in MANAGED_ENVIRONMENT_KEYS:
         os.environ.pop(key, None)
     clear_applied_environment()
     yield
+    purge_applied_environment()
     for key, value in snapshot.items():
         if value is None:
             os.environ.pop(key, None)

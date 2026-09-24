@@ -83,6 +83,28 @@ def test_apply_to_environment_does_not_contaminate_later_settings():
     assert _identity(later) == baseline
 
 
+def test_purge_applied_environment_cleans_written_vars_and_preserves_operator_vars(monkeypatch):
+    """purge_applied_environment must remove RE:Track-written values from os.environ while preserving operator variables."""
+    from app.config.settings import _applied_environment, purge_applied_environment
+
+    monkeypatch.setenv("LLM_PROVIDER", "operator_set_provider")
+
+    settings = Settings(embedding_provider="retrack_written_provider")
+    settings.apply_to_environment()
+
+    assert os.environ.get("EMBEDDING_PROVIDER") == "retrack_written_provider"
+    assert "EMBEDDING_PROVIDER" in _applied_environment
+
+    purge_applied_environment()
+
+    # RE:Track's written variable was purged from os.environ
+    assert os.environ.get("EMBEDDING_PROVIDER") is None
+    # Operator-set variable was preserved
+    assert os.environ.get("LLM_PROVIDER") == "operator_set_provider"
+    # Tracking dictionary is clear
+    assert len(_applied_environment) == 0
+
+
 def test_operator_value_that_differs_from_write_is_still_an_override(monkeypatch):
     """An operator changing a managed variable after a write keeps override precedence."""
     Settings(embedding_provider="ollama", embedding_endpoint="").apply_to_environment()

@@ -116,3 +116,54 @@ def test_reset_container_clears_singleton():
 
     reset_container()
     assert container_module._container is None
+
+
+@pytest.mark.asyncio
+async def test_container_shutdown_purges_applied_environment(monkeypatch):
+    """container.shutdown() must purge RE:Track-written environment variables from os.environ."""
+    import os
+    from app.config.settings import Settings
+
+    container = ApplicationContainer()
+    container.settings = Settings(embedding_provider="custom_shutdown_test")
+    container.settings.apply_to_environment()
+
+    assert os.environ.get("EMBEDDING_PROVIDER") == "custom_shutdown_test"
+
+    await container.shutdown()
+
+    # Applied env should be purged from os.environ
+    assert os.environ.get("EMBEDDING_PROVIDER") is None
+
+
+def test_parent_watchdog_starts_and_stops_on_dead_parent(monkeypatch):
+    """Parent watchdog must invoke SIGTERM when parent PID is no longer alive."""
+    import os
+    import signal
+    from app import server
+
+    signaled_pids = []
+
+    def fake_kill(pid, sig):
+        if sig == signal.SIGTERM:
+            signaled_pids.append((pid, sig))
+        elif sig == 0:
+            # Simulate dead parent
+            raise ProcessLookupError("No such process")
+
+    # Pick an unused PID for the parent
+    fake_parent_pid = 999999
+    monkeypatch.setenv("RETRACK_PARENT_PID", str(fake_parent_pid))
+    monkeypatch.setattr(os, "kill", fake_kill)
+
+    server._start_parent_watchdog()
+
+    import time
+    # Watchdog sleeps 1.0s, so allow up to 1.5s
+    for _ in range(30):
+        if signaled_pids:
+            break
+        time.sleep(0.05)
+
+    assert len(signaled_pids) > 0
+    assert signaled_pids[0] == (os.getpid(), signal.SIGTERM)

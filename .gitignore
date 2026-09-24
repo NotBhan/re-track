@@ -124,5 +124,6 @@ examples/generated/
 .cognee_data/
 cognee_data/
 .mimocode/
+.commandcode/
 Hackathon/
 andes-context-mimocode/docs/compose/*

@@ -248,6 +248,14 @@ class ApplicationContainer:
         except Exception as e:
             logger.warning("Offload executor shutdown failed: %s", e)
 
+        # Purge any environment variables RE:Track wrote into os.environ for Cognee
+        try:
+            from app.config.settings import purge_applied_environment
+
+            purge_applied_environment()
+        except Exception as e:
+            logger.warning("Purging applied environment failed: %s", e)
+
     async def update_provider(
         self,
         provider: str,

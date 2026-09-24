@@ -122,6 +122,8 @@ CONFIGURATION_PRECEDENCE: tuple[str, ...] = (
 
 # Values RE:Track itself wrote into os.environ, keyed by variable name.
 _applied_environment: dict[str, str] = {}
+# Snapshot of operator-supplied values before RE:Track wrote them, for restoration on purge.
+_operator_snapshot: dict[str, str] = {}
 
 # Fields explicitly supplied to the Settings constructor for the active construction.
 _explicit_init_fields: contextvars.ContextVar[frozenset[str]] = contextvars.ContextVar(
@@ -194,6 +196,23 @@ def clear_applied_environment() -> None:
     Used by diagnostics and test isolation; does not modify os.environ.
     """
     _applied_environment.clear()
+    _operator_snapshot.clear()
+
+
+def purge_applied_environment() -> None:
+    """Remove any environment variables that RE:Track itself wrote from os.environ.
+
+    Also clears the internal tracking dictionary. Preserves or restores any
+    variables supplied directly by the operator.
+    """
+    for key, value in list(_applied_environment.items()):
+        if os.environ.get(key) == value:
+            if key in _operator_snapshot:
+                os.environ[key] = _operator_snapshot[key]
+            else:
+                os.environ.pop(key, None)
+    _applied_environment.clear()
+    _operator_snapshot.clear()
 
 
 class OllamaConfig(BaseSettings):
@@ -680,8 +699,13 @@ class Settings(BaseSettings):
         if env is None:
             env = self.configuration_environment()
         for key, value in env.items():
-            os.environ[key] = str(value)
-        _applied_environment.update({key: str(value) for key, value in env.items()})
+            str_val = str(value)
+            # If the operator supplied an explicit environment variable that RE:Track
+            # has not written yet, snapshot it so purge_applied_environment() can restore it.
+            if key in os.environ and key not in _applied_environment and key not in _operator_snapshot:
+                _operator_snapshot[key] = os.environ[key]
+            os.environ[key] = str_val
+            _applied_environment[key] = str_val
 
     def configuration_environment(self) -> dict[str, str]:
         """Return the environment mapping Cognee expects for the active configuration."""
