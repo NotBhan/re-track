@@ -665,8 +665,11 @@ class SemanticMemoryGenerationTelemetry:
 
     model_invoked: bool = False
     provider_identity: str = ""
+    provider_endpoint: str = ""
     model_name: str = ""
-    inference_status: str = "not_configured"  # 'success', 'insufficient_evidence', 'not_configured', 'provider_unavailable', 'generation_failed', 'no_valid_memories', 'noop'
+    # 'success' | 'insufficient_evidence' | 'not_configured' | 'provider_unavailable'
+    # | 'model_unavailable' | 'generation_failed' | 'no_valid_memories' | 'noop'
+    inference_status: str = "not_configured"
     inference_time_ms: float = 0.0
     fallback_used: bool = False
     fallback_reason: Optional[str] = None
@@ -686,6 +689,7 @@ class SemanticMemoryGenerationTelemetry:
         return {
             "model_invoked": self.model_invoked,
             "provider_identity": self.provider_identity,
+            "provider_endpoint": self.provider_endpoint,
             "model_name": self.model_name,
             "inference_status": self.inference_status,
             "inference_time_ms": self.inference_time_ms,
@@ -710,7 +714,9 @@ class SemanticMemoryGenerationResult:
     """Result object for semantic memory generation and cognification."""
 
     success: bool
-    status: str  # 'success', 'insufficient_evidence', 'not_configured', 'provider_unavailable', 'generation_failed', 'no_valid_memories', 'noop'
+    # 'success' | 'insufficient_evidence' | 'not_configured' | 'provider_unavailable'
+    # | 'model_unavailable' | 'generation_failed' | 'no_valid_memories' | 'noop'
+    status: str
     records: list[SemanticMemoryRecord] = field(default_factory=list)
     telemetry: SemanticMemoryGenerationTelemetry = field(default_factory=SemanticMemoryGenerationTelemetry)
     message: str = ""

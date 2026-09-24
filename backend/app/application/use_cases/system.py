@@ -299,7 +299,27 @@ class SystemUseCases:
                     embedding_state = "unreachable"
                     embedding_detail = f"{type(e).__name__}: {e}"
 
+            # Explicit semantic-memory extraction availability, reported independently
+            # of both the interactive inference provider and the embedding provider.
+            semantic_identity = settings.semantic_memory_identity()
+            semantic_state = "not_configured"
+            semantic_detail = None
+            try:
+                semantic_probe = await settings.probe_semantic_memory_provider()
+                if isinstance(semantic_probe, dict):
+                    semantic_state = str(semantic_probe.get("state") or "not_configured")
+                    detail = semantic_probe.get("detail")
+                    semantic_detail = str(detail) if detail else None
+            except Exception as e:  # pragma: no cover - probe reports, does not raise
+                semantic_state = "unreachable"
+                semantic_detail = f"{type(e).__name__}: {e}"
+
             response = HealthResponse(
+                semantic_memory_provider=str(semantic_identity["provider"]),
+                semantic_memory_endpoint=str(semantic_identity["endpoint"]),
+                semantic_memory_model=str(semantic_identity["model"]),
+                semantic_memory_state=semantic_state,
+                semantic_memory_detail=semantic_detail,
                 embedding_provider=str(embedding_identity["provider"]),
                 embedding_endpoint=str(embedding_identity["endpoint"]),
                 embedding_model=str(embedding_identity["model"]),
@@ -503,7 +523,25 @@ class SystemUseCases:
                     status_embedding_state = "unreachable"
                     status_embedding_detail = f"{type(e).__name__}: {e}"
 
+            status_semantic_identity = settings.semantic_memory_identity()
+            status_semantic_state = "not_configured"
+            status_semantic_detail = None
+            try:
+                semantic_probe = await settings.probe_semantic_memory_provider()
+                if isinstance(semantic_probe, dict):
+                    status_semantic_state = str(semantic_probe.get("state") or "not_configured")
+                    detail = semantic_probe.get("detail")
+                    status_semantic_detail = str(detail) if detail else None
+            except Exception as e:  # pragma: no cover - probe reports, does not raise
+                status_semantic_state = "unreachable"
+                status_semantic_detail = f"{type(e).__name__}: {e}"
+
             response = BackendStatusResponse(
+                semantic_memory_provider=str(status_semantic_identity["provider"]),
+                semantic_memory_endpoint=str(status_semantic_identity["endpoint"]),
+                semantic_memory_model=str(status_semantic_identity["model"]),
+                semantic_memory_state=status_semantic_state,
+                semantic_memory_detail=status_semantic_detail,
                 status=overall_status,
                 ollama_reachable=provider_reachable,
                 ollama_host=prov_host,
@@ -596,6 +634,9 @@ class SystemUseCases:
                 llm_endpoint=llm_end,
                 llm_model=str(getattr(settings.ollama, "llm_model", "phi4-mini")),
                 embedding_model=str(getattr(settings.ollama, "embedding_model", "nomic-embed-text:latest")),
+                semantic_memory_provider=str(settings.semantic_memory_identity()["provider"]),
+                semantic_memory_endpoint=str(settings.semantic_memory_identity()["endpoint"]),
+                memory_model=str(getattr(settings.ollama, "memory_model", "")),
                 llm_host=str(getattr(settings.ollama, "host", "localhost")),
                 llm_port=int(getattr(settings.ollama, "port", 11434)) if str(getattr(settings.ollama, "port", 11434)).isdigit() else 11434,
                 api_key_configured=bool(api_key and api_key not in ("local", "ollama", "lm-studio")),
@@ -683,6 +724,9 @@ class SystemUseCases:
                 llm_port=int(getattr(settings.ollama, "port", 11434)) if str(getattr(settings.ollama, "port", 11434)).isdigit() else 11434,
                 llm_model=str(getattr(settings.ollama, "llm_model", "phi4-mini")),
                 embedding_model=str(getattr(settings.ollama, "embedding_model", "nomic-embed-text:latest")),
+                semantic_memory_provider=str(settings.semantic_memory_identity()["provider"]),
+                semantic_memory_endpoint=str(settings.semantic_memory_identity()["endpoint"]),
+                memory_model=str(getattr(settings.ollama, "memory_model", "")),
                 api_key_configured=bool(api_key and api_key not in ("local", "ollama", "lm-studio")),
                 api_key_masked=masked_key,
             )

@@ -20,6 +20,7 @@ from app.application.domain.memory import (
     SemanticMemoryGenerationInput,
     SemanticMemoryRecord,
 )
+from app.config.settings import OllamaConfig, Settings
 from app.models.provider import ProviderType
 from app.models.responses import RecallResponse, RecallResult
 from app.services.cognee_service import CogneeService, sanitize_dataset_name
@@ -146,7 +147,7 @@ async def test_cognee_uses_configured_memory_model(tmp_path: Path):
     })
     mock_provider = MockLLMProvider(response_text=mock_resp, default_model="phi4-mini")
     repo = JsonSemanticMemoryRepository(store_path=tmp_path / "sem_mem.json")
-    generator = SemanticMemoryGenerator(llm_provider=mock_provider, repository=repo)
+    generator = SemanticMemoryGenerator(memory_provider=mock_provider, repository=repo)
 
     result = await generator.cognify_repository(
         repository_id="test_repo",
@@ -161,9 +162,10 @@ async def test_cognee_uses_configured_memory_model(tmp_path: Path):
     assert result.telemetry.llm_invocation_count == 1
 
 
-# 2. test_cognee_falls_back_to_active_inference_model
+# 2. test_cognification_without_memory_model_is_explicitly_unavailable
 @pytest.mark.asyncio
-async def test_cognee_falls_back_to_active_inference_model(tmp_path: Path):
+async def test_cognification_without_memory_model_is_explicitly_unavailable(tmp_path: Path):
+    """No dedicated extraction model -> explicit unavailable, zero inference, no fallback."""
     manifest = _make_manifest()
     mock_resp = json.dumps({
         "memories": [{
@@ -172,9 +174,12 @@ async def test_cognee_falls_back_to_active_inference_model(tmp_path: Path):
             "source_symbols": ["CoreEngine"],
         }]
     })
-    mock_provider = MockLLMProvider(response_text=mock_resp, default_model="qwen2.5-coder:7b")
+    settings = Settings(ollama=OllamaConfig(llm_model="qwen2.5-coder:7b"))
+    mock_provider = MockLLMProvider(response_text=mock_resp, default_model="")
     repo = JsonSemanticMemoryRepository(store_path=tmp_path / "sem_mem.json")
-    generator = SemanticMemoryGenerator(llm_provider=mock_provider, repository=repo)
+    generator = SemanticMemoryGenerator(
+        memory_provider=mock_provider, repository=repo, settings=settings
+    )
 
     result = await generator.cognify_repository(
         repository_id="test_repo",
@@ -182,11 +187,12 @@ async def test_cognee_falls_back_to_active_inference_model(tmp_path: Path):
         model_config={},  # No dedicated memory model
     )
 
-    assert result.success is True
-    assert mock_provider.last_model == "qwen2.5-coder:7b"
-    assert result.telemetry.fallback_used is True
-    assert "active inference model" in (result.telemetry.fallback_reason or "")
-    assert result.telemetry.llm_invocation_count == 1
+    assert result.success is False
+    assert result.status == "not_configured"
+    assert mock_provider.call_count == 0
+    assert result.telemetry.fallback_used is False
+    assert result.telemetry.llm_invocation_count == 0
+    assert len(result.records) == 0
 
 
 # 3. test_cognee_without_model_returns_not_configured
@@ -194,7 +200,7 @@ async def test_cognee_falls_back_to_active_inference_model(tmp_path: Path):
 async def test_cognee_without_model_returns_not_configured(tmp_path: Path):
     manifest = _make_manifest()
     repo = JsonSemanticMemoryRepository(store_path=tmp_path / "sem_mem.json")
-    generator = SemanticMemoryGenerator(llm_provider=None, repository=repo)
+    generator = SemanticMemoryGenerator(memory_provider=None, repository=repo)
 
     result = await generator.cognify_repository(
         repository_id="test_repo",
@@ -214,7 +220,7 @@ async def test_cognee_receives_only_verified_repository_evidence(tmp_path: Path)
     manifest = _make_manifest()
     mock_provider = MockLLMProvider(response_text="{}", default_model="phi4-mini")
     repo = JsonSemanticMemoryRepository(store_path=tmp_path / "sem_mem.json")
-    generator = SemanticMemoryGenerator(llm_provider=mock_provider, repository=repo)
+    generator = SemanticMemoryGenerator(memory_provider=mock_provider, repository=repo)
 
     await generator.cognify_repository(
         repository_id="test_repo",
@@ -247,7 +253,7 @@ async def test_cognee_cognification_persists_repository_scoped_memory(tmp_path: 
     mock_provider = MockLLMProvider(response_text=mock_resp, default_model="phi4-mini")
     repo = JsonSemanticMemoryRepository(store_path=tmp_path / "sem_mem.json")
     mock_cognee = MockCogneeService()
-    generator = SemanticMemoryGenerator(llm_provider=mock_provider, repository=repo)
+    generator = SemanticMemoryGenerator(memory_provider=mock_provider, repository=repo)
 
     result = await generator.cognify_repository(
         repository_id="test_repo",
@@ -280,7 +286,7 @@ async def test_cognee_output_is_mapped_through_semantic_memory_adapter(tmp_path:
     })
     mock_provider = MockLLMProvider(response_text=mock_resp, default_model="phi4-mini")
     repo = JsonSemanticMemoryRepository(store_path=tmp_path / "sem_mem.json")
-    generator = SemanticMemoryGenerator(llm_provider=mock_provider, repository=repo)
+    generator = SemanticMemoryGenerator(memory_provider=mock_provider, repository=repo)
 
     result = await generator.cognify_repository(
         repository_id="test_repo",
@@ -309,7 +315,7 @@ async def test_cognee_cannot_create_unknown_files(tmp_path: Path):
     })
     mock_provider = MockLLMProvider(response_text=mock_resp, default_model="phi4-mini")
     repo = JsonSemanticMemoryRepository(store_path=tmp_path / "sem_mem.json")
-    generator = SemanticMemoryGenerator(llm_provider=mock_provider, repository=repo)
+    generator = SemanticMemoryGenerator(memory_provider=mock_provider, repository=repo)
 
     result = await generator.cognify_repository(
         repository_id="test_repo",
@@ -336,7 +342,7 @@ async def test_cognee_cannot_create_unknown_symbols(tmp_path: Path):
     })
     mock_provider = MockLLMProvider(response_text=mock_resp, default_model="phi4-mini")
     repo = JsonSemanticMemoryRepository(store_path=tmp_path / "sem_mem.json")
-    generator = SemanticMemoryGenerator(llm_provider=mock_provider, repository=repo)
+    generator = SemanticMemoryGenerator(memory_provider=mock_provider, repository=repo)
 
     result = await generator.cognify_repository(
         repository_id="test_repo",
@@ -364,7 +370,7 @@ async def test_cognee_output_cannot_become_authoritative(tmp_path: Path):
     })
     mock_provider = MockLLMProvider(response_text=mock_resp, default_model="phi4-mini")
     repo = JsonSemanticMemoryRepository(store_path=tmp_path / "sem_mem.json")
-    generator = SemanticMemoryGenerator(llm_provider=mock_provider, repository=repo)
+    generator = SemanticMemoryGenerator(memory_provider=mock_provider, repository=repo)
 
     result = await generator.cognify_repository(
         repository_id="test_repo",
@@ -393,7 +399,7 @@ async def test_cross_repository_cognee_memory_is_rejected(tmp_path: Path):
     })
     mock_provider = MockLLMProvider(response_text=mock_resp, default_model="phi4-mini")
     repo = JsonSemanticMemoryRepository(store_path=tmp_path / "sem_mem.json")
-    generator = SemanticMemoryGenerator(llm_provider=mock_provider, repository=repo)
+    generator = SemanticMemoryGenerator(memory_provider=mock_provider, repository=repo)
 
     # Cognify Repo A
     await generator.cognify_repository("repo_a", manifest=manifest_a)
@@ -436,7 +442,7 @@ async def test_stale_cognee_memory_is_rejected_after_source_mutation(tmp_path: P
     })
     mock_provider = MockLLMProvider(response_text=mock_resp, default_model="phi4-mini")
     repo = JsonSemanticMemoryRepository(store_path=tmp_path / "sem_mem.json")
-    generator = SemanticMemoryGenerator(llm_provider=mock_provider, repository=repo)
+    generator = SemanticMemoryGenerator(memory_provider=mock_provider, repository=repo)
 
     await generator.cognify_repository("test_repo", manifest=manifest_v1)
     assert len(repo.get_by_repository("test_repo", manifest=manifest_v1)) == 1
@@ -470,7 +476,7 @@ async def test_deleted_file_cognee_memory_is_invalidated(tmp_path: Path):
     })
     mock_provider = MockLLMProvider(response_text=mock_resp, default_model="phi4-mini")
     repo = JsonSemanticMemoryRepository(store_path=tmp_path / "sem_mem.json")
-    generator = SemanticMemoryGenerator(llm_provider=mock_provider, repository=repo)
+    generator = SemanticMemoryGenerator(memory_provider=mock_provider, repository=repo)
 
     # Initial cognify
     await generator.cognify_repository("test_repo", manifest=manifest_v1)
@@ -516,7 +522,7 @@ async def test_cognee_failure_does_not_break_deterministic_retrieval(tmp_path: P
     repo = JsonSemanticMemoryRepository(store_path=tmp_path / "sem_mem.json")
     # Cognee service that fails on add()
     failing_cognee = MockCogneeService(should_fail=True)
-    generator = SemanticMemoryGenerator(llm_provider=mock_provider, repository=repo)
+    generator = SemanticMemoryGenerator(memory_provider=mock_provider, repository=repo)
 
     result = await generator.cognify_repository(
         "test_repo",
@@ -546,7 +552,7 @@ async def test_cognification_is_repository_scoped(tmp_path: Path):
         default_model="phi4-mini",
     )
     repo = JsonSemanticMemoryRepository(store_path=tmp_path / "sem_mem.json")
-    generator = SemanticMemoryGenerator(llm_provider=mock_provider, repository=repo)
+    generator = SemanticMemoryGenerator(memory_provider=mock_provider, repository=repo)
 
     res1 = await generator.cognify_repository("repo_alpha", manifest=manifest_1)
     assert res1.success is True
@@ -569,7 +575,7 @@ async def test_repeated_cognification_is_idempotent(tmp_path: Path):
     })
     mock_provider = MockLLMProvider(response_text=mock_resp, default_model="phi4-mini")
     repo = JsonSemanticMemoryRepository(store_path=tmp_path / "sem_mem.json")
-    generator = SemanticMemoryGenerator(llm_provider=mock_provider, repository=repo)
+    generator = SemanticMemoryGenerator(memory_provider=mock_provider, repository=repo)
 
     # First pass
     r1 = await generator.cognify_repository("test_repo", manifest=manifest)
@@ -605,7 +611,7 @@ async def test_modified_file_triggers_targeted_re_cognification(tmp_path: Path):
     })
     mock_provider = MockLLMProvider(response_text=mock_resp_v1, default_model="phi4-mini")
     repo = JsonSemanticMemoryRepository(store_path=tmp_path / "sem_mem.json")
-    generator = SemanticMemoryGenerator(llm_provider=mock_provider, repository=repo)
+    generator = SemanticMemoryGenerator(memory_provider=mock_provider, repository=repo)
 
     # Initial build
     await generator.cognify_repository("test_repo", manifest=manifest_v1)
@@ -663,7 +669,7 @@ async def test_renamed_file_preserves_same_sha_memory(tmp_path: Path):
     })
     mock_provider = MockLLMProvider(response_text=mock_resp, default_model="phi4-mini")
     repo = JsonSemanticMemoryRepository(store_path=tmp_path / "sem_mem.json")
-    generator = SemanticMemoryGenerator(llm_provider=mock_provider, repository=repo)
+    generator = SemanticMemoryGenerator(memory_provider=mock_provider, repository=repo)
 
     # Initial build
     await generator.cognify_repository("test_repo", manifest=manifest_v1)
@@ -712,7 +718,7 @@ async def test_cognee_telemetry_reports_actual_model(tmp_path: Path):
         default_model="lmstudio-custom-mem:q8",
     )
     repo = JsonSemanticMemoryRepository(store_path=tmp_path / "sem_mem.json")
-    generator = SemanticMemoryGenerator(llm_provider=mock_provider, repository=repo)
+    generator = SemanticMemoryGenerator(memory_provider=mock_provider, repository=repo)
 
     result = await generator.cognify_repository("test_repo", manifest=manifest)
     tel = result.telemetry
@@ -733,7 +739,7 @@ async def test_cognee_failure_is_not_reported_as_missing_repository_evidence(tmp
         default_model="phi4-mini",
     )
     repo = JsonSemanticMemoryRepository(store_path=tmp_path / "sem_mem.json")
-    generator = SemanticMemoryGenerator(llm_provider=mock_provider, repository=repo)
+    generator = SemanticMemoryGenerator(memory_provider=mock_provider, repository=repo)
 
     result = await generator.cognify_repository("test_repo", manifest=manifest)
 
@@ -821,7 +827,7 @@ async def test_acceptance_constraint_exactly_once_semantic_extraction(tmp_path: 
     mock_provider = MockLLMProvider(response_text=mock_resp, default_model="phi4-mini")
     mock_cognee = MockCogneeService()
     repo = JsonSemanticMemoryRepository(store_path=tmp_path / "sem_mem.json")
-    generator = SemanticMemoryGenerator(llm_provider=mock_provider, repository=repo)
+    generator = SemanticMemoryGenerator(memory_provider=mock_provider, repository=repo)
 
     result = await generator.cognify_repository(
         "test_repo",
@@ -851,7 +857,7 @@ async def test_acceptance_constraint_no_recursive_self_feeding(tmp_path: Path):
     })
     mock_provider = MockLLMProvider(response_text=mock_resp, default_model="phi4-mini")
     repo = JsonSemanticMemoryRepository(store_path=tmp_path / "sem_mem.json")
-    generator = SemanticMemoryGenerator(llm_provider=mock_provider, repository=repo)
+    generator = SemanticMemoryGenerator(memory_provider=mock_provider, repository=repo)
 
     # Pass 1
     await generator.cognify_repository("test_repo", manifest=manifest)

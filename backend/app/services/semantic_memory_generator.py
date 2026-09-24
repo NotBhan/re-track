@@ -32,6 +32,7 @@ from app.application.ports.memory import (
 )
 from app.config.settings import Settings, get_settings
 from app.services.cognee_service import CogneeSemanticMemoryAdapter
+from app.services.llm_provider_service import ModelMismatchError, ModelNotAvailableError
 
 logger = logging.getLogger(__name__)
 
@@ -105,44 +106,60 @@ def build_generation_prompt(
 
 
 def extract_memories_from_response(raw_response: str) -> list[dict[str, Any]]:
-    """Clean model response, strip <think> blocks, and parse structured memories JSON."""
+    """Clean model response, strip <think> blocks, and parse structured memories JSON.
+
+    Parsing is deterministic: an unclosed ``<think>`` block (a reasoning model that
+    ran out of generation budget mid-reasoning) is discarded together with everything
+    that follows it, so a truncated reasoning trace can never be mistaken for valid
+    extraction output.
+    """
     if not raw_response or not raw_response.strip():
         return []
 
-    # Strip reasoning think blocks
-    cleaned = re.sub(r"<think>.*?</think>", "", raw_response, flags=re.DOTALL).strip()
+    # Strip complete reasoning blocks first.
+    cleaned = re.sub(r"<think>.*?</think>", "", raw_response, flags=re.DOTALL)
 
-    # Try finding JSON code block
+    # Discard an unclosed reasoning block: it never contains extraction output.
+    if "<think>" in cleaned:
+        cleaned = cleaned.split("<think>", 1)[0]
+
+    cleaned = cleaned.strip()
+
+    # Candidate JSON payloads, most specific first, so parsing is deterministic:
+    #   1. an explicit ```json fence
+    #   2. the entire (stripped) response
+    #   3. the outermost brace object / bracket array embedded in prose
+    candidates: list[str] = []
     match = re.search(r"```(?:json)?\s*(.*?)\s*```", cleaned, re.DOTALL)
     if match:
-        json_str = match.group(1).strip()
-    else:
-        # Fallback to brace extraction
-        start_idx = cleaned.find("{")
-        end_idx = cleaned.rfind("}")
-        if start_idx != -1 and end_idx != -1 and end_idx >= start_idx:
-            json_str = cleaned[start_idx : end_idx + 1]
-        else:
-            # Check for array
-            start_arr = cleaned.find("[")
-            end_arr = cleaned.rfind("]")
-            if start_arr != -1 and end_arr != -1 and end_arr >= start_arr:
-                json_str = cleaned[start_arr : end_arr + 1]
-            else:
-                return []
+        candidates.append(match.group(1).strip())
+    candidates.append(cleaned)
 
-    try:
-        data = json.loads(json_str)
-    except Exception:
-        return []
+    start_idx, end_idx = cleaned.find("{"), cleaned.rfind("}")
+    if start_idx != -1 and end_idx > start_idx:
+        candidates.append(cleaned[start_idx : end_idx + 1])
+    start_arr, end_arr = cleaned.find("["), cleaned.rfind("]")
+    if start_arr != -1 and end_arr > start_arr:
+        candidates.append(cleaned[start_arr : end_arr + 1])
 
-    if isinstance(data, dict):
-        raw_items = data.get("memories", [])
-        if isinstance(raw_items, list):
-            return [it for it in raw_items if isinstance(it, dict)]
-        return []
-    elif isinstance(data, list):
-        return [it for it in data if isinstance(it, dict)]
+    seen: set[str] = set()
+    for candidate in candidates:
+        if not candidate or candidate in seen:
+            continue
+        seen.add(candidate)
+        try:
+            data = json.loads(candidate)
+        except Exception:
+            continue
+
+        if isinstance(data, dict):
+            raw_items = data.get("memories", [])
+            if isinstance(raw_items, list):
+                return [it for it in raw_items if isinstance(it, dict)]
+            continue
+        if isinstance(data, list):
+            return [it for it in data if isinstance(it, dict)]
+
     return []
 
 
@@ -160,52 +177,61 @@ def _normalize_rel_path(p: str | Path, repo_root: str | Path) -> str:
 
 
 class SemanticMemoryGenerator:
-    """Service that orchestrates the generation, validation, and persistence of semantic memory records."""
+    """Service that orchestrates the generation, validation, and persistence of semantic memory records.
+
+    The extraction stage uses a dedicated semantic-memory provider and model, supplied
+    independently of the interactive inference provider. There is no fallback: when no
+    extraction model is configured the stage reports an explicit unavailable state and
+    performs zero inference, rather than silently reusing the interactive model.
+    """
 
     def __init__(
         self,
-        llm_provider: Optional[LLMProviderPort] = None,
+        memory_provider: Optional[LLMProviderPort] = None,
         repository: Optional[SemanticMemoryRepositoryPort] = None,
         settings: Optional[Settings] = None,
+        memory_model: Optional[str] = None,
     ) -> None:
-        self.llm_provider = llm_provider
+        self.memory_provider = memory_provider
         self.repository = repository
         self.settings = settings or get_settings()
+        self.memory_model = memory_model
 
-    def _select_model(
+    def _resolve_memory_identity(
         self,
         model_config: Optional[dict[str, Any]] = None,
-    ) -> tuple[Optional[str], bool, Optional[str]]:
-        """Select the target model following strict priority:
-        1. Explicitly configured dedicated memory model.
-        2. Currently configured inference model (as documented fallback).
-        If none configured, returns (None, False, None).
+    ) -> tuple[Optional[str], Optional[str]]:
+        """Resolve the dedicated semantic-memory extraction model.
+
+        Strict priority, with no substitution:
+
+        1. explicit ``memory_model`` constructor argument
+        2. per-call ``model_config["memory_model"]``
+        3. configured ``ollama.memory_model`` / ``SEMANTIC_MEMORY_MODEL``
+        4. the dedicated memory provider's own configured model
+
+        The interactive inference model is never consulted. Returns
+        ``(model, unavailable_reason)``; ``model`` is ``None`` when unavailable.
         """
         cfg = model_config or {}
 
-        # 1. Check dedicated memory model
-        dedicated = (
-            cfg.get("memory_model")
-            or getattr(self.settings, "memory_model", None)
-            or getattr(getattr(self.settings, "ollama", None), "memory_model", None)
+        candidates = (
+            ("explicit memory_model", self.memory_model),
+            ("model_config.memory_model", cfg.get("memory_model")),
+            (
+                "settings.ollama.memory_model",
+                getattr(getattr(self.settings, "ollama", None), "memory_model", None),
+            ),
+            (
+                "memory_provider.default_model",
+                getattr(self.memory_provider, "default_model", None),
+            ),
         )
-        if dedicated and str(dedicated).strip():
-            return str(dedicated).strip(), False, None
+        for _source, value in candidates:
+            if value is not None and str(value).strip():
+                return str(value).strip(), None
 
-        # 2. Check active inference model
-        inference = (
-            cfg.get("model")
-            or getattr(self.llm_provider, "default_model", None)
-            or getattr(getattr(self.settings, "ollama", None), "llm_model", None)
-        )
-        if inference and str(inference).strip():
-            return (
-                str(inference).strip(),
-                True,
-                "No dedicated memory model configured; falling back to active inference model",
-            )
-
-        return None, False, None
+        return None, "no_semantic_memory_model_configured"
 
     async def generate_semantic_memory(
         self,
@@ -257,9 +283,12 @@ class SemanticMemoryGenerator:
                 message="No matching source files available for memory generation.",
             )
 
-        # 3. Model selection
-        target_model, fallback_used, fallback_reason = self._select_model(model_config)
-        if not target_model or self.llm_provider is None:
+        # 3. Dedicated extraction model resolution. There is no fallback: a missing
+        #    extraction model is an explicit unavailable state, never the interactive
+        #    inference model.
+        target_model, unavailable_reason = self._resolve_memory_identity(model_config)
+        if target_model is None or self.memory_provider is None:
+            reason = unavailable_reason or "no_semantic_memory_provider_configured"
             return SemanticMemoryGenerationResult(
                 success=False,
                 status="not_configured",
@@ -267,9 +296,13 @@ class SemanticMemoryGenerator:
                 telemetry=SemanticMemoryGenerationTelemetry(
                     model_invoked=False,
                     inference_status="not_configured",
-                    rejection_reasons=["no_model_configured"],
+                    rejection_reasons=[reason],
                 ),
-                message="No memory model or LLM inference provider configured for semantic memory generation.",
+                message=(
+                    "Semantic-memory stage unavailable: no dedicated extraction model/provider configured "
+                    "(SEMANTIC_MEMORY_MODEL / SEMANTIC_MEMORY_ENDPOINT). "
+                    "The interactive inference model is never substituted."
+                ),
             )
 
         # 4. Build prompts
@@ -277,14 +310,15 @@ class SemanticMemoryGenerator:
         system_prompt = SEMANTIC_MEMORY_SYSTEM_PROMPT
 
         # 5. Model invocation with latency and error tracking
-        provider_type = getattr(self.llm_provider, "provider_type", "llm_provider")
+        provider_type = getattr(self.memory_provider, "provider_type", "memory_provider")
         provider_identity = (
             provider_type.value if hasattr(provider_type, "value") else str(provider_type)
         )
+        provider_endpoint = getattr(self.memory_provider, "base_url", "") or ""
 
         t0 = time.perf_counter()
         try:
-            raw_response = await self.llm_provider.generate_completion(
+            raw_response = await self.memory_provider.generate_completion(
                 prompt=user_prompt,
                 system_prompt=system_prompt,
                 model=target_model,
@@ -292,6 +326,30 @@ class SemanticMemoryGenerator:
                 max_tokens=1024,
             )
             elapsed_ms = (time.perf_counter() - t0) * 1000.0
+        except (ModelNotAvailableError, ModelMismatchError) as e:
+            # The dedicated extraction model is configured but not served by the
+            # configured provider. This is an explicit unavailable state, not a
+            # generation failure, and no inference actually occurred.
+            elapsed_ms = (time.perf_counter() - t0) * 1000.0
+            logger.warning("Semantic memory model unavailable: %s", e)
+            return SemanticMemoryGenerationResult(
+                success=False,
+                status="model_unavailable",
+                records=[],
+                telemetry=SemanticMemoryGenerationTelemetry(
+                    model_invoked=False,
+                    provider_identity=provider_identity,
+                    provider_endpoint=provider_endpoint,
+                    model_name=target_model,
+                    inference_status="model_unavailable",
+                    inference_time_ms=elapsed_ms,
+                    rejection_reasons=[f"memory_model_unavailable:{type(e).__name__}"],
+                ),
+                message=(
+                    f"Dedicated semantic-memory model '{target_model}' is not available on the configured "
+                    f"extraction provider. RE:Track does not substitute another model: {e}"
+                ),
+            )
         except (ConnectionError, TimeoutError, OSError) as e:
             elapsed_ms = (time.perf_counter() - t0) * 1000.0
             logger.warning("Semantic memory LLM provider unreachable: %s", e)
@@ -302,11 +360,10 @@ class SemanticMemoryGenerator:
                 telemetry=SemanticMemoryGenerationTelemetry(
                     model_invoked=True,
                     provider_identity=provider_identity,
+                    provider_endpoint=provider_endpoint,
                     model_name=target_model,
                     inference_status="provider_unavailable",
                     inference_time_ms=elapsed_ms,
-                    fallback_used=fallback_used,
-                    fallback_reason=fallback_reason,
                     rejection_reasons=[f"provider_error:{type(e).__name__}"],
                 ),
                 message=f"LLM provider unavailable: {e}",
@@ -321,11 +378,10 @@ class SemanticMemoryGenerator:
                 telemetry=SemanticMemoryGenerationTelemetry(
                     model_invoked=True,
                     provider_identity=provider_identity,
+                    provider_endpoint=provider_endpoint,
                     model_name=target_model,
                     inference_status="generation_failed",
                     inference_time_ms=elapsed_ms,
-                    fallback_used=fallback_used,
-                    fallback_reason=fallback_reason,
                     rejection_reasons=[f"generation_exception:{type(e).__name__}"],
                 ),
                 message=f"Memory generation failed: {e}",
@@ -343,13 +399,13 @@ class SemanticMemoryGenerator:
                 telemetry=SemanticMemoryGenerationTelemetry(
                     model_invoked=True,
                     provider_identity=provider_identity,
+                    provider_endpoint=provider_endpoint,
                     model_name=target_model,
                     inference_status="no_valid_memories",
                     inference_time_ms=elapsed_ms,
-                    fallback_used=fallback_used,
-                    fallback_reason=fallback_reason,
                     candidate_count=0,
                     rejection_reasons=["empty_or_malformed_llm_json"],
+                    llm_invocation_count=1,
                 ),
                 message="Model returned no valid structured memory items.",
             )
@@ -466,11 +522,10 @@ class SemanticMemoryGenerator:
         telemetry = SemanticMemoryGenerationTelemetry(
             model_invoked=True,
             provider_identity=provider_identity,
+            provider_endpoint=provider_endpoint,
             model_name=target_model,
             inference_status=overall_status,
             inference_time_ms=elapsed_ms,
-            fallback_used=fallback_used,
-            fallback_reason=fallback_reason,
             candidate_count=candidate_count,
             validated_count=validated_count,
             persisted_count=persisted_count,
@@ -549,10 +604,17 @@ class SemanticMemoryGenerator:
                 if self.repository
                 else [r for r in existing_records if r.evidence_status != "stale"]
             )
+            noop_model, _ = self._resolve_memory_identity(None)
+            noop_provider_type = getattr(self.memory_provider, "provider_type", None)
             telemetry = SemanticMemoryGenerationTelemetry(
                 model_invoked=False,
-                provider_identity=getattr(self.llm_provider, "provider_type", "llm_provider"),
-                model_name=getattr(self.llm_provider, "default_model", ""),
+                provider_identity=(
+                    noop_provider_type.value
+                    if hasattr(noop_provider_type, "value")
+                    else str(noop_provider_type or "")
+                ),
+                provider_endpoint=getattr(self.memory_provider, "base_url", "") or "",
+                model_name=noop_model or "",
                 inference_status="noop",
                 inference_time_ms=0.0,
                 candidate_count=len(active_mems),
@@ -674,10 +736,17 @@ class SemanticMemoryGenerator:
                     if self.repository
                     else []
                 )
+                noop_model, _ = self._resolve_memory_identity(None)
+                noop_provider_type = getattr(self.memory_provider, "provider_type", None)
                 telemetry = SemanticMemoryGenerationTelemetry(
                     model_invoked=False,
-                    provider_identity=getattr(self.llm_provider, "provider_type", "llm_provider"),
-                    model_name=getattr(self.llm_provider, "default_model", ""),
+                    provider_identity=(
+                        noop_provider_type.value
+                        if hasattr(noop_provider_type, "value")
+                        else str(noop_provider_type or "")
+                    ),
+                    provider_endpoint=getattr(self.memory_provider, "base_url", "") or "",
+                    model_name=noop_model or "",
                     inference_status="success",
                     llm_invocation_count=0,
                     invalidated_count=invalidated_count,

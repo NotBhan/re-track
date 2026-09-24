@@ -44,6 +44,9 @@ MANAGED_ENVIRONMENT_KEYS: tuple[str, ...] = (
     "SEMANTIC_MEMORY_MODEL",
     "LLM_ENDPOINT",
     "LLM_API_KEY",
+    "SEMANTIC_MEMORY_PROVIDER",
+    "SEMANTIC_MEMORY_ENDPOINT",
+    "SEMANTIC_MEMORY_API_KEY",
     "EMBEDDING_PROVIDER",
     "EMBEDDING_MODEL",
     "EMBEDDING_ENDPOINT",
@@ -68,6 +71,9 @@ _ENVIRONMENT_FIELD_MAP: tuple[tuple[str, str], ...] = (
     ("SEMANTIC_MEMORY_MODEL", "memory_model"),
     ("LLM_ENDPOINT", "llm_endpoint"),
     ("LLM_API_KEY", "llm_api_key"),
+    ("SEMANTIC_MEMORY_PROVIDER", "semantic_memory_provider"),
+    ("SEMANTIC_MEMORY_ENDPOINT", "semantic_memory_endpoint"),
+    ("SEMANTIC_MEMORY_API_KEY", "semantic_memory_api_key"),
     ("EMBEDDING_PROVIDER", "embedding_provider"),
     ("EMBEDDING_MODEL", "embedding_model"),
     ("EMBEDDING_ENDPOINT", "embedding_endpoint"),
@@ -92,6 +98,10 @@ _TOP_LEVEL_FIELDS = frozenset(
         "embedding_provider",
         "embedding_endpoint",
         "embedding_api_key",
+        # The semantic-memory stage connection is a third, independent identity.
+        "semantic_memory_provider",
+        "semantic_memory_endpoint",
+        "semantic_memory_api_key",
     }
 )
 _OLLAMA_FIELDS = frozenset({"llm_model", "memory_model", "embedding_model", "embedding_dimensions", "hf_tokenizer", "host", "port"})
@@ -195,10 +205,11 @@ class OllamaConfig(BaseSettings):
     memory_model: str = Field(
         default="",
         description=(
-            "Dedicated model for semantic-memory extraction. Empty falls back to the "
-            "configured inference model. A reasoning model can consume its whole "
+            "Dedicated model for semantic-memory extraction. Empty means the "
+            "semantic-memory stage is explicitly unavailable: the interactive inference "
+            "model is never substituted. A reasoning model can consume its whole "
             "generation budget on hidden reasoning and never emit the required JSON, "
-            "so a non-reasoning instruct model is recommended for this stage."
+            "so a non-reasoning instruct model is required for this stage."
         ),
     )
     embedding_model: str = Field(
@@ -293,6 +304,22 @@ class Settings(BaseSettings):
     )
     embedding_api_key: str = Field(default="ollama", description="Embedding provider API key")
 
+    # The semantic-memory (extraction) stage connection is intentionally a THIRD,
+    # independent identity alongside the interactive inference identity and the
+    # embedding identity. It is never inferred from either: an unconfigured
+    # semantic-memory provider reports an explicit unavailable state instead of
+    # borrowing the interactive endpoint or model. The extraction model itself is
+    # `ollama.memory_model` / `SEMANTIC_MEMORY_MODEL`.
+    semantic_memory_provider: str = Field(
+        default="",
+        description="Semantic-memory extraction provider: ollama, lmstudio, openai_compatible. Empty = not configured.",
+    )
+    semantic_memory_endpoint: str = Field(
+        default="",
+        description="Semantic-memory extraction endpoint. Empty resolves to the Ollama /v1 endpoint; other providers stay unconfigured.",
+    )
+    semantic_memory_api_key: str = Field(default="", description="Semantic-memory extraction provider API key")
+
     settings_store_path: Path = Field(default_factory=lambda: DEFAULT_SETTINGS_STORE_PATH)
     legacy_settings_store_path: Path = Field(default_factory=lambda: DEFAULT_LEGACY_SETTINGS_STORE_PATH)
 
@@ -367,6 +394,14 @@ class Settings(BaseSettings):
             if "embedding_api_key" in data and data["embedding_api_key"] is not None and "embedding_api_key" not in exclude:
                 self.embedding_api_key = str(data["embedding_api_key"])
 
+            # Semantic-memory stage identity (independent of both LLM and embedding).
+            if "semantic_memory_provider" in data and data["semantic_memory_provider"] and "semantic_memory_provider" not in exclude:
+                self.semantic_memory_provider = str(data["semantic_memory_provider"])
+            if "semantic_memory_endpoint" in data and data["semantic_memory_endpoint"] and "semantic_memory_endpoint" not in exclude:
+                self.semantic_memory_endpoint = str(data["semantic_memory_endpoint"])
+            if "semantic_memory_api_key" in data and data["semantic_memory_api_key"] is not None and "semantic_memory_api_key" not in exclude:
+                self.semantic_memory_api_key = str(data["semantic_memory_api_key"])
+
             # Storage overrides
             if not exclude_storage:
                 if "vector_db" in data and data["vector_db"]:
@@ -434,6 +469,9 @@ class Settings(BaseSettings):
                 "embedding_provider": self.embedding_provider,
                 "embedding_endpoint": self.embedding_endpoint,
                 "embedding_api_key": self.embedding_api_key,
+                "semantic_memory_provider": self.semantic_memory_provider,
+                "semantic_memory_endpoint": self.semantic_memory_endpoint,
+                "semantic_memory_api_key": self.semantic_memory_api_key,
                 "embedding_dimensions": self.ollama.embedding_dimensions,
                 "vector_db": self.storage.vector_db,
                 "graph_db": self.storage.graph_db,
@@ -601,6 +639,38 @@ class Settings(BaseSettings):
             "api_key": self.embedding_api_key or "ollama",
         }
 
+    def semantic_memory_provider_name(self) -> str:
+        """Return the configured semantic-memory provider exactly as configured (lowercased)."""
+        return (self.semantic_memory_provider or "").strip().lower()
+
+    def resolve_semantic_memory_endpoint(self) -> str:
+        """Resolve the semantic-memory extraction endpoint without substituting another identity.
+
+        An explicitly configured endpoint always wins. Only the Ollama provider has a
+        derived default. Every other provider reports an empty endpoint so an
+        unconfigured extraction stage surfaces as ``not_configured`` instead of being
+        silently pointed at the interactive or embedding service.
+        """
+        explicit = (self.semantic_memory_endpoint or "").strip()
+        if explicit:
+            return explicit
+        if self.semantic_memory_provider_name() == "ollama":
+            return self.ollama.llm_endpoint
+        return ""
+
+    def semantic_memory_identity(self) -> dict[str, Any]:
+        """Return the authoritative semantic-memory extraction identity.
+
+        This is a third identity, independent from both the interactive inference
+        identity and the embedding identity. It is never inferred from either.
+        """
+        return {
+            "provider": self.semantic_memory_provider_name(),
+            "endpoint": self.resolve_semantic_memory_endpoint(),
+            "model": self.ollama.memory_model,
+            "api_key": self.semantic_memory_api_key or "local",
+        }
+
     def apply_to_environment(self, env: Optional[dict[str, str]] = None) -> None:
         """Write provider configuration into os.environ for Cognee compatibility.
 
@@ -616,10 +686,14 @@ class Settings(BaseSettings):
     def configuration_environment(self) -> dict[str, str]:
         """Return the environment mapping Cognee expects for the active configuration."""
         embedding = self.embedding_identity()
+        semantic = self.semantic_memory_identity()
         return {
             "LLM_PROVIDER": self.llm_provider or "ollama",
             "LLM_MODEL": self.ollama.llm_model,
             "SEMANTIC_MEMORY_MODEL": self.ollama.memory_model,
+            "SEMANTIC_MEMORY_PROVIDER": semantic["provider"],
+            "SEMANTIC_MEMORY_ENDPOINT": semantic["endpoint"],
+            "SEMANTIC_MEMORY_API_KEY": semantic["api_key"],
             "LLM_ENDPOINT": self.llm_endpoint or self.ollama.llm_endpoint,
             "LLM_API_KEY": self.llm_api_key or "local",
             "EMBEDDING_PROVIDER": embedding["provider"],
@@ -852,6 +926,109 @@ class Settings(BaseSettings):
     def clear_embedding_probe_cache(self) -> None:
         """Invalidate the cached embedding availability probe."""
         self._embedding_probe_cache = None
+
+    async def probe_semantic_memory_provider(self, timeout: float = 3.0, max_age_seconds: float = 20.0) -> dict[str, Any]:
+        """Explicitly verify the configured semantic-memory extraction provider and model.
+
+        Reports one truthful state and never substitutes another provider, endpoint, or
+        model:
+
+            available       - endpoint reachable and the configured extraction model is listed
+            model_missing   - endpoint reachable but the configured extraction model is absent
+            unreachable     - endpoint could not be reached
+            not_configured  - endpoint or extraction model is not configured
+
+        Results are cached briefly so health polling does not add an outbound request on
+        every call.
+        """
+        now = time.monotonic()
+        identity = self.semantic_memory_identity()
+        provider = identity["provider"]
+        endpoint = (identity["endpoint"] or "").rstrip("/")
+        model = identity["model"]
+        cache_key = (provider, endpoint, str(model))
+
+        cached = getattr(self, "_semantic_memory_probe_cache", None)
+        if cached is not None and cached[0] == cache_key and (now - cached[1]) < max_age_seconds:
+            return cached[2]
+
+        def _remember(payload: dict[str, Any]) -> dict[str, Any]:
+            self._semantic_memory_probe_cache = (cache_key, now, payload)
+            return payload
+
+        result: dict[str, Any] = {
+            "provider": provider,
+            "endpoint": endpoint,
+            "model": model,
+            "state": "not_configured",
+            "detail": None,
+            "available_models": [],
+        }
+
+        if not endpoint or not model:
+            result["detail"] = "Semantic-memory endpoint or semantic-memory model is not configured."
+            return _remember(result)
+
+        provider_lower = provider.lower()
+        try:
+            import httpx
+
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                if "ollama" in provider_lower:
+                    base = endpoint[: -len("/v1")] if endpoint.endswith("/v1") else endpoint
+                    resp = await client.get(f"{base}/api/tags")
+                    resp.raise_for_status()
+                    payload = resp.json()
+                    names = [str(m.get("name", "")) for m in (payload.get("models") or [])]
+                else:
+                    models_url = endpoint if endpoint.endswith("/models") else f"{endpoint}/models"
+                    resp = await client.get(
+                        models_url,
+                        headers={"Authorization": f"Bearer {identity['api_key']}"},
+                    )
+                    resp.raise_for_status()
+                    payload = resp.json()
+                    names = [str(m.get("id", "")) for m in (payload.get("data") or [])]
+        except Exception as e:
+            result["state"] = "unreachable"
+            result["detail"] = (
+                f"Semantic-memory provider '{provider}' unreachable at {endpoint}: {type(e).__name__}: {e}"
+            )
+            return _remember(result)
+
+        available = [n for n in names if n]
+        result["available_models"] = available[:10]
+        if not available:
+            result["state"] = "model_missing"
+            result["detail"] = (
+                f"Semantic-memory provider '{provider}' is reachable at {endpoint} but reports no models, "
+                f"so '{model}' cannot be used."
+            )
+            return _remember(result)
+
+        target = model
+        for prefix in ("openai/", "lm_studio/", "lmstudio/", "ollama/"):
+            if target.startswith(prefix):
+                target = target[len(prefix):]
+
+        def _matches(candidate: str, wanted: str) -> bool:
+            cand, want = candidate.strip(), wanted.strip()
+            return cand == want or cand.split(":")[0] == want.split(":")[0]
+
+        if any(_matches(name, target) for name in available):
+            result["state"] = "available"
+        else:
+            result["state"] = "model_missing"
+            result["detail"] = (
+                f"Semantic-memory model '{model}' is not available at {endpoint}. "
+                f"Available models: {', '.join(available[:5])}. "
+                "RE:Track will not substitute a different extraction model."
+            )
+        return _remember(result)
+
+    def clear_semantic_memory_probe_cache(self) -> None:
+        """Invalidate the cached semantic-memory availability probe."""
+        self._semantic_memory_probe_cache = None
 
     def validate_provider(self) -> None:
         """Check provider reachability if connection test is not skipped."""

@@ -805,7 +805,7 @@ async def test_memory_generation_never_self_feeds(eval_corpus):
     mock_llm.default_model = "phi4-mini"
 
     memory_repo = JsonSemanticMemoryRepository(store_path=Path("/tmp/eval_store_selffeed.json"))
-    generator = SemanticMemoryGenerator(llm_provider=mock_llm, repository=memory_repo)
+    generator = SemanticMemoryGenerator(memory_provider=mock_llm, repository=memory_repo)
 
     # Initial generation
     res1 = await generator.cognify_repository(repository_id="python_backend", manifest=manifest)

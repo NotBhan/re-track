@@ -392,7 +392,8 @@ def test_semantic_memory_model_follows_the_same_precedence(monkeypatch, tmp_path
     assert explicit.ollama.memory_model == "explicit-memory-model"
 
 
-def test_semantic_memory_model_falls_back_to_inference_model_when_unset(monkeypatch, tmp_path: Path):
+def test_semantic_memory_model_is_never_inferred_from_the_inference_model(monkeypatch, tmp_path: Path):
+    """An unset extraction model is unavailable; the inference model is never substituted."""
     monkeypatch.setattr("app.config.settings.DEFAULT_SETTINGS_STORE_PATH", tmp_path / "absent.json")
     monkeypatch.setattr("app.config.settings.DEFAULT_ENV_FILE", tmp_path / "absent.env")
 
@@ -401,11 +402,79 @@ def test_semantic_memory_model_falls_back_to_inference_model_when_unset(monkeypa
 
     from app.services.semantic_memory_generator import SemanticMemoryGenerator
 
-    generator = SemanticMemoryGenerator(llm_provider=None, repository=None, settings=settings)
-    model, fallback_used, fallback_reason = generator._select_model(None)
-    assert model == "the-inference-model"
-    assert fallback_used is True
-    assert "dedicated memory model" in (fallback_reason or "")
+    # No dedicated provider and no extraction model anywhere -> explicit unavailable.
+    generator = SemanticMemoryGenerator(memory_provider=None, repository=None, settings=settings)
+    model, reason = generator._resolve_memory_identity(None)
+    assert model is None
+    assert reason == "no_semantic_memory_model_configured"
+
+    # A dedicated provider whose own model is empty is likewise unavailable.
+    class _NoModelProvider:
+        provider_type = "test"
+        default_model = ""
+
+    provider_only = SemanticMemoryGenerator(
+        memory_provider=_NoModelProvider(), repository=None, settings=settings
+    )
+    assert provider_only._resolve_memory_identity(None)[0] is None
+
+    # Only an explicitly configured extraction model resolves.
+    class _WithModelProvider:
+        provider_type = "test"
+        default_model = "dedicated-extraction-model"
+
+    dedicated = SemanticMemoryGenerator(
+        memory_provider=_WithModelProvider(), repository=None, settings=settings
+    )
+    assert dedicated._resolve_memory_identity(None) == ("dedicated-extraction-model", None)
+
+
+def test_semantic_memory_identity_is_independent_of_llm_and_embedding():
+    """The semantic-memory stage is a third identity, never inferred from the other two."""
+    settings = Settings(
+        llm_provider="lmstudio",
+        llm_endpoint="http://127.0.0.1:1234/v1",
+        embedding_provider="ollama",
+        embedding_endpoint="",
+        semantic_memory_provider="",
+        semantic_memory_endpoint="",
+        semantic_memory_api_key="",
+        ollama=OllamaConfig(memory_model="", llm_model="interactive-model"),
+    )
+
+    # Unconfigured extraction stage reports empty, not the LLM endpoint/model.
+    identity = settings.semantic_memory_identity()
+    assert identity == {"provider": "", "endpoint": "", "model": "", "api_key": "local"}
+    assert identity["endpoint"] != settings.llm_endpoint
+    assert identity["model"] != settings.ollama.llm_model
+
+    # Explicitly configuring only the extraction model does not borrow the LLM endpoint.
+    settings.ollama.memory_model = "phi-4-mini-instruct"
+    assert settings.semantic_memory_identity()["endpoint"] == ""
+    assert settings.semantic_memory_identity()["model"] == "phi-4-mini-instruct"
+
+    # Explicitly configuring the extraction connection moves nothing else.
+    settings.semantic_memory_provider = "lmstudio"
+    settings.semantic_memory_endpoint = "http://127.0.0.1:9999/v1"
+    assert settings.semantic_memory_identity()["endpoint"] == "http://127.0.0.1:9999/v1"
+    assert settings.llm_endpoint == "http://127.0.0.1:1234/v1"
+    assert settings.embedding_identity()["endpoint"] != "http://127.0.0.1:9999/v1"
+
+
+def test_semantic_memory_probe_reports_not_configured_without_substitution(monkeypatch, tmp_path: Path):
+    monkeypatch.setattr("app.config.settings.DEFAULT_SETTINGS_STORE_PATH", tmp_path / "absent.json")
+    monkeypatch.setattr("app.config.settings.DEFAULT_ENV_FILE", tmp_path / "absent.env")
+
+    settings = Settings(
+        llm_endpoint="http://127.0.0.1:1234/v1",
+        semantic_memory_provider="",
+        semantic_memory_endpoint="",
+        ollama=OllamaConfig(memory_model=""),
+    )
+    state = asyncio.run(settings.probe_semantic_memory_provider(max_age_seconds=0))
+    assert state["state"] == "not_configured"
+    assert state["endpoint"] == ""
+    assert "1234" not in state["endpoint"]
 
 
 def test_cognee_provider_mapping_keeps_structured_output_usable():

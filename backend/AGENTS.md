@@ -85,10 +85,21 @@ Production services implemented and verified:
     environment variables it writes, and construction removes those self-written values, so a
     prior `Settings` instance can never configure a later one. Env keywords remain a supported
     override only when the operator set them.
-11. **Semantic-memory stage model is explicit**: `ollama.memory_model` / `SEMANTIC_MEMORY_MODEL`
-    selects the extraction model; empty falls back to the inference model. LM Studio maps to
-    litellm's `lm_studio` provider so Cognee uses `response_format: json_schema` (LM Studio
-    rejects `json_object` with HTTP 400).
+11. **Three independent identities, never inferred from one another**: interactive inference
+    (`llm_provider` / `llm_endpoint` / `ollama.llm_model`), embeddings
+    (`embedding_identity()`), and semantic-memory extraction
+    (`semantic_memory_identity()` = `semantic_memory_provider` / `semantic_memory_endpoint` /
+    `ollama.memory_model`). Each is resolved and reported separately.
+12. **No semantic-memory model substitution**: `ollama.memory_model` / `SEMANTIC_MEMORY_MODEL`
+    selects the dedicated extraction model. When it is empty the semantic-memory stage is
+    explicitly `not_configured` with **zero** inference — the interactive reasoning model is
+    never substituted. A configured-but-unserved extraction model is reported as
+    `model_unavailable`. `Settings.probe_semantic_memory_provider()` reports
+    `available | model_missing | unreachable | not_configured` and performs no substitution.
+13. **Cognification performs no hidden model pass**: `CogneeService.add()` only ingests;
+    `cognee.cognify()` / `cognee.remember()` are never invoked from the indexing/cognification
+    path. LM Studio maps to litellm's `lm_studio` provider so Cognee uses
+    `response_format: json_schema` (LM Studio rejects `json_object` with HTTP 400).
 
 ---
 

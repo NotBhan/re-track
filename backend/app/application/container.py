@@ -66,6 +66,16 @@ from app.services.workspace_authorization_service import WorkspaceAuthorizationS
 logger = logging.getLogger(__name__)
 
 
+def _provider_type_for(name: str) -> ProviderType:
+    """Map a configured provider name onto the transport provider used to reach it."""
+    lowered = (name or "").lower()
+    if "lm" in lowered or "studio" in lowered:
+        return ProviderType.LM_STUDIO
+    if "ollama" in lowered:
+        return ProviderType.OLLAMA
+    return ProviderType.OPENAI_COMPATIBLE
+
+
 class ApplicationContainer:
     """Composition root managing service lifecycles and injecting dependencies into use cases."""
 
@@ -77,6 +87,10 @@ class ApplicationContainer:
         self.repository_manager: RepositoryManager = RepositoryManager()
         self.cgc_service: Optional[CGCService] = None
         self.llm_provider: Optional[LLMProviderService] = None
+        # Dedicated semantic-memory extraction connection. Independent from the
+        # interactive inference provider: None means the stage is explicitly
+        # unavailable and no substitution is performed.
+        self.memory_provider: Optional[LLMProviderService] = None
         self.intent_parser: Optional[IntentParserService] = None
         self.manifest_service: Optional[ManifestService] = None
         self.package_repository: JsonContextPackageRepository = JsonContextPackageRepository()
@@ -159,8 +173,9 @@ class ApplicationContainer:
         self.intent_parser = IntentParserService(self.llm_provider)
         self.cgc_service = CGCService()
         self.manifest_service = ManifestService()
+        self.memory_provider = self._build_memory_provider()
         self.semantic_memory_generator = SemanticMemoryGenerator(
-            llm_provider=self.llm_provider,
+            memory_provider=self.memory_provider,
             repository=self.semantic_memory_repository,
             settings=self.settings,
         )
@@ -173,11 +188,42 @@ class ApplicationContainer:
             cognee_service=self.cognee_service,
         )
 
+        mem_identity = self.settings.semantic_memory_identity()
         logger.info(
-            "ApplicationContainer initialized | provider=%s | endpoint=%s | model=%s",
+            "ApplicationContainer initialized | interactive=%s/%s/%s | semantic_memory=%s/%s/%s",
             p_type.value,
             llm_endpoint,
             llm_model,
+            mem_identity["provider"] or "unconfigured",
+            mem_identity["endpoint"] or "unconfigured",
+            mem_identity["model"] or "unconfigured",
+        )
+
+    def _build_memory_provider(self) -> Optional[LLMProviderService]:
+        """Build the dedicated semantic-memory extraction connection, or None.
+
+        The extraction identity is resolved independently of the interactive
+        inference identity and is never derived from it. When either the endpoint or
+        the extraction model is unconfigured, ``None`` is returned so the
+        semantic-memory stage reports an explicit unavailable state.
+        """
+        if self.settings is None:
+            return None
+        identity = self.settings.semantic_memory_identity()
+        endpoint = (identity["endpoint"] or "").strip()
+        model = (identity["model"] or "").strip()
+        if not endpoint or not model:
+            logger.info(
+                "Semantic-memory stage unavailable | endpoint_configured=%s | model_configured=%s",
+                bool(endpoint),
+                bool(model),
+            )
+            return None
+        return LLMProviderService(
+            provider_type=_provider_type_for(identity["provider"]),
+            base_url=endpoint,
+            api_key=identity["api_key"] or "local",
+            default_model=model,
         )
 
     async def shutdown(self) -> None:
@@ -227,8 +273,8 @@ class ApplicationContainer:
             default_model=model,
         )
         self.intent_parser = IntentParserService(self.llm_provider)
-        if self.semantic_memory_generator is not None:
-            self.semantic_memory_generator.llm_provider = self.llm_provider
+        # The semantic-memory extraction identity is independent: hot-reloading the
+        # interactive provider never moves or substitutes the extraction model.
         if self.indexing_service is not None:
             self.indexing_service._semantic_memory_generator = self.semantic_memory_generator
 

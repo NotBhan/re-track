@@ -148,7 +148,7 @@ async def test_fresh_indexing_triggers_cognification(test_repo_env):
     })
     mock_provider = MockLLMProvider(response_text=mock_resp)
     mock_cognee = MockCogneeService()
-    generator = SemanticMemoryGenerator(llm_provider=mock_provider, repository=memory_repo)
+    generator = SemanticMemoryGenerator(memory_provider=mock_provider, repository=memory_repo)
 
     indexing_service = IndexingService(
         cognee_service=mock_cognee,
@@ -189,7 +189,7 @@ async def test_noop_triggers_zero_cognification(test_repo_env):
     })
     mock_provider = MockLLMProvider(response_text=mock_resp)
     mock_cognee = MockCogneeService()
-    generator = SemanticMemoryGenerator(llm_provider=mock_provider, repository=memory_repo)
+    generator = SemanticMemoryGenerator(memory_provider=mock_provider, repository=memory_repo)
 
     indexing_service = IndexingService(
         cognee_service=mock_cognee,
@@ -231,7 +231,7 @@ async def test_added_file_triggers_targeted_cognification(test_repo_env):
     })
     mock_provider = MockLLMProvider(response_text=mock_resp_1)
     mock_cognee = MockCogneeService()
-    generator = SemanticMemoryGenerator(llm_provider=mock_provider, repository=memory_repo)
+    generator = SemanticMemoryGenerator(memory_provider=mock_provider, repository=memory_repo)
 
     indexing_service = IndexingService(
         cognee_service=mock_cognee,
@@ -286,7 +286,7 @@ async def test_modified_file_triggers_targeted_regeneration(test_repo_env):
     })
     mock_provider = MockLLMProvider(response_text=mock_resp_1)
     mock_cognee = MockCogneeService()
-    generator = SemanticMemoryGenerator(llm_provider=mock_provider, repository=memory_repo)
+    generator = SemanticMemoryGenerator(memory_provider=mock_provider, repository=memory_repo)
 
     indexing_service = IndexingService(
         cognee_service=mock_cognee,
@@ -336,7 +336,7 @@ async def test_deleted_file_invalidates_without_llm_call(test_repo_env):
     })
     mock_provider = MockLLMProvider(response_text=mock_resp_1)
     mock_cognee = MockCogneeService()
-    generator = SemanticMemoryGenerator(llm_provider=mock_provider, repository=memory_repo)
+    generator = SemanticMemoryGenerator(memory_provider=mock_provider, repository=memory_repo)
 
     indexing_service = IndexingService(
         cognee_service=mock_cognee,
@@ -380,7 +380,7 @@ async def test_same_sha_rename_updates_provenance_without_llm_call(test_repo_env
     })
     mock_provider = MockLLMProvider(response_text=mock_resp)
     mock_cognee = MockCogneeService()
-    generator = SemanticMemoryGenerator(llm_provider=mock_provider, repository=memory_repo)
+    generator = SemanticMemoryGenerator(memory_provider=mock_provider, repository=memory_repo)
 
     indexing_service = IndexingService(
         cognee_service=mock_cognee,
@@ -427,7 +427,7 @@ async def test_changed_rename_regenerates_memory(test_repo_env):
     })
     mock_provider = MockLLMProvider(response_text=mock_resp_1)
     mock_cognee = MockCogneeService()
-    generator = SemanticMemoryGenerator(llm_provider=mock_provider, repository=memory_repo)
+    generator = SemanticMemoryGenerator(memory_provider=mock_provider, repository=memory_repo)
 
     indexing_service = IndexingService(
         cognee_service=mock_cognee,
@@ -479,7 +479,7 @@ async def test_unchanged_memories_are_preserved(test_repo_env):
     })
     mock_provider = MockLLMProvider(response_text=mock_resp)
     mock_cognee = MockCogneeService()
-    generator = SemanticMemoryGenerator(llm_provider=mock_provider, repository=memory_repo)
+    generator = SemanticMemoryGenerator(memory_provider=mock_provider, repository=memory_repo)
 
     indexing_service = IndexingService(
         cognee_service=mock_cognee,
@@ -516,7 +516,7 @@ async def test_provider_failure_does_not_fail_indexing(test_repo_env):
     # Provider that raises network / offline error
     mock_provider = MockLLMProvider(raise_error=ConnectionError("Ollama daemon offline"))
     mock_cognee = MockCogneeService()
-    generator = SemanticMemoryGenerator(llm_provider=mock_provider, repository=memory_repo)
+    generator = SemanticMemoryGenerator(memory_provider=mock_provider, repository=memory_repo)
 
     indexing_service = IndexingService(
         cognee_service=mock_cognee,
@@ -558,7 +558,7 @@ async def test_cognee_failure_does_not_fail_indexing(test_repo_env):
     mock_provider = MockLLMProvider(response_text=mock_resp)
     # Cognee service that fails during outline ingestion
     failing_cognee = MockCogneeService(should_fail=True)
-    generator = SemanticMemoryGenerator(llm_provider=mock_provider, repository=memory_repo)
+    generator = SemanticMemoryGenerator(memory_provider=mock_provider, repository=memory_repo)
 
     indexing_service = IndexingService(
         cognee_service=failing_cognee,
@@ -587,7 +587,7 @@ async def test_duplicate_cognification_trigger_is_impossible_for_one_index_opera
     })
     mock_provider = MockLLMProvider(response_text=mock_resp)
     mock_cognee = MockCogneeService()
-    generator = SemanticMemoryGenerator(llm_provider=mock_provider, repository=memory_repo)
+    generator = SemanticMemoryGenerator(memory_provider=mock_provider, repository=memory_repo)
 
     indexing_service = IndexingService(
         cognee_service=mock_cognee,
@@ -618,7 +618,7 @@ async def test_cognification_sees_the_post_index_current_manifest(test_repo_env)
     })
     mock_provider = MockLLMProvider(response_text=mock_resp)
     mock_cognee = MockCogneeService()
-    generator = SemanticMemoryGenerator(llm_provider=mock_provider, repository=memory_repo)
+    generator = SemanticMemoryGenerator(memory_provider=mock_provider, repository=memory_repo)
 
     indexing_service = IndexingService(
         cognee_service=mock_cognee,
@@ -660,7 +660,7 @@ async def test_cross_repository_isolation_remains_enforced(test_repo_env):
         })
     )
     mock_cognee = MockCogneeService()
-    generator = SemanticMemoryGenerator(llm_provider=mock_provider, repository=memory_repo)
+    generator = SemanticMemoryGenerator(memory_provider=mock_provider, repository=memory_repo)
 
     indexing_service = IndexingService(
         cognee_service=mock_cognee,

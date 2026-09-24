@@ -18,6 +18,17 @@ class HealthResponse(BaseModel):
     )
     embedding_detail: Optional[str] = Field(default=None, description="Truthful embedding availability detail")
 
+    # The semantic-memory extraction stage is a third identity, reported separately
+    # from both the interactive inference identity and the embedding identity.
+    semantic_memory_provider: str = Field(default="", description="Configured semantic-memory extraction provider")
+    semantic_memory_endpoint: str = Field(default="", description="Configured semantic-memory extraction endpoint")
+    semantic_memory_model: str = Field(default="", description="Configured semantic-memory extraction model (empty = unavailable)")
+    semantic_memory_state: str = Field(
+        default="unknown",
+        description="Semantic-memory availability: available | model_missing | unreachable | not_configured",
+    )
+    semantic_memory_detail: Optional[str] = Field(default=None, description="Truthful semantic-memory availability detail")
+
     status: str = Field(description="Health status: 'ok' or 'degraded'")
     ollama_reachable: bool = Field(description="Legacy alias for provider_reachable")
     cognee_initialized: bool = Field(description="Whether CogneeService is initialized")
@@ -92,6 +103,14 @@ class BackendStatusResponse(BaseModel):
         description="Embedding availability: available | model_missing | unreachable | not_configured",
     )
     embedding_detail: Optional[str] = Field(default=None, description="Truthful embedding availability detail")
+    semantic_memory_provider: str = Field(default="", description="Configured semantic-memory extraction provider (independent of LLM/embedding)")
+    semantic_memory_endpoint: str = Field(default="", description="Configured semantic-memory extraction endpoint")
+    semantic_memory_model: str = Field(default="", description="Configured semantic-memory extraction model (empty = unavailable)")
+    semantic_memory_state: str = Field(
+        default="unknown",
+        description="Semantic-memory availability: available | model_missing | unreachable | not_configured",
+    )
+    semantic_memory_detail: Optional[str] = Field(default=None, description="Truthful semantic-memory availability detail")
     vector_db: str = Field(description="Vector database provider")
     graph_db: str = Field(description="Graph database provider")
     relational_db: str = Field(description="Relational database provider")
@@ -146,6 +165,9 @@ class AppSettingsResponse(BaseModel):
     llm_port: int = Field(default=11434, description="LLM port")
     llm_model: str = Field(default="phi4-mini", description="Active LLM model")
     embedding_model: str = Field(default="nomic-embed-text:latest", description="Active embedding model")
+    semantic_memory_provider: str = Field(default="", description="Configured semantic-memory extraction provider")
+    semantic_memory_endpoint: str = Field(default="", description="Configured semantic-memory extraction endpoint")
+    memory_model: str = Field(default="", description="Dedicated semantic-memory extraction model (empty = stage unavailable)")
     api_key_configured: bool = Field(default=False, description="Whether an API key is set")
     api_key_masked: str = Field(default="local", description="Masked API key indicator")
 

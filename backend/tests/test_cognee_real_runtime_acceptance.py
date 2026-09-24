@@ -191,7 +191,7 @@ def test_env(tmp_path: Path):
 
     llm = RealRuntimeMockLLM()
     generator = SemanticMemoryGenerator(
-        llm_provider=llm,
+        memory_provider=llm,
         repository=memory_repo,
         settings=settings,
     )

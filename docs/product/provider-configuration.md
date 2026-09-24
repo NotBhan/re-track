@@ -103,12 +103,56 @@ reports exactly one truthful state and performs no substitution:
 Embedding health is evaluated separately from LLM health; a reachable LLM does not imply usable
 embeddings and vice versa.
 
-### Semantic-memory stage model
+### Semantic-memory stage identity (a third, independent identity)
 
-`memory_model` (environment variable `SEMANTIC_MEMORY_MODEL`) selects a dedicated model for
-semantic-memory extraction. When empty it falls back to the configured inference model. A
-reasoning model can consume its entire generation budget on hidden reasoning and never emit the
-required JSON, so a non-reasoning instruct model is recommended for this stage.
+The semantic-memory extraction stage has its own provider / endpoint / model, configured through
+its own path and never inferred from the interactive LLM or the embedding identity:
+
+| Field | Environment variable | Notes |
+|---|---|---|
+| provider | `SEMANTIC_MEMORY_PROVIDER` | `ollama`, `lmstudio`, `openai_compatible`, … |
+| endpoint | `SEMANTIC_MEMORY_ENDPOINT` | required for non-Ollama providers; empty means `not_configured` |
+| model | `SEMANTIC_MEMORY_MODEL` (settings `memory_model`) | the dedicated extraction model |
+| api key | `SEMANTIC_MEMORY_API_KEY` | defaults to `local` |
+
+`Settings.semantic_memory_identity()` reports this identity, and `ApplicationContainer` builds a
+dedicated extraction connection from it. **No substitution occurs**: when the endpoint or the model
+is unconfigured the stage reports an explicit unavailable state (`not_configured`) and performs
+zero inference. The interactive reasoning model is never reused for extraction, and no other model
+is silently selected.
+
+When configured but not actually served by the provider, the stage reports `model_unavailable`
+rather than degrading into a generic generation failure.
+
+### Semantic-memory availability states
+
+`Settings.probe_semantic_memory_provider()` — surfaced on `/health` and `/status` as
+`semantic_memory_state` — reports exactly one truthful state and performs no substitution:
+
+| State | Meaning |
+|---|---|
+| `available` | endpoint reachable and the configured extraction model is listed |
+| `model_missing` | endpoint reachable but the configured extraction model is absent |
+| `unreachable` | endpoint could not be reached |
+| `not_configured` | endpoint or extraction model is not configured |
+
+### Embedded vector/graph materialization (`cognify`)
+
+The indexing and cognification path only *ingests* (`CogneeService.add`), so it creates no
+LanceDB vectors and no Kùzu graph records. Materializing them is a separate, explicit `cognify`
+operation.
+
+**Ollama caveat (verified):** when the *interactive* LLM provider is Ollama, Cognee's LiteLLM
+Ollama adapter requires the native base URL in `LLM_ENDPOINT`
+(`http://127.0.0.1:11434`), **not** the OpenAI-compatible form (`.../v1`). With `/v1`, litellm
+appends `/api/...` and the request 404s. This affects Cognee's graph-extraction pass only; the
+semantic-memory extraction client is an independent identity and correctly uses the `/v1` form.
+
+### Why a dedicated extraction model
+
+A reasoning model can consume its entire generation budget on hidden reasoning and never emit the
+required JSON, so a small **non-reasoning instruction-following** model is required for this stage.
+See `docs/cognee_integration.md` → *Semantic-Memory Extraction Stage* for the full contract.
 
 ### LM Studio and structured output
 

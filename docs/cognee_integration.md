@@ -70,14 +70,15 @@ and their endpoints/models are resolved by the precedence model documented in
 
 | Component | Provider | Model/DB |
 |-----------|----------|----------|
-| LLM | LM Studio (`lmstudio`) | `unsloth/phi-4-mini-reasoning` |
-| Semantic-memory stage | LM Studio (`memory_model`) | `phi-4-mini-instruct` |
+| LLM (interactive) | LM Studio (`lmstudio`) at `http://127.0.0.1:1234/v1` | `unsloth/phi-4-mini-reasoning` |
+| Semantic-memory stage | LM Studio at `http://127.0.0.1:1234/v1` | `phi-4-mini-instruct` (dedicated, non-reasoning) |
 | Embeddings | `openai_compatible` at `http://127.0.0.1:1234/v1` | `text-embedding-nomic-embed-text-v1.5` (768-dim) |
 | Vector DB | LanceDB | local file |
 | Graph DB | Kuzu | local file |
 | Relational DB | SQLite | local file |
 
-The embedding provider is configured independently of the LLM provider and is never substituted.
+All three identities are configured independently and none is ever substituted or inferred from
+another.
 
 ---
 
@@ -90,7 +91,8 @@ a later `Settings` instance.
 | Variable | Purpose |
 |----------|---------|
 | `LLM_PROVIDER` / `LLM_MODEL` / `LLM_ENDPOINT` / `LLM_API_KEY` | Active inference identity |
-| `SEMANTIC_MEMORY_MODEL` | Dedicated semantic-memory extraction model (empty = inference model) |
+| `SEMANTIC_MEMORY_MODEL` | Dedicated semantic-memory extraction model (empty = stage unavailable) |
+| `SEMANTIC_MEMORY_PROVIDER` / `SEMANTIC_MEMORY_ENDPOINT` / `SEMANTIC_MEMORY_API_KEY` | Independent semantic-memory extraction connection |
 | `EMBEDDING_PROVIDER` / `EMBEDDING_MODEL` / `EMBEDDING_ENDPOINT` / `EMBEDDING_API_KEY` / `EMBEDDING_DIMENSIONS` | Independent embedding identity |
 | `VECTOR_DB_PROVIDER` / `GRAPH_DB_PROVIDER` / `RELATIONAL_DB_PROVIDER` | Storage providers |
 | `HUGGINGFACE_TOKENIZER` | Token counting for the embedding engine |
@@ -165,6 +167,55 @@ Tier 4 Derived Retrieval via `retrieve_semantic_memory()`
 5. **Single Authoritative Orchestration Boundary**: Cognification is orchestrated exclusively downstream inside `IndexingService.index_repository(...)` immediately after `ManifestService.update_manifest(...)` atomically commits the post-index state.
 6. **Graceful Failure Isolation**: Any LLM provider or Cognee indexing failure during semantic cognification degrades gracefully without blocking or failing deterministic repository indexing.
 
+---
+
+## Semantic-Memory Extraction Stage (Dedicated Model)
+
+Semantic extraction is a **dedicated RE:Track call**, not a Cognee pipeline. `SemanticMemoryGenerator`
+builds a strictly evidence-bounded prompt from the committed manifest (files, AST symbols,
+verified snippets) and performs exactly one chat-completion call against a **dedicated extraction
+connection**.
+
+### Three independent identities
+
+| Stage | Provider | Endpoint | Model |
+|---|---|---|---|
+| Interactive inference | `llm_provider` | `llm_endpoint` | `ollama.llm_model` |
+| Embeddings | `embedding_provider` | `resolve_embedding_endpoint()` | `ollama.embedding_model` |
+| Semantic memory | `semantic_memory_provider` | `resolve_semantic_memory_endpoint()` | `ollama.memory_model` |
+
+None is inferred from another. `ApplicationContainer` builds the extraction connection only from
+`semantic_memory_identity()`; the interactive provider is never passed to the generator.
+
+### No substitution, explicit unavailability
+
+`SemanticMemoryGenerator._resolve_memory_identity()` resolves the extraction model in a strict
+order — explicit argument → `model_config` → `settings.ollama.memory_model` → the dedicated
+provider's own model — and **the interactive inference model is never consulted**. When nothing
+resolves, the stage returns `status="not_configured"` with `model_invoked=False` and zero inference.
+
+| Outcome | Meaning |
+|---|---|
+| `success` | Extraction output parsed and provenance-validated |
+| `not_configured` | No dedicated extraction model/provider configured — zero inference |
+| `model_unavailable` | Model configured but not served by the extraction provider |
+| `provider_unavailable` | Extraction provider unreachable |
+| `no_valid_memories` | Output empty/malformed, or every candidate failed provenance validation |
+| `generation_failed` | Extraction provider returned an unusable response |
+
+### Deterministic parsing
+
+`extract_memories_from_response()` strips complete `<think>…</think>` blocks, discards an unclosed
+`<think>` trace (a reasoning model that exhausted its budget mid-reasoning), then attempts, in
+order: a ```json fence → the whole response → the outermost `{…}` / `[…]` span. Unparseable or
+partially-parseable output yields zero candidates — never a repaired or fabricated record.
+
+### No hidden model pass
+
+Cognification indexes validated records through `CogneeService.add()` only. `cognee.cognify()` and
+`cognee.remember()` are never invoked on the indexing path, so a single cognification cycle makes
+exactly **one** extraction call and no additional Cognee LLM pass. Retrieval remains
+`SearchType.CHUNKS` with `auto_route=False` and never invokes the extraction model.
 
 ---
 
@@ -187,7 +238,10 @@ Embedded storage engines (LanceDB, Kùzu/Ladybug, SQLite) maintain exclusive fil
 - `remember()` processes one item at a time (~30s per item with phi3:mini)
 - `recall()` has ~60-90s latency due to session turn analysis (even with `CACHING=false`)
 - `improve()` operates on all datasets (no single-dataset scoping in v1.2.2)
-- Thinking-mode models (qwen3.5:4b) cause structured output failures
+- Reasoning / thinking-mode models cannot satisfy RE:Track's semantic-extraction JSON contract:
+  they consume the generation budget on hidden reasoning (or emit `<think>` traces) and never
+  produce the required JSON. They are acceptable as the *interactive* model but must not be used
+  for the semantic-memory stage.
 - HuggingFace tokenizer dependency is required for embedding operations
 - `transformers` Python package must be installed
 
@@ -197,12 +251,22 @@ See `references/cognee/verified_notes.md` for complete limitation details.
 
 ## Recommended Model
 
-**phi3:mini** is the current recommended local model for Cognee integration.
+Two distinct model roles, selected through two distinct configuration paths:
 
-- Compatible with Cognee's instructor-based structured output
-- No thinking mode conflicts
-- Successfully validated across all memory operations
-- See `references/cognee/verified_notes.md` for comparison with qwen3.5:4b
+**Interactive inference** — the general reasoning/compression model (e.g. `phi4-mini`,
+`unsloth/phi-4-mini-reasoning`). May be a reasoning model.
+
+**Semantic-memory extraction** (`memory_model` / `SEMANTIC_MEMORY_MODEL`) — a **small
+instruction-following** model with no thinking mode (e.g. `phi-4-mini-instruct`, `qwen2.5:0.5b`).
+It must:
+
+- emit a single valid JSON object matching the `{"memories": [...]}` schema,
+- reference only files/symbols present in the supplied evidence,
+- avoid reasoning traces entirely.
+
+A reasoning model must never be selected for this stage: the extraction contract requires the JSON
+to be produced directly. If no extraction model is configured the stage is explicitly unavailable
+and produces zero semantic records — it does not fall back to the interactive model.
 
 ---
 
