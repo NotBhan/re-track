@@ -1,5 +1,9 @@
 # RE:Track Modern Desktop GUI — Source Contract
 
+## Status
+
+This GUI is the **accepted baseline** for the desktop experience: repository management, startup hydration, truthful progress/confidence presentation, rendered/raw context output, the shared dropdown system, and 80–150% scaling are implemented and verified. Extend it with incremental, contract-following fixes — do not redesign it from scratch. Checkpoint notes live in `docs/development_plan.md` (Interface Workstream Status).
+
 ## Architecture & Ownership
 
 This directory contains the completely redesigned modern GUI for RE:Track.

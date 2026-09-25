@@ -241,6 +241,16 @@ This document tracks the phased development milestones and operational roadmap f
 - [ ] **Phase 10E: Agent Workflow Optimization** (Multi-turn conversational context caching).
 
 
+### Interface Workstream Status
+
+- [x] **GUI baseline (COMPLETED & ACCEPTED — sufficient to proceed)**
+  - Accepted as the working desktop experience: repository management destination, startup hydration of persisted repositories, truthful model/indexing progress, qualitative evidence confidence, rendered/raw context output, shared dropdown system, and viewport-exact 80–150% UI scaling.
+  - Verification evidence: 36 Vitest regression cases, 12 live-backend Playwright specs (`e2e/`), clean `npm run build` and `npm run lint`, plus manual validation against the running Tauri desktop application.
+  - This GUI is the frozen baseline for incremental fixes only — no further redesign; remaining known nits are recorded as future polish, not blockers.
+- [ ] **TUI workstream (NEXT — GUI gate cleared)**
+  - Starting point: `frontend/tui/retrack.mjs` currently emits a single non-TTY snapshot over the shared backend client (`frontend/shared/backend-client.mjs`).
+  - Boundary: interfaces remain presentation adapters; `tui/` never imports React or Tauri and re-implements no retrieval, ranking, or memory logic.
+
 ### Deferred Capabilities (Postponed Until Specific Demand)
 
 - **HTTP / Streamable MCP Transport**: Postponed (local stdio remains the primary standard for Claude and Cursor).
