@@ -267,10 +267,32 @@ class RepositoryUseCases:
                     return {"success": True, "repo_id": repo_id, **active}
 
             status = getattr(repo, "status", "ready")
+            status_str = status.value if hasattr(status, "value") else str(status)
+
+            # Derive a human-readable stage label from status
+            stage_labels = {
+                "indexing": "Indexing repository files...",
+                "indexed": "Indexing Complete",
+                "scanning": "Scanning repository...",
+                "registered": "Registered — not yet indexed",
+                "error": "Indexing Failed",
+            }
+            stage = stage_labels.get(status_str, status_str.capitalize())
+
+            file_count = getattr(repo, "file_count", 0) or 0
+
             return {
                 "success": True,
                 "repo_id": repo_id,
-                "status": status.value if hasattr(status, "value") else status,
+                "status": status_str,
+                "stage": stage,
+                "processed_files": file_count if status_str == "indexed" else 0,
+                "total_files": file_count,
+                "file_count": file_count,
+                "size_bytes": getattr(repo, "size_bytes", 0) or 0,
+                "elapsed_ms": 0,
+                "languages": getattr(repo, "languages", []) or [],
+                "frameworks": getattr(repo, "frameworks", []) or [],
                 "error": getattr(repo, "error_message", None),
             }
         except Exception as e:

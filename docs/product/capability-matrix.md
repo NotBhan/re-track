@@ -37,7 +37,7 @@ RE:Track provides a local-first code intelligence and context synthesis platform
 | **MCP Integration** | Registered Repo List (`list_indexed_repositories`) | **Production** | AI Coding Agents | **Cold/Warm**: < 1ms | None (Local JSON Store) |
 | **Context Synthesis** | Agent Context Synthesis (`get_agent_context`) | **Production** | AI Coding Agents | **Cold**: ~80-150ms<br>**Warm/Hit**: < 2ms | Local LLM for semantic recall; offline fallback enabled |
 | **Context Synthesis** | Interactive Context Studio | **Production** | Human Developers | Real-time UI updates (60fps) | None for AST; LLM for semantic chunks |
-| **Context Synthesis** | Token Budgeting (100–32,000 tokens) | **Production** | Human Developers & Agents | Sub-1ms budget pruning | None |
+| **Context Synthesis** | Token Budgeting (100–32,000 tokens) | **Production** | Human Developers & Agents | Sub-1ms deterministic packing | None (no LLM used to compress) |
 | **Code Intelligence** | Python Native AST Call Graph Extraction | **Production** | Internal Engine | Full-fidelity native AST (`ast` module) | None |
 | **Code Intelligence** | TypeScript / JS / JSX Tree-sitter AST Extraction | **Production** | Internal Engine | Native Tree-sitter CST parsing, module alias & barrel linking | None |
 | **Code Intelligence** | Force-Directed Graph Explorer | **Production** | Human Developers | Smooth 60fps spring-physics layout | None (SVG Canvas) |

@@ -326,9 +326,15 @@ class EvidenceService:
         indexed_files: Sequence[str | Path],
     ) -> str:
         """Strip reasoning tags and validate response format."""
-        # Strip reasoning blocks before storage/presentation
+        # Strip reasoning blocks before storage/presentation. A reasoning model
+        # truncated by its generation cap ends mid-trace with no closing tag, so
+        # an unclosed block is dropped as well instead of being delivered.
         cleaned = re.sub(r"<think>.*?</think>", "", raw_markdown, flags=re.DOTALL).strip()
         cleaned = re.sub(r"\[THINKING\].*?\[/THINKING\]", "", cleaned, flags=re.DOTALL).strip()
+        if "<think>" in cleaned:
+            cleaned = cleaned.split("<think>", 1)[0].strip()
+        if "[THINKING]" in cleaned:
+            cleaned = cleaned.split("[THINKING]", 1)[0].strip()
 
         if not cleaned or len(cleaned.strip()) < 10:
             return raw_markdown

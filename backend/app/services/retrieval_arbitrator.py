@@ -92,6 +92,7 @@ class RetrievalArbitrator:
         cognee_memories: Sequence[Any] = (),
         target_tokens: int = 3000,
         reserve_authoritative_budget: bool = True,
+        collect_all: bool = False,
     ) -> ArbitratedEvidenceResult:
         """Arbitrate multi-modal evidence candidates into a ranked, budgeted result.
 
@@ -103,6 +104,14 @@ class RetrievalArbitrator:
             Authoritative tiers (1 & 2) receive reserved budget allocation.
             Lower tiers (3 & 4) only fill remaining unreserved budget without
             ever displacing higher-tier candidates.
+
+        Args:
+            collect_all: When True every ranked candidate is returned and no
+                candidate is evicted by the token budget. Callers that own their
+                own packing (the context compactor) use this to receive the
+                complete ranked evidence set; budget enforcement then belongs to
+                the packer, which reduces evidence instead of dropping it by
+                position.
         """
         all_candidates: list[ArbitratedCandidate] = []
         stale_rejected_count = 0
@@ -406,7 +415,7 @@ class RetrievalArbitrator:
         # Step 1: Allocate Tier 1 (Source)
         tier_1_cands = [c for c in sorted_candidates if c.tier == AuthorityTier.TIER_1_SOURCE]
         for c in tier_1_cands:
-            if accumulated_tokens + c.token_estimate <= target_tokens or not selected_candidates:
+            if collect_all or accumulated_tokens + c.token_estimate <= target_tokens or not selected_candidates:
                 selected_candidates.append(c)
                 accumulated_tokens += c.token_estimate
                 tier_counts[c.tier.label] += 1
@@ -414,7 +423,7 @@ class RetrievalArbitrator:
         # Step 2: Allocate Tier 2 (AST)
         tier_2_cands = [c for c in sorted_candidates if c.tier == AuthorityTier.TIER_2_MANIFEST_AST]
         for c in tier_2_cands:
-            if accumulated_tokens + c.token_estimate <= target_tokens or not selected_candidates:
+            if collect_all or accumulated_tokens + c.token_estimate <= target_tokens or not selected_candidates:
                 selected_candidates.append(c)
                 accumulated_tokens += c.token_estimate
                 tier_counts[c.tier.label] += 1
@@ -422,7 +431,7 @@ class RetrievalArbitrator:
         # Step 3: Fill remaining space with Tier 3 (LanceDB/Kùzu)
         tier_3_cands = [c for c in sorted_candidates if c.tier == AuthorityTier.TIER_3_LANCEDB_KUZU]
         for c in tier_3_cands:
-            if accumulated_tokens + c.token_estimate <= target_tokens:
+            if collect_all or accumulated_tokens + c.token_estimate <= target_tokens:
                 selected_candidates.append(c)
                 accumulated_tokens += c.token_estimate
                 tier_counts[c.tier.label] += 1
@@ -430,7 +439,7 @@ class RetrievalArbitrator:
         # Step 4: Fill remaining space with Tier 4 (Cognee)
         tier_4_cands = [c for c in sorted_candidates if c.tier == AuthorityTier.TIER_4_COGNEE]
         for c in tier_4_cands:
-            if accumulated_tokens + c.token_estimate <= target_tokens:
+            if collect_all or accumulated_tokens + c.token_estimate <= target_tokens:
                 selected_candidates.append(c)
                 accumulated_tokens += c.token_estimate
                 tier_counts[c.tier.label] += 1

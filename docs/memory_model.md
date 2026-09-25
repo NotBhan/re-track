@@ -103,8 +103,9 @@ A `SemanticMemoryRecord` is evaluated against the active `RepositoryManifest` vi
 ### 3.3 Strict Derived Tier Guarantee
 - Semantic memory records reside strictly in **Authority Tier 4** (`AuthorityTier.TIER_4_COGNEE`).
 - They can never be promoted to Tier 1 (Source Files) or Tier 2 (AST Structure).
-- Under token budget constraints, Tier 4 records are evicted before Tier 1, Tier 2, or Tier 3 evidence.
+- Under token budget constraints, Tier 4 records are reduced and evicted before Tier 1, Tier 2, or Tier 3 evidence (`ContextCompactor`); reduction precedes eviction, so a low-authority record is only dropped once it can no longer be represented at all.
 - The arbitrator rejects invalid or stale records before ranking, ensuring 0 token budget is consumed by unverified memory.
+- The arbitrator can also return the complete ranked candidate set (`collect_all=True`) so the compactor — not a positional budget — decides what the budget buys; reduction and omission are reported per artifact.
 
 ---
 

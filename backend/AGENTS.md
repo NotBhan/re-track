@@ -17,7 +17,9 @@ Owns:
 - CGCService (CodeGraphContext structural graph queries)
 - IntentParserService (task intent & symbol extraction)
 - ContextService & PackageBuilder (dedup → rank → compress → render)
-- BudgetManager (line-boundary token compression and priority enforcement)
+- ContextCompactor (deterministic, evidence-aware context packing; progressive reduction ladder)
+- token_budget (single token-accounting model: budget split + char-4 estimator)
+- BudgetManager (line-boundary token compression and priority enforcement for the deterministic package path)
 - MarkdownRenderer (structured markdown artifact generation)
 - RepositorySummaryGenerator (Depth-2.5 framework grouping + 2-pass AST call graph engine)
 - BenchmarkEngine (`backend/app/api/benchmarks.py` — full source baseline tokenization, discrete latencies, run metadata)
@@ -38,6 +40,7 @@ Production services implemented and verified:
 - IntentParserService (task intent & symbol extraction) ✅
 - ContextService (discrete latency tracking: retrieval, ranking, synthesis) ✅
 - PackageBuilder & BudgetManager (line-boundary token compression) ✅
+- ContextCompactor & token_budget (budget contract + deterministic evidence packing; replaces tail truncation on the agent-context path) ✅
 - RepositorySummaryGenerator (2-pass deterministic Python & TypeScript AST resolver) ✅
 - BenchmarkEngine (authoritative baseline tokenization, compression ratio, token savings %) ✅
 - Hardware Telemetry (detected GPU presence vs active execution device, RAM pressure) ✅
@@ -100,6 +103,25 @@ Production services implemented and verified:
     `cognee.cognify()` / `cognee.remember()` are never invoked from the indexing/cognification
     path. LM Studio maps to litellm's `lm_studio` provider so Cognee uses
     `response_format: json_schema` (LM Studio rejects `json_object` with HTTP 400).
+14. **One token-accounting model**: `app/services/token_budget.py` owns the char-4 estimator
+    (`estimate_tokens`) and the budget split. No second estimator may be introduced; every
+    budget decision, prompt measurement and telemetry value uses this one.
+15. **`max_tokens` is a full input budget, not a repository-only budget**:
+    `task_prompt_tokens + fixed_overhead_tokens + output_reservation_tokens +
+    evidence_budget_tokens` must be accounted for explicitly. The generation cap sent to a
+    provider is the output reservation — never the requested context budget.
+16. **No tail truncation on the agent-context path**: budget pressure is resolved by the
+    `ContextCompactor` reduction ladder (normalize → relevant region → symbol body →
+    signatures/control flow → provenance-preserving reference). Every level keeps file and
+    line-range provenance and marks elided ranges. Evidence is never dropped by position.
+17. **Budget pressure always follows the truth hierarchy**: source truth > deterministic AST >
+    derived retrieval > semantic memory. Lower tiers are reduced and dropped first; mandatory
+    task-linked evidence is never silently dropped, and an unsatisfiable budget is reported as
+    a degraded state instead of being masked.
+18. **Compaction is deterministic and fully reported**: identical inputs produce byte-identical
+    packages regardless of candidate order, and `AgentContextResponse.compaction` reports the
+    budget split, retained/reduced/omitted artifacts with reasons, and whether mandatory
+    evidence fit. No fabricated compression figures.
 
 ---
 
@@ -130,7 +152,7 @@ Run backend server:
 - `app/config/` — Environment loading, provider configuration, Cognee config setup.
 - `app/core/` — Structured logging.
 - `app/models/` — Data models (`CallNode`, `CallEdge`, `RepositorySummary`, `AgentContextResponse`, `HealthResponse`, `MemoryStatsResponse`).
-- `app/services/` — `CogneeService`, `IndexingService`, `ContextService`, `PackageBuilder`, `BudgetManager`, `MarkdownRenderer`, `RepositorySummaryGenerator`.
+- `app/services/` — `CogneeService`, `IndexingService`, `ContextService`, `ContextCompactor`, `PackageBuilder`, `BudgetManager`, `token_budget`, `MarkdownRenderer`, `RepositorySummaryGenerator`.
 - `app/services/pipeline/` — Pipeline stages: Deduplicator, Ranker, Compressor, Categorizer, ReferenceResolver.
 - `app/api/` — API commands, Pydantic schemas, benchmark runner, repo metadata persistence.
 - `app/cli/` — Typer CLI application.

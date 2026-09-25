@@ -13,8 +13,9 @@ from pathlib import Path
 import re
 import threading
 import time
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Optional, Sequence
 
+from app.application.domain.arbitration import ArbitratedCandidate, AuthorityTier
 from app.application.domain.dataset_identity import derive_dataset_name
 from app.application.domain.evidence import EvidenceRecord, EvidenceState
 from app.application.domain.intent import parse_intent_heuristics
@@ -40,13 +41,39 @@ from app.application.ports.summary_generator import SummaryGeneratorPort
 from app.application.ports.workspace_authorization import WorkspaceAuthorizationPort
 from app.core.logging import log_event
 from app.models.errors import CogneeServiceError
+from app.services.context_compactor import ContextCompactor, derive_task_terms
 from app.services.evidence_service import EvidenceService
 from app.services.retrieval_arbitrator import RetrievalArbitrator
+from app.services.token_budget import estimate_tokens, plan_context_budget
 
 logger = logging.getLogger(__name__)
 
 #: Sentinel returned when the client disconnected and work was cancelled.
 _CLIENT_DISCONNECTED = object()
+
+#: Fixed synthesis instructions. These are the model-side half of the context
+#: budget: their token cost is measured (never guessed) and reserved before any
+#: repository evidence is packed, so a budget claim always covers the whole
+#: request rather than just the repository slice.
+_SYNTH_SYSTEM_PROMPT = (
+    "You are an expert repository-intelligence coding assistant. "
+    "Your mission is to synthesize high-precision, task-specific context answering the developer's exact request.\n"
+    "STRICT GROUNDING RULES:\n"
+    "1. Rely ONLY on the authoritative repository evidence, source snippets, and AST symbols provided below.\n"
+    "2. Answer the developer's specific task directly. Do NOT merely summarize the whole repository.\n"
+    "3. Identify the exact files, entry points, and functions/classes that must be inspected or modified.\n"
+    "4. Explain the call flow and interactions between the identified components.\n"
+    "5. If any dependencies or evidence are missing or uncertain, explicitly state what is missing."
+)
+
+_SYNTH_OUTPUT_FORMAT = (
+    "## Required Output Format\n"
+    "Synthesize structured context for this task:\n"
+    "1. **Task Analysis & Entry Points**: Direct answer to the task and where execution begins.\n"
+    "2. **Key Components & Functions**: Relevant symbols, their roles, and callers/callees.\n"
+    "3. **Proposed Action / Modifications**: Specific functions/classes to inspect, modify, or add.\n"
+    "4. **Architectural Constraints & Observations**: Edge cases, missing evidence, or potential pitfalls."
+)
 
 # Repository walking, AST parsing and snippet extraction are synchronous CPU/IO work.
 # They are offloaded so the event loop (and therefore concurrent IPC such as health
@@ -84,6 +111,79 @@ async def run_offloaded(fn: Callable[..., Any], *args: Any, **kwargs: Any) -> An
     """Run synchronous work on the bounded offload pool without blocking the loop."""
     loop = asyncio.get_running_loop()
     return await loop.run_in_executor(get_offload_executor(), functools.partial(fn, *args, **kwargs))
+
+
+def build_synthesis_user_prompt(
+    task_prompt: str,
+    task_summary: str,
+    category: str,
+    target_entities: Sequence[str],
+    symbols: Sequence[str],
+    evidence_text: str,
+    include_task: bool = True,
+) -> str:
+    """Build the synthesis user prompt.
+
+    The same builder produces the prompt sent to the model and the prompt used to
+    measure the fixed prompt overhead, so the budget accounting cannot drift from
+    what is actually requested.
+
+    ``include_task=False`` omits the verbatim developer task. Budget planning uses
+    that form to measure the *fixed* scaffolding, because the task prompt is
+    accounted for separately as ``task_prompt_tokens``. Measuring the scaffold
+    with the task included would count the task twice and silently shrink the
+    repository-evidence allowance by the size of the task prompt.
+    """
+    task_block = f"# Developer Task\n{task_prompt}\n\n" if include_task else ""
+    return (
+        f"{task_block}"
+        f"## Intent Understanding\n"
+        f"- Objective: {task_summary}\n"
+        f"- Category: {category}\n"
+        f"- Target Entities: {', '.join(target_entities) or 'General'}\n"
+        f"- Identified Symbols: {', '.join(symbols) or 'None'}\n\n"
+        f"## Authoritative Repository Evidence\n{evidence_text}\n\n"
+        f"{_SYNTH_OUTPUT_FORMAT}"
+    )
+
+
+#: Renderer separates package parts with this delimiter.
+_PACKAGE_DELIMITER = "\n\n---\n\n"
+_TASK_SECTION_RE = re.compile(r"^#\s+(Task|Objective)\b", re.IGNORECASE)
+
+
+def build_derived_recall_candidate(package: Any) -> list[ArbitratedCandidate]:
+    """Adapt the deterministic recall package into the lowest-authority evidence tier.
+
+    The package's rendered markdown is derived retrieval (Cognee recall → dedup →
+    rank → compress → render), so it belongs below every source, AST and validated
+    memory candidate. Modelling it as a candidate — instead of appending it after
+    the budget — means it is reduced or dropped first when the budget is tight, and
+    the task/objective preamble (already reproduced at the top of the package and
+    in the model prompt) is not duplicated inside the evidence.
+    """
+    markdown = str(getattr(package, "markdown", "") or "").strip()
+    if not markdown:
+        return []
+    blocks = [block.strip() for block in markdown.split(_PACKAGE_DELIMITER)]
+    kept = [block for block in blocks if block and not _TASK_SECTION_RE.match(block)]
+    body = "\n\n".join(kept).strip()
+    if len(body) < 20:
+        return []
+    return [
+        ArbitratedCandidate(
+            id="recall:package",
+            tier=AuthorityTier.TIER_4_COGNEE,
+            content=body,
+            source_file="",
+            relationship_kind="recall_package",
+            relevance=0.3,
+            confidence=0.5,
+            specificity=0.4,
+            is_valid=True,
+            token_estimate=max(1, len(body) // 4),
+        )
+    ]
 
 
 class BoundedConcurrencyGuard:
@@ -161,6 +261,7 @@ class ContextUseCases:
         self._workspace_auth = workspace_auth
         self._semantic_memory_repository = semantic_memory_repository
         self._last_tier3_telemetry: dict[str, Any] = {}
+        self._compactor = ContextCompactor()
         self._guard = concurrency_guard or BoundedConcurrencyGuard(
             max_concurrent=max_concurrent,
             max_queue=max_queue,
@@ -558,6 +659,12 @@ class ContextUseCases:
                         message="Client disconnected; context synthesis was cancelled.",
                     )
                 structural_res, package, semantic_memories, tier3_memories = gathered_retrieval
+                # NOTE: `package` is the deterministic recall package. Its rendered
+                # markdown is no longer concatenated into the agent context (that path
+                # had no budget and dropped the tail of its last section); the
+                # compactor below packs the same retrieval evidence with an explicit
+                # budget. The recall invocation itself is retained unchanged so
+                # retrieval behaviour is untouched by this change.
                 self._last_tier3_telemetry = dict(tier3_telemetry)
                 log_event(
                     logger,
@@ -579,6 +686,7 @@ class ContextUseCases:
                 t_rank_start = time.perf_counter()
                 relevant_snippets = []
                 matched_file_rels = []
+                search_terms: list[str] = []
                 if self._source_search:
                     search_terms = self._source_search.build_search_terms(
                         task_prompt=request.task_prompt,
@@ -766,6 +874,101 @@ class ContextUseCases:
                 )
 
                 t_synth_start = time.perf_counter()
+
+                # ------------------------------------------------------------------
+                # Budget-aware evidence packing.
+                #
+                # This replaces tail truncation. The complete ranked candidate set
+                # is collected (no positional eviction) and the compactor decides
+                # what the requested budget buys: mandatory task-linked evidence is
+                # placed first, oversized artifacts are reduced through an explicit
+                # level ladder that keeps their provenance, and lower-authority
+                # evidence yields first when the budget is tight.
+                # ------------------------------------------------------------------
+                packing_result = RetrievalArbitrator.arbitrate(
+                    task_prompt=request.task_prompt,
+                    intent=intent,
+                    manifest=manifest_obj,
+                    source_snippets=relevant_snippets,
+                    source_matched_files=matched_file_rels,
+                    ast_symbols=symbols_found,
+                    ast_call_edges=call_edges,
+                    lancedb_kuzu_memories=tier3_memories or [],
+                    cognee_memories=semantic_memories or [],
+                    target_tokens=target_tokens,
+                    reserve_authoritative_budget=True,
+                    collect_all=True,
+                )
+
+                all_related = list(dict.fromkeys(
+                    matched_file_rels + (structural_res.related_files if structural_res else [])
+                ))
+
+                # One consistent token-accounting model: the requested budget is
+                # split into task prompt, fixed prompt overhead, generation
+                # reservation and the repository-evidence allowance. The scaffold
+                # is measured WITHOUT the task text because `task_prompt_tokens`
+                # already accounts for it; including it here would double count it
+                # and shrink the evidence allowance below what the budget allows.
+                will_invoke_model = self._llm_provider is not None
+                budget_plan = plan_context_budget(
+                    requested_tokens=target_tokens,
+                    task_prompt=request.task_prompt,
+                    fixed_overhead_text=_SYNTH_SYSTEM_PROMPT + build_synthesis_user_prompt(
+                        task_prompt=request.task_prompt,
+                        task_summary=intent.task_summary,
+                        category=intent.category,
+                        target_entities=getattr(intent, "target_entities", []),
+                        symbols=evidence.evidence_symbols or intent.extracted_symbols,
+                        evidence_text="",
+                        include_task=False,
+                    ),
+                    model_reserved=will_invoke_model,
+                )
+
+                def _pack_evidence(
+                    output_reservation_override: Optional[int] = None,
+                    include_derived_recall: bool = False,
+                ):
+                    """Pack the ranked evidence against the budget (optionally around a known answer)."""
+                    candidates = list(packing_result.candidates)
+                    if include_derived_recall:
+                        candidates += build_derived_recall_candidate(package)
+                    return self._compactor.compact(
+                        candidates=candidates,
+                        plan=budget_plan,
+                        task_prompt=request.task_prompt,
+                        title=intent.task_summary,
+                        task_terms=search_terms or derive_task_terms(
+                            request.task_prompt, list(intent.extracted_symbols)
+                        ),
+                        task_symbols=list(intent.extracted_symbols),
+                        task_files=list(intent.relevant_file_hints) + list(matched_file_rels[:4]),
+                        relevant_files=all_related,
+                        missing_evidence=evidence.missing_evidence,
+                        output_reservation_override=output_reservation_override,
+                    )
+
+                compacted = _pack_evidence()
+
+                log_event(
+                    logger,
+                    logging.INFO,
+                    "context_compaction_completed",
+                    component="context_engine",
+                    operation="get_agent_context",
+                    requested_tokens=compacted.report.requested_tokens,
+                    evidence_budget_tokens=compacted.report.evidence_budget_tokens,
+                    pre_compaction_tokens=compacted.report.pre_compaction_tokens,
+                    evidence_tokens=compacted.report.evidence_tokens,
+                    candidates_before=compacted.report.candidates_before,
+                    candidates_after=compacted.report.candidates_after,
+                    omitted_count=len(compacted.report.omitted),
+                    reduced_count=len(compacted.report.reduced),
+                    mandatory_evidence_fit=compacted.report.mandatory_evidence_fit,
+                    budget_satisfied=compacted.report.budget_satisfied,
+                )
+
                 synth_model_invoked = False
                 synth_model_name = None
                 synth_provider_identity = None
@@ -781,60 +984,28 @@ class ContextUseCases:
                     synth_provider_identity = p_type.value if hasattr(p_type, "value") else str(p_type or "llm_provider")
                     synth_model_name = getattr(self._llm_provider, "default_model", None)
 
-                    synth_system_prompt = (
-                        "You are an expert repository-intelligence coding assistant. "
-                        "Your mission is to synthesize high-precision, task-specific context answering the developer's exact request.\n"
-                        "STRICT GROUNDING RULES:\n"
-                        "1. Rely ONLY on the authoritative repository evidence, source snippets, and AST symbols provided below.\n"
-                        "2. Answer the developer's specific task directly. Do NOT merely summarize the whole repository.\n"
-                        "3. Identify the exact files, entry points, and functions/classes that must be inspected or modified.\n"
-                        "4. Explain the call flow and interactions between the identified components.\n"
-                        "5. If any dependencies or evidence are missing or uncertain, explicitly state what is missing."
-                    )
-
-                    evidence_blocks = []
-                    if relevant_snippets:
-                        evidence_blocks.append("### Grounded Code Snippets\n" + "\n\n".join(relevant_snippets[:6]))
-                    if structural_res and structural_res.symbols_found:
-                        struct_md = structural_res.to_markdown()
-                        if struct_md:
-                            evidence_blocks.append(f"### Verified AST Symbols & Call Graph\n{struct_md}")
-                    if matched_file_rels:
-                        files_formatted = "\n".join(f"- `{f}`" for f in matched_file_rels[:10])
-                        evidence_blocks.append(f"### Relevant Files in Repository\n{files_formatted}")
-                    if tier3_memories:
-                        mem_formatted = "\n".join(
-                            f"- {getattr(m, 'text', str(m))[:160]}" for m in tier3_memories[:4]
-                        )
-                        evidence_blocks.append(f"### Semantic Memory Context\n{mem_formatted}")
-
-                    evidence_text = "\n\n".join(evidence_blocks) if evidence_blocks else "General repository structure and indexed files."
-
-                    synth_user_prompt = (
-                        f"# Developer Task\n{request.task_prompt}\n\n"
-                        f"## Intent Understanding\n"
-                        f"- Objective: {intent.task_summary}\n"
-                        f"- Category: {intent.category}\n"
-                        f"- Target Entities: {', '.join(getattr(intent, 'target_entities', [])) or 'General'}\n"
-                        f"- Identified Symbols: {', '.join(intent.extracted_symbols or evidence.evidence_symbols) or 'None'}\n\n"
-                        f"## Authoritative Repository Evidence\n{evidence_text}\n\n"
-                        "## Required Output Format\n"
-                        "Synthesize structured context for this task:\n"
-                        "1. **Task Analysis & Entry Points**: Direct answer to the task and where execution begins.\n"
-                        "2. **Key Components & Functions**: Relevant symbols, their roles, and callers/callees.\n"
-                        "3. **Proposed Action / Modifications**: Specific functions/classes to inspect, modify, or add.\n"
-                        "4. **Architectural Constraints & Observations**: Edge cases, missing evidence, or potential pitfalls."
+                    evidence_text = compacted.evidence_markdown or "General repository structure and indexed files."
+                    synth_user_prompt = build_synthesis_user_prompt(
+                        task_prompt=request.task_prompt,
+                        task_summary=intent.task_summary,
+                        category=intent.category,
+                        target_entities=getattr(intent, "target_entities", []),
+                        symbols=evidence.evidence_symbols or intent.extracted_symbols,
+                        evidence_text=evidence_text,
                     )
 
                     try:
                         t_model_start = time.perf_counter()
+                        # The generation budget is the budget's explicit output
+                        # reservation — never the input context budget.
+                        generation_budget = budget_plan.output_reservation_tokens or min(target_tokens, 8192)
                         synth_raw = await self._await_or_disconnect(
                             self._llm_provider.generate_completion(
                                 prompt=synth_user_prompt,
-                                system_prompt=synth_system_prompt,
+                                system_prompt=_SYNTH_SYSTEM_PROMPT,
                                 model=synth_model_name,
                                 temperature=0.1,
-                                max_tokens=min(target_tokens, 2048),
+                                max_tokens=generation_budget,
                             ),
                             disconnect_probe,
                         )
@@ -845,9 +1016,16 @@ class ContextUseCases:
                             )
                         synth_inference_time_ms = int((time.perf_counter() - t_model_start) * 1000)
 
-                        # Strip thinking tags
+                        # Strip thinking tags. A reasoning model truncated by the
+                        # generation reservation ends mid-trace with no closing
+                        # tag, so an unclosed block is dropped rather than
+                        # delivered as if it were the answer.
                         synth_clean = re.sub(r"<think>.*?</think>", "", synth_raw, flags=re.DOTALL).strip()
                         synth_clean = re.sub(r"\[THINKING\].*?\[/THINKING\]", "", synth_clean, flags=re.DOTALL).strip()
+                        if "<think>" in synth_clean:
+                            synth_clean = synth_clean.split("<think>", 1)[0].strip()
+                        if "[THINKING]" in synth_clean:
+                            synth_clean = synth_clean.split("[THINKING]", 1)[0].strip()
 
                         if synth_clean and len(synth_clean) > 20:
                             actual_model = getattr(self._llm_provider, "last_invoked_model", None) or synth_model_name
@@ -857,28 +1035,26 @@ class ContextUseCases:
                             synth_fallback_used = False
                             synth_fallback_reason = None
 
-                            # Assemble final markdown: Task-specific synthesis first, followed by grounded evidence
-                            final_markdown = f"# Task Context: {intent.task_summary}\n\n{synth_clean}\n\n"
-                            if relevant_snippets:
-                                final_markdown += "---\n\n# Relevant Code Snippets & Target Implementations\n\n" + "\n\n".join(relevant_snippets) + "\n\n"
-                            if structural_res and structural_res.symbols_found:
-                                struct_md = structural_res.to_markdown()
-                                if struct_md:
-                                    final_markdown += f"---\n\n# Structural Code Relationships\n\n{struct_md}\n\n"
+                            # Re-pack the evidence around the answer the model
+                            # actually produced, so the delivered package fits the
+                            # requested budget. The answer is never truncated to
+                            # make room for evidence — evidence is what yields.
+                            compacted = _pack_evidence(output_reservation_override=estimate_tokens(synth_clean))
+
+                            # Task-specific synthesis leads; the packed evidence set
+                            # that grounded it travels with it.
+                            final_markdown = compacted.compose(synth_clean)
                     except Exception as e:
                         logger.warning("LLM task context synthesis failed, falling back to deterministic assembly: %s", e)
                         synth_fallback_used = True
                         synth_fallback_reason = f"Model synthesis error: {e}"
 
-                # Fallback to deterministic package if model was not invoked
+                # Fallback to the deterministic compacted package if the model was
+                # not invoked. The deterministic recall package contributes as the
+                # lowest-authority tier, so it is reduced or dropped first.
                 if not final_markdown:
-                    final_markdown = package.markdown
-                    if relevant_snippets:
-                        final_markdown += "\n\n---\n\n# Relevant Code Snippets & Target Implementations\n\n" + "\n\n".join(relevant_snippets)
-                    if structural_res and structural_res.symbols_found:
-                        struct_md = structural_res.to_markdown()
-                        if struct_md:
-                            final_markdown += f"\n\n---\n\n# Structural Code Relationships\n\n{struct_md}\n"
+                    compacted = _pack_evidence(output_reservation_override=0, include_derived_recall=True)
+                    final_markdown = compacted.deterministic_markdown
 
                 # Sanitize reasoning tags
                 final_markdown = EvidenceService.sanitize_and_validate_grounded_response(
@@ -887,12 +1063,11 @@ class ContextUseCases:
                     indexed_files=indexed_files,
                 )
 
+                # Measure the delivered document against the requested budget.
+                compaction_report = compacted.observe_final(final_markdown)
+
                 synthesis_time_ms = int((time.perf_counter() - t_synth_start) * 1000)
                 elapsed_ms = int((time.monotonic() - start) * 1000)
-
-                all_related = list(dict.fromkeys(
-                    matched_file_rels + (structural_res.related_files if structural_res else [])
-                ))
 
                 response = AgentContextResponse(
                     success=True,
@@ -904,7 +1079,7 @@ class ContextUseCases:
                     callees=structural_res.callees if structural_res else [],
                     related_files=all_related,
                     quantization_warning=quant_warning,
-                    estimated_tokens=len(final_markdown) // 4,
+                    estimated_tokens=compaction_report.final_tokens,
                     generation_time_ms=elapsed_ms,
                     retrieval_time_ms=retrieval_time_ms,
                     ranking_time_ms=ranking_time_ms,
@@ -928,6 +1103,7 @@ class ContextUseCases:
                     abstained=False,
                     abstention_reason=None,
                     model_claims_allowed=True,
+                    compaction=compaction_report.to_dict(),
                 )
 
                 log_event(
@@ -944,17 +1120,12 @@ class ContextUseCases:
                 )
 
                 # Cache response
-                ref_files = list(files_for_prompt) if "files_for_prompt" in locals() else []
-                ref_symbols = list(intent.extracted_symbols) if "intent" in locals() and intent else []
-                if "ast_context" in locals() and ast_context and hasattr(ast_context, "symbols_found"):
-                    ref_symbols.extend(ast_context.symbols_found)
-
                 self._cache.set(
                     cache_key,
                     response,
                     repo_path=str(repo_path),
-                    referenced_files=ref_files,
-                    referenced_symbols=ref_symbols,
+                    referenced_files=evidence.evidence_files or all_related,
+                    referenced_symbols=list(intent.extracted_symbols),
                 )
                 return response
             finally:

@@ -49,7 +49,10 @@ The following have been verified through end-to-end implementation and automated
 ## Context Package Generation & Budgeting
 - Intent parser and symbol extraction
 - Multi-stage pipeline: Dedup → Rank → Compress → Categorize → References → Render
-- Line-boundary token compression and priority tier budgeting
+- Explicit budget contract: requested budget = task prompt + fixed prompt overhead + output reservation + evidence allowance
+- Deterministic, evidence-aware packing with a progressive reduction ladder (normalize → relevant region → symbol body → control flow → provenance reference)
+- Authority-ordered retention: Tier 1/2 evidence survives budget pressure before Tier 3/4; mandatory task-linked evidence is never silently dropped
+- Measured compaction telemetry (`AgentContextResponse.compaction`): budget split, retained/reduced/omitted artifacts with reasons, budget-satisfied and degraded states
 - Discrete latency decomposition: retrieval, ranking, synthesis, total
 
 ## Reproducible Benchmark Suite & Golden Dataset

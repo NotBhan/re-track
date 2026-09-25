@@ -74,9 +74,9 @@ This document establishes the verified inventory of all features and technical c
 - **User-Facing / Internal**: User-facing
 - **Status**: Production
 - **Implementation**: [`backend/app/mcp/tools.py`](file:///home/chandrabhan/Documents/Personal%20Projects/re-track/backend/app/mcp/tools.py), [`backend/app/application/use_cases/context.py`](file:///home/chandrabhan/Documents/Personal%20Projects/re-track/backend/app/application/use_cases/context.py)
-- **How It Works**: Validates workspace authorization, parses task intent, resolves symbols against the AST call graph, extracts relevant code snippets, integrates semantic memory from Cognee (if available), applies adaptive token budgeting, and returns structured metadata with a Markdown context package.
+- **How It Works**: Validates workspace authorization, parses task intent, resolves symbols against the AST call graph, extracts relevant code snippets, integrates semantic memory from Cognee (if available), arbitrates evidence by authority tier, packs it into the requested budget with deterministic progressive reduction (no tail truncation), and returns structured metadata with a Markdown context package.
 - **Inputs**: `task_prompt` (str), `repository_path` (str), `max_tokens` (int, default: 8000), `dataset_name` (optional str), `include_structural_graph` (bool, default: True).
-- **Outputs**: `AgentContextResponse` JSON object with `context_markdown`, `extracted_symbols`, `callers`, `callees`, `related_files`, `estimated_tokens`, and `total_time_ms`.
+- **Outputs**: `AgentContextResponse` JSON object with `context_markdown`, `extracted_symbols`, `callers`, `callees`, `related_files`, `estimated_tokens`, `compaction` (budget split, retained/reduced/omitted evidence with reasons), and `total_time_ms`.
 - **Dependencies**: `ContextUseCases`, `WorkspaceAuthorizationPort`, `BoundedConcurrencyGuard`, `RepositorySummaryGenerator`, `CogneeService`.
 - **Verification Evidence**: `tests/test_mcp_tools.py`, `tests/test_phase_8e_long_duration_soak.py` (3,000 soak ops).
 - **Known Limitations**: Requires indexed codebase or falls back to local AST summary if Cognee dataset is absent.

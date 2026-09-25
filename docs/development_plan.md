@@ -226,6 +226,15 @@ This document tracks the phased development milestones and operational roadmap f
     - **REM-02 (CLI Async Test Cleanup)**: Eliminated unraisable `RuntimeWarning` coroutine warnings in `tests/test_cli.py` by closing unawaited coroutine objects passed to `_run`; verified with zero warnings under `-W error::RuntimeWarning` (`12 passed in 0.58s`).
     - **REM-03 (Legacy Context Builder Cleanup)**: Pruned dead legacy page `src/pages/ContextBuilder.tsx` and redirected `/context-builder` route to `/studio`; verified clean production build with reduced bundle size (888.13 kB).
     - **REM-04 (Documentation Contract Synchronization)**: Synchronized verification contracts and test counts across root `AGENTS.md` and `docs/development_plan.md` to 866 passing tests.
+- [x] **Phase 10D.7: Budget-Aware Context Compaction (COMPLETED)**
+  - Replaced tail truncation on the agent-context path with an explicit, deterministic, evidence-aware packing pipeline (`ContextCompactor`, `app/services/context_compactor.py`) plus a single token-accounting model (`app/services/token_budget.py`).
+  - **Budget contract**: `max_tokens` is split into `task_prompt_tokens + fixed_overhead_tokens + output_reservation_tokens + evidence_budget_tokens`. The generation cap sent to a provider is the output reservation, never the input context budget; after synthesis the evidence is re-packed around the answer the model actually produced, so the delivered package fits the request without truncating the answer.
+  - **Evidence priority**: reuse of the existing arbitration signals (`(tier, relevance, confidence, specificity, id)`) plus mandatory-evidence rules for task-symbol/file matches and call relationships touching selected symbols; source truth survives budget pressure before AST, derived retrieval and semantic memory.
+  - **Reduction ladder**: normalize → relevant region (grown to the allowance) → symbol body → signatures/control flow → provenance-preserving reference. File and line-range provenance are preserved at every level and elided ranges are marked; no LLM is invoked to compress.
+  - **Coherence**: supporting evidence is attached to the highest-ranked source artifact it explains, so snippet + symbols + call edges travel together.
+  - **No silent loss**: `AgentContextResponse.compaction` reports the budget split, pre/post token counts, retained/reduced/omitted artifacts with reasons, mandatory-evidence fit, and explicit degraded states (`fixed_prompt_overhead_exceeds_budget`, `mandatory_evidence_exceeds_budget`, `final_package_exceeds_requested_budget`).
+  - **Determinism**: identical repository state, task, retrieval result and budget produce byte-identical output independent of candidate order; intent category never gates packing.
+  - Verified live against the local model at 2K/4K/8K (delivered 2037/1965/2671 estimated tokens, all within budget) and by 44 new deterministic tests in `backend/tests/test_context_compaction.py`.
 - [x] **Phase 10G: Repository Management, Startup Hydration & Honest Progress (COMPLETED)**
   - **Repository Management destination**: `/repositories` is a first-class navigation entry with a tracked-repository list, active-repository marker, real-data summary panel (source, branch, commit, file count, size, languages, frameworks, entry points, components, index state, last indexed, call-graph counts), and the primary Open / Re-index / Delete actions plus a labelled **Add Repository** action.
   - **Startup hydration fix**: repository state is hydrated on launch through `bootstrapRepositories()` (retry until the backend answers) and re-synchronized whenever backend health flips to reachable. Previously the initial fetch raced backend readiness, failed silently, and the list only appeared after a mutation. The active repository is persisted in `localStorage` and restored on the next launch.
@@ -239,7 +248,6 @@ This document tracks the phased development milestones and operational roadmap f
   - Verified by 36 Vitest regression tests, 12 live-backend Playwright specs (`e2e/`), and manual validation against the running Tauri desktop application.
 - [ ] **Phase 10D: Adaptive Query-Aware Retrieval** (Task-type-specific token allocation profiles).
 - [ ] **Phase 10E: Agent Workflow Optimization** (Multi-turn conversational context caching).
-
 
 ### Interface Workstream Status
 
@@ -265,7 +273,7 @@ This document tracks the phased development milestones and operational roadmap f
 - **Backend Pytest Suite:** 1002/1003 passing unit/integration/acceptance tests (`backend/tests/`). The remaining case, `test_phase_8e_long_duration_soak.py::test_prolonged_3000_operations_mcp_soak`, fails its P95 latency budget both with and without the current working-tree changes (it measures against the real `~/.retrack` repository store on this machine) and is tracked as a pre-existing environmental failure.
 - **Frontend Vitest Suite:** 36/36 passing behavioral tests across 4 suites (`frontend/gui/src/test/`).
 - **Live-Backend E2E Suite:** 12/12 passing Playwright specs (`e2e/`) against the running FastAPI backend — repository lifecycle (cold start, add, re-index, delete, relaunch), provider failure recovery, UI-scale geometry, and workflow smoke checks.
- 100% passing multi-language AST syntax and symbol resolution tests (`tests/test_ast_integrity.py`).
+- **AST Integrity:** 100% passing multi-language AST syntax and symbol resolution tests (`tests/test_ast_integrity.py`).
 - **Frontend Build & Types:** 100% clean TypeScript compile and Vite production build (`npm run build`).
 - **Design System:** Vercel Geist aesthetic with dark mode canvas (`#000000`), micro-animations (`motion/react`), and high-contrast typography.
 - **Protocol Compliance:** 100% clean JSON-RPC framing on stdio; 0 unhandled exception leaks across MCP tools.

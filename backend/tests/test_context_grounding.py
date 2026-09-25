@@ -8,6 +8,40 @@ from app.application.domain.intent import ParsedIntentRecord
 from app.services.evidence_service import EvidenceService
 
 
+def test_strip_unclosed_think_block():
+    """An unterminated <think> block must be dropped, not delivered.
+
+    A reasoning model that hits its generation reservation ends mid-trace with no
+    closing tag. The complete-block regex cannot match it, so without explicit
+    handling the raw reasoning leaks into the delivered context — which is what
+    happens at a tight context budget with a 25% output reservation.
+    """
+    raw_markdown = (
+        "# Context Package\n\n"
+        "## Target Functions\n"
+        "- `get_user_profile` in `routes/users.py`\n\n"
+        "<think>\n"
+        "Truncated reasoning that never closed because the generation budget ran out"
+    )
+
+    evidence = EvidenceRecord(
+        evidence_state=EvidenceState.SUFFICIENT.value,
+        evidence_score=0.85,
+        model_claims_allowed=True,
+    )
+
+    sanitized = EvidenceService.sanitize_and_validate_grounded_response(
+        raw_markdown=raw_markdown,
+        evidence=evidence,
+        indexed_files=[Path("routes/users.py")],
+    )
+
+    assert "<think>" not in sanitized
+    assert "Truncated reasoning" not in sanitized
+    assert "# Context Package" in sanitized
+    assert "`get_user_profile` in `routes/users.py`" in sanitized
+
+
 def test_strip_think_tags_from_reasoning_models():
     """Reasoning model <think>...</think> tags must be cleanly stripped before presentation."""
     raw_markdown = (

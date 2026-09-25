@@ -60,5 +60,13 @@ class AgentContextResponse(BaseModel):
     abstained: bool = Field(default=False, description="Whether generation abstained")
     abstention_reason: Optional[str] = Field(default=None, description="Abstention reason")
     model_claims_allowed: bool = Field(default=True, description="Whether model claims are allowed")
+    compaction: Optional[dict[str, Any]] = Field(
+        default=None,
+        description=(
+            "Budget accounting and compaction telemetry: requested budget, prompt overhead, "
+            "task tokens, output reservation, evidence allowance, pre/post token counts, "
+            "retained/reduced/omitted evidence with reasons, and whether mandatory evidence fit."
+        ),
+    )
 
 

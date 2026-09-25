@@ -66,7 +66,7 @@ The architecture follows six primary principles:
 3. **Defense-in-Depth Trust Boundary**: External MCP clients are restricted to registered repositories or configured workspace roots (`RETRACK_WORKSPACE_ROOTS`). System files and escaping symlinks are rejected.
 4. **Deterministic Static Certainty**: AST and call graph analysis prioritize static certainty over graph completeness. Ambiguous symbols produce no internal edge.
 5. **Collision-Proof Dataset Identity**: Context memory is partitioned via `{sanitized_name}_{path_sha256_10hex}` to physically prevent cross-repository memory pollution.
-6. **Token Budget Enforcement**: Context Packages enforce hard prompt token limits using line-boundary compression.
+6. **Explicit Context Budgeting**: A requested context budget is split into task prompt, fixed prompt overhead, generation reservation and an evidence allowance, then filled by deterministic, evidence-aware packing that follows the truth hierarchy. Oversized evidence is progressively reduced with its provenance intact — never tail-truncated, and never dropped silently. See `docs/architecture/context-compaction.md`.
 
 ---
 
