@@ -8,6 +8,7 @@
     "build": "tsc && vite build",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:tui": "node --test frontend/tui/tests/",
     "preview": "vite preview",
     "tauri": "node scripts/tauri.mjs",
     "cli": "node frontend/cli/retrack.mjs",

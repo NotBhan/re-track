@@ -17,6 +17,8 @@ export const ENDPOINTS = Object.freeze({
   status: "/status",
   dashboardStats: "/dashboard/stats",
   diagnostics: "/diagnostics",
+  diagnosticsExport: "/diagnostics/export",
+  recentLogs: "/logs/recent",
   repositories: "/repos",
   repositorySummaries: "/repositories",
   contextPackages: "/packages",
@@ -118,10 +120,54 @@ export function createBackendClient(options = {}) {
     status: () => request("GET", ENDPOINTS.status, { timeoutMs: 10_000 }),
     dashboardStats: () => request("GET", ENDPOINTS.dashboardStats, { timeoutMs: 10_000 }),
     diagnostics: () => request("GET", ENDPOINTS.diagnostics, { timeoutMs: 15_000 }),
+    exportDiagnostics: () =>
+      request("POST", ENDPOINTS.diagnosticsExport, { body: {}, timeoutMs: 30_000 }),
+    recentLogs: (limit = 20) =>
+      request("GET", `${ENDPOINTS.recentLogs}?limit=${encodeURIComponent(limit)}`, {
+        timeoutMs: 15_000,
+      }),
 
     listRepositories: () => request("GET", ENDPOINTS.repositories, { timeoutMs: 15_000 }),
+    createRepository: ({ sourceType, sourceUrl, localPath, name }) =>
+      request("POST", ENDPOINTS.repositories, {
+        body: {
+          source_type: sourceType,
+          source_url: sourceUrl,
+          local_path: localPath,
+          name,
+        },
+        timeoutMs: 60_000,
+      }),
+    scanRepository: (repoId) =>
+      request("POST", `${ENDPOINTS.repositories}/${encodeURIComponent(repoId)}/scan`, {
+        body: {},
+        timeoutMs: 60_000,
+      }),
+    repositoryProgress: (repoId) =>
+      request("GET", `${ENDPOINTS.repositories}/${encodeURIComponent(repoId)}/progress`, {
+        timeoutMs: 15_000,
+      }),
+    deleteRepository: (repoId) =>
+      request("DELETE", `${ENDPOINTS.repositories}/${encodeURIComponent(repoId)}`, {
+        timeoutMs: 60_000,
+      }),
+    repositoryPrompts: (repoId) =>
+      request("GET", `${ENDPOINTS.repositories}/${encodeURIComponent(repoId)}/prompts`, {
+        timeoutMs: 30_000,
+      }),
+
     listRepositorySummaries: () => request("GET", ENDPOINTS.repositorySummaries, { timeoutMs: 30_000 }),
     listContextPackages: () => request("GET", ENDPOINTS.contextPackages, { timeoutMs: 15_000 }),
+    getContextPackage: (packageId) =>
+      request("GET", `${ENDPOINTS.contextPackages}/${encodeURIComponent(packageId)}`, {
+        timeoutMs: 15_000,
+      }),
+    saveContextPackage: (payload) =>
+      request("POST", ENDPOINTS.contextPackages, { body: payload, timeoutMs: 15_000 }),
+    deleteContextPackage: (packageId) =>
+      request("DELETE", `${ENDPOINTS.contextPackages}/${encodeURIComponent(packageId)}`, {
+        timeoutMs: 15_000,
+      }),
     listDatasets: () => request("GET", ENDPOINTS.datasets, { timeoutMs: 30_000 }),
     memoryStats: () => request("GET", ENDPOINTS.memoryStats, { timeoutMs: 15_000 }),
     memoryVectors: () => request("GET", ENDPOINTS.memoryVectors, { timeoutMs: 15_000 }),

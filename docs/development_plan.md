@@ -255,9 +255,12 @@ This document tracks the phased development milestones and operational roadmap f
   - Accepted as the working desktop experience: repository management destination, startup hydration of persisted repositories, truthful model/indexing progress, qualitative evidence confidence, rendered/raw context output, shared dropdown system, and viewport-exact 80–150% UI scaling.
   - Verification evidence: 36 Vitest regression cases, 12 live-backend Playwright specs (`e2e/`), clean `npm run build` and `npm run lint`, plus manual validation against the running Tauri desktop application.
   - This GUI is the frozen baseline for incremental fixes only — no further redesign; remaining known nits are recorded as future polish, not blockers.
-- [ ] **TUI workstream (NEXT — GUI gate cleared)**
-  - Starting point: `frontend/tui/retrack.mjs` currently emits a single non-TTY snapshot over the shared backend client (`frontend/shared/backend-client.mjs`).
-  - Boundary: interfaces remain presentation adapters; `tui/` never imports React or Tauri and re-implements no retrieval, ranking, or memory logic.
+- [x] **TUI workstream (COMPLETED)**
+  - `frontend/tui/` is a keyboard-driven terminal application over the shared backend contract (`retrack.mjs` lifecycle, `state.mjs` state/actions/dispatch, `render.mjs` pure frames, `layout.mjs` budgets, `theme.mjs` styling, `keys.mjs` input, `markdown.mjs` output), with zero runtime dependencies.
+  - Views: Repositories (list + real-data inspector, add/scan/index/delete, automatic-updates and cancellation limits stated), Code (call-graph state and AST symbols from `/repos`, no fabricated search), Context (suggested tasks, packages, evidence, rendered/raw output, save/open/delete), System (provider/engine/hardware/memory/storage/diagnostics, GUI-only notes, diagnostics export).
+  - Truthfulness: backend phases for indexing, elapsed time plus `/health` runtime state for synthesis, qualitative confidence tiers instead of percentages, `unavailable`/`none` for missing data, external indexing runs adopted read-only.
+  - Responsive layout classes (`wide ≥110`, `medium`, `compact rows <18`, `tooSmall <48×12`); single-frame repaints coalesced at ~50 ms with a quiet idle cadence; terminal restored on `q`, Ctrl+C, SIGINT/SIGTERM/SIGHUP, EOF and errors; the non-TTY single-line snapshot contract is preserved.
+  - Verified by 84 `node:test` cases (`npm run test:tui`) and a scripted PTY acceptance run against the live backend (43 checks: hydration, switching, filtering, import, scan, index phases, synthesis, evidence, rendered/raw, packages, backend loss/recovery, resizing, exits, no orphan processes).
 
 ### Deferred Capabilities (Postponed Until Specific Demand)
 
