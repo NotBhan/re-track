@@ -226,6 +226,17 @@ This document tracks the phased development milestones and operational roadmap f
     - **REM-02 (CLI Async Test Cleanup)**: Eliminated unraisable `RuntimeWarning` coroutine warnings in `tests/test_cli.py` by closing unawaited coroutine objects passed to `_run`; verified with zero warnings under `-W error::RuntimeWarning` (`12 passed in 0.58s`).
     - **REM-03 (Legacy Context Builder Cleanup)**: Pruned dead legacy page `src/pages/ContextBuilder.tsx` and redirected `/context-builder` route to `/studio`; verified clean production build with reduced bundle size (888.13 kB).
     - **REM-04 (Documentation Contract Synchronization)**: Synchronized verification contracts and test counts across root `AGENTS.md` and `docs/development_plan.md` to 866 passing tests.
+- [x] **Phase 10G: Repository Management, Startup Hydration & Honest Progress (COMPLETED)**
+  - **Repository Management destination**: `/repositories` is a first-class navigation entry with a tracked-repository list, active-repository marker, real-data summary panel (source, branch, commit, file count, size, languages, frameworks, entry points, components, index state, last indexed, call-graph counts), and the primary Open / Re-index / Delete actions plus a labelled **Add Repository** action.
+  - **Startup hydration fix**: repository state is hydrated on launch through `bootstrapRepositories()` (retry until the backend answers) and re-synchronized whenever backend health flips to reachable. Previously the initial fetch raced backend readiness, failed silently, and the list only appeared after a mutation. The active repository is persisted in `localStorage` and restored on the next launch.
+  - **Single import affordance**: the header's icon-only `+` was replaced by a labelled **Add Repository** action; one shared modal instance is driven from `repositoryStore`, removing the duplicate modal that previously existed in two components.
+  - **Real indexing progress**: the existing `IndexingService` phase callback is now published to the existing `/repos/{id}/progress` contract (`stage_index`/`stage_total`), so re-index shows the backend's own phases instead of a fabricated file percentage. Duplicate re-index requests are rejected, and completion/failure persists until dismissed.
+  - **Truthful confidence presentation**: `evidence_confidence` is the engine's evidence-channel agreement (0.0 / 0.5 / 1.0) and is rendered as a qualitative tier (cross-validated / single-channel / not computed) with the engine's weighted `evidence_score` shown separately as evidence strength — never as a bare "50% confidence".
+  - **Truthful model progress**: context synthesis shows a non-numeric processing panel (elapsed time plus the concurrency slot/queue state from `/health`) because the provider contract exposes no token-level progress; measured pipeline phases (retrieval/ranking/synthesis/inference) are shown after completion.
+  - **Markdown display modes**: rendered vs raw markdown is a presentation-only toggle over the same backend string, persisted in `preferencesStore`; switching never regenerates or mutates the package.
+  - **UI scale correctness**: CSS zoom now pins the document root to `viewport / factor`, so the layout stays viewport-exact at 80/90/100/110/125/140/150% instead of clipping above 100%.
+  - **Design-language cleanup**: every custom dropdown uses the shared `Select` listbox (surface hierarchy, hairline border, menu elevation, hover/active/focus states) and decorative accents were collapsed onto the ink/grey ladder with color reserved for semantic use.
+  - Verified by 36 Vitest regression tests, 12 live-backend Playwright specs (`e2e/`), and manual validation against the running Tauri desktop application.
 - [ ] **Phase 10D: Adaptive Query-Aware Retrieval** (Task-type-specific token allocation profiles).
 - [ ] **Phase 10E: Agent Workflow Optimization** (Multi-turn conversational context caching).
 
@@ -241,9 +252,10 @@ This document tracks the phased development milestones and operational roadmap f
 
 ## 2. Quality & Verification Metrics
 
-- **Backend Pytest Suite:** 866/866 passing unit/integration/acceptance tests across backend test suites (`backend/tests/`).
-- **Frontend Vitest Suite:** 56/56 passing behavioral tests across 13 test suites (`src/test/journeys/` and `src/test/navigation.test.tsx`).
-- **AST Integrity:** 100% passing multi-language AST syntax and symbol resolution tests (`tests/test_ast_integrity.py`).
+- **Backend Pytest Suite:** 1002/1003 passing unit/integration/acceptance tests (`backend/tests/`). The remaining case, `test_phase_8e_long_duration_soak.py::test_prolonged_3000_operations_mcp_soak`, fails its P95 latency budget both with and without the current working-tree changes (it measures against the real `~/.retrack` repository store on this machine) and is tracked as a pre-existing environmental failure.
+- **Frontend Vitest Suite:** 36/36 passing behavioral tests across 4 suites (`frontend/gui/src/test/`).
+- **Live-Backend E2E Suite:** 12/12 passing Playwright specs (`e2e/`) against the running FastAPI backend — repository lifecycle (cold start, add, re-index, delete, relaunch), provider failure recovery, UI-scale geometry, and workflow smoke checks.
+ 100% passing multi-language AST syntax and symbol resolution tests (`tests/test_ast_integrity.py`).
 - **Frontend Build & Types:** 100% clean TypeScript compile and Vite production build (`npm run build`).
 - **Design System:** Vercel Geist aesthetic with dark mode canvas (`#000000`), micro-animations (`motion/react`), and high-contrast typography.
 - **Protocol Compliance:** 100% clean JSON-RPC framing on stdio; 0 unhandled exception leaks across MCP tools.

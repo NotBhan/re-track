@@ -584,6 +584,10 @@ class RepositoryManager:
             "size_bytes": repo.size_bytes,
         }
 
+    def clear_indexing_progress(self, repo_id: str) -> None:
+        """Drop the transient progress record once a run reaches a terminal state."""
+        self._active_progress.pop(repo_id, None)
+
     @staticmethod
     def _get_stage_label(status: str) -> str:
         labels = {

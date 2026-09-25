@@ -10,24 +10,28 @@ describe("RE:Track New GUI — Core User Journeys & Specification Verification",
   });
 
   // --- Journey A: First Launch & Repository Management ---
-  it("Journey A: renders application shell, navigates to Code, and opens Add Repository modal", async () => {
+  it("Journey A: lands on Repository Management, renders the shell, and opens the Add Repository modal", async () => {
     render(<App />);
 
     // Brand is visible
     expect(screen.getByText("RE:Track")).toBeInTheDocument();
 
-    // 4 primary navigation items are present
+    // Repository Management is a first-class destination alongside the other primary views
+    expect(screen.getByText("Repositories")).toBeInTheDocument();
     expect(screen.getByText("Code")).toBeInTheDocument();
     expect(screen.getByText("Context")).toBeInTheDocument();
     expect(screen.getByText("Memory")).toBeInTheDocument();
     expect(screen.getByText("System")).toBeInTheDocument();
 
-    // Repository is loaded and displayed in header & catalog
+    // Persisted repository is hydrated on launch and visible without any import step
     await waitFor(() => {
-      expect(screen.getByText("retrack-test-repo")).toBeInTheDocument();
+      expect(screen.getAllByText("retrack-test-repo").length).toBeGreaterThan(1);
     });
+    expect(screen.getByText("Repository Management")).toBeInTheDocument();
+    expect(screen.getByText("Tracked Repositories")).toBeInTheDocument();
 
-    // Click "Add Repository" button (+) in header
+    // The import affordance is a labeled action, not an icon-only button
+    expect(screen.getByTitle("Add or import repository")).toHaveTextContent("Add Repository");
     const addBtn = screen.getByTitle("Add or import repository");
     fireEvent.click(addBtn);
 
@@ -44,7 +48,13 @@ describe("RE:Track New GUI — Core User Journeys & Specification Verification",
     render(<App />);
 
     await waitFor(() => {
-      expect(screen.getByText("retrack-test-repo")).toBeInTheDocument();
+      expect(screen.getAllByText("retrack-test-repo").length).toBeGreaterThan(0);
+    });
+
+    // Open the code explorer for the active repository
+    fireEvent.click(screen.getByText("Code"));
+    await waitFor(() => {
+      expect(screen.getByText("AST Call Graph")).toBeInTheDocument();
     });
 
     // Check call graph nodes
@@ -99,7 +109,10 @@ describe("RE:Track New GUI — Core User Journeys & Specification Verification",
       expect(screen.getByText("Evidence & Grounding")).toBeInTheDocument();
       expect(screen.getByText(/Authentication and Engine Startup/i)).toBeInTheDocument();
       expect(screen.getByText(/Evidence Grounding/i)).toBeInTheDocument();
-      expect(screen.getByText("95% confidence")).toBeInTheDocument();
+      // Confidence is rendered as a qualitative grounding tier, never a bare percentage
+      expect(screen.getByText("Cross-validated")).toBeInTheDocument();
+      expect(screen.getByText("Evidence strength")).toBeInTheDocument();
+      expect(screen.queryByText(/%\s*confidence/i)).not.toBeInTheDocument();
     });
 
     // Verify synthesis markdown output is displayed

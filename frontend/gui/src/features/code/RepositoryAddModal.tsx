@@ -4,7 +4,8 @@ import { Dialog } from "../../components/Dialog";
 import { Button } from "../../components/Button";
 import { Input } from "../../components/Input";
 import { useRepositoryStore } from "../../stores/repositoryStore";
-import { toast } from "../..//app/providers/ToastProvider";
+import { toast } from "../../app/providers/ToastProvider";
+import { cn } from "../../lib/utils";
 
 interface RepositoryAddModalProps {
   open: boolean;
@@ -88,15 +89,16 @@ export const RepositoryAddModal: React.FC<RepositoryAddModalProps> = ({ open, on
     >
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         {/* Source Type Selector */}
-        <div className="flex p-1 bg-white/[0.03] border border-white/[0.06] rounded-lg">
+        <div className="flex p-1 bg-[#121212] border border-[#262626] rounded-sm">
           <button
             type="button"
             onClick={() => setSourceType("local")}
-            className={`flex-1 flex items-center justify-center gap-2 py-1.5 rounded-md text-xs font-medium transition-all ${
+            className={cn(
+              "flex-1 flex items-center justify-center gap-2 py-1.5 rounded-[4px] text-xs font-medium transition-colors",
               sourceType === "local"
-                ? "bg-white/[0.1] text-white shadow-xs"
-                : "text-slate-400 hover:text-slate-200"
-            }`}
+                ? "bg-[#1f1f1f] text-[#ededed] border border-[#333333]"
+                : "text-[#707070] hover:text-[#ededed] border border-transparent"
+            )}
           >
             <Folder className="w-3.5 h-3.5" />
             <span>Local Directory</span>
@@ -104,11 +106,12 @@ export const RepositoryAddModal: React.FC<RepositoryAddModalProps> = ({ open, on
           <button
             type="button"
             onClick={() => setSourceType("github")}
-            className={`flex-1 flex items-center justify-center gap-2 py-1.5 rounded-md text-xs font-medium transition-all ${
+            className={cn(
+              "flex-1 flex items-center justify-center gap-2 py-1.5 rounded-[4px] text-xs font-medium transition-colors",
               sourceType === "github"
-                ? "bg-white/[0.1] text-white shadow-xs"
-                : "text-slate-400 hover:text-slate-200"
-            }`}
+                ? "bg-[#1f1f1f] text-[#ededed] border border-[#333333]"
+                : "text-[#707070] hover:text-[#ededed] border border-transparent"
+            )}
           >
             <GitBranch className="w-3.5 h-3.5" />
             <span>GitHub URL</span>
@@ -118,7 +121,7 @@ export const RepositoryAddModal: React.FC<RepositoryAddModalProps> = ({ open, on
         {/* Path / URL input */}
         {sourceType === "local" ? (
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-slate-300">Directory Path</label>
+            <label className="text-xs font-medium text-[#a1a1a1]">Directory Path</label>
             <div className="flex gap-2">
               <Input
                 placeholder="/path/to/project"
@@ -136,7 +139,7 @@ export const RepositoryAddModal: React.FC<RepositoryAddModalProps> = ({ open, on
           </div>
         ) : (
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-slate-300">GitHub Repository URL</label>
+            <label className="text-xs font-medium text-[#a1a1a1]">GitHub Repository URL</label>
             <Input
               placeholder="https://github.com/owner/repository.git"
               value={githubUrl}
@@ -151,7 +154,7 @@ export const RepositoryAddModal: React.FC<RepositoryAddModalProps> = ({ open, on
 
         {/* Repository Name override */}
         <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-medium text-slate-300">Display Name</label>
+          <label className="text-xs font-medium text-[#a1a1a1]">Display Name</label>
           <Input
             placeholder="e.g. my-project"
             value={repoName}
@@ -160,7 +163,7 @@ export const RepositoryAddModal: React.FC<RepositoryAddModalProps> = ({ open, on
         </div>
 
         {error && (
-          <div className="flex items-center gap-2 p-3 bg-rose-500/10 border border-rose-500/20 text-rose-300 rounded-lg text-xs">
+          <div className="flex items-center gap-2 p-3 bg-[#180808] border border-[#451a1a] text-[#f87171] rounded-sm text-xs">
             <AlertCircle className="w-4 h-4 shrink-0" />
             <span>{error}</span>
           </div>
@@ -171,7 +174,7 @@ export const RepositoryAddModal: React.FC<RepositoryAddModalProps> = ({ open, on
             Cancel
           </Button>
           <Button type="submit" loading={loading}>
-            Add & Scan
+            Add Repository
           </Button>
         </div>
       </form>

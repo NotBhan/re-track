@@ -2,8 +2,10 @@ import React, { useState } from "react";
 import { Copy, Check, BookmarkPlus, Zap, Clock, Cpu } from "lucide-react";
 import type { AgentContextResponse } from "../../types/api";
 import { Button } from "../../components/Button";
+import { Tabs } from "../../components/Tabs";
 import { formatNumber, formatMs } from "../../lib/utils";
 import { toast } from "../../app/providers/ToastProvider";
+import { usePreferencesStore } from "../../stores/preferencesStore";
 import ReactMarkdown from "react-markdown";
 
 interface SynthesisOutputProps {
@@ -13,11 +15,15 @@ interface SynthesisOutputProps {
 
 export const SynthesisOutput: React.FC<SynthesisOutputProps> = ({ result, onSavePackage }) => {
   const [copied, setCopied] = useState(false);
+  const { markdownViewMode, setMarkdownViewMode } = usePreferencesStore();
+
+  // The rendered and raw views always read the same backend string.
+  const markdown = result.context_markdown;
 
   const handleCopy = async () => {
     try {
       if (navigator.clipboard) {
-        await navigator.clipboard.writeText(result.context_markdown);
+        await navigator.clipboard.writeText(markdown);
       }
       setCopied(true);
       toast.success("Context markdown copied to clipboard");
@@ -27,11 +33,18 @@ export const SynthesisOutput: React.FC<SynthesisOutputProps> = ({ result, onSave
     }
   };
 
+  const timings = [
+    { label: "retrieval", value: result.retrieval_time_ms },
+    { label: "ranking", value: result.ranking_time_ms },
+    { label: "synthesis", value: result.synthesis_time_ms },
+    { label: "inference", value: result.inference_time_ms },
+  ].filter((entry) => typeof entry.value === "number" && entry.value > 0);
+
   return (
     <div className="flex-1 flex flex-col h-full bg-[#0a0a0a] border border-[#262626] rounded-lg overflow-hidden">
       {/* Top Meta Bar */}
-      <div className="flex items-center justify-between px-4 py-2.5 border-b border-[#262626] bg-[#000000]">
-        <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 border-b border-[#262626] bg-[#000000]">
+        <div className="flex items-center gap-3 flex-wrap">
           <div className="flex items-center gap-1.5 text-xs font-mono text-[#ededed]">
             <Zap className="w-3.5 h-3.5 text-[#a1a1a1]" />
             <span>{formatNumber(result.estimated_tokens)} tokens</span>
@@ -62,8 +75,18 @@ export const SynthesisOutput: React.FC<SynthesisOutputProps> = ({ result, onSave
           )}
         </div>
 
-        {/* Action Buttons */}
-        <div className="flex items-center gap-2">
+        {/* Presentation + Actions */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <Tabs
+            items={[
+              { id: "rendered", label: "Rendered" },
+              { id: "raw", label: "Raw Markdown" },
+            ]}
+            activeId={markdownViewMode}
+            onChange={(id) => setMarkdownViewMode(id as "rendered" | "raw")}
+            ariaLabel="Context output display mode"
+          />
+
           <Button size="sm" variant="secondary" onClick={handleCopy}>
             {copied ? <Check className="w-3.5 h-3.5 text-[#10b981]" /> : <Copy className="w-3.5 h-3.5" />}
             <span>{copied ? "Copied" : "Copy"}</span>
@@ -76,10 +99,33 @@ export const SynthesisOutput: React.FC<SynthesisOutputProps> = ({ result, onSave
         </div>
       </div>
 
-      {/* Markdown Content Viewer */}
-      <div className="flex-1 overflow-y-auto p-5 text-sm leading-relaxed text-[#ededed] select-text prose prose-invert max-w-none prose-pre:bg-[#000000] prose-pre:border prose-pre:border-[#262626] prose-code:font-mono prose-headings:text-[#ededed] prose-headings:font-semibold">
-        <ReactMarkdown>{result.context_markdown}</ReactMarkdown>
-      </div>
+      {/* Measured pipeline phases for this run (backend-reported) */}
+      {timings.length > 0 && (
+        <div className="flex flex-wrap items-center gap-3 px-4 py-1.5 border-b border-[#1a1a1a] bg-[#0a0a0a] text-[10px] font-mono text-[#707070]">
+          {timings.map((entry) => (
+            <span key={entry.label}>
+              {entry.label} {formatMs(entry.value as number)}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* Markdown Content Viewer — presentation-only switch over the same source string */}
+      {markdownViewMode === "raw" ? (
+        <pre
+          data-testid="context-raw-markdown"
+          className="flex-1 overflow-auto p-5 text-xs leading-relaxed text-[#ededed] font-mono whitespace-pre-wrap select-text"
+        >
+          {markdown}
+        </pre>
+      ) : (
+        <div
+          data-testid="context-rendered-markdown"
+          className="flex-1 overflow-y-auto p-5 text-sm leading-relaxed text-[#ededed] select-text prose prose-invert max-w-none prose-pre:bg-[#000000] prose-pre:border prose-pre:border-[#262626] prose-code:font-mono prose-headings:text-[#ededed] prose-headings:font-semibold"
+        >
+          <ReactMarkdown>{markdown}</ReactMarkdown>
+        </div>
+      )}
     </div>
   );
 };

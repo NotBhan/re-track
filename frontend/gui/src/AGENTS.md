@@ -6,15 +6,16 @@ This directory contains the completely redesigned modern GUI for RE:Track.
 It is organized into clean architectural layers:
 
 - `app/` — Global application shell, navigation header, and notification/toast provider.
-- `components/` — Quiet, atomic design system primitives (`Button`, `Input`, `Badge`, `Dialog`, `Tabs`, `EmptyState`).
+- `components/` — Quiet, atomic design system primitives (`Button`, `Input`, `Select`, `Badge`, `Dialog`, `Tabs`, `EmptyState`). `Select` is the single listbox control for every dropdown in the GUI.
 - `features/` — High-cohesion, domain-focused user journey features:
-  - `features/code/` — Repository Catalog, CallGraphView (5-state integrity), ManifestTable, IndexingProgressView, RepositoryAddModal.
-  - `features/context/` — ContextWorkbench, EvidenceViewer (5-tier evidence breakdown), SynthesisOutput, PackageDrawer.
+  - `features/repositories/` — Repository Management destination: tracked-repository list, active selection, real-data summary panel, re-index/delete actions.
+  - `features/code/` — Repository Catalog (AST explorer), CallGraphView (5-state integrity), ManifestTable, IndexingProgressView, RepositoryAddModal.
+  - `features/context/` — ContextWorkbench, EvidenceViewer, ModelProcessingPanel (non-numeric runtime progress), SynthesisOutput (rendered/raw markdown), PackageDrawer.
   - `features/memory/` — MemoryHub (with explicit Derived Storage notice), IngestedFilesView, VectorSpaceView, KnowledgeGraphView.
   - `features/system/` — SystemHub, TelemetryGauges (truth boundary enforced), ProviderSettings, StorageSettings, DisplaySettings (UI scaling), DiagnosticsViewer, BenchmarkRunner.
-- `stores/` — Lightweight Zustand domain stores (`repositoryStore`, `contextStore`, `memoryStore`, `systemStore`, `uiScaleStore`).
+- `stores/` — Lightweight Zustand domain stores (`repositoryStore`, `contextStore`, `memoryStore`, `systemStore`, `uiScaleStore`, `preferencesStore`).
 - `lib/` — Tauri IPC bridge (`api.ts`), styling utilities (`utils.ts`).
-- `test/` — Full regression test suite verifying core user journeys.
+- `test/` — Vitest regression suites; `e2e/` (repository root) holds live-backend Playwright specs.
 
 ---
 
@@ -37,3 +38,12 @@ It is organized into clean architectural layers:
 
 4. **Presentation Independence**:
    Components only handle presentation and user interactions. No business logic, AST parsing, or graph traversal algorithms reside in the frontend. All data access flows through `src/lib/api.ts` directly to Tauri IPC invoke handlers.
+
+5. **Startup Hydration**:
+   Persisted repositories are hydrated on launch by `repositoryStore.bootstrapRepositories()`, which retries until the backend answers and re-synchronizes whenever the backend becomes reachable. The active repository is persisted in `localStorage` (`retrack:active-repository`) and restored on the next launch. UI surfaces must not present an empty repository state while hydration is still pending.
+
+6. **Honest Progress and Confidence**:
+   The GUI never fabricates percentages. Context synthesis shows elapsed time plus the runtime state reported by `/health` (concurrency slot/queue), because the provider contract exposes no token-level progress. Indexing shows the phase index reported by the backend IndexingService. Evidence confidence is rendered as a qualitative grounding tier (cross-validated / single-channel / not computed) rather than a bare percentage, and evidence strength is shown from the engine's own weighted score.
+
+7. **UI Scale**:
+   `uiScaleStore` applies CSS `zoom` to the document root and pins the root box to `viewport / factor` so the scaled layout stays exactly viewport-sized at 80–150%. Application chrome must size itself with `h-full`/`w-full`/flex percentages instead of `vh`/`vw` units, which do not follow a zoomed root.

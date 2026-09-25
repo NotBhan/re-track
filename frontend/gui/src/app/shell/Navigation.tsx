@@ -1,9 +1,15 @@
 import React from "react";
 import { NavLink } from "react-router-dom";
-import { Code2, Compass, BrainCircuit, Settings2 } from "lucide-react";
+import { FolderGit2, Code2, Compass, BrainCircuit, Settings2 } from "lucide-react";
 import { cn } from "../../lib/utils";
 
 export const NAVIGATION_ITEMS = [
+  {
+    to: "/repositories",
+    label: "Repositories",
+    description: "Managed repositories & indexing",
+    icon: FolderGit2,
+  },
   {
     to: "/code",
     label: "Code",
@@ -35,7 +41,7 @@ export const Navigation: React.FC = () => {
     <aside className="w-56 bg-[#000000] border-r border-[#262626] p-2 flex flex-col justify-between select-none shrink-0">
       <nav className="flex flex-col gap-1">
         <div className="px-3 py-2 text-[10px] font-semibold text-[#707070] tracking-wider uppercase">
-          Intelligence
+          Workspace
         </div>
         {NAVIGATION_ITEMS.map((item) => {
           const Icon = item.icon;
@@ -43,9 +49,10 @@ export const Navigation: React.FC = () => {
             <NavLink
               key={item.to}
               to={item.to}
+              title={item.description}
               className={({ isActive }) =>
                 cn(
-                  "flex items-center gap-2.5 px-3 py-2 rounded-md text-xs font-medium transition-colors group",
+                  "flex items-center gap-2.5 px-3 py-2 rounded-sm text-xs font-medium transition-colors group",
                   isActive
                     ? "bg-[#121212] text-[#ededed] border border-[#262626]"
                     : "text-[#a1a1a1] hover:text-[#ededed] hover:bg-[#0a0a0a]"
@@ -69,9 +76,9 @@ export const Navigation: React.FC = () => {
       </nav>
 
       {/* Footer Info */}
-      <div className="p-3 border-t border-[#262626] flex items-center justify-between text-[11px] text-[#707070] font-mono">
-        <span>RE:Track v0.1.0</span>
-        <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#121212] border border-[#262626] text-[#a1a1a1]">
+      <div className="p-3 border-t border-[#262626] flex items-center justify-between gap-2 text-[11px] text-[#707070] font-mono">
+        <span className="truncate">RE:Track v0.1.0</span>
+        <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#121212] border border-[#262626] text-[#a1a1a1] whitespace-nowrap shrink-0">
           AST Grounded
         </span>
       </div>

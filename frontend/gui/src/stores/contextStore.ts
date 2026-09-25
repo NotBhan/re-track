@@ -40,6 +40,7 @@ interface ContextStore {
   includeStructuralGraph: boolean;
 
   synthesizing: boolean;
+  synthesisStartedAt: number | null;
   error: string | null;
   result: AgentContextResponse | null;
 
@@ -61,6 +62,7 @@ interface ContextStore {
   saveCurrentAsPackage: (name: string, tags?: string[]) => Promise<SavedContextPackage | null>;
   deleteSavedPackage: (packageId: string) => Promise<void>;
   clearResult: () => void;
+  clearError: () => void;
 }
 
 export const useContextMenuStore = create<ContextStore>((set, get) => ({
@@ -70,6 +72,7 @@ export const useContextMenuStore = create<ContextStore>((set, get) => ({
   includeStructuralGraph: true,
 
   synthesizing: false,
+  synthesisStartedAt: null,
   error: null,
   result: null,
 
@@ -99,7 +102,7 @@ export const useContextMenuStore = create<ContextStore>((set, get) => ({
       return;
     }
 
-    set({ synthesizing: true, error: null });
+    set({ synthesizing: true, synthesisStartedAt: Date.now(), error: null });
 
     try {
       const response = await getAgentContext({
@@ -113,12 +116,14 @@ export const useContextMenuStore = create<ContextStore>((set, get) => ({
       set({
         result: response,
         synthesizing: false,
+        synthesisStartedAt: null,
         error: response.success ? null : "Synthesis did not succeed",
       });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       set({
         synthesizing: false,
+        synthesisStartedAt: null,
         error: msg,
       });
     }
@@ -200,4 +205,5 @@ export const useContextMenuStore = create<ContextStore>((set, get) => ({
   },
 
   clearResult: () => set({ result: null, error: null }),
+  clearError: () => set({ error: null }),
 }));

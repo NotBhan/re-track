@@ -352,6 +352,7 @@ class ApplicationContainer:
             metadata_store=self.metadata_store,
             filesystem=self.filesystem,
             workspace_auth=self.workspace_auth,
+            repository_manager=self.repository_manager,
         )
 
     def get_repository_use_cases(self) -> RepositoryUseCases:

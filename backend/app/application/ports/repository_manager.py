@@ -32,6 +32,14 @@ class RepositoryManagerPort(Protocol):
         """Get active indexing or scanning progress for a repository."""
         ...
 
+    def set_indexing_progress(self, repo_id: str, progress: dict[str, Any]) -> None:
+        """Publish live indexing progress for a repository."""
+        ...
+
+    def clear_indexing_progress(self, repo_id: str) -> None:
+        """Drop the transient indexing progress record for a repository."""
+        ...
+
     def get_by_id(self, repo_id: str) -> Optional[Any]:
         """Retrieve repository details by ID."""
         ...

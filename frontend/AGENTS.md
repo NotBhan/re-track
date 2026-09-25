@@ -59,6 +59,7 @@ The TUI and CLI are excluded from the GUI bundle: Vite only bundles what `gui/in
 npm run build                 # GUI typecheck + production build
 npm run test                  # GUI unit/integration suite
 npm run lint                  # oxlint over gui, cli, tui, shared
+npx playwright test           # live-backend E2E (backend must be running on 127.0.0.1:8765)
 node frontend/cli/retrack.mjs help
 node frontend/tui/retrack.mjs # non-TTY invocations emit a single snapshot
 ```

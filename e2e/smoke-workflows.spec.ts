@@ -1,95 +1,124 @@
 import { test, expect } from "@playwright/test";
 import { TAURI_BRIDGE_INIT_SCRIPT } from "./tauri-bridge";
 
+/**
+ * Real browser smoke validation of the high-value workflows against the live
+ * backend on http://127.0.0.1:8765 (see e2e/tauri-bridge.ts).
+ */
+test.describe.configure({ timeout: 240000 });
+
 test.describe("Real Browser Smoke Validation — High-Value Workflows", () => {
   test.beforeEach(async ({ page }) => {
-    // Inject real Tauri IPC bridge routing commands to FastAPI at http://127.0.0.1:8765
     await page.addInitScript(TAURI_BRIDGE_INIT_SCRIPT);
   });
 
-  test("1. Application Launch — renders shell with real backend telemetry", async ({ page }) => {
+  test("1. Application launch renders the shell and hydrates repositories", async ({ page }) => {
     await page.goto("/");
-    // Verify application header and branding
     await expect(page.getByText("RE:Track").first()).toBeVisible();
-
-    // Verify top bar hardware telemetry arrives from real backend
     await expect(page.locator("header")).toBeVisible();
-    const headerText = await page.locator("header").textContent();
-    expect(headerText).toBeDefined();
+    await expect(page.getByText("Repository Management")).toBeVisible();
+    await expect(page.getByTestId("repository-row").first()).toBeVisible({ timeout: 15000 });
   });
 
-  test("2. Repository Page & Catalog — displays repositories from real backend", async ({ page }) => {
-    await page.goto("/");
-    await expect(page.getByText("Workspaces & Repositories").first()).toBeVisible();
+  test("2. Repository Management lists tracked repositories with a real summary", async ({
+    page,
+  }) => {
+    await page.goto("/repositories");
+    await expect(page.getByTestId("repository-list")).toBeVisible();
+    expect(await page.getByTestId("repository-row").count()).toBeGreaterThan(0);
 
-    // Verify filter input is present and interactive
-    const filterInput = page.getByPlaceholder("Filter workspaces...").first();
-    await expect(filterInput).toBeVisible();
-    await filterInput.fill("retrack");
-    await expect(filterInput).toHaveValue("retrack");
+    await page.getByTestId("repository-row").first().click();
+    await expect(page.getByText("Source files")).toBeVisible();
+    await expect(page.getByText("Index state")).toBeVisible();
+    await expect(page.getByRole("button", { name: /^Open$/ })).toBeVisible();
+    await expect(page.getByRole("button", { name: /^(Re-index|Index)$/ })).toBeVisible();
+    await expect(page.getByRole("button", { name: /^Delete$/ })).toBeVisible();
   });
 
-  test("3. Repository Registration & Scan — modal interaction", async ({ page }) => {
-    await page.goto("/");
+  test("3. Repository switching from the header dropdown", async ({ page }) => {
+    await page.goto("/repositories");
+    const rows = page.getByTestId("repository-row");
+    await expect(rows.first()).toBeVisible({ timeout: 15000 });
+    const total = await rows.count();
 
-    // Click "Register Workspace" or "Add Repository"
-    const addBtn = page.getByRole("button", { name: /Register Workspace|Add Repository|Register/i }).first();
-    if (await addBtn.isVisible()) {
-      await addBtn.click();
-      await expect(page.getByText(/Register|Import/i).first()).toBeVisible();
-      // Close modal if Cancel button is present
-      const cancelBtn = page.getByRole("button", { name: /Cancel|Close/i }).first();
-      if (await cancelBtn.isVisible()) {
-        await cancelBtn.click();
-      }
+    if (total > 1) {
+      const secondName = await rows.nth(1).locator("span").first().textContent();
+      const switcher = page.getByRole("combobox", { name: "Active repository" });
+      await switcher.click();
+      await page.getByRole("option").nth(1).click();
+      await expect(switcher).toContainText((secondName || "").trim());
     }
   });
 
-  test("4. Quick Context Synthesis — generates real context package", async ({ page }) => {
-    await page.goto("/studio");
-    await expect(page.getByText("Context Studio").first()).toBeVisible();
+  test("4. Add Repository modal opens from the labelled action", async ({ page }) => {
+    await page.goto("/repositories");
+    await page.getByRole("button", { name: /^Add Repository$/ }).first().click();
 
-    const promptInput = page.getByPlaceholder("Type the feature, refactoring, or question for your local memory...");
-    await expect(promptInput).toBeVisible();
-    await promptInput.fill("Explain server initialization in backend/app/server.py");
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByText("Local Directory")).toBeVisible();
+    await expect(dialog.getByText("GitHub URL")).toBeVisible();
 
-    const synthesizeBtn = page.getByRole("button", { name: /Synthesize Context/i });
-    await expect(synthesizeBtn).toBeVisible();
-    await synthesizeBtn.click();
-
-    // Wait for real backend synthesis response
-    await expect(
-      page.getByText(/Tokens|Evidence Provenance|Repository Map|Summary/i).first()
-    ).toBeVisible({ timeout: 20000 });
+    await dialog.getByRole("button", { name: /Cancel/ }).click();
+    await expect(dialog).toBeHidden();
   });
 
-  test("5. Context Studio — workbench controls and token parameters", async ({ page }) => {
-    await page.goto("/studio");
-    await expect(page.getByText("Context Studio").first()).toBeVisible();
+  test("5. Context Studio synthesizes against the live backend", async ({ page }) => {
+    await page.goto("/context");
+    await expect(page.getByText("Context Studio")).toBeVisible();
 
-    // Verify token constraint slider exists
-    await expect(page.getByText(/Token Budget Constraint|max tokens/i).first()).toBeVisible();
+    // Wait until repository hydration completes before generating context.
+    await expect(page.getByText(/No repository is active yet/)).toHaveCount(0, { timeout: 20000 });
+
+    await page.getByPlaceholder(/Describe your coding task/i).fill(
+      "Explain the context engine entry points"
+    );
+    await page.getByRole("button", { name: /Synthesize/ }).click();
+
+    // If the processing panel is still on screen it must contain no invented percentage.
+    const panel = page.getByTestId("model-processing-panel");
+    if (await panel.isVisible().catch(() => false)) {
+      expect(await panel.textContent()).not.toMatch(/%/);
+    }
+    await expect(page.getByTestId("context-rendered-markdown")).toBeVisible({ timeout: 120000 });
+    await expect(page.getByText("Evidence & Grounding")).toBeVisible();
+    await expect(page.getByText("Evidence strength")).toBeVisible();
   });
 
-  test("6. Knowledge Explorer — AST topology and structural components", async ({ page }) => {
-    await page.goto("/knowledge/235a60e7acc6");
-    await expect(page.getByText(/Knowledge Explorer|Topological Call Graph/i).first()).toBeVisible();
+  test("6. Context output switches between rendered and raw markdown", async ({ page }) => {
+    await page.goto("/context");
+    // Wait until repository hydration completes before generating context.
+    await expect(page.getByText(/No repository is active yet/)).toHaveCount(0, { timeout: 20000 });
+
+    await page.getByPlaceholder(/Describe your coding task/i).fill("Summarize the repository layout");
+    await page.getByRole("button", { name: /Synthesize/ }).click();
+
+    await expect(page.getByTestId("context-rendered-markdown")).toBeVisible({ timeout: 120000 });
+    const renderedHeadings = await page
+      .getByTestId("context-rendered-markdown")
+      .locator("h1, h2")
+      .count();
+    expect(renderedHeadings).toBeGreaterThan(0);
+
+    await page.getByRole("tab", { name: /Raw Markdown/ }).click();
+    const raw = page.getByTestId("context-raw-markdown");
+    await expect(raw).toBeVisible();
+    expect(await raw.textContent()).toContain("#");
   });
 
-  test("7. Settings & Provider Management — shows configuration controls", async ({ page }) => {
-    await page.goto("/settings");
-    await expect(page.getByText(/Settings|Backend Connection|Inference/i).first()).toBeVisible();
+  test("7. Memory hub renders the derived-storage notice", async ({ page }) => {
+    await page.goto("/memory");
+    await expect(page.getByText("Memory Engine").first()).toBeVisible();
+    await expect(page.getByText(/Derived Storage Notice/)).toBeVisible();
   });
 
-  test("8. Diagnostics — health telemetry and structured logs", async ({ page }) => {
-    await page.goto("/settings");
-    // Switch to Diagnostics tab in SettingsNav
-    const diagTab = page.getByRole("button", { name: "Diagnostics" }).first();
-    await expect(diagTab).toBeVisible();
-    await diagTab.click();
+  test("8. System settings render provider identity and telemetry", async ({ page }) => {
+    await page.goto("/system");
+    await expect(page.getByText("System & Settings")).toBeVisible();
+    await expect(page.getByText("Runtime Model Identity")).toBeVisible();
 
-    // Verify Diagnostics Settings renders with real backend metrics
-    await expect(page.getByText("Operational Diagnostics & Health")).toBeVisible();
-    await expect(page.getByRole("button", { name: /Export Bundle/i })).toBeVisible();
+    await page.getByRole("tab", { name: /Hardware Telemetry/ }).click();
+    await expect(page.getByText("Runtime Health")).toBeVisible();
+    await expect(page.getByText("Hardware & Resource Telemetry")).toBeVisible();
   });
 });

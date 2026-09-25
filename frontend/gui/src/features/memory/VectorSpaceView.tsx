@@ -12,7 +12,7 @@ interface VectorSpaceViewProps {
 export const VectorSpaceView: React.FC<VectorSpaceViewProps> = ({ vectors, loading }) => {
   if (loading) {
     return (
-      <div className="flex items-center justify-center p-12 text-xs text-slate-400">
+      <div className="flex items-center justify-center p-12 text-xs text-[#a1a1a1]">
         Inspecting vector index...
       </div>
     );
@@ -20,7 +20,7 @@ export const VectorSpaceView: React.FC<VectorSpaceViewProps> = ({ vectors, loadi
 
   if (!vectors) {
     return (
-      <div className="p-8 text-center border border-white/[0.04] rounded-xl text-slate-400 text-xs">
+      <div className="p-8 text-center border border-[#262626] rounded-lg text-[#a1a1a1] text-xs">
         No vector index metadata available.
       </div>
     );
@@ -30,37 +30,37 @@ export const VectorSpaceView: React.FC<VectorSpaceViewProps> = ({ vectors, loadi
     <div className="flex flex-col gap-4">
       {/* Top summary cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <div className="p-3.5 rounded-xl bg-white/[0.02] border border-white/[0.06] flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-sky-500/10 text-sky-400">
+        <div className="p-3.5 rounded-lg bg-[#0a0a0a] border border-[#262626] flex items-center gap-3">
+          <div className="p-2 rounded-lg bg-[#121212] text-[#a1a1a1]">
             <Database className="w-4 h-4" />
           </div>
           <div>
-            <div className="text-[11px] text-slate-400 font-medium">Provider</div>
-            <div className="text-sm font-semibold text-slate-100 uppercase tracking-wide">
+            <div className="text-[11px] text-[#a1a1a1] font-medium">Provider</div>
+            <div className="text-sm font-semibold text-[#ededed] uppercase tracking-wide">
               {vectors.vector_db_provider || "LanceDB"}
             </div>
           </div>
         </div>
 
-        <div className="p-3.5 rounded-xl bg-white/[0.02] border border-white/[0.06] flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-indigo-500/10 text-indigo-400">
+        <div className="p-3.5 rounded-lg bg-[#0a0a0a] border border-[#262626] flex items-center gap-3">
+          <div className="p-2 rounded-lg bg-[#121212] text-[#a1a1a1]">
             <Binary className="w-4 h-4" />
           </div>
           <div>
-            <div className="text-[11px] text-slate-400 font-medium">Embedding Model</div>
-            <div className="text-xs font-semibold text-slate-100 font-mono truncate max-w-[160px]">
+            <div className="text-[11px] text-[#a1a1a1] font-medium">Embedding Model</div>
+            <div className="text-xs font-semibold text-[#ededed] font-mono truncate max-w-[160px]">
               {vectors.embedding_model || "nomic-embed-text"}
             </div>
           </div>
         </div>
 
-        <div className="p-3.5 rounded-xl bg-white/[0.02] border border-white/[0.06] flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-400">
+        <div className="p-3.5 rounded-lg bg-[#0a0a0a] border border-[#262626] flex items-center gap-3">
+          <div className="p-2 rounded-lg bg-[#121212] text-[#a1a1a1]">
             <Layers className="w-4 h-4" />
           </div>
           <div>
-            <div className="text-[11px] text-slate-400 font-medium">Dimensions</div>
-            <div className="text-sm font-semibold text-slate-100 font-mono">
+            <div className="text-[11px] text-[#a1a1a1] font-medium">Dimensions</div>
+            <div className="text-sm font-semibold text-[#ededed] font-mono">
               {vectors.embedding_dimensions || 768} dims
             </div>
           </div>
@@ -68,20 +68,20 @@ export const VectorSpaceView: React.FC<VectorSpaceViewProps> = ({ vectors, loadi
       </div>
 
       {/* Datasets & Tables table */}
-      <div className="p-4 rounded-xl bg-white/[0.02] border border-white/[0.06]">
-        <h4 className="text-xs font-semibold text-slate-200 mb-3">Indexed Vector Partitions</h4>
+      <div className="p-4 rounded-lg bg-[#0a0a0a] border border-[#262626]">
+        <h4 className="text-xs font-semibold text-[#ededed] mb-3">Indexed Vector Partitions</h4>
         {vectors.datasets && vectors.datasets.length > 0 ? (
           <div className="flex flex-col gap-2">
             {vectors.datasets.map((ds) => (
               <div
                 key={ds.id}
-                className="flex items-center justify-between p-3 rounded-lg bg-white/[0.02] border border-white/[0.04] text-xs"
+                className="flex items-center justify-between p-3 rounded-lg bg-[#0a0a0a] border border-[#262626] text-xs"
               >
                 <div className="flex items-center gap-2.5">
-                  <Database className="w-3.5 h-3.5 text-slate-400" />
-                  <span className="font-semibold text-slate-200">{ds.name}</span>
+                  <Database className="w-3.5 h-3.5 text-[#a1a1a1]" />
+                  <span className="font-semibold text-[#ededed]">{ds.name}</span>
                 </div>
-                <div className="flex items-center gap-4 text-slate-400 font-mono text-[11px]">
+                <div className="flex items-center gap-4 text-[#a1a1a1] font-mono text-[11px]">
                   <span>{formatNumber(ds.chunk_count || 0)} chunks</span>
                   <Badge variant="accent" size="sm">
                     {ds.vector_status || "ready"}
@@ -91,7 +91,7 @@ export const VectorSpaceView: React.FC<VectorSpaceViewProps> = ({ vectors, loadi
             ))}
           </div>
         ) : (
-          <div className="text-xs text-slate-500 italic">No vector partitions generated yet.</div>
+          <div className="text-xs text-[#707070] italic">No vector partitions generated yet.</div>
         )}
       </div>
     </div>

@@ -15,6 +15,7 @@ import { VectorSpaceView } from "./VectorSpaceView";
 import { KnowledgeGraphView } from "./KnowledgeGraphView";
 import { Button } from "../../components/Button";
 import { Tabs } from "../../components/Tabs";
+import { Select } from "../../components/Select";
 import { toast } from "../../app/providers/ToastProvider";
 
 export const MemoryHub: React.FC = () => {
@@ -55,13 +56,13 @@ export const MemoryHub: React.FC = () => {
   return (
     <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-6">
       {/* Top Header & Cognify Action */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-5 border-b border-white/[0.06]">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-5 border-b border-[#262626]">
         <div>
-          <h2 className="text-xl font-bold tracking-tight text-slate-100 flex items-center gap-2">
-            <BrainCircuit className="w-5 h-5 text-indigo-400" />
+          <h2 className="text-xl font-bold tracking-tight text-[#ededed] flex items-center gap-2">
+            <BrainCircuit className="w-5 h-5 text-[#a1a1a1]" />
             <span>Memory Engine</span>
           </h2>
-          <p className="text-xs text-slate-400 mt-0.5">
+          <p className="text-xs text-[#a1a1a1] mt-0.5">
             Derived semantic memory, vector indexes, and entity knowledge graphs.
           </p>
         </div>
@@ -77,43 +78,44 @@ export const MemoryHub: React.FC = () => {
           </Button>
 
           <Button size="sm" loading={cognifying} onClick={handleCognify}>
-            <Sparkles className="w-3.5 h-3.5 mr-1 text-sky-300" />
+            <Sparkles className="w-3.5 h-3.5 mr-1 text-[#a1a1a1]" />
             <span>Cognify Dataset</span>
           </Button>
         </div>
       </div>
 
       {/* Prominent Epistemic Notice */}
-      <div className="p-3.5 rounded-xl bg-sky-950/20 border border-sky-500/20 text-sky-200 flex items-start gap-3">
-        <Info className="w-4 h-4 text-sky-400 shrink-0 mt-0.5" />
+      <div className="p-3.5 rounded-lg bg-[#0a0a0a] border border-[#262626] text-[#a1a1a1] flex items-start gap-3">
+        <Info className="w-4 h-4 text-[#707070] shrink-0 mt-0.5" />
         <div className="text-xs leading-relaxed">
-          <strong className="font-semibold text-sky-100">Derived Storage Notice:</strong> This memory engine
+          <strong className="font-semibold text-[#ededed]">Derived Storage Notice:</strong> This memory engine
           contains synthesized vector chunks (LanceDB) and entity relationship graphs (Kùzu). All records here
           represent derived knowledge extracted from the repository, not raw ground-truth source files.
         </div>
       </div>
 
       {/* Dataset Scope Selector */}
-      <div className="flex items-center justify-between gap-4 p-3 rounded-xl bg-white/[0.02] border border-white/[0.06]">
-        <div className="flex items-center gap-2">
-          <Database className="w-4 h-4 text-slate-400" />
-          <span className="text-xs font-semibold text-slate-300">Dataset Scope:</span>
-          <select
+      <div className="flex flex-wrap items-center justify-between gap-4 p-3 rounded-lg bg-[#0a0a0a] border border-[#262626]">
+        <div className="flex items-center gap-2 min-w-0">
+          <Database className="w-4 h-4 text-[#707070] shrink-0" />
+          <span className="text-xs font-semibold text-[#a1a1a1] shrink-0">Dataset scope:</span>
+          <Select
             value={selectedDatasetId || ""}
-            onChange={(e) => selectDataset(e.target.value || null)}
-            className="bg-[#11141a] text-xs font-medium text-slate-200 border border-white/[0.08] rounded-md px-2.5 py-1 outline-none cursor-pointer"
-          >
-            {datasets.map((d) => (
-              <option key={d.id} value={d.id}>
-                {d.name} ({d.file_count || 0} files)
-              </option>
-            ))}
-          </select>
+            onChange={(value) => selectDataset(value || null)}
+            options={datasets.map((d) => ({
+              value: d.id,
+              label: d.name,
+              hint: `${d.file_count || 0} files`,
+            }))}
+            placeholder="No datasets"
+            ariaLabel="Dataset scope"
+            className="w-[240px] max-w-[50vw]"
+          />
         </div>
 
         {stats && (
-          <div className="text-xs font-mono text-slate-400">
-            Total derived memory: <strong className="text-slate-200">{stats.total_size_display}</strong>
+          <div className="text-xs font-mono text-[#707070]">
+            Total derived memory: <strong className="text-[#ededed]">{stats.total_size_display}</strong>
           </div>
         )}
       </div>

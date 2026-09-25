@@ -3,7 +3,15 @@ import { RefreshCw, AlertCircle, ShieldAlert } from "lucide-react";
 import { useSystemStore } from "../../stores/systemStore";
 import { Button } from "../../components/Button";
 import { Input } from "../../components/Input";
+import { Select } from "../../components/Select";
 import { toast } from "../../app/providers/ToastProvider";
+import { cn } from "../../lib/utils";
+
+const PROVIDER_OPTIONS = [
+  { id: "lmstudio", label: "LM Studio" },
+  { id: "ollama", label: "Ollama" },
+  { id: "openai_compatible", label: "OpenAI Compatible" },
+];
 
 export const ProviderSettings: React.FC = () => {
   const {
@@ -72,37 +80,42 @@ export const ProviderSettings: React.FC = () => {
   return (
     <div className="flex flex-col gap-6 max-w-2xl">
       {/* Identity State Summary */}
-      <div className="p-4 rounded-xl bg-white/[0.02] border border-white/[0.06] flex flex-col gap-3">
-        <h4 className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
+      <div className="p-4 rounded-lg bg-[#0a0a0a] border border-[#262626] flex flex-col gap-3">
+        <h4 className="text-[10px] font-semibold text-[#707070] uppercase tracking-wider font-mono">
           Runtime Model Identity
         </h4>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <div className="p-3 rounded-lg bg-white/[0.02] border border-white/[0.04]">
-            <span className="text-[11px] text-slate-400 block mb-0.5">Configured Model</span>
-            <span className="text-xs font-semibold text-slate-200 font-mono">
-              {configuredModel || "phi4-mini"}
-            </span>
+        <dl className="grid grid-cols-1 sm:grid-cols-3 gap-x-4 gap-y-3">
+          <div className="flex flex-col gap-0.5">
+            <dt className="text-[11px] text-[#707070]">Configured model</dt>
+            <dd className="text-xs font-mono text-[#ededed] truncate">
+              {configuredModel || "not configured"}
+            </dd>
           </div>
 
-          <div className="p-3 rounded-lg bg-white/[0.02] border border-white/[0.04]">
-            <span className="text-[11px] text-slate-400 block mb-0.5">Active/Verified Model</span>
-            <span className="text-xs font-semibold text-emerald-400 font-mono">
+          <div className="flex flex-col gap-0.5">
+            <dt className="text-[11px] text-[#707070]">Active / verified model</dt>
+            <dd
+              className={cn(
+                "text-xs font-mono truncate",
+                providerReachable ? "text-[#10b981]" : "text-[#707070]"
+              )}
+            >
               {activeModel || (providerReachable ? "active" : "unverified")}
-            </span>
+            </dd>
           </div>
 
-          <div className="p-3 rounded-lg bg-white/[0.02] border border-white/[0.04]">
-            <span className="text-[11px] text-slate-400 block mb-0.5">Embedding Model</span>
-            <span className="text-xs font-semibold text-slate-200 font-mono">
-              {appSettings?.embedding_model || "nomic-embed-text"}
-            </span>
+          <div className="flex flex-col gap-0.5">
+            <dt className="text-[11px] text-[#707070]">Embedding model</dt>
+            <dd className="text-xs font-mono text-[#ededed] truncate">
+              {appSettings?.embedding_model || "not configured"}
+            </dd>
           </div>
-        </div>
+        </dl>
 
         {quantizationWarning && (
-          <div className="flex items-center gap-2 p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs">
-            <ShieldAlert className="w-4 h-4 shrink-0 text-amber-400" />
+          <div className="flex items-center gap-2 p-2.5 rounded-sm bg-[#1c1304] border border-[#f59e0b]/25 text-[#f59e0b] text-xs">
+            <ShieldAlert className="w-4 h-4 shrink-0" />
             <span>{quantizationWarning}</span>
           </div>
         )}
@@ -110,24 +123,21 @@ export const ProviderSettings: React.FC = () => {
 
       {/* Provider & Model Form */}
       <form onSubmit={handleSave} className="flex flex-col gap-4">
-        {/* Provider Radio Pills */}
+        {/* Provider Selector */}
         <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-medium text-slate-300">Inference Provider</label>
-          <div className="flex p-1 bg-white/[0.03] border border-white/[0.06] rounded-lg max-w-md">
-            {[
-              { id: "lmstudio", label: "LM Studio" },
-              { id: "ollama", label: "Ollama" },
-              { id: "openai_compatible", label: "OpenAI Compatible" },
-            ].map((item) => (
+          <label className="text-xs font-medium text-[#a1a1a1]">Inference provider</label>
+          <div className="flex p-1 bg-[#121212] border border-[#262626] rounded-sm max-w-md">
+            {PROVIDER_OPTIONS.map((item) => (
               <button
                 key={item.id}
                 type="button"
                 onClick={() => handleProviderChange(item.id)}
-                className={`flex-1 py-1.5 rounded-md text-xs font-medium transition-all ${
+                className={cn(
+                  "flex-1 py-1.5 rounded-[4px] text-xs font-medium transition-colors border",
                   provider === item.id
-                    ? "bg-white/[0.1] text-white shadow-xs"
-                    : "text-slate-400 hover:text-slate-200"
-                }`}
+                    ? "bg-[#1f1f1f] text-[#ededed] border-[#333333]"
+                    : "text-[#707070] hover:text-[#ededed] border-transparent"
+                )}
               >
                 {item.label}
               </button>
@@ -137,7 +147,7 @@ export const ProviderSettings: React.FC = () => {
 
         {/* Base URL & Probe button */}
         <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-medium text-slate-300">Endpoint Base URL</label>
+          <label className="text-xs font-medium text-[#a1a1a1]">Endpoint base URL</label>
           <div className="flex gap-2">
             <Input
               value={endpoint}
@@ -160,7 +170,7 @@ export const ProviderSettings: React.FC = () => {
         {/* API Key if OpenAI compatible */}
         {provider === "openai_compatible" && (
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-slate-300">API Key</label>
+            <label className="text-xs font-medium text-[#a1a1a1]">API key</label>
             <Input
               type="password"
               value={apiKey}
@@ -173,26 +183,27 @@ export const ProviderSettings: React.FC = () => {
         {/* Model Selection */}
         <div className="flex flex-col gap-1.5">
           <div className="flex items-center justify-between">
-            <label className="text-xs font-medium text-slate-300">Target Model</label>
+            <label className="text-xs font-medium text-[#a1a1a1]">Target model</label>
             {discoveredModels.length > 0 && (
-              <span className="text-[11px] text-slate-400 font-mono">
+              <span className="text-[11px] text-[#707070] font-mono">
                 {discoveredModels.length} models discovered
               </span>
             )}
           </div>
 
           {discoveredModels.length > 0 ? (
-            <select
+            <Select
               value={selectedModel}
-              onChange={(e) => setSelectedModel(e.target.value)}
-              className="bg-[#11141a] text-xs font-mono text-slate-200 border border-white/[0.08] rounded-lg px-3.5 py-2.5 outline-none cursor-pointer focus:border-sky-500/50"
-            >
-              {discoveredModels.map((m) => (
-                <option key={m.model_id} value={m.name || m.model_id}>
-                  {m.name || m.model_id} {m.quantization ? `(${m.quantization})` : ""}
-                </option>
-              ))}
-            </select>
+              onChange={setSelectedModel}
+              options={discoveredModels.map((m) => ({
+                value: m.name || m.model_id,
+                label: m.name || m.model_id,
+                hint: m.quantization || undefined,
+              }))}
+              placeholder="Select a discovered model"
+              ariaLabel="Target model"
+              className="w-full max-w-md"
+            />
           ) : (
             <Input
               value={selectedModel}
@@ -203,7 +214,7 @@ export const ProviderSettings: React.FC = () => {
         </div>
 
         {discoveryError && (
-          <div className="flex items-center gap-2 p-3 bg-rose-500/10 border border-rose-500/20 text-rose-300 rounded-lg text-xs">
+          <div className="flex items-center gap-2 p-3 bg-[#180808] border border-[#451a1a] text-[#f87171] rounded-sm text-xs">
             <AlertCircle className="w-4 h-4 shrink-0" />
             <span>{discoveryError}</span>
           </div>

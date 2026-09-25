@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect } from "react";
 import { Header } from "./Header";
 import { Navigation } from "./Navigation";
 import { RepositoryAddModal } from "../../features/code/RepositoryAddModal";
@@ -8,22 +8,43 @@ import { useUiScaleStore } from "../../stores/uiScaleStore";
 import { useNavigate } from "react-router-dom";
 
 export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [addModalOpen, setAddModalOpen] = useState(false);
-  const { fetchRepositories } = useRepositoryStore();
-  const { pollHealth } = useSystemStore();
+  const {
+    bootstrapRepositories,
+    stopBootstrap,
+    fetchRepositories,
+    addRepositoryOpen,
+    openAddRepository,
+    closeAddRepository,
+  } = useRepositoryStore();
+  const { pollHealth, backendOnline } = useSystemStore();
   const { zoomIn, zoomOut, resetScale } = useUiScaleStore();
   const navigate = useNavigate();
 
+  // Hydrate persisted repositories on startup. The backend takes time to become
+  // ready after launch, so the bootstrap retries until the first fetch succeeds
+  // instead of leaving the store empty until the next repository mutation.
   useEffect(() => {
-    fetchRepositories();
+    bootstrapRepositories();
     pollHealth();
 
-    // Poll health periodically every 5 seconds
+    return () => stopBootstrap();
+  }, [bootstrapRepositories, stopBootstrap, pollHealth]);
+
+  // Poll health periodically every 5 seconds
+  useEffect(() => {
     const interval = setInterval(() => {
       pollHealth();
     }, 5000);
     return () => clearInterval(interval);
-  }, [fetchRepositories, pollHealth]);
+  }, [pollHealth]);
+
+  // Re-synchronize persisted repositories whenever the backend becomes reachable
+  // (e.g. it restarted, or the bootstrap window closed before readiness).
+  useEffect(() => {
+    if (backendOnline) {
+      fetchRepositories();
+    }
+  }, [backendOnline, fetchRepositories]);
 
   // Global UI Scale keyboard shortcut listener
   useEffect(() => {
@@ -47,11 +68,12 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
   }, [zoomIn, zoomOut, resetScale]);
 
   return (
-    <div className="flex flex-col h-screen w-screen overflow-hidden bg-[#000000] text-[#ededed] font-sans selection:bg-[#ffffff] selection:text-[#000000]">
+    <div className="flex flex-col h-full w-full overflow-hidden bg-[#000000] text-[#ededed] font-sans selection:bg-[#ffffff] selection:text-[#000000]">
       {/* Top Header */}
       <Header
-        onAddRepo={() => setAddModalOpen(true)}
+        onAddRepo={openAddRepository}
         onNavigateSystem={() => navigate("/system")}
+        onNavigateRepositories={() => navigate("/repositories")}
       />
 
       {/* Main Layout: Sidebar + Page Canvas */}
@@ -62,8 +84,8 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
         </main>
       </div>
 
-      {/* Global Add Repository Modal */}
-      <RepositoryAddModal open={addModalOpen} onOpenChange={setAddModalOpen} />
+      {/* Single global Add Repository Modal */}
+      <RepositoryAddModal open={addRepositoryOpen} onOpenChange={(open) => !open && closeAddRepository()} />
     </div>
   );
 };

@@ -1,6 +1,10 @@
 import "@testing-library/jest-dom/vitest";
 import { cleanup } from "@testing-library/react";
 import { afterEach, vi } from "vitest";
+import { useRepositoryStore } from "../stores/repositoryStore";
+import { useContextMenuStore as useContextStore } from "../stores/contextStore";
+import { usePreferencesStore } from "../stores/preferencesStore";
+import { useUiScaleStore } from "../stores/uiScaleStore";
 
 // In-memory Storage mock
 const createStorageMock = () => {
@@ -63,6 +67,7 @@ global.IntersectionObserver = class IntersectionObserver {
 };
 
 window.scrollTo = vi.fn();
+Element.prototype.scrollIntoView = vi.fn();
 
 Object.defineProperty(navigator, "clipboard", {
   configurable: true,
@@ -304,6 +309,69 @@ const defaultMockHandler: MockInvokeHandler = async (cmd, _args) => {
     };
   }
 
+  if (cmd === "get_repository_progress") {
+    return {
+      success: true,
+      repo_id: "repo-1",
+      status: "indexed",
+      stage: "Indexing Completed",
+      stage_index: 5,
+      stage_total: 5,
+      processed_files: 42,
+      total_files: 42,
+      elapsed_ms: 1200,
+      languages: ["Python", "TypeScript"],
+      frameworks: ["FastAPI", "React"],
+      error: null,
+      file_count: 42,
+      size_bytes: 1048576,
+    };
+  }
+
+  if (cmd === "create_repository") {
+    return {
+      id: "repo-new",
+      name: "new-repository",
+      source_type: "local",
+      source_url: null,
+      local_path: "/workspace/new-repository",
+      branch: "main",
+      commit_hash: null,
+      status: "registered",
+      languages: [],
+      frameworks: [],
+      file_count: 0,
+      size_bytes: 0,
+      indexed_at: null,
+      error_message: null,
+      summary: "",
+      entry_points: [],
+      architecture: "",
+      components: [],
+      dependencies: [],
+      metadata: {},
+    };
+  }
+
+  if (cmd === "scan_repository") {
+    return {
+      repository_id: "repo-new",
+      file_count: 10,
+      total_size_bytes: 2048,
+      languages: ["Python"],
+      frameworks: [],
+      entry_points: [],
+      summary: "Scanned",
+      components: [],
+      git_branch: "main",
+      git_commit: null,
+    };
+  }
+
+  if (cmd === "delete_repository") {
+    return { success: true, message: "deleted" };
+  }
+
   if (cmd === "list_context_packages") {
     return {
       success: true,
@@ -324,7 +392,40 @@ vi.mock("@tauri-apps/api/core", () => ({
   }),
 }));
 
+// Zustand stores are module singletons, so reset the GUI-facing state between tests.
+export function resetGuiStores() {
+  useRepositoryStore.getState().stopBootstrap();
+  useRepositoryStore.getState().stopPolling();
+  useRepositoryStore.setState({
+    repositories: [],
+    selectedId: null,
+    selectedRepo: null,
+    searchQuery: "",
+    hydrated: false,
+    loading: false,
+    scanning: false,
+    indexing: false,
+    indexingRepoId: null,
+    indexingStartedAt: null,
+    error: null,
+    addRepositoryOpen: false,
+    lastScan: null,
+    progress: null,
+  });
+  useContextStore.setState({
+    taskPrompt: "",
+    selectedRepoId: null,
+    synthesizing: false,
+    synthesisStartedAt: null,
+    error: null,
+    result: null,
+  });
+  usePreferencesStore.setState({ markdownViewMode: "rendered" });
+  useUiScaleStore.setState({ scale: 100 });
+}
+
 afterEach(() => {
+  resetGuiStores();
   cleanup();
   vi.clearAllMocks();
   storageMock.clear();

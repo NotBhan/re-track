@@ -1,15 +1,24 @@
 import React, { useState, useEffect } from "react";
-import { Compass, Bookmark, Layers, AlertCircle, ArrowRight } from "lucide-react";
+import { Compass, Bookmark, Layers, AlertCircle, ArrowRight, FolderGit2 } from "lucide-react";
 import { useContextMenuStore } from "../../stores/contextStore";
 import { useRepositoryStore } from "../../stores/repositoryStore";
 import { EvidenceViewer } from "./EvidenceViewer";
 import { SynthesisOutput } from "./SynthesisOutput";
+import { ModelProcessingPanel } from "./ModelProcessingPanel";
 import { PackageDrawer } from "./PackageDrawer";
 import { Button } from "../../components/Button";
 import { Input } from "../../components/Input";
+import { Select } from "../../components/Select";
 import { Dialog } from "../../components/Dialog";
 import { EmptyState } from "../../components/EmptyState";
 import { toast } from "../../app/providers/ToastProvider";
+import { useNavigate } from "react-router-dom";
+
+const TOKEN_BUDGET_OPTIONS = [
+  { value: "2048", label: "2K tokens" },
+  { value: "4096", label: "4K tokens" },
+  { value: "8192", label: "8K tokens" },
+];
 
 export const ContextWorkbench: React.FC = () => {
   const {
@@ -20,15 +29,18 @@ export const ContextWorkbench: React.FC = () => {
     includeStructuralGraph,
     setIncludeStructuralGraph,
     synthesizing,
+    synthesisStartedAt,
     error,
     result,
     synthesize,
     suggestedPrompts,
     fetchPrompts,
     saveCurrentAsPackage,
+    clearError,
   } = useContextMenuStore();
 
   const { selectedRepo } = useRepositoryStore();
+  const navigate = useNavigate();
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [saveModalOpen, setSaveModalOpen] = useState(false);
@@ -38,12 +50,14 @@ export const ContextWorkbench: React.FC = () => {
   useEffect(() => {
     if (selectedRepo?.id) {
       fetchPrompts(selectedRepo.id);
+      // A repository becoming active resolves the transient "select one first" state.
+      clearError();
     }
-  }, [selectedRepo?.id, fetchPrompts]);
+  }, [selectedRepo?.id, fetchPrompts, clearError]);
 
   const handleSynthesize = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!taskPrompt.trim() || synthesizing) return;
+    if (!taskPrompt.trim() || synthesizing || !selectedRepo) return;
     synthesize();
   };
 
@@ -112,15 +126,14 @@ export const ContextWorkbench: React.FC = () => {
               <div className="flex items-center gap-4 text-xs text-[#a1a1a1]">
                 <div className="flex items-center gap-1.5">
                   <span className="text-[#707070]">Budget:</span>
-                  <select
-                    value={maxTokens}
-                    onChange={(e) => setMaxTokens(Number(e.target.value))}
-                    className="bg-[#121212] border border-[#262626] rounded px-1.5 py-0.5 text-xs text-[#ededed] outline-none cursor-pointer font-mono"
-                  >
-                    <option value={2048}>2K tokens</option>
-                    <option value={4096}>4K tokens</option>
-                    <option value={8192}>8K tokens</option>
-                  </select>
+                  <Select
+                    size="sm"
+                    value={String(maxTokens)}
+                    onChange={(value) => setMaxTokens(Number(value))}
+                    options={TOKEN_BUDGET_OPTIONS}
+                    ariaLabel="Token budget"
+                    className="w-[110px]"
+                  />
                 </div>
 
                 <label className="flex items-center gap-1.5 cursor-pointer select-none text-xs text-[#a1a1a1] hover:text-[#ededed] transition-colors">
@@ -135,7 +148,18 @@ export const ContextWorkbench: React.FC = () => {
               </div>
 
               {/* Submit Button */}
-              <Button type="submit" size="sm" variant="primary" loading={synthesizing} disabled={!taskPrompt.trim()}>
+              <Button
+                type="submit"
+                size="sm"
+                variant="primary"
+                loading={synthesizing}
+                disabled={!taskPrompt.trim() || !selectedRepo}
+                title={
+                  selectedRepo
+                    ? "Generate context for the active repository"
+                    : "Select a repository in Repository Management first"
+                }
+              >
                 <span>Synthesize</span>
                 <ArrowRight className="w-3.5 h-3.5 ml-1" />
               </Button>
@@ -162,8 +186,20 @@ export const ContextWorkbench: React.FC = () => {
           )}
         </form>
 
+        {!selectedRepo && (
+          <div className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-sm bg-[#0a0a0a] border border-[#262626] text-xs text-[#a1a1a1]">
+            <span>
+              No repository is active yet. Add or select one to generate grounded context.
+            </span>
+            <Button size="sm" variant="secondary" onClick={() => navigate("/repositories")}>
+              <FolderGit2 className="w-3.5 h-3.5" />
+              <span>Repository Management</span>
+            </Button>
+          </div>
+        )}
+
         {error && (
-          <div className="flex items-center gap-2 p-3 bg-[#180808] border border-[#451a1a] text-[#f87171] rounded-md text-xs">
+          <div className="flex items-center gap-2 p-3 bg-[#180808] border border-[#451a1a] text-[#f87171] rounded-sm text-xs">
             <AlertCircle className="w-4 h-4 shrink-0" />
             <span>{error}</span>
           </div>
@@ -171,18 +207,24 @@ export const ContextWorkbench: React.FC = () => {
       </div>
 
       {/* Main Content Area */}
-      {result ? (
+      {synthesizing ? (
+        <div className="flex-1 flex items-start justify-center pt-6">
+          <div className="w-full max-w-xl">
+            <ModelProcessingPanel startedAt={synthesisStartedAt || Date.now()} />
+          </div>
+        </div>
+      ) : result ? (
         <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-3 gap-5">
           {/* Left Column: Evidence Breakdown */}
-          <div className="lg:col-span-1 flex flex-col min-h-0">
-            <h3 className="text-xs font-semibold text-[#707070] uppercase tracking-wider mb-2.5">
-              Evidence & Grounding
+          <div className="lg:col-span-1 flex flex-col min-h-0 overflow-hidden">
+            <h3 className="text-xs font-semibold text-[#707070] uppercase tracking-wider mb-2.5 shrink-0">
+              Evidence &amp; Grounding
             </h3>
             <EvidenceViewer result={result} />
           </div>
 
           {/* Right Column: Markdown Synthesis Output */}
-          <div className="lg:col-span-2 flex flex-col min-h-0">
+          <div className="lg:col-span-2 flex flex-col min-h-0 overflow-hidden">
             <SynthesisOutput
               result={result}
               onSavePackage={() => {

@@ -14,6 +14,7 @@ export interface TabsProps {
   onChange: (id: string) => void;
   className?: string;
   variant?: "pill" | "underline";
+  ariaLabel?: string;
 }
 
 export const Tabs: React.FC<TabsProps> = ({
@@ -22,13 +23,15 @@ export const Tabs: React.FC<TabsProps> = ({
   onChange,
   className,
   variant = "pill",
+  ariaLabel,
 }) => {
   return (
     <div
       role="tablist"
+      aria-label={ariaLabel}
       className={cn(
         variant === "pill"
-          ? "flex items-center gap-1 p-1 bg-[#0a0a0a] border border-[#262626] rounded-md"
+          ? "flex items-center gap-1 p-1 bg-[#0a0a0a] border border-[#262626] rounded-sm"
           : "flex items-center gap-6 border-b border-[#262626]",
         className
       )}

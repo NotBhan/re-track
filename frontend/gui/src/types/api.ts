@@ -60,6 +60,8 @@ export interface ScanResult {
 export interface IndexingProgress {
   status: string;
   stage: string;
+  stage_index?: number | null;
+  stage_total?: number | null;
   processed_files: number;
   total_files: number;
   elapsed_ms: number;

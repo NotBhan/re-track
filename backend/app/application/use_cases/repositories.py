@@ -255,6 +255,17 @@ class RepositoryUseCases:
             repo = getattr(self._manager, "get", getattr(self._manager, "get_by_id", None))(repo_id)
             if not repo:
                 return ErrorResponse(error="NotFoundError", message=f"Repository {repo_id} not found")
+
+            # A live indexing run publishes phase progress; prefer it while active.
+            get_active = getattr(self._manager, "get_indexing_progress", None)
+            if callable(get_active):
+                try:
+                    active = get_active(repo_id)
+                except Exception:
+                    active = None
+                if active and active.get("status") in ("indexing", "scanning"):
+                    return {"success": True, "repo_id": repo_id, **active}
+
             status = getattr(repo, "status", "ready")
             return {
                 "success": True,

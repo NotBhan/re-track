@@ -53,20 +53,20 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             key={t.id}
             className={cn(
               "pointer-events-auto flex items-center justify-between p-3 rounded-lg border shadow-xl text-xs font-medium animate-in slide-in-from-bottom-2 duration-150",
-              t.type === "success" && "bg-[#111c16] text-emerald-300 border-emerald-500/20",
-              t.type === "error" && "bg-[#201114] text-rose-300 border-rose-500/20",
-              t.type === "info" && "bg-[#13161f] text-slate-200 border-white/[0.08]"
+              t.type === "success" && "bg-[#051a0e] text-[#10b981] border-[#10b981]/25",
+              t.type === "error" && "bg-[#180808] text-[#f87171] border-[#451a1a]",
+              t.type === "info" && "bg-[#121212] text-[#ededed] border-[#262626]"
             )}
           >
             <div className="flex items-center gap-2.5">
-              {t.type === "success" && <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />}
-              {t.type === "error" && <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />}
-              {t.type === "info" && <Info className="w-4 h-4 text-sky-400 shrink-0" />}
+              {t.type === "success" && <CheckCircle2 className="w-4 h-4 text-[#10b981] shrink-0" />}
+              {t.type === "error" && <AlertCircle className="w-4 h-4 text-[#f87171] shrink-0" />}
+              {t.type === "info" && <Info className="w-4 h-4 text-[#a1a1a1] shrink-0" />}
               <span className="leading-snug">{t.message}</span>
             </div>
             <button
               onClick={() => removeToast(t.id)}
-              className="text-slate-400 hover:text-white p-1 ml-2 rounded-sm"
+              className="text-[#a1a1a1] hover:text-[#ededed] p-1 ml-2 rounded-sm"
             >
               <X className="w-3.5 h-3.5" />
             </button>

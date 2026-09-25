@@ -1,73 +1,83 @@
 import React from "react";
-import { FolderGit2, ChevronDown, Plus, Cpu, ZoomIn, ZoomOut } from "lucide-react";
+import { FolderGit2, Plus, Cpu, ZoomIn, ZoomOut } from "lucide-react";
 import { useRepositoryStore } from "../../stores/repositoryStore";
 import { useSystemStore } from "../../stores/systemStore";
 import { useUiScaleStore } from "../../stores/uiScaleStore";
+import { Select } from "../../components/Select";
 import { cn } from "../../lib/utils";
 
 interface HeaderProps {
   onAddRepo: () => void;
   onNavigateSystem: () => void;
+  onNavigateRepositories: () => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ onAddRepo, onNavigateSystem }) => {
+export const Header: React.FC<HeaderProps> = ({
+  onAddRepo,
+  onNavigateSystem,
+  onNavigateRepositories,
+}) => {
   const { repositories, selectedId, selectRepository } = useRepositoryStore();
   const { providerReachable, activeProvider, activeModel, backendOnline } = useSystemStore();
   const { scale, zoomIn, zoomOut, resetScale } = useUiScaleStore();
 
+  const repositoryOptions = repositories.map((repo) => ({
+    value: repo.id,
+    label: repo.name,
+    hint: `${repo.file_count || 0} files · ${repo.status || "registered"}`,
+  }));
+
   return (
-    <header className="h-12 bg-[#000000] border-b border-[#262626] px-4 flex items-center justify-between shrink-0 select-none z-20">
-      {/* Left: Brand + Active Repository Selector */}
-      <div className="flex items-center gap-4">
+    <header className="h-12 bg-[#000000] border-b border-[#262626] px-4 flex items-center justify-between gap-3 shrink-0 select-none z-30">
+      {/* Left: Brand + Active Repository Selector + Import */}
+      <div className="flex items-center gap-3 min-w-0">
         {/* Monochromatic Geist Brand Mark */}
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2.5 shrink-0">
           <div className="w-5 h-5 rounded bg-[#ffffff] flex items-center justify-center">
             <span className="text-[10px] font-black text-[#000000] tracking-tighter">▲</span>
           </div>
           <span className="font-semibold text-xs tracking-tight text-[#ededed]">RE:Track</span>
         </div>
 
-        <div className="h-3.5 w-px bg-[#262626]" />
+        <div className="h-3.5 w-px bg-[#262626] shrink-0" />
 
         {/* Repository Switcher */}
-        <div className="relative flex items-center">
-          <div className="flex items-center gap-2 px-2.5 py-1 rounded-md bg-[#0a0a0a] border border-[#262626] hover:border-[#404040] transition-colors">
-            <FolderGit2 className="w-3.5 h-3.5 text-[#707070]" />
-            <select
-              value={selectedId || ""}
-              onChange={(e) => selectRepository(e.target.value || null)}
-              className="bg-transparent text-xs font-medium text-[#ededed] outline-none cursor-pointer pr-4 appearance-none"
-            >
-              {repositories.length === 0 ? (
-                <option value="" disabled className="bg-[#0a0a0a] text-[#707070]">
-                  No repositories added
-                </option>
-              ) : (
-                repositories.map((repo) => (
-                  <option key={repo.id} value={repo.id} className="bg-[#0a0a0a] text-[#ededed]">
-                    {repo.name} ({repo.file_count || 0} files)
-                  </option>
-                ))
-              )}
-            </select>
-            <ChevronDown className="w-3 h-3 text-[#707070] -ml-4 pointer-events-none" />
-          </div>
-
+        <div className="flex items-center gap-2 min-w-0">
+          <FolderGit2 className="w-3.5 h-3.5 text-[#707070] shrink-0" />
+          <Select
+            value={selectedId || ""}
+            onChange={(value) => selectRepository(value || null)}
+            options={repositoryOptions}
+            placeholder="No repositories added"
+            ariaLabel="Active repository"
+            className="w-[210px] max-w-[36vw]"
+            menuClassName="w-[280px]"
+            title="Active repository"
+          />
           <button
-            onClick={onAddRepo}
-            title="Add or import repository"
-            className="ml-1.5 p-1 rounded-md text-[#707070] hover:text-[#ededed] hover:bg-[#121212] transition-colors"
+            onClick={onNavigateRepositories}
+            className="text-[11px] font-medium text-[#707070] hover:text-[#ededed] transition-colors px-1.5 py-1 rounded-sm hover:bg-[#121212] shrink-0"
           >
-            <Plus className="w-3.5 h-3.5" />
+            Manage
           </button>
         </div>
+
+        {/* Explicit, labeled import affordance */}
+        <button
+          onClick={onAddRepo}
+          title="Add or import repository"
+          className="flex items-center gap-1.5 h-7 px-2.5 rounded-sm border border-[#262626] bg-[#0a0a0a] text-[#ededed] text-[11px] font-medium hover:border-[#404040] hover:bg-[#121212] transition-colors shrink-0"
+        >
+          <Plus className="w-3.5 h-3.5" />
+          <span>Add Repository</span>
+        </button>
       </div>
 
       {/* Right: UI Scale Controller + Runtime Indicator */}
-      <div className="flex items-center gap-2.5">
+      <div className="flex items-center gap-2.5 shrink-0">
         {/* UI Zoom Controls */}
         <div
-          className="flex items-center bg-[#0a0a0a] border border-[#262626] rounded-md px-1 py-0.5"
+          className="flex items-center bg-[#0a0a0a] border border-[#262626] rounded-sm px-1 py-0.5"
           title="UI Scale (Ctrl + / - / 0)"
         >
           <button
@@ -100,7 +110,7 @@ export const Header: React.FC<HeaderProps> = ({ onAddRepo, onNavigateSystem }) =
         {/* Runtime Provider Indicator */}
         <button
           onClick={onNavigateSystem}
-          className="flex items-center gap-2 px-2.5 py-1 rounded-md bg-[#0a0a0a] border border-[#262626] hover:border-[#404040] transition-colors text-xs"
+          className="flex items-center gap-2 px-2.5 py-1 rounded-sm bg-[#0a0a0a] border border-[#262626] hover:border-[#404040] transition-colors text-xs"
         >
           <Cpu className="w-3 h-3 text-[#707070]" />
           <span className="capitalize text-[#ededed] font-medium text-[11px]">

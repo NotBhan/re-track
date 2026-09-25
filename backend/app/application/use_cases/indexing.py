@@ -28,6 +28,7 @@ from app.application.dto import (
 )
 from app.application.ports.filesystem import FileSystemPort
 from app.application.ports.indexing_service import IndexingServicePort
+from app.application.ports.repository_manager import RepositoryManagerPort
 from app.application.ports.repository_metadata import RepositoryMetadataPort
 from app.application.ports.summary_generator import SummaryGeneratorPort
 from app.application.ports.workspace_authorization import WorkspaceAuthorizationPort
@@ -48,6 +49,7 @@ class IndexingUseCases:
         metadata_store: Optional[RepositoryMetadataPort] = None,
         filesystem: Optional[FileSystemPort] = None,
         workspace_auth: Optional[WorkspaceAuthorizationPort] = None,
+        repository_manager: Optional[RepositoryManagerPort] = None,
     ) -> None:
         self._indexing_service = indexing_service
         self._lock = indexing_lock
@@ -56,6 +58,49 @@ class IndexingUseCases:
         self._metadata_store = metadata_store
         self._fs = filesystem
         self._workspace_auth = workspace_auth
+        self._repository_manager = repository_manager
+
+    def _resolve_repo_id(self, repo_path: Path) -> Optional[str]:
+        """Match a repository path to its managed repository id, when registered."""
+        if not self._repository_manager:
+            return None
+        try:
+            for repo in self._repository_manager.list_repositories():
+                local_path = getattr(repo, "local_path", None)
+                if not local_path:
+                    continue
+                try:
+                    if Path(local_path).resolve() == repo_path:
+                        return getattr(repo, "id", None)
+                except OSError:
+                    continue
+        except Exception:
+            return None
+        return None
+
+    def _publish_index_progress(self, repo_id: Optional[str], payload: dict[str, Any]) -> None:
+        """Publish live indexing state to the repository progress record.
+
+        The IndexingService reports named phases with (stage, step, total); this is the
+        only progress signal the runtime actually produces, so it is surfaced verbatim
+        rather than as a synthesized file percentage.
+        """
+        if not repo_id or not self._repository_manager:
+            return
+        try:
+            self._repository_manager.set_indexing_progress(repo_id, payload)
+        except Exception as exc:  # progress reporting must never break indexing
+            logger.debug("Could not publish indexing progress for %s: %s", repo_id, exc)
+
+    def _clear_index_progress(self, repo_id: Optional[str]) -> None:
+        if not repo_id or not self._repository_manager:
+            return
+        clear = getattr(self._repository_manager, "clear_indexing_progress", None)
+        if callable(clear):
+            try:
+                clear(repo_id)
+            except Exception as exc:
+                logger.debug("Could not clear indexing progress for %s: %s", repo_id, exc)
 
     async def index_repository(
         self,
@@ -103,11 +148,94 @@ class IndexingUseCases:
 
             async with self._lock:
                 effective_dataset_name = derive_dataset_name(repo_path, request.dataset_name)
-                progress = await self._indexing_service.index_repository(
-                    repo_path=repo_path,
-                    dataset_name=effective_dataset_name,
-                    force_reindex=request.force_reindex,
+                index_start = time.monotonic()
+                repo_id = self._resolve_repo_id(repo_path)
+                base_progress: dict[str, Any] = {
+                    "processed_files": 0,
+                    "total_files": 0,
+                    "languages": [],
+                    "frameworks": [],
+                    "error": None,
+                }
+
+                def _report_stage(stage: str, step: int, total: int) -> None:
+                    self._publish_index_progress(
+                        repo_id,
+                        {
+                            **base_progress,
+                            "status": "indexing",
+                            "stage": stage,
+                            "stage_index": step,
+                            "stage_total": total,
+                            "elapsed_ms": int((time.monotonic() - index_start) * 1000),
+                        },
+                    )
+
+                self._publish_index_progress(
+                    repo_id,
+                    {
+                        **base_progress,
+                        "status": "indexing",
+                        "stage": "Starting index run…",
+                        "stage_index": 0,
+                        "stage_total": 5,
+                        "elapsed_ms": 0,
+                    },
                 )
+
+                try:
+                    progress = await self._indexing_service.index_repository(
+                        repo_path=repo_path,
+                        dataset_name=effective_dataset_name,
+                        force_reindex=request.force_reindex,
+                        progress_callback=_report_stage,
+                    )
+                except TypeError:
+                    # Ports without callback support still index; progress is then unavailable.
+                    progress = await self._indexing_service.index_repository(
+                        repo_path=repo_path,
+                        dataset_name=effective_dataset_name,
+                        force_reindex=request.force_reindex,
+                    )
+                except Exception as index_error:
+                    self._publish_index_progress(
+                        repo_id,
+                        {
+                            **base_progress,
+                            "status": "error",
+                            "stage": "Indexing failed",
+                            "stage_index": 5,
+                            "stage_total": 5,
+                            "elapsed_ms": int((time.monotonic() - index_start) * 1000),
+                            "error": str(index_error),
+                        },
+                    )
+                    self._clear_index_progress(repo_id)
+                    raise
+
+                self._publish_index_progress(
+                    repo_id,
+                    {
+                        "processed_files": progress.processed_files,
+                        "total_files": progress.total_files,
+                        "languages": [],
+                        "frameworks": [],
+                        "error": (
+                            progress.summary() if progress.failed_files > 0 else None
+                        ),
+                        "status": "indexed" if progress.failed_files == 0 else "error",
+                        "stage": (
+                            "Indexing completed"
+                            if progress.failed_files == 0
+                            else "Indexing completed with failures"
+                        ),
+                        "stage_index": 5,
+                        "stage_total": 5,
+                        "elapsed_ms": int((time.monotonic() - index_start) * 1000),
+                        "indexed_at": datetime.now(timezone.utc).isoformat(),
+                    },
+                )
+                self._clear_index_progress(repo_id)
 
                 # Extract languages, purpose, architecture, and components from summary generator
                 languages: list[str] = []

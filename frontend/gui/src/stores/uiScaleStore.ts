@@ -30,9 +30,16 @@ function getInitialScale(): number {
 
 function applyScaleToDocument(scale: number) {
   if (typeof document === "undefined") return;
-  // Apply zoom to documentElement for full-window crisp scaling in Tauri/Chromium/WebKit
-  (document.documentElement.style as any).zoom = `${scale}%`;
-  document.documentElement.style.setProperty("--ui-scale", `${scale / 100}`);
+  const factor = scale / 100;
+  const root = document.documentElement;
+  // CSS zoom scales painted boxes while `vh`/`vw` units keep resolving against
+  // the unzoomed viewport, so scales above 100% overflow the window and clip
+  // the layout. Pinning the root to viewport/factor keeps the scaled layout
+  // exactly viewport-sized at every step.
+  (root.style as any).zoom = `${scale}%`;
+  root.style.width = `${Math.round(window.innerWidth / factor)}px`;
+  root.style.height = `${Math.round(window.innerHeight / factor)}px`;
+  root.style.setProperty("--ui-scale", `${factor}`);
 }
 
 export const useUiScaleStore = create<UiScaleState>((set, get) => {
@@ -66,3 +73,9 @@ export const useUiScaleStore = create<UiScaleState>((set, get) => {
     },
   };
 });
+
+if (typeof window !== "undefined") {
+  window.addEventListener("resize", () => {
+    applyScaleToDocument(useUiScaleStore.getState().scale);
+  });
+}

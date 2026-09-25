@@ -18,7 +18,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
           ref={ref}
           type={type}
           className={cn(
-            "w-full h-9 bg-[#0a0a0a] text-[#ededed] placeholder:text-[#707070] text-sm rounded-md px-3.5 border border-[#262626] transition-colors focus:outline-none focus:border-[#666666] focus:ring-1 focus:ring-[#ededed]/20 disabled:opacity-40 disabled:cursor-not-allowed",
+            "w-full h-9 bg-[#0a0a0a] text-[#ededed] placeholder:text-[#707070] text-sm rounded-sm px-3.5 border border-[#262626] transition-colors focus:outline-none focus:border-[#666666] focus:ring-1 focus:ring-[#ededed]/20 disabled:opacity-40 disabled:cursor-not-allowed",
             icon && "pl-9",
             className
           )}

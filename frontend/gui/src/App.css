@@ -32,14 +32,29 @@ html {
   font-size: 14px;
 }
 
+/* Indeterminate progress indication for work whose completion the backend cannot quantify. */
+@keyframes retrack-indeterminate {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(300%);
+  }
+}
+
 body {
   font-family: var(--font-sans);
   background-color: #000000;
   color: #ededed;
   margin: 0;
+  height: 100%;
   overflow: hidden;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  height: 100%;
 }
 
 /* Crisp 1px Borders */

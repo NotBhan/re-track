@@ -3,6 +3,9 @@ import { defineConfig } from "@playwright/test";
 export default defineConfig({
   testDir: "./e2e",
   timeout: 30000,
+  // The backend guards context synthesis behind a bounded concurrency queue
+  // (max_concurrent=1), so specs run serially against it.
+  workers: 1,
   use: {
     browserName: "chromium",
     launchOptions: {
