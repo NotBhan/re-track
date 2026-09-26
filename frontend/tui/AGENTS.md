@@ -9,6 +9,7 @@ Owns the RE:Track terminal user interface: a keyboard-driven, monochrome ANSI ap
 | File | Responsibility |
 | --- | --- |
 | `retrack.mjs` | Entry point: TTY/snapshot detection, alternate screen, raw mode, key event loop, resize handling, repaint coalescing, keepalive, every exit path. |
+| `backend-lifecycle.mjs` | Backend discovery, spawn, `/health` readiness, ownership, and process-tree shutdown. The only TUI module allowed to import `node:child_process`. |
 | `state.mjs` | Application state, session/navigation state, async actions, and the single input dispatch with explicit precedence. No terminal I/O, no timers. |
 | `render.mjs` | Pure presentation model (`buildModel`) and frame composition (`composeFrame`/`composeLines`). No backend access, no timers, no writes. |
 | `layout.mjs` | Frame budget arithmetic, responsive class, list scrolling windows, width-aware text fitting. |
@@ -21,14 +22,16 @@ Owns the RE:Track terminal user interface: a keyboard-driven, monochrome ANSI ap
 
 # Local Contracts
 
-1. Depends on `../shared/backend-client.mjs` only. Must not import `../gui/**` or `../cli/**`, React, Tauri, or any third-party runtime dependency.
-2. **Terminal restoration is mandatory on every exit path**: `q`, Ctrl+C, SIGINT, SIGTERM, SIGHUP, stdin EOF/error, stdout error, and uncaught exceptions must leave the alternate screen, restore the cursor, and disable raw mode.
-3. Non-TTY invocation (pipe, CI) emits exactly **one** snapshot line and exits:
+1. Depends on `../shared/backend-client.mjs` and its own `backend-lifecycle.mjs` only. Must not import `../gui/**` or `../cli/**`, React, Tauri, or any third-party runtime dependency, and no module except `backend-lifecycle.mjs` may touch `node:child_process`.
+2. **Terminal restoration is mandatory on every exit path**: `q`, Ctrl+C, SIGINT, SIGTERM, SIGHUP, stdin EOF/error, stdout error, and uncaught exceptions must leave the alternate screen, restore the cursor, and disable raw mode — and must release a backend this TUI started before the process exits.
+3. **Canonical usage is `npm run tui`.** The TUI attaches to a backend already answering `RETRACK_BACKEND_URL` (default `http://127.0.0.1:8765`); otherwise it spawns one using the desktop runtime's startup contract: `<repo>/backend` (or `RETRACK_BACKEND_DIR`), `backend/.venv/bin/python` first, `python -m uvicorn app.server:app --host 127.0.0.1 --port <port>`, `PYTHONPATH` + the desktop environment (`BACKEND_ENV`), `RETRACK_PARENT_PID` (the backend's own watchdog reaps it if the TUI dies abruptly), output appended to `$TMPDIR/retrack-backend.log`, and bounded `/health` polling before the interface opens. `RETRACK_BACKEND_STARTUP_TIMEOUT_MS` overrides the readiness budget.
+4. **Ownership is explicit, never inferred from the port.** `ensureBackend()` returns `owned`, true only when this invocation spawned the child; it also carries the child PID and process group. Shutdown targets only that child's process group (`SIGTERM`, then SIGKILL after a bounded grace). A backend that was already running — even one that won a port race against a spawned child — is attached to and never signalled.
+5. Non-TTY invocation (pipe, CI) emits exactly **one** snapshot line and exits:
    `RE:Track · <base-url> · backend=<status> · repos=<n> · packages=<n>`.
-   An unreachable backend exits non-zero with the client's error text on stderr. This contract is byte-compatible with earlier releases.
-4. Subsystem reads are independent: a failing endpoint degrades that pane/section rather than blanking the view, and `r` (or the automatic cadence) reconciles.
-5. Rendered values come from backend responses only. Missing values render as `unavailable` / `none` / `never` — never `0`, `unknown` percentages, or empty successes.
-6. Repaints are coalesced (one frame per ~50 ms of input) and idle output stays quiet: the tick repaints only while an operation or notice is live, plus a 4 s no-op keepalive that surfaces terminal-layer failures.
+   The snapshot may start (and then shut down) a backend of its own, but stdout stays exactly one line and no child outlives it. An unreachable backend that cannot be started exits non-zero with the startup failure on stderr (the client's error text for a backend that dies later). This contract is byte-compatible with earlier releases.
+6. Subsystem reads are independent: a failing endpoint degrades that pane/section rather than blanking the view, and `r` (or the automatic cadence) reconciles.
+7. Rendered values come from backend responses only. Missing values render as `unavailable` / `none` / `never` — never `0`, unknown percentages, or empty successes.
+8. Repaints are coalesced (one frame per ~50 ms of input) and idle output stays quiet: the tick repaints only while an operation or notice is live, plus a 4 s no-op keepalive that surfaces terminal-layer failures.
 
 ---
 
@@ -103,10 +106,10 @@ Overlays use one shared editor: visible cursor, `←`/`→`, `home`/`end`, `Back
 # Verification
 
 ```bash
-npm run test:tui              # node:test suites (keys, state, render, process, client)
+npm run test:tui              # node:test suites (keys, state, render, lifecycle, process, client)
 npm run lint                  # oxlint over gui, cli, tui, shared
 node frontend/tui/retrack.mjs | cat   # non-TTY snapshot path, must terminate
-npm run tui                   # interactive (requires a running backend)
+npm run tui                   # interactive; starts the backend when needed, attaches when running
 ```
 
 PTY verification (real backend on `127.0.0.1:8765`, 40×120 unless noted):
@@ -115,4 +118,4 @@ PTY verification (real backend on `127.0.0.1:8765`, 40×120 unless noted):
 script -qec "stty rows 40 cols 120; node frontend/tui/retrack.mjs" /dev/null
 ```
 
-Checklist: cold start hydrates persisted repositories without an import; repository selection/switching/filtering; add → scan → index with real phases → completion; context synthesis with evidence and rendered/raw output; package save/open/delete; backend loss and `r` reconciliation; view navigation and modal input; resizing (120×40 → 40×10); `q` and `Ctrl+C` exit with the alternate screen and cursor restored; no orphan processes. `process.test.mjs` covers the snapshot contract, unreachable backend, PTY startup/quit/Ctrl+C, alternate-screen restoration, and the published scroll bounds.
+Checklist: cold start hydrates persisted repositories without an import; repository selection/switching/filtering; add → scan → index with real phases → completion; context synthesis with evidence and rendered/raw output; package save/open/delete; backend loss and `r` reconciliation; view navigation and modal input; resizing (120×40 → 40×10); `q` and `Ctrl+C` exit with the alternate screen and cursor restored; no orphan processes. `process.test.mjs` covers the snapshot contract, the failed-startup path, PTY startup/quit/Ctrl+C, alternate-screen restoration, and the published scroll bounds; `lifecycle.test.mjs` and `lifecycle-process.test.mjs` cover discovery/spawn/readiness/ownership/shutdown (attach without spawning, graceful and SIGKILL-fallback shutdown, startup failure, readiness timeout, port-race protection, repeated launch, snapshot cleanup) against a real child backend.

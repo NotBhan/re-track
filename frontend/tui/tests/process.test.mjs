@@ -8,6 +8,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { makeClient } from "./fixtures.mjs";
+import { createFakeBackend, fakeBackendEnv, pidAlive, readJson } from "./fake-backend.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const entry = path.resolve(here, "..", "retrack.mjs");
@@ -110,10 +111,10 @@ function runInPty(baseUrl, inputs, options = {}) {
 }
 
 /** Run the entry with piped stdio (non-TTY) while the stub server stays responsive. */
-function runSnapshot(baseUrl) {
+function runSnapshot(baseUrl, extraEnv = {}) {
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [entry], {
-      env: { ...process.env, RETRACK_BACKEND_URL: baseUrl },
+      env: { ...process.env, RETRACK_BACKEND_URL: baseUrl, ...extraEnv },
       stdio: ["ignore", "pipe", "pipe"],
     });
     let stdout = "";
@@ -160,20 +161,33 @@ describe("tui process: non-TTY contract", () => {
     assert.equal(result.stdout.includes("\u001b[?1049h"), false, "snapshot mode must not enter the alternate screen");
   });
 
-  it("exits non-zero with an error when the backend is unreachable", async () => {
-    const result = await runSnapshot("http://127.0.0.1:9");
+  it("exits non-zero with the startup failure when no backend can be reached or started", async () => {
+    const fake = createFakeBackend({ mode: "exit" });
+    const result = await runSnapshot("http://127.0.0.1:9", fakeBackendEnv(fake));
 
     assert.equal(result.code, 1);
-    assert.match(result.stderr, /backend unavailable|unreachable/i);
+    assert.match(result.stderr, /backend startup failed|unreachable/i);
+    assert.match(result.stderr, /exited before readiness/);
+    assert.equal(result.stdout, "", "a failed startup prints nothing to stdout");
+
+    const pids = readJson(path.join(fake.markers, "pids.json"));
+    assert.ok(pids?.self, "the spawned backend recorded its pid");
+    assert.equal(pidAlive(pids.self), false, "no orphan backend remains");
   });
 
-  it("never spawns a backend or any other child process", () => {
+  it("keeps process management inside the backend-lifecycle module", () => {
     const modules = ["retrack.mjs", "state.mjs", "render.mjs", "keys.mjs", "theme.mjs", "layout.mjs", "markdown.mjs"];
     for (const module of modules) {
       const source = readFileSync(path.resolve(here, "..", module), "utf8");
       assert.doesNotMatch(source, /node:child_process/, `${module} must not spawn processes`);
       assert.doesNotMatch(source, /from "\.\.\/cli|from "\.\.\/gui|@tauri-apps/, `${module} must not import other interfaces`);
     }
+    for (const module of modules.filter((name) => name !== "retrack.mjs")) {
+      const source = readFileSync(path.resolve(here, "..", module), "utf8");
+      assert.doesNotMatch(source, /backend-lifecycle/, `${module} must not orchestrate processes`);
+    }
+    const lifecycle = readFileSync(path.resolve(here, "..", "backend-lifecycle.mjs"), "utf8");
+    assert.match(lifecycle, /node:child_process/, "the lifecycle module owns process management");
   });
 });
 

@@ -112,6 +112,7 @@ Dependency rules:
 
 - `gui/` → Tauri IPC → backend. It imports neither `cli/`, `tui/`, nor `shared/`.
 - `cli/` and `tui/` → `shared/backend-client.mjs` → backend HTTP contract.
+- Backend process ownership is per-interface: the desktop runtime spawns the backend from Rust (`src-tauri/src/lib.rs`), the TUI spawns it from `tui/backend-lifecycle.mjs` using the same startup contract, and the CLI never spawns one.
 - `tui/` never imports React/Tauri; `cli/` never imports GUI/TUI presentation.
 - Repository indexing, AST extraction, retrieval, ranking, and memory statistics are never re-implemented in `frontend/`.
 
@@ -133,7 +134,9 @@ Retrieval-mode contract (derived memory):
 Lifecycle contract:
 
 - The backend composition root (`ApplicationContainer`) exposes `initialize()` / `shutdown()` symmetry. `shutdown()` releases memory-engine handles (LanceDB vector engine, Kùzu graph engine) and is invoked from both the FastAPI lifespan and the MCP stdio shutdown path.
-- Terminal interfaces restore the terminal (cursor, alternate screen, raw mode) on every exit path, including Ctrl+C, EOF, and uncaught errors.
+- The TUI owns its backend lifecycle (`frontend/tui/backend-lifecycle.mjs`): it attaches to a backend already answering `RETRACK_BACKEND_URL` (starting nothing, terminating nothing), and otherwise spawns one with the desktop runtime's contract — `backend/.venv/bin/python` (or `python3.13`/`python3`/`python`), `python -m uvicorn app.server:app --host 127.0.0.1 --port <port>`, `PYTHONPATH` plus the desktop environment, `RETRACK_PARENT_PID` so the backend's own watchdog reaps it after an abrupt TUI death, output appended to `$TMPDIR/retrack-backend.log`, and bounded `/health` readiness polling before the interface opens.
+- Backend ownership is explicit (`owned` on the lifecycle handle, backed by the child handle and its process group), never inferred from the port. Shutdown signals only a backend this invocation spawned: SIGTERM to its process group, then SIGKILL after a bounded grace. A pre-existing backend — including one that wins a port race against a spawned child — is never signalled.
+- Terminal interfaces restore the terminal (cursor, alternate screen, raw mode) on every exit path, including Ctrl+C, EOF, and uncaught errors; the TUI performs the same backend release on `q`, Ctrl+C, SIGINT/SIGTERM/SIGHUP, stdin closure, and uncaught exceptions.
 
 ---
 

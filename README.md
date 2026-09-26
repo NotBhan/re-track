@@ -130,6 +130,22 @@ npm run tauri dev
 
 ---
 
+## Terminal UI
+
+```bash
+npm run tui
+```
+
+`npm run tui` is the complete workflow — no second terminal is needed. The TUI checks whether a RE:Track backend is already reachable at `RETRACK_BACKEND_URL` (default `http://127.0.0.1:8765`):
+
+- **Backend already running** — the TUI attaches to it, starts nothing, and leaves it running when the TUI exits.
+- **Backend not running** — the TUI starts one itself using the same executable, environment and log file (`$TMPDIR/retrack-backend.log`) as the desktop runtime, waits for `/health` readiness, and then opens the interface. That backend is shut down (SIGTERM, then a bounded SIGKILL fallback) when the TUI exits, on `q`, Ctrl+C, or an incoming signal.
+- **Startup failure** — the real failure is reported with the backend log tail, the terminal is restored, and the TUI exits non-zero.
+
+The non-TTY snapshot (`npm run tui | cat`) follows the same rules: it prints its single snapshot line and never leaves a child process behind. `RETRACK_BACKEND_DIR` overrides the backend directory and `RETRACK_BACKEND_STARTUP_TIMEOUT_MS` the readiness budget.
+
+---
+
 ## Agent Context API
 
 External AI coding tools, autonomous agents, and MCP servers can request token-optimized Context Packages via HTTP:

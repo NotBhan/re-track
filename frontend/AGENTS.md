@@ -36,7 +36,7 @@ Owns:
 | Interface | Entry point | Build |
 |---|---|---|
 | GUI | `gui/index.html` → `gui/src/main.tsx` | Vite root `frontend/gui`, output `dist/` at repository root (Tauri `frontendDist: ../dist`) |
-| TUI | `tui/retrack.mjs` | none (plain Node ESM, zero dependencies) |
+| TUI | `tui/retrack.mjs` (backend process lifecycle in `tui/backend-lifecycle.mjs`) | none (plain Node ESM, zero dependencies) |
 | CLI | `cli/retrack.mjs` | none (plain Node ESM, zero dependencies) |
 
 Scripts: `npm run dev` / `npm run build` (GUI), `npm run cli`, `npm run tui`.
@@ -49,6 +49,7 @@ The TUI and CLI are excluded from the GUI bundle: Vite only bundles what `gui/in
 
 - `shared/backend-client.mjs` is the single backend contract surface for non-GUI interfaces. New backend endpoints are added there, not inlined per interface.
 - Terminal interfaces must restore the terminal (cursor, alternate screen, raw mode) on every exit path, including Ctrl+C, EOF, and uncaught errors.
+- The TUI owns its backend process lifecycle (`tui/backend-lifecycle.mjs`, a port of the desktop runtime's startup contract): `npm run tui` attaches to a reachable backend and otherwise starts one, terminating only the process tree that invocation started. The CLI never spawns a backend.
 - Keep interface-specific dependencies isolated. Do not introduce a framework solely to populate a folder.
 
 ---
@@ -58,11 +59,12 @@ The TUI and CLI are excluded from the GUI bundle: Vite only bundles what `gui/in
 ```bash
 npm run build                 # GUI typecheck + production build
 npm run test                  # GUI unit/integration suite
-npm run test:tui              # TUI node:test suites (keys, state, render, process, client)
+npm run test:tui              # TUI node:test suites (keys, state, render, lifecycle, process, client)
 npm run lint                  # oxlint over gui, cli, tui, shared
 npx playwright test           # live-backend E2E (backend must be running on 127.0.0.1:8765)
 node frontend/cli/retrack.mjs help
-node frontend/tui/retrack.mjs # non-TTY invocations emit a single snapshot
+node frontend/tui/retrack.mjs # non-TTY invocations emit a single snapshot (starting a backend if needed)
+npm run tui                   # interactive; starts the backend automatically when none is reachable
 ```
 
 ---
