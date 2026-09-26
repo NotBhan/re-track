@@ -10,6 +10,7 @@ Owns the RE:Track terminal user interface: a keyboard-driven, monochrome ANSI ap
 | --- | --- |
 | `retrack.mjs` | Entry point: TTY/snapshot detection, alternate screen, raw mode, key event loop, resize handling, repaint coalescing, keepalive, every exit path. |
 | `backend-lifecycle.mjs` | Backend discovery, spawn, `/health` readiness, ownership, and process-tree shutdown. The only TUI module allowed to import `node:child_process`. |
+| `keymap.mjs` | The control map: every advertised control, its terse footer label, its descriptive help text, the contextual hint order, and the derived `?` sheet. The single source of truth for footer and help. |
 | `state.mjs` | Application state, session/navigation state, async actions, and the single input dispatch with explicit precedence. No terminal I/O, no timers. |
 | `render.mjs` | Pure presentation model (`buildModel`) and frame composition (`composeFrame`/`composeLines`). No backend access, no timers, no writes. |
 | `layout.mjs` | Frame budget arithmetic, responsive class, list scrolling windows, width-aware text fitting. |
@@ -26,12 +27,14 @@ Owns the RE:Track terminal user interface: a keyboard-driven, monochrome ANSI ap
 2. **Terminal restoration is mandatory on every exit path**: `q`, Ctrl+C, SIGINT, SIGTERM, SIGHUP, stdin EOF/error, stdout error, and uncaught exceptions must leave the alternate screen, restore the cursor, and disable raw mode — and must release a backend this TUI started before the process exits.
 3. **Canonical usage is `npm run tui`.** The TUI attaches to a backend already answering `RETRACK_BACKEND_URL` (default `http://127.0.0.1:8765`); otherwise it spawns one using the desktop runtime's startup contract: `<repo>/backend` (or `RETRACK_BACKEND_DIR`), `backend/.venv/bin/python` first, `python -m uvicorn app.server:app --host 127.0.0.1 --port <port>`, `PYTHONPATH` + the desktop environment (`BACKEND_ENV`), `RETRACK_PARENT_PID` (the backend's own watchdog reaps it if the TUI dies abruptly), output appended to `$TMPDIR/retrack-backend.log`, and bounded `/health` polling before the interface opens. `RETRACK_BACKEND_STARTUP_TIMEOUT_MS` overrides the readiness budget.
 4. **Ownership is explicit, never inferred from the port.** `ensureBackend()` returns `owned`, true only when this invocation spawned the child; it also carries the child PID and process group. Shutdown targets only that child's process group (`SIGTERM`, then SIGKILL after a bounded grace). A backend that was already running — even one that won a port race against a spawned child — is attached to and never signalled.
-5. Non-TTY invocation (pipe, CI) emits exactly **one** snapshot line and exits:
+5. **The control map is the single source of truth (Torlink's keymap model).** `keymap.mjs` holds every advertised control with a terse footer label, a descriptive help label, a help group and a context list. `footerHints(context)` and the `?` sheet are both derived from it, so they cannot disagree; a hint that is not in the table is shown nowhere. The footer drops whole hints when the row is full (never wraps or clips) and always keeps the `?` affordance when the context advertises it.
+6. **Input precedence is explicit**: Ctrl+C → open overlay → active text edit (filter/field) → global keys (`q`, `?`, `r`, `1-4`, `tab`, `esc`, `←→`/`h l`) → focused region → ignored. A modal or field never leaks a keystroke to the view behind it, and the footer context is resolved with the same precedence.
+7. Non-TTY invocation (pipe, CI) emits exactly **one** snapshot line and exits:
    `RE:Track · <base-url> · backend=<status> · repos=<n> · packages=<n>`.
    The snapshot may start (and then shut down) a backend of its own, but stdout stays exactly one line and no child outlives it. An unreachable backend that cannot be started exits non-zero with the startup failure on stderr (the client's error text for a backend that dies later). This contract is byte-compatible with earlier releases.
-6. Subsystem reads are independent: a failing endpoint degrades that pane/section rather than blanking the view, and `r` (or the automatic cadence) reconciles.
-7. Rendered values come from backend responses only. Missing values render as `unavailable` / `none` / `never` — never `0`, unknown percentages, or empty successes.
-8. Repaints are coalesced (one frame per ~50 ms of input) and idle output stays quiet: the tick repaints only while an operation or notice is live, plus a 4 s no-op keepalive that surfaces terminal-layer failures.
+8. Subsystem reads are independent: a failing endpoint degrades that pane/section rather than blanking the view, and `r` (or the automatic cadence) reconciles.
+9. Rendered values come from backend responses only. Missing values render as `unavailable` / `none` / `never` — never `0`, unknown percentages, or empty successes.
+10. Repaints are coalesced (one frame per ~50 ms of input) and idle output stays quiet: the tick repaints only while an operation or notice is live, plus a 4 s no-op keepalive that surfaces terminal-layer failures.
 
 ---
 
@@ -42,16 +45,16 @@ Frame
 ├─ Header        brand · active repository (status) · backend/degrades · transient notice
 ├─ Rule          hidden when compact
 ├─ Body          (replaced by an overlay while one is open)
-│   ├─ Rail        persistent navigation: Repositories · Code · Context · System (+ counts)
+│   ├─ Rail        persistent menu: Repositories · Code · Context · System (+ counts)
 │   └─ View        primary list region (+ inline filter row) and the inspector
 ├─ Operation     sticky line while indexing/synthesizing (real phase / elapsed / runtime state)
 ├─ Footer        contextual hints derived from the same table as the help sheet
 └─ Overlays      Add repository · Delete confirmation · New task · Save package · Help
 ```
 
-Focus ownership: exactly one of `rail`, `list`, `inspector`; an open overlay owns input and focus returns to the previous region when it closes. Per-view cursors and scroll offsets are preserved across view switches.
+Navigation follows the Torlink interaction model. The rail selection **is** the active destination: ↑↓ move it (with wrap-around) and the content pane follows immediately. `enter` activates — it moves focus into the list for the destination, or opens the detail for the selected row. Focus and activation are separate visual states, both monochrome-safe: the active destination always carries `▍` and the focused region adds the `▍` marker to its own title (the rail's `Workspace` header, the list title, the inspector title), so `NO_COLOR` still shows where the keyboard is.
 
-Responsive classes (from `layout.mjs`):
+Focus ownership: exactly one of `rail`, `list`, `inspector`; below the side-by-side breakpoint the inspector is a **mode** that owns input while open and closes when focus leaves it (Torlink's rule), so focus never rests on a hidden region. `esc` walks back one level — detail → list → menu — and clears an applied filter first. Per-view cursors and scroll offsets are preserved across view switches. Responsive classes (from `layout.mjs`):
 
 | Class | Condition | Layout |
 | --- | --- | --- |
@@ -75,21 +78,21 @@ Responsive classes (from `layout.mjs`):
 
 | Keys | Action |
 | --- | --- |
-| `1` `2` `3` `4` | Switch to Repositories / Code / Context / System |
-| `tab` | Cycle focus (rail → list → inspector when visible) |
-| `↑` `↓` | Move selection (list/rail) or scroll (inspector/system/viewer) |
-| `PgUp` `PgDn` `home` `end` | Page and jump within the focused region |
-| `enter` | Primary action (inspect, open, submit) |
-| `esc` | Close overlay / leave inspector mode / clear filter |
-| `/` | Filter the list (Repositories, Code) |
-| `?` | Keyboard help sheet (single source with the footer hints) |
+| `↑` `↓` (`j` `k`) | Move the menu selection, the list selection, or scroll the focused region (wraps in menus/lists; `PgUp` `PgDn` `home` `end` page and jump) |
+| `←` `→` (`h` `l`) | Move between panes (rail ↔ list ↔ inspector when it is open) |
+| `enter` | Activate: rail → list, list row → its detail (which then owns the keyboard), dialogs → submit |
+| `esc` | Back one level: overlay → detail → list → menu; clears an applied filter first |
+| `tab` | Cycle focus (rail → list → detail when open); a mode that loses focus closes |
+| `1` `2` `3` `4` | Menu shortcuts: jump straight to Repositories / Code / Context / System |
+| `/` | Filter the list (field owns the keyboard; `enter` applies, `esc` clears, `↓` leaves the field) |
+| `?` | Control reference from the shared keymap (`↑↓` scroll it, any other key closes it) |
 | `r` | Refresh from the backend |
-| `q` / `Ctrl+C` | Quit (terminal restored) |
+| `q` / `Ctrl+C` | Quit (terminal restored, owned backend stopped) |
 | `a` `s` `i` `d` | Repositories: add, scan, index, delete |
 | `n` `b` `g` `m` `S` | Context: new task, budget, AST graph, rendered/raw, save package |
 | `e` | System: export diagnostics bundle |
 
-Overlays use one shared editor: visible cursor, `←`/`→`, `home`/`end`, `Backspace`, `Ctrl+U`/`W`/`K`/`A`/`E`, `enter` to submit, `esc` to cancel. Validation errors come from the client/backend responses; malformed input is never silently accepted.
+Overlays own input completely — no view shortcut leaks through. Text fields use one shared editor (visible cursor: inverse cell, or the `▏` caret when styling is disabled): `←`/`→` move the cursor, `home`/`end`, `Backspace`, `Ctrl+U`/`W`/`K`/`A`/`E`, `enter` to submit, `esc` to cancel. The add-repository dialog moves between its fields with `↑`/`↓` and switches source with `tab`. Validation errors come from the client/backend responses; malformed input is never silently accepted.
 
 ---
 
@@ -118,4 +121,6 @@ PTY verification (real backend on `127.0.0.1:8765`, 40×120 unless noted):
 script -qec "stty rows 40 cols 120; node frontend/tui/retrack.mjs" /dev/null
 ```
 
-Checklist: cold start hydrates persisted repositories without an import; repository selection/switching/filtering; add → scan → index with real phases → completion; context synthesis with evidence and rendered/raw output; package save/open/delete; backend loss and `r` reconciliation; view navigation and modal input; resizing (120×40 → 40×10); `q` and `Ctrl+C` exit with the alternate screen and cursor restored; no orphan processes. `process.test.mjs` covers the snapshot contract, the failed-startup path, PTY startup/quit/Ctrl+C, alternate-screen restoration, and the published scroll bounds; `lifecycle.test.mjs` and `lifecycle-process.test.mjs` cover discovery/spawn/readiness/ownership/shutdown (attach without spawning, graceful and SIGKILL-fallback shutdown, startup failure, readiness timeout, port-race protection, repeated launch, snapshot cleanup) against a real child backend.
+Checklist: cold start hydrates persisted repositories without an import; repository selection/switching/filtering; add → scan → index with real phases → completion; context synthesis with evidence and rendered/raw output; package save/open/delete; backend loss and `r` reconciliation; view navigation and modal input; resizing (120×40 → 40×10); `q` and `Ctrl+C` exit with the alternate screen and cursor restored; no orphan processes. `process.test.mjs` covers the snapshot contract, the failed-startup path, PTY startup/quit/Ctrl+C, alternate-screen restoration, and the published scroll bounds; `lifecycle.test.mjs` and `lifecycle-process.test.mjs` cover discovery/spawn/readiness/ownership/shutdown (attach without spawning, graceful and SIGKILL-fallback shutdown, startup failure, readiness timeout, port-race protection, repeated launch, snapshot cleanup) against a real child backend; `menu.test.mjs` covers menu navigation (movement with wrap-around, activation, vim aliases, preserved per-view cursors), input precedence (overlay, field, filter, help, globals), focus rules (detail mode below the breakpoint, back chain, hidden regions) and rendering (focus markers without color, contextual footers that never clip, footer/help single-source agreement, visible input cursor).
+
+Menu acceptance run (real backend, PTY): drive the whole interface with `↑` `↓` `enter` `tab` `esc` plus contextual keys at 120×40, 90×24, 60×20 and 48×16 — menu movement and activation, dialog/filter/help owning input, detail mode focus, contextual footers, and clean exit with the terminal restored — and once with `NO_COLOR=1` to confirm focus and selection markers survive without styling.

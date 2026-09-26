@@ -11,6 +11,7 @@
  */
 
 import { layoutFor, padTo, padStart, truncate, windowStart, wrapToWidth, clamp } from "./layout.mjs";
+import { HELP_GROUPS, footerHints } from "./keymap.mjs";
 import { formatMarkdown } from "./markdown.mjs";
 import {
   GLYPH,
@@ -25,13 +26,6 @@ import {
   statusStyle,
   summarizeList,
 } from "./theme.mjs";
-
-export const HELP_SHEET = Object.freeze([
-  { title: "Navigate", hints: [["1-4", "views"], ["tab", "pane"], ["↑↓ / ←→", "move"], ["enter", "open"], ["esc", "back"], ["?", "keys"], ["q", "quit"]] },
-  { title: "Repositories", hints: [["/", "filter"], ["a", "add"], ["s", "scan"], ["i", "index"], ["d", "delete"], ["r", "refresh"]] },
-  { title: "Context", hints: [["n", "new task"], ["enter", "suggestion or package"], ["b", "budget"], ["g", "AST graph"], ["m", "rendered / raw"], ["S", "save package"], ["d", "delete package"]] },
-  { title: "System", hints: [["↑↓", "scroll"], ["e", "export diagnostics"]] },
-]);
 
 export const HELP_NOTES = Object.freeze([
   "Indexing and synthesis cannot be cancelled: the backend exposes no cancel endpoint.",
@@ -87,6 +81,33 @@ function fit(styled, width) {
   return truncated + " ".repeat(Math.max(0, width - plainLength(truncated)));
 }
 
+/**
+ * A live text field: the value with a visible cursor. Styling inverts the cell
+ * under the cursor; without styling (NO_COLOR) the caret glyph keeps the
+ * insertion point visible, because no escape sequence may be emitted.
+ */
+function editorText(value, cursor, styler, placeholder = "") {
+  const text = String(value ?? "");
+  if (text.length === 0) {
+    const head = placeholder ? placeholder[0] : " ";
+    const tail = placeholder.slice(1);
+    return styler.enabled ? `${styler.inverse(head)}${styler.dim(tail)}` : `${GLYPH.caret}${tail}`;
+  }
+  const at = clamp(cursor ?? text.length, 0, text.length);
+  const before = text.slice(0, at);
+  const cell = text[at] ?? " ";
+  const after = text.slice(at + 1);
+  if (styler.enabled) return `${before}${styler.inverse(cell)}${after}`;
+  return `${before}${GLYPH.caret}${cell === " " ? "" : cell}${after}`;
+}
+
+/** A form field line: the focused field owns the cursor and the pointer marker. */
+function fieldLine(label, value, cursor, focused, placeholder) {
+  const text = String(value ?? "");
+  if (!focused) return { text: `  ${label}: ${text || placeholder}`, style: "dim" };
+  return { prefix: `${GLYPH.pointer} ${label}: `, value: text, cursor: cursor ?? text.length, placeholder };
+}
+
 function cell(text, style = identity) {
   return { text: String(text ?? ""), style };
 }
@@ -127,7 +148,7 @@ export function buildModel(app, options = {}) {
     rail: buildRail(state, layout),
     view: null,
     operation: buildOperation(state, layout, spinnerFrame),
-    footer: buildFooter(state, layout),
+    footer: buildFooter(state, layout, cols),
     overlay: state.overlay ? buildOverlay(state, layout, cols) : null,
     scrollMax: { inspector: 0, system: 0, viewer: 0 },
   };
@@ -139,7 +160,7 @@ export function buildModel(app, options = {}) {
   model.view = buildView(app, state, layout);
   model.scrollMax.inspector = Math.max(0, model.view.inspector.lines.length - (model.layout.bodyRows - 2));
   model.scrollMax.system = Math.max(0, model.view.list.rows.length - model.view.list.height);
-  model.scrollMax.viewer = model.overlay && model.overlay.kind === "viewPackage"
+  model.scrollMax.viewer = model.overlay && (model.overlay.kind === "viewPackage" || model.overlay.kind === "help")
     ? Math.max(0, model.overlay.lines.length - (model.layout.bodyRows - 2))
     : 0;
 
@@ -187,6 +208,7 @@ function buildView(app, state, layout) {
     focused: state.focus === "list",
     filterActive: state.filterActive,
     filter: state.filter,
+    filterCursor: state.filterCursor ?? (state.filter ?? "").length,
     empty: null,
     height: Math.max(1, layout.bodyRows - 2),
     width: layout.listWidth,
@@ -642,70 +664,98 @@ function buildOperation(state, layout, spinnerFrame) {
   return null;
 }
 
-function buildFooter(state, layout) {
-  const hints = [];
-  const push = (keys, label) => hints.push({ keys, label });
+/** Which contextual hint set owns the footer (same precedence as input dispatch). */
+function footerContext(state) {
+  if (state.overlay) {
+    if (state.overlay.kind === "help") return "help";
+    if (state.overlay.kind === "confirm") return "confirm";
+    if (state.overlay.kind === "addRepo") return "addRepo";
+    if (state.overlay.kind === "viewPackage") return "viewer";
+    return "editor";
+  }
+  if (state.filterActive) return "filter";
+  if (state.focus === "rail") return "rail";
+  if (state.focus === "inspector") return "inspector";
+  if (state.view === "repositories") return "repositories";
+  if (state.view === "context") return "context";
+  if (state.view === "system") return "system";
+  return "list";
+}
 
-  if (state.overlay?.kind === "help") push("esc", "close");
-  else if (state.overlay?.kind === "confirm") {
-    push("enter", "confirm");
-    push("esc", "cancel");
-  } else if (state.overlay?.kind === "addRepo") {
-    push("enter", "import");
-    push("tab", "source");
-    push("↑↓", "field");
-    push("esc", "cancel");
-  } else if (state.overlay?.kind === "newTask" || state.overlay?.kind === "savePackage") {
-    push("enter", "submit");
-    push("esc", "cancel");
-  } else if (state.overlay?.kind === "viewPackage") {
-    push("↑↓", "scroll");
-    push("m", state.markdownView === "rendered" ? "raw" : "rendered");
-    push("esc", "close");
-  } else if (state.filterActive) {
-    push("enter", "apply");
-    push("esc", "clear");
-  } else if (state.focus === "rail") {
-    push("↑↓", "view");
-    push("enter", "content");
-    push("tab", "pane");
-    push("?", "keys");
-  } else if (state.focus === "inspector") {
-    push("↑↓", "scroll");
-    push("esc", "back");
-    push("tab", "pane");
-    push("?", "keys");
-  } else if (state.view === "repositories") {
-    push("↑↓", "move");
-    push("enter", "inspect");
-    push("a", "add");
-    push("i", "index");
-    push("d", "delete");
-    push("/", "filter");
-    push("?", "keys");
-  } else if (state.view === "code") {
-    push("↑↓", "move");
-    push("enter", "inspect");
-    push("tab", "pane");
-    push("?", "keys");
-  } else if (state.view === "context") {
-    push("↑↓", "move");
-    push("n", "new task");
-    push("enter", "open");
-    push("m", state.markdownView === "rendered" ? "raw" : "rendered");
-    push("S", "save");
-    push("?", "keys");
+/**
+ * Terse contextual hints from the shared control map (keymap.mjs). Hints that
+ * would overflow the row are dropped whole — never wrapped or clipped — and the
+ * `?` affordance is kept whenever the context advertises it.
+ */
+function buildFooter(state, layout, cols) {
+  // Compact terminals keep the short list; otherwise width decides how many
+  // whole hints fit, so a wide terminal shows every relevant control.
+  const cap = layout.compact ? layout.footerHints : Number.POSITIVE_INFINITY;
+  const hints = footerHints(footerContext(state), state).slice(0, cap);
+  const right = state.lastRefreshAt ? `updated ${new Date(state.lastRefreshAt).toLocaleTimeString()}` : null;
+  const budget = Math.max(0, cols - (right ? plainLength(right) + 2 : 0));
+  const keysIndex = hints.findIndex((hint) => hint.keys === "?");
+  const reserved = keysIndex >= 0 ? plainLength(`${hints[keysIndex].keys} ${hints[keysIndex].label}`) + 2 : 0;
+  const primaryBudget = Math.max(0, budget - reserved);
+
+  const shown = [];
+  let used = 0;
+  for (const hint of hints) {
+    if (hint.keys === "?") continue;
+    const cost = plainLength(`${hint.keys} ${hint.label}`) + (shown.length > 0 ? 2 : 0);
+    if (shown.length > 0 && used + cost > primaryBudget) break;
+    shown.push(hint);
+    used += cost;
+  }
+  if (keysIndex >= 0) shown.push(hints[keysIndex]);
+
+  return { hints: shown, right };
+}
+
+/**
+ * The `?` reference sheet. Groups are laid out in two columns when both fit the
+ * terminal (Torlink's card does the same) and stacked otherwise, so a wide
+ * terminal shows the complete control list without scrolling. The sheet is
+ * scrollable because no terminal promises to be tall enough for it.
+ */
+function helpLines(cols) {
+  const blocks = HELP_GROUPS.map((group) => {
+    const keyWidth = Math.max(...group.hints.map(([keys]) => keys.length));
+    return {
+      title: group.title,
+      lines: group.hints.map(([keys, label]) => `${padTo(keys, keyWidth)}  ${label}`),
+    };
+  });
+  const render = (block) => [block.title, ...block.lines, ""];
+  const height = (list) => list.reduce((total, block) => total + block.lines.length + 2, 0);
+
+  // Balance the columns by line count, then keep them only if they fit.
+  let split = blocks.length;
+  let best = Infinity;
+  for (let index = 1; index < blocks.length; index += 1) {
+    const diff = Math.abs(height(blocks.slice(0, index)) - height(blocks.slice(index)));
+    if (diff < best) {
+      best = diff;
+      split = index;
+    }
+  }
+  const left = blocks.slice(0, split).flatMap(render);
+  const right = blocks.slice(split).flatMap(render);
+  const widthOf = (list) => list.reduce((max, line) => Math.max(max, line.length), 0);
+  const leftWidth = widthOf(left);
+  const gap = 2;
+
+  const body = [];
+  if (right.length > 0 && leftWidth + gap + widthOf(right) <= cols) {
+    const rows = Math.max(left.length, right.length);
+    for (let index = 0; index < rows; index += 1) {
+      body.push(`${padTo(left[index] ?? "", leftWidth + gap)}${right[index] ?? ""}`.trimEnd());
+    }
   } else {
-    push("↑↓", "scroll");
-    push("e", "export");
-    push("r", "refresh");
-    push("?", "keys");
+    body.push(...blocks.flatMap(render));
   }
 
-  return {
-    hints: hints.slice(0, layout.footerHints),
-    right: state.lastRefreshAt ? `updated ${new Date(state.lastRefreshAt).toLocaleTimeString()}` : null,
-  };
+  return [...body, "", ...HELP_NOTES];
 }
 
 function buildOverlay(state, layout, cols) {
@@ -714,15 +764,15 @@ function buildOverlay(state, layout, cols) {
   const height = Math.max(1, layout.bodyRows - 2);
 
   if (overlay.kind === "help") {
-    const lines = [];
-    for (const group of HELP_SHEET) {
-      lines.push({ text: group.title, style: "bold" });
-      const keyWidth = Math.max(...group.hints.map(([keys]) => keys.length)) + 2;
-      for (const [keys, label] of group.hints) lines.push({ text: `${padTo(keys, keyWidth)}${label}`, style: "dim" });
-      lines.push({ text: "" });
+    const lines = helpLines(cols).map((text) => ({ text }));
+    for (const group of HELP_GROUPS) {
+      const index = lines.findIndex((line) => line.text === group.title);
+      if (index >= 0) lines[index].style = "bold";
     }
-    for (const note of HELP_NOTES) lines.push({ text: note, style: "dim" });
-    return { kind: "help", title: "Keyboard", lines, width, height, scroll: 0 };
+    for (const line of lines) {
+      if (line.style === undefined && line.text !== "") line.style = "dim";
+    }
+    return { kind: "help", title: "Keyboard", lines, width, height, scroll: state.scroll.viewer ?? 0 };
   }
 
   if (overlay.kind === "confirm") {
@@ -747,14 +797,12 @@ function buildOverlay(state, layout, cols) {
   }
 
   if (overlay.kind === "addRepo") {
+    const pathLabel = overlay.source === "local" ? "path" : "url";
     const lines = [
       { text: `source: ${overlay.source === "local" ? "Local directory" : "GitHub URL"}   (tab switches)`, style: "dim" },
       { text: "" },
-      {
-        text: `${overlay.field === "path" ? GLYPH.pointer : " "} ${overlay.source === "local" ? "path" : "url"}: ${overlay.values.path || "(required)"}`,
-        style: overlay.field === "path" ? "bold" : "dim",
-      },
-      { text: `  name: ${overlay.values.name || "(optional)"}`, style: overlay.field === "name" ? "bold" : "dim" },
+      fieldLine(pathLabel, overlay.values.path, overlay.cursors.path, overlay.field === "path", "(required)"),
+      fieldLine("name", overlay.values.name, overlay.cursors.name, overlay.field === "name", "(optional)"),
     ];
     if (overlay.error) lines.push({ text: overlay.error, style: "error" });
     return { kind: "addRepo", title: "Add repository", lines, width, height, scroll: 0 };
@@ -764,14 +812,18 @@ function buildOverlay(state, layout, cols) {
     const lines = [
       { text: "Describe the coding task for grounded context:", style: "dim" },
       { text: "" },
-      { text: overlay.value || "(required)", style: "bold" },
+      { prefix: `${GLYPH.pointer} `, value: overlay.value, cursor: overlay.cursor, placeholder: "(required)" },
     ];
     if (overlay.error) lines.push({ text: overlay.error, style: "error" });
     return { kind: "newTask", title: `New task · ${Math.round(state.tokenBudget / 1024)}K budget${state.includeGraph ? " · AST graph" : ""}`, lines, width, height, scroll: 0 };
   }
 
   if (overlay.kind === "savePackage") {
-    const lines = [{ text: "Package name:", style: "dim" }, { text: "" }, { text: overlay.value || "(required)", style: "bold" }];
+    const lines = [
+      { text: "Package name:", style: "dim" },
+      { text: "" },
+      { prefix: `${GLYPH.pointer} `, value: overlay.value, cursor: overlay.cursor, placeholder: "(required)" },
+    ];
     if (overlay.error) lines.push({ text: overlay.error, style: "error" });
     return { kind: "savePackage", title: "Save context package", lines, width, height, scroll: 0 };
   }
@@ -875,7 +927,10 @@ function bodyLines(model, styler) {
 
 function railContent(model, styler) {
   const width = model.layout.railWidth;
-  const lines = [fit(styler.dim("Workspace"), width)];
+  // Same focus language as the pane titles: the marker is the no-color signal
+  // that the menu owns the keyboard, while the active destination keeps its own
+  // marker when focus is elsewhere.
+  const lines = [titleRule("Workspace", null, width, styler, model.rail.focused)];
   for (const item of model.rail.items) {
     const count = model.layout.showBadges && item.count !== null ? ` (${item.count})` : "";
     const marker = item.active ? GLYPH.pointer : " ";
@@ -898,7 +953,10 @@ function listContent(model, styler) {
 
   if (list.filterActive || list.filter) {
     const prefix = list.filterActive ? `${GLYPH.pointer} ` : "filter: ";
-    lines.push(fit(styler.dim(truncate(`${prefix}${list.filter || "(typing)"}`, width)), width));
+    const body = list.filterActive
+      ? editorText(list.filter, list.filterCursor, styler, "type to filter…")
+      : truncate(list.filter, Math.max(4, width - prefix.length));
+    lines.push(fit(`${styler.dim(prefix)}${body}`, width));
   }
 
   if (model.view.banner && !model.view.inspector.open) {
@@ -972,7 +1030,16 @@ function overlayLines(model, styler) {
   for (let index = start; index < Math.min(overlay.lines.length, start + height); index += 1) {
     const line = overlay.lines[index];
     const text = String(line.text ?? "");
-    const styled = line.style === "bold" ? styler.bold(text) : line.style === "error" ? styler.err(text) : line.style === "dim" ? styler.dim(text) : text;
+    const styled =
+      line.prefix !== undefined
+        ? `${styler.dim(line.prefix)}${editorText(line.value, line.cursor, styler, line.placeholder ?? "")}`
+        : line.style === "bold"
+          ? styler.bold(text)
+          : line.style === "error"
+            ? styler.err(text)
+            : line.style === "dim"
+              ? styler.dim(text)
+              : text;
     lines.push(fit(styled, model.cols));
   }
   return lines;

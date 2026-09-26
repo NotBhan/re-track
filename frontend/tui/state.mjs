@@ -55,6 +55,7 @@ function initialState() {
     inspectorOpen: false,
     overlay: null,
     filter: "",
+    filterCursor: 0,
     filterActive: false,
     markdownView: "rendered",
     tokenBudget: 4096,
@@ -282,6 +283,11 @@ export function createApp(options = {}) {
   function switchView(view) {
     if (!VIEWS.includes(view)) return;
     const patch = { view, overlay: null, filterActive: false, scroll: { ...state.scroll } };
+    // Below the side-by-side breakpoint the inspector is a mode, and Torlink's
+    // rule is that a region's mode resets once focus leaves it: switching
+    // destinations from the menu must not leave the previous detail covering
+    // the new list.
+    if (!state.viewport.sideBySide) patch.inspectorOpen = false;
     if (view === "system") {
       patch.scroll.system = 0;
     }
@@ -317,10 +323,19 @@ export function createApp(options = {}) {
     void loadPrompts(selectedRepository());
   }
 
+  /**
+   * Cycle focus between the applicable regions (Torlink's tab). A detail mode
+   * that loses focus closes, so focus never rests on a hidden region.
+   */
   function cycleFocus() {
     const order = state.inspectorOpen ? ["rail", "list", "inspector"] : ["rail", "list"];
     const current = order.indexOf(state.focus);
-    set({ focus: order[wrapStep(current, 1, order.length)] });
+    const next = order[wrapStep(current, 1, order.length)];
+    const patch = { focus: next };
+    if (next !== "inspector" && state.inspectorOpen && !state.viewport.sideBySide) {
+      patch.inspectorOpen = false;
+    }
+    set(patch);
   }
 
   function setFocus(focus) {
@@ -331,8 +346,42 @@ export function createApp(options = {}) {
     set({ inspectorOpen: true, scroll: { ...state.scroll, inspector: 0 } });
   }
 
+  /** Open the detail and hand it the keyboard — the menu's activation target. */
+  function enterInspector() {
+    set({ inspectorOpen: true, focus: "inspector", scroll: { ...state.scroll, inspector: 0 } });
+  }
+
   function closeInspector() {
     set({ inspectorOpen: false, focus: state.focus === "inspector" ? "list" : state.focus });
+  }
+
+  /** Menu movement: the selection *is* the active destination, and it wraps. */
+  function moveRail(delta) {
+    const current = VIEWS.indexOf(state.view);
+    switchView(VIEWS[wrapStep(current, delta, VIEWS.length)]);
+  }
+
+  /** Back one level (Torlink's esc): detail → list → menu, clearing a filter first. */
+  function back() {
+    if (state.inspectorOpen) {
+      closeInspector();
+      return;
+    }
+    if (state.filter) {
+      cancelFilter();
+      return;
+    }
+    if (state.focus !== "rail") setFocus("rail");
+  }
+
+  function focusLeft() {
+    if (state.focus === "inspector") closeInspector();
+    else if (state.focus === "list") setFocus("rail");
+  }
+
+  function focusRight() {
+    if (state.focus === "rail") setFocus("list");
+    else if (state.focus === "list" && state.inspectorOpen && state.viewport.sideBySide) setFocus("inspector");
   }
 
   function scrollRegion(region, delta, size) {
@@ -357,15 +406,21 @@ export function createApp(options = {}) {
   }
 
   function startFilter() {
-    set({ filterActive: true, focus: "list" });
+    set({ filterActive: true, focus: "list", filterCursor: state.filter.length });
   }
 
   function cancelFilter() {
-    set({ filterActive: false, filter: "", cursors: { ...state.cursors, [state.view]: 0 } });
+    set({ filterActive: false, filter: "", filterCursor: 0, cursors: { ...state.cursors, [state.view]: 0 } });
   }
 
-  function applyFilterText(text) {
-    set({ filter: stripMouseSequences(text), cursors: { ...state.cursors, [state.view]: 0 } });
+  /** Replace the filter text and place the caret — the field keeps a real cursor. */
+  function applyFilterText(text, cursor = String(text ?? "").length) {
+    const value = stripMouseSequences(text);
+    set({
+      filter: value,
+      filterCursor: clamp(cursor, 0, value.length),
+      cursors: { ...state.cursors, [state.view]: 0 },
+    });
   }
 
   /* -------------------------------- overlays -------------------------------- */
@@ -711,7 +766,15 @@ export function createApp(options = {}) {
     if (!overlay) return undefined;
 
     if (overlay.kind === "help") {
-      if (intent.name !== "unknown") closeOverlay();
+      // The reference sheet scrolls; every other key dismisses it (Torlink).
+      const max = state.viewport.viewerMax;
+      if (intent.name === "up") scrollRegion("viewer", -1, max);
+      else if (intent.name === "down") scrollRegion("viewer", 1, max);
+      else if (intent.name === "pageUp") scrollRegion("viewer", -10, max);
+      else if (intent.name === "pageDown") scrollRegion("viewer", 10, max);
+      else if (intent.name === "home") scrollRegion("viewer", -(state.scroll.viewer ?? 0), max);
+      else if (intent.name === "end") scrollRegion("viewer", max, max);
+      else if (intent.name !== "unknown") closeOverlay();
       return undefined;
     }
 
@@ -795,7 +858,15 @@ export function createApp(options = {}) {
       set({ filterActive: false });
       return;
     }
-    const current = { value: state.filter, cursor: state.filter.length };
+    // Torlink's field semantics: ↓ leaves the field for the list, ↑ is swallowed
+    // so a stray tap never moves the hidden list selection.
+    if (intent.name === "down") {
+      set({ filterActive: false });
+      return;
+    }
+    if (intent.name === "up") return;
+
+    const current = { value: state.filter, cursor: state.filterCursor ?? state.filter.length };
     const names = {
       backspace: { type: "backspace" },
       left: { type: "left" },
@@ -803,26 +874,32 @@ export function createApp(options = {}) {
       home: { type: "home" },
       end: { type: "end" },
     };
-    if (intent.name === "ctrl" && intent.char === "u") {
-      applyFilterText("");
+    const controlEdits = {
+      u: { type: "clear" },
+      w: { type: "deleteWord" },
+      k: { type: "killToEnd" },
+      a: { type: "home" },
+      e: { type: "end" },
+    };
+    if (intent.name === "ctrl" && controlEdits[intent.char]) {
+      const next = applyEdit(current, controlEdits[intent.char]);
+      applyFilterText(next.value, next.cursor);
       return;
     }
     if (names[intent.name]) {
-      applyFilterText(applyEdit(current, names[intent.name]).value);
+      const next = applyEdit(current, names[intent.name]);
+      applyFilterText(next.value, next.cursor);
       return;
     }
-    if (intent.name === "char") {
-      applyFilterText(state.filter + intent.char);
-      return;
-    }
-    if (intent.name === "space") {
-      applyFilterText(`${state.filter} `);
+    if (intent.name === "char" || intent.name === "space") {
+      const next = applyEdit(current, { type: "insert", text: intent.name === "space" ? " " : intent.char });
+      applyFilterText(next.value, next.cursor);
     }
   }
 
   function handleMoveKey(intent, pageSize) {
-    if (intent.name === "up") moveCursor(-1);
-    else if (intent.name === "down") moveCursor(1);
+    const delta = moveDelta(intent);
+    if (delta !== 0) moveCursor(delta);
     else if (intent.name === "pageUp") pageCursor(-1, pageSize);
     else if (intent.name === "pageDown") pageCursor(1, pageSize);
     else if (intent.name === "home") moveCursor(0);
@@ -832,8 +909,8 @@ export function createApp(options = {}) {
   function handleListAction(intent, pageSize) {
     if (state.view === "system") {
       const max = state.viewport.systemMax;
-      if (intent.name === "up") scrollRegion("system", -1, max);
-      else if (intent.name === "down") scrollRegion("system", 1, max);
+      const delta = moveDelta(intent);
+      if (delta !== 0) scrollRegion("system", delta, max);
       else if (intent.name === "pageUp") scrollRegion("system", -(pageSize - 1), max);
       else if (intent.name === "pageDown") scrollRegion("system", pageSize - 1, max);
       else if (intent.name === "home") scrollRegion("system", -(state.scroll.system ?? 0), max);
@@ -844,21 +921,18 @@ export function createApp(options = {}) {
 
     if (intent.name === "enter") {
       if (state.view === "repositories") {
-        const repo = selectedRepository();
-        if (repo) {
-          if (state.inspectorOpen) setFocus("inspector");
-          else openInspector();
-        }
+        // Activation opens the detail and hands it the keyboard (Torlink:
+        // enter opens, esc walks back).
+        if (selectedRepository()) enterInspector();
         return;
       }
       if (state.view === "code") {
-        openInspector();
+        enterInspector();
         return;
       }
       if (state.view === "context") {
         const row = selectedContextRow();
         if (row?.kind === "package") void openPackageViewer(row.id);
-        else if (row?.kind === "suggestion") openNewTask();
         else openNewTask();
         return;
       }
@@ -902,9 +976,17 @@ export function createApp(options = {}) {
     }
   }
 
+  /** ↑ / ↓ with the Torlink movement aliases (j / k). */
+  function moveDelta(intent) {
+    if (intent.name === "up" || (intent.name === "char" && intent.char === "k")) return -1;
+    if (intent.name === "down" || (intent.name === "char" && intent.char === "j")) return 1;
+    return 0;
+  }
+
   /**
-   * Single input entry point with explicit precedence:
-   * ctrl-c → overlay owns input → filter capture → global keys → view keys.
+   * Single input entry point with explicit precedence, mirroring the Torlink
+   * model: termination → active overlay → active text edit → global keys →
+   * focused region → ignored input.
    */
   function dispatch(intent) {
     if (intent.name === "ctrl" && intent.char === "c") return { quit: true };
@@ -938,22 +1020,22 @@ export function createApp(options = {}) {
       return {};
     }
     if (intent.name === "escape") {
-      if (state.inspectorOpen) {
-        closeInspector();
-        return {};
-      }
-      if (state.filter) {
-        cancelFilter();
-        return {};
-      }
-      setFocus("list");
+      back();
+      return {};
+    }
+    if (intent.name === "left" || (intent.name === "char" && intent.char === "h")) {
+      focusLeft();
+      return {};
+    }
+    if (intent.name === "right" || (intent.name === "char" && intent.char === "l")) {
+      focusRight();
       return {};
     }
 
     if (state.focus === "rail") {
-      if (intent.name === "up" || intent.name === "down") {
-        const current = VIEWS.indexOf(state.view);
-        switchView(VIEWS[wrapStep(current, intent.name === "down" ? 1 : -1, VIEWS.length)]);
+      const delta = moveDelta(intent);
+      if (delta !== 0) {
+        moveRail(delta);
         return {};
       }
       if (intent.name === "enter") setFocus("list");
@@ -965,8 +1047,8 @@ export function createApp(options = {}) {
     if (state.focus === "inspector") {
       const max = state.viewport.inspectorMax;
       const view = state.view;
-      if (intent.name === "up") scrollRegion("inspector", -1, max);
-      else if (intent.name === "down") scrollRegion("inspector", 1, max);
+      const delta = moveDelta(intent);
+      if (delta !== 0) scrollRegion("inspector", delta, max);
       else if (intent.name === "pageUp") scrollRegion("inspector", -(pageSize - 1), max);
       else if (intent.name === "pageDown") scrollRegion("inspector", pageSize - 1, max);
       else if (intent.name === "home") scrollRegion("inspector", -(state.scroll.inspector ?? 0), max);
@@ -1058,6 +1140,7 @@ export function createApp(options = {}) {
     pageCursor,
     selectRepositoryById,
     openInspector,
+    enterInspector,
     closeInspector,
     openHelp,
     openAddRepository,

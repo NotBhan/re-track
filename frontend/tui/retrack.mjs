@@ -124,6 +124,8 @@ async function runInteractive(client, { onExit }) {
       inspectorMax: model.scrollMax.inspector,
       systemMax: model.scrollMax.system,
       viewerMax: model.scrollMax.viewer,
+      // Focus rules depend on whether the inspector is a pane or a mode.
+      sideBySide: model.layout.sideBySide,
     });
     if (clearNext) {
       clearScreen();

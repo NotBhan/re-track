@@ -15,6 +15,7 @@ export const ESC = "\x1b[";
 /** Single-cell glyphs only — no wide or emoji characters. */
 export const GLYPH = Object.freeze({
   pointer: "▍",
+  caret: "▏",
   bullet: "•",
   dot: "·",
   check: "✓",
