@@ -241,7 +241,7 @@ describe("tui process: interactive (PTY)", () => {
     assert.match(result.stdout, /System · backend/, "view switching reached the System view");
     assert.match(
       strip(result.stdout),
-      /provider switching: GUI only/,
+      /configuration: Settings view/,
       "paging scrolled the System report to its final section"
     );
     assertProcessGone(result.pid);

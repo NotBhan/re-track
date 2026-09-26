@@ -65,11 +65,32 @@ export const PACKAGES = [
     id: "pkg-1",
     name: "Auth context",
     task: "Explain auth",
+    objective: "Explain auth",
+    repository_name: "alpha-service",
+    repository_branch: "main",
+    repository_commit: "abcdef1234567890",
+    section_count: 3,
     markdown: "# Auth\n\n- session",
     token_estimate: 320,
     created_at: "2026-09-24T09:00:00Z",
+    updated_at: "2026-09-24T09:00:00Z",
+    tags: ["auth"],
   },
 ];
+
+export const APP_SETTINGS = {
+  data_root: "/home/u/.retrack",
+  system_root: "/home/u/.retrack/system",
+  vector_db: "lancedb",
+  graph_db: "kuzu",
+  relational_db: "sqlite",
+  llm_endpoint: "http://127.0.0.1:1234/v1",
+  llm_model: "phi3:mini",
+  enable_kg_extraction: true,
+  auto_link_entities: false,
+  caching: true,
+  api_key_configured: false,
+};
 
 export const CONTEXT_OK = {
   success: true,
@@ -124,6 +145,8 @@ export function makeClient(overrides = {}) {
     if (typeof result === "function") return result(...args);
     return result;
   };
+  // Persisted settings are per-client so a toggle + re-read is observable.
+  const settings = { ...APP_SETTINGS };
   const base = {
     health: HEALTH,
     status: { status: "ok", llm_provider: "lmstudio" },
@@ -142,8 +165,30 @@ export function makeClient(overrides = {}) {
     getContextPackage: (id) => PACKAGES.find((pkg) => pkg.id === id),
     saveContextPackage: (payload) => ({ id: "pkg-new", created_at: "2026-09-25T12:00:00Z", ...payload }),
     deleteContextPackage: { success: true },
+    appendContextPackage: (id, payload) => ({ ...PACKAGES[0], id, task: payload.task, updated_at: "2026-09-25T13:00:00Z" }),
     agentContext: CONTEXT_OK,
     exportDiagnostics: { status: "ok", export_path: "/tmp/re-track-diagnostics.json" },
+    appSettings: () => ({ success: true, ...settings }),
+    updateCogneeSettings: (payload) => {
+      Object.assign(settings, payload);
+      return { success: true, ...settings };
+    },
+    updateProvider: (payload) => {
+      settings.llm_provider = payload.provider;
+      settings.llm_endpoint = payload.base_url;
+      settings.llm_model = payload.model;
+      return { success: true, ...payload };
+    },
+    discoverProvider: {
+      success: true,
+      provider: "lmstudio",
+      base_url: "http://127.0.0.1:1234/v1",
+      is_reachable: true,
+      status: "available",
+      models: [{ model_id: "qwen2.5-7b", name: "qwen2.5-7b", quantization: "Q4_K_M" }],
+      message: "",
+      error_details: null,
+    },
   };
   const client = { calls };
   for (const [name, value] of Object.entries({ ...base, ...overrides })) {
@@ -162,9 +207,9 @@ export async function settle(times = 4) {
   }
 }
 
-export async function startApp(overrides = {}) {
+export async function startApp(overrides = {}, options = {}) {
   const client = makeClient(overrides);
-  const app = createApp({ client, now: () => Date.now() });
+  const app = createApp({ client, now: () => Date.now(), ...options });
   await app.load();
   return { app, client };
 }

@@ -26,6 +26,10 @@ export const ENDPOINTS = Object.freeze({
   memoryStats: "/memory/stats",
   memoryVectors: "/memory/vectors",
   providerStatus: "/provider/status",
+  providerUpdate: "/provider/update",
+  providerDiscover: "/provider/discover",
+  settings: "/settings",
+  settingsCognee: "/settings/cognee",
   generateContext: "/context",
   agentContext: "/api/v1/context",
   index: "/index",
@@ -164,6 +168,16 @@ export function createBackendClient(options = {}) {
       }),
     saveContextPackage: (payload) =>
       request("POST", ENDPOINTS.contextPackages, { body: payload, timeoutMs: 15_000 }),
+    /** Append an iterative task/note to an existing package (mirrors ContextPackageAppendRequest). */
+    appendContextPackage: (packageId, { task, markdown = "", objective = "" }) =>
+      request("POST", `${ENDPOINTS.contextPackages}/${encodeURIComponent(packageId)}/append`, {
+        body: {
+          additional_task: task,
+          additional_markdown: markdown,
+          additional_objective: objective,
+        },
+        timeoutMs: 15_000,
+      }),
     deleteContextPackage: (packageId) =>
       request("DELETE", `${ENDPOINTS.contextPackages}/${encodeURIComponent(packageId)}`, {
         timeoutMs: 15_000,
@@ -172,6 +186,27 @@ export function createBackendClient(options = {}) {
     memoryStats: () => request("GET", ENDPOINTS.memoryStats, { timeoutMs: 15_000 }),
     memoryVectors: () => request("GET", ENDPOINTS.memoryVectors, { timeoutMs: 15_000 }),
     providerStatus: () => request("GET", ENDPOINTS.providerStatus, { timeoutMs: 10_000 }),
+
+    /** Hot-reload and persist the active inference provider (UpdateProviderRequest). */
+    updateProvider: ({ provider, base_url, model, api_key = "local" }) =>
+      request("POST", ENDPOINTS.providerUpdate, {
+        body: { provider, base_url, model, api_key },
+        timeoutMs: 30_000,
+      }),
+
+    /** Non-mutating model discovery probe for a candidate or active endpoint. */
+    discoverProvider: ({ provider, base_url, api_key = "local" }) =>
+      request("POST", ENDPOINTS.providerDiscover, {
+        body: { provider, base_url, api_key },
+        timeoutMs: 20_000,
+      }),
+
+    /** Persistent application settings (AppSettingsResponse). */
+    appSettings: () => request("GET", ENDPOINTS.settings, { timeoutMs: 10_000 }),
+
+    /** Persist Cognee pipeline parameters (the only settings mutation exposed over HTTP). */
+    updateCogneeSettings: (payload) =>
+      request("POST", ENDPOINTS.settingsCognee, { body: payload, timeoutMs: 20_000 }),
 
     /** Active-repository Context Package synthesis (the GUI's generate_context path). */
     generateContext: ({ task, datasets, top_k }) =>

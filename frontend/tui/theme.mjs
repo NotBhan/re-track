@@ -26,7 +26,23 @@ export const GLYPH = Object.freeze({
   ellipsis: "…",
   rule: "─",
   bar: "▌",
+  filled: "█",
+  empty: "░",
 });
+
+/**
+ * Determinate progress bar. `ratio` must be authoritative backend data
+ * (processed/total files or stage index/total) — the bar never invents a
+ * percentage, and a missing ratio renders as an empty track.
+ */
+export function progressBar(ratio, width) {
+  const cells = Math.max(1, Math.floor(width));
+  if (typeof ratio !== "number" || Number.isNaN(ratio) || !Number.isFinite(ratio)) {
+    return GLYPH.empty.repeat(cells);
+  }
+  const filled = Math.round(Math.min(Math.max(ratio, 0), 1) * cells);
+  return GLYPH.filled.repeat(filled) + GLYPH.empty.repeat(cells - filled);
+}
 
 export const SPINNER_FRAMES = Object.freeze(["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]);
 

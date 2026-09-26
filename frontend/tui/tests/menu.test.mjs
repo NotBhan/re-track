@@ -54,9 +54,10 @@ describe("menu: navigation", () => {
     // Wrapping matches the reference movement helper (wrapStep).
     app.dispatch(key("up"));
     app.dispatch(key("up"));
-    assert.equal(app.getState().view, "system", "wraps past the first entry");
+    assert.equal(app.getState().view, "settings", "wraps past the first entry");
     app.dispatch(key("down"));
     assert.equal(app.getState().view, "repositories", "wraps past the last entry");
+    await settle();
   });
 
   it("activates the selection with enter by moving focus into the list", async () => {
@@ -103,10 +104,17 @@ describe("menu: navigation", () => {
 
   it("keeps numeric shortcuts as fast access", async () => {
     const { app } = await startApp();
-    for (const [digit, view] of [["2", "code"], ["3", "context"], ["4", "system"], ["1", "repositories"]]) {
+    for (const [digit, view] of [
+      ["2", "code"],
+      ["3", "context"],
+      ["4", "system"],
+      ["5", "settings"],
+      ["1", "repositories"],
+    ]) {
       app.dispatch(char(digit));
       assert.equal(app.getState().view, view);
     }
+    await settle();
   });
 
   it("preserves each destination's cursor and scroll state across menu switches", async () => {
@@ -367,7 +375,9 @@ describe("menu: rendering", () => {
   it("lists every help group in the ? sheet and scrolls it on short terminals", async () => {
     const { app } = await startApp();
     app.dispatch(char("?"));
-    const wide = text(frame(app, 120, 46).lines);
+    // A tall terminal shows the complete reference in one frame; a shorter one
+    // scrolls (checked below) instead of dropping entries.
+    const wide = text(frame(app, 120, 84).lines);
     for (const group of HELP_GROUPS) assert.match(wide, new RegExp(group.title));
     assert.match(wide, /Indexing and synthesis/, "the reference keeps its notes when it fits");
 

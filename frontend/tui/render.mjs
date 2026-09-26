@@ -23,13 +23,14 @@ import {
   formatCount,
   formatDuration,
   formatRelativeTime,
+  progressBar,
   statusStyle,
   summarizeList,
 } from "./theme.mjs";
 
 export const HELP_NOTES = Object.freeze([
   "Indexing and synthesis cannot be cancelled: the backend exposes no cancel endpoint.",
-  "Provider switching and settings changes are available in the desktop GUI only.",
+  "Provider configuration is editable in Settings (e); storage engines are fixed by the backend.",
   "Code search is unavailable over HTTP; the Code view shows AST metadata only.",
   "All values shown come from backend responses; nothing is estimated.",
 ]);
@@ -39,7 +40,29 @@ const VIEW_TITLES = Object.freeze({
   code: "Code",
   context: "Context",
   system: "System",
+  settings: "Settings",
 });
+
+/** True when the backend reported a usable file total (0/1048 is real progress). */
+const hasFileProgress = (op) =>
+  Number.isFinite(op?.processedFiles) && Number.isFinite(op?.totalFiles) && op.totalFiles > 0;
+/** True when the backend reported a usable phase index. */
+const hasPhaseProgress = (op) =>
+  Number.isFinite(op?.stageIndex) && Number.isFinite(op?.stageTotal) && op.stageTotal > 0 && op.stageIndex > 0;
+
+/**
+ * Height of the operation block, derived from state before the layout is built.
+ * Determinate progress earns a second row for the bar; a failure keeps its
+ * error text visible on one.
+ */
+function operationHeight(state) {
+  if (state.operation?.kind === "indexing") {
+    return hasFileProgress(state.operation) || hasPhaseProgress(state.operation) ? 2 : 1;
+  }
+  if (state.operation?.kind === "synthesis") return 1;
+  if (state.lastRun) return state.lastRun.status === "error" && state.lastRun.stage ? 2 : 1;
+  return 0;
+}
 
 const identity = (text) => text;
 const ANSI = /\u001b\[[0-9;]*m/g;
@@ -135,7 +158,7 @@ export function buildModel(app, options = {}) {
   const cols = Math.max(20, options.cols ?? 80);
   const rows = Math.max(6, options.rows ?? 24);
   const spinnerFrame = Math.max(0, options.spinnerFrame ?? 0);
-  const layout = layoutFor({ cols, rows, operation: Boolean(state.operation) });
+  const layout = layoutFor({ cols, rows, operation: operationHeight(state) });
 
   const model = {
     cols,
@@ -147,7 +170,7 @@ export function buildModel(app, options = {}) {
     header: buildHeader(app, state),
     rail: buildRail(state, layout),
     view: null,
-    operation: buildOperation(state, layout, spinnerFrame),
+    operation: buildOperation(state, layout, spinnerFrame, cols),
     footer: buildFooter(state, layout, cols),
     overlay: state.overlay ? buildOverlay(state, layout, cols) : null,
     scrollMax: { inspector: 0, system: 0, viewer: 0 },
@@ -191,6 +214,7 @@ function buildRail(state, layout) {
       { key: "code", label: "Code", count: null, active: state.view === "code" },
       { key: "context", label: "Context", count: state.packages.length, active: state.view === "context" },
       { key: "system", label: "System", count: null, active: state.view === "system" },
+      { key: "settings", label: "Settings", count: null, active: state.view === "settings" },
     ],
     width: layout.railWidth,
   };
@@ -225,6 +249,7 @@ function buildView(app, state, layout) {
   if (state.view === "repositories") buildRepositories(app, state, layout, list, inspector);
   else if (state.view === "code") buildCode(app, state, layout, list, inspector);
   else if (state.view === "context") buildContext(app, state, layout, list, inspector);
+  else if (state.view === "settings") buildSettings(app, state, layout, list, inspector);
   else buildSystem(app, state, layout, list, inspector);
 
   return {
@@ -253,12 +278,16 @@ function buildSubtitle(app, state) {
     const budget = `${Math.round(state.tokenBudget / 1024)}K budget`;
     const graph = state.includeGraph ? "AST graph on" : "AST graph off";
     const source = state.prompts.source ? `suggestions ${state.prompts.source}` : null;
-    return [source, budget, graph].filter(Boolean).join(" · ");
+    const scope = state.packageScope === "packages" ? "catalog: packages" : "catalog: all";
+    return [scope, source, budget, graph].filter(Boolean).join(" · ");
   }
   return state.health?.status ? `backend ${state.health.status}` : null;
 }
 
 function buildBanner(app, state) {
+  if (state.view === "settings" && state.settingsError) {
+    return { level: "warn", lines: [`settings unavailable: ${state.settingsError}`] };
+  }
   if (state.view === "context" && state.prompts.state === "error") {
     return { level: "warn", lines: [`suggested tasks unavailable: ${state.prompts.error}`] };
   }
@@ -440,14 +469,24 @@ function buildContext(app, state, layout, list, inspector) {
           kind: "package",
           id: row.id,
           cells: [
-            cell(truncate(row.label ?? row.id, layout.listWidth - 24), identity),
-            cell(` ${truncate(formatCount(row.tokens), 8)} tok`, (text, styler) => styler.dim(text)),
+            cell(
+              truncate(row.label ?? row.id, Math.max(12, layout.listWidth - 4 - (layout.listWidth >= 54 ? 18 : 0) - (layout.listWidth >= 44 ? 10 : 0) - (layout.listWidth >= 66 ? 10 : 0) - 5)),
+              (text, styler) => styler.bold(text)
+            ),
+            ...(layout.listWidth >= 54 ? [cell(` ${truncate(row.repository ?? UNAVAILABLE, 16)}`, (text, styler) => styler.dim(text))] : []),
+            ...(layout.listWidth >= 44 ? [cell(` ${truncate(formatCount(row.tokens), 8)} tok`, (text, styler) => styler.dim(text))] : []),
+            ...(layout.listWidth >= 66 ? [cell(` ${truncate(formatRelativeTime(row.created, state.nowMs), 8)}`, (text, styler) => styler.dim(text))] : []),
             cell(" pkg", (text, styler) => styler.dim(text)),
           ],
         }
   );
   if (list.rows.length === 0) {
-    list.empty = state.prompts.state === "loading" ? "loading suggested tasks…" : "no suggestions or packages · press n for a task";
+    list.empty =
+      state.packageScope === "packages"
+        ? "no saved packages yet · generate context (n) and press S to save one"
+        : state.prompts.state === "loading"
+          ? "loading suggested tasks…"
+          : "no suggestions or packages · press n for a task, p for the catalog";
   }
 
   if (state.operation?.kind === "synthesis") {
@@ -496,11 +535,21 @@ function buildContext(app, state, layout, list, inspector) {
     const pkg = state.packages.find((item) => item.id === selected.id);
     inspector.lines = [
       cell(pkg?.name ?? selected.label, (text, styler) => styler.bold(text)),
-      cell(`${formatCount(pkg?.token_estimate)} tokens · saved ${formatRelativeTime(pkg?.created_at, state.nowMs)}`, (text, styler) => styler.dim(text)),
+      cell(
+        `${formatCount(pkg?.token_estimate)} tokens · ${formatCount(pkg?.section_count)} sections · saved ${formatRelativeTime(pkg?.created_at, state.nowMs)}`,
+        (text, styler) => styler.dim(text)
+      ),
+      cell(
+        `repository: ${pkg?.repository_name || UNAVAILABLE}${pkg?.repository_branch ? ` · ${pkg.repository_branch}` : ""}`,
+        (text, styler) => styler.dim(text)
+      ),
+      pkg?.updated_at && pkg.updated_at !== pkg.created_at
+        ? cell(`updated ${formatRelativeTime(pkg.updated_at, state.nowMs)}`, (text, styler) => styler.dim(text))
+        : cell(""),
       cell(""),
       ...wrapToWidth(pkg?.task ?? "", Math.max(20, inspector.width - 2)).map((piece) => cell(piece)),
       cell(""),
-      cell("Press enter to open the saved markdown.", (text, styler) => styler.dim(text)),
+      cell("enter opens the package · A appends · e exports", (text, styler) => styler.dim(text)),
     ];
     return;
   }
@@ -559,12 +608,181 @@ function buildContext(app, state, layout, list, inspector) {
   inspector.lines = lines;
 }
 
+/** A label/value row for detail panes (repository, symbol, settings). */
+function detailRow(label, value, width, labelWidth = 22) {
+  return cell(
+    joinCells(
+      [
+        cell(padTo(label, labelWidth), (text, styler) => styler.dim(text)),
+        cell(value === null || value === undefined || value === "" ? UNAVAILABLE : String(value)),
+      ],
+      { dim: identity },
+      Math.max(20, width)
+    )
+  );
+}
+
+const CAPABILITIES = Object.freeze([
+  ["repository management", "available (a / s / i / d)"],
+  ["context synthesis", "available (Context · n)"],
+  ["package viewer", "available (Context · enter)"],
+  ["package save", "available (Context · S)"],
+  ["package append", "available (POST /packages/{id}/append)"],
+  ["package export", "local file export (no backend endpoint)"],
+  ["diagnostics export", "available (System · e)"],
+  ["pipeline toggles", "editable here (t)"],
+  ["provider configuration", "editable here (e)"],
+  ["model discovery", "available (ctrl+p in the provider editor)"],
+  ["storage engine selection", "fixed by the backend (single engine each)"],
+  ["display scaling", "GUI only (desktop window property)"],
+  ["cancellation", "not supported by the backend"],
+  ["code search", "not available over HTTP"],
+  ["automatic updates", "not available"],
+]);
+
+/**
+ * Settings answers "what is RE:Track configured to use?" — the persisted
+ * application settings plus the runtime facts that qualify them. Every value is
+ * a backend field; missing fields render as unavailable, and capabilities that
+ * exist only in the desktop GUI say so instead of offering a dead control.
+ */
+function buildSettings(app, state, layout, list, inspector) {
+  const settings = state.appSettings ?? {};
+  const health = state.health ?? {};
+  const status = state.status ?? {};
+  const provider = state.providerStatus ?? {};
+  const detailed = state.detailedHealth ?? {};
+  const paths = detailed.storage_paths ?? {};
+  const memory = state.memoryStats ?? {};
+  const width = Math.max(20, inspector.width - 2);
+  const sections = app.settingsRows();
+  const selected = app.selectedSettingsSection();
+
+  const summaries = {
+    provider: provider.provider ?? health.provider_identity ?? status.llm_provider ?? null,
+    storage: settings.vector_db ? `${settings.vector_db} · ${settings.graph_db ?? UNAVAILABLE}` : null,
+    hardware: health.execution_device ?? null,
+    capabilities: `${CAPABILITIES.length} entries · read-only`,
+  };
+  list.rows = sections.map((section) => ({
+    key: section.key,
+    cells: [
+      cell(section.label, (text, styler) => styler.bold(text)),
+      cell(` ${summaries[section.key] ?? UNAVAILABLE}`, (text, styler) => styler.dim(text)),
+    ],
+  }));
+  list.subtitle = state.settingsBusy ? "applying…" : null;
+
+  const loadedModels = Array.isArray(provider.loaded_models)
+    ? provider.loaded_models.map((model) => model?.model_id ?? model?.name).filter(Boolean)
+    : [];
+
+  if (!selected || selected.key === "provider") {
+    inspector.title = "Provider";
+    inspector.lines = [
+      detailRow("provider", provider.provider ?? health.provider_identity ?? status.llm_provider, width),
+      detailRow("endpoint", provider.base_url ?? health.provider_base_url ?? status.llm_endpoint ?? settings.llm_endpoint, width),
+      detailRow("configured model", health.configured_model ?? status.configured_model ?? settings.llm_model, width),
+      detailRow("verified active", health.active_model ?? status.active_model ?? "none verified", width),
+      detailRow("active model state", health.active_model_state, width),
+      detailRow("reachable", provider.is_reachable ?? health.provider_reachable, width),
+      detailRow("health state", provider.health_state ?? health.provider_health_state, width),
+      detailRow("loaded models", loadedModels.length > 0 ? summarizeList(loadedModels, 3) : null, width),
+      detailRow("api key", settings.api_key_masked ?? (settings.api_key_configured ? "configured" : null), width),
+      cell(""),
+      cell("Embedding", (text, styler) => styler.dim(text)),
+      detailRow("provider", health.embedding_provider ?? status.embedding_provider, width),
+      detailRow("model", health.embedding_model ?? status.embedding_model, width),
+      detailRow("state", health.embedding_state ?? status.embedding_state, width),
+      cell(""),
+      cell("Semantic memory", (text, styler) => styler.dim(text)),
+      detailRow("provider", health.semantic_memory_provider ?? status.semantic_memory_provider ?? settings.semantic_memory_provider, width),
+      detailRow("model", health.semantic_memory_model ?? status.semantic_memory_model ?? settings.memory_model, width),
+      detailRow("state", health.semantic_memory_state ?? status.semantic_memory_state, width),
+      cell(""),
+      cell("press e to edit the provider, endpoint, model and API key", (text, styler) => styler.dim(text)),
+    ];
+    return;
+  }
+
+  if (selected.key === "storage") {
+    const toggle = (key) => {
+      const value = settings[key];
+      if (value === undefined || value === null) return null;
+      return `${value ? "enabled" : "disabled"} (t toggles)`;
+    };
+    inspector.title = "Storage & pipeline";
+    inspector.lines = [
+      detailRow("data root", settings.data_root ?? paths.canonical_root, width),
+      detailRow("system root", settings.system_root, width),
+      detailRow("logs directory", paths.logs_directory, width),
+      detailRow("cache directory", paths.cache_directory, width),
+      detailRow("canonical storage", health.storage_canonical_exists === undefined ? null : health.storage_canonical_exists ? "present" : "missing", width),
+      detailRow("writable", health.storage_canonical_writable, width),
+      detailRow("legacy storage detected", health.legacy_storage_detected, width),
+      cell(""),
+      cell("Engines", (text, styler) => styler.dim(text)),
+      detailRow("vector db", settings.vector_db, width),
+      detailRow("graph db", settings.graph_db, width),
+      detailRow("relational db", settings.relational_db, width),
+      cell("storage engines are fixed by the backend (single engine each)", (text, styler) => styler.dim(text)),
+      cell(""),
+      cell("Pipeline", (text, styler) => styler.dim(text)),
+      detailRow("knowledge graph", toggle("enable_kg_extraction"), width),
+      detailRow("auto-link entities", toggle("auto_link_entities"), width),
+      detailRow("ingestion caching", toggle("caching"), width),
+    ];
+    return;
+  }
+
+  if (selected.key === "hardware") {
+    inspector.title = "Hardware & runtime";
+    inspector.lines = [
+      detailRow("ram", health.ram_total_gb !== undefined ? `${health.ram_used_gb ?? 0} / ${health.ram_total_gb} GB` : null, width),
+      detailRow("cpu", health.cpu_percent !== undefined ? `${health.cpu_percent}%` : null, width),
+      detailRow("gpu", health.gpu_name ?? health.gpu_presence, width),
+      detailRow("vram", health.vram_total_gb !== undefined ? `${health.vram_used_gb ?? 0} / ${health.vram_total_gb} GB` : null, width),
+      detailRow("execution device", health.execution_device, width),
+      detailRow("memory pressure", health.high_memory_pressure === undefined ? null : health.high_memory_pressure ? "high" : "normal", width),
+      cell(""),
+      cell("Runtime", (text, styler) => styler.dim(text)),
+      detailRow("engine state", health.engine_state, width),
+      detailRow("engine reason", health.engine_reason, width),
+      detailRow("cognee state", health.cognee_state ?? (health.cognee_initialized ? "initialized" : null), width),
+      detailRow("cognee reason", health.cognee_reason, width),
+      detailRow("mcp ready", health.mcp_server_ready, width),
+      detailRow("concurrency", health.concurrency_queue_capacity !== undefined ? `${formatCount(health.concurrency_queue_depth)} queued · ${formatCount(health.concurrency_available_slots)} slots free` : null, width),
+      detailRow("datasets", memory.dataset_count, width),
+      detailRow("memory size", memory.total_size_display, width),
+      detailRow("knowledge graph", memory.knowledge_graph_status, width),
+    ];
+    return;
+  }
+
+  inspector.title = "Capabilities";
+  inspector.lines = [
+    cell("What this terminal interface can do, and what stays in the GUI:", (text, styler) => styler.dim(text)),
+    cell(""),
+    ...CAPABILITIES.map(([label, value]) =>
+      cell(
+        joinCells(
+          [cell(padTo(label, 30), (text, styler) => styler.dim(text)), cell(value)],
+          { dim: identity },
+          width
+        )
+      )
+    ),
+    cell(""),
+    cell("Pipeline toggles are persisted through POST /settings/cognee and re-read after saving.", (text, styler) => styler.dim(text)),
+    cell("Everything else configured in the desktop GUI has no terminal mutation surface.", (text, styler) => styler.dim(text)),
+  ];
+}
+
 function buildSystem(app, state, layout, list, inspector) {
   const health = state.health ?? {};
   const status = state.status ?? {};
   const provider = state.providerStatus ?? {};
   const memory = state.memoryStats ?? {};
-  const detailed = state.detailedHealth ?? {};
   const rows = [];
   const section = (title) => rows.push({ section: title });
   const entry = (label, value) => rows.push({ label, value });
@@ -573,13 +791,10 @@ function buildSystem(app, state, layout, list, inspector) {
   entry("identity", provider.provider ?? health.provider_identity ?? status.llm_provider);
   entry("reachable", provider.is_reachable ?? health.provider_reachable);
   entry("health state", provider.health_state ?? health.provider_health_state);
-  entry("endpoint", provider.base_url ?? health.provider_base_url ?? status.llm_endpoint);
-  entry("configured model", health.configured_model ?? status.configured_model);
-  entry("verified active", health.active_model ?? status.active_model ?? "none verified");
+  entry("active model", health.active_model ?? status.active_model ?? "none verified");
   entry("embedding state", health.embedding_state);
-  entry("embedding model", health.embedding_model);
   entry("semantic mem state", health.semantic_memory_state);
-  entry("semantic mem model", health.semantic_memory_model);
+  entry("configuration", "Settings view");
 
   section("Engine");
   entry("engine state", health.engine_state);
@@ -609,9 +824,10 @@ function buildSystem(app, state, layout, list, inspector) {
   entry("graph nodes/edges", memory.graph_nodes !== undefined || memory.graph_edges !== undefined ? `${formatCount(memory.graph_nodes)} / ${formatCount(memory.graph_edges)}` : null);
 
   section("Storage");
-  entry("canonical root", detailed.storage_paths?.canonical_root);
-  entry("logs directory", detailed.storage_paths?.logs_directory);
-  entry("cache directory", detailed.storage_paths?.cache_directory);
+  entry("canonical", health.storage_canonical_exists === undefined ? null : health.storage_canonical_exists ? "present" : "missing");
+  entry("writable", health.storage_canonical_writable);
+  entry("legacy detected", health.legacy_storage_detected);
+  entry("paths", "Settings view");
 
   section("Diagnostics");
   entry("version", health.version);
@@ -624,9 +840,8 @@ function buildSystem(app, state, layout, list, inspector) {
   }
 
   section("Limits");
-  rows.push({ note: "provider switching: GUI only" });
-  rows.push({ note: "settings mutation: GUI only" });
   rows.push({ note: "cancellation: not supported by the backend" });
+  rows.push({ note: "configuration: Settings view" });
 
   list.rows = rows;
   list.offsetMode = true;
@@ -635,32 +850,59 @@ function buildSystem(app, state, layout, list, inspector) {
   inspector.lines = [cell("System information is read-only.", (text, styler) => styler.dim(text))];
 }
 
-function buildOperation(state, layout, spinnerFrame) {
+/**
+ * Sticky operation block: obvious activity, obvious completion, obvious
+ * failure. Determinate bars are only drawn from backend-reported file or phase
+ * counts; everything else is indeterminate and says so.
+ */
+function buildOperation(state, layout, spinnerFrame, cols) {
+  const spinner = layout.compact ? "" : `${SPINNER_FRAMES[spinnerFrame % SPINNER_FRAMES.length]} `;
+  const barWidth = clamp(Math.floor(cols * 0.22), 10, 24);
+
   if (state.operation?.kind === "indexing") {
     const op = state.operation;
-    const phase = op.stageIndex && op.stageTotal ? `phase ${op.stageIndex}/${op.stageTotal}` : "indeterminate";
-    const spinner = layout.compact ? "" : `${SPINNER_FRAMES[spinnerFrame % SPINNER_FRAMES.length]} `;
-    return {
-      level: "warn",
-      text: `${spinner}indexing ${op.repoName ?? op.repoId} · ${phase} · ${op.stage ?? "working"} · elapsed ${formatDuration(state.nowMs - op.startedAt)}`,
-    };
+    const elapsed = formatDuration(op.elapsedMs ?? state.nowMs - op.startedAt);
+    const lines = [`${spinner}Indexing ${op.repoName ?? op.repoId} · ${op.stage ?? "working"}`];
+    if (hasFileProgress(op)) {
+      const phase = hasPhaseProgress(op) ? ` · phase ${op.stageIndex}/${op.stageTotal}` : "";
+      lines.push(
+        `${progressBar(op.processedFiles / op.totalFiles, barWidth)}  ${formatCount(op.processedFiles)} / ${formatCount(op.totalFiles)} files${phase} · ${elapsed}`
+      );
+    } else if (hasPhaseProgress(op)) {
+      lines.push(
+        `${progressBar(op.stageIndex / op.stageTotal, barWidth)}  phase ${op.stageIndex}/${op.stageTotal} · ${elapsed}`
+      );
+    }
+    return { level: "warn", lines };
   }
+
   if (state.operation?.kind === "synthesis") {
     const op = state.operation;
-    const spinner = layout.compact ? "" : `${SPINNER_FRAMES[spinnerFrame % SPINNER_FRAMES.length]} `;
+    const elapsed = formatDuration(state.nowMs - op.startedAt);
     return {
       level: "warn",
-      text: `${spinner}synthesizing · elapsed ${formatDuration(state.nowMs - op.startedAt)} · runtime ${op.runtimeState ?? "unknown"}`,
+      lines: [`${spinner}Synthesizing ${op.repoName ?? op.repoId} · elapsed ${elapsed} · runtime ${op.runtimeState ?? "unknown"}`],
     };
   }
+
   if (state.lastRun) {
     const run = state.lastRun;
-    const outcome =
-      run.status === "indexed"
-        ? `indexed ${run.repoName} · ${formatCount(run.processedFiles)}/${formatCount(run.totalFiles)} files`
-        : `indexing failed · ${run.repoName} · ${run.stage}`;
-    return { level: run.status === "indexed" ? "ok" : "error", text: outcome };
+    const name = run.repoName ?? run.repoId;
+    if (run.status === "indexed") {
+      const detail = [
+        Number.isFinite(run.totalFiles) ? `${formatCount(run.totalFiles)} files` : null,
+        Number.isFinite(run.failedFiles) && run.failedFiles > 0 ? `${formatCount(run.failedFiles)} failed` : null,
+        Number.isFinite(run.elapsedMs) ? formatDuration(run.elapsedMs) : null,
+      ]
+        .filter(Boolean)
+        .join(" · ");
+      return { level: "ok", lines: [`${GLYPH.check} Indexed ${name}${detail ? ` · ${detail}` : ""}`] };
+    }
+    const lines = [`${GLYPH.cross} Indexing failed · ${name}`];
+    if (run.stage) lines.push(run.stage);
+    return { level: "error", lines };
   }
+
   return null;
 }
 
@@ -671,6 +913,8 @@ function footerContext(state) {
     if (state.overlay.kind === "confirm") return "confirm";
     if (state.overlay.kind === "addRepo") return "addRepo";
     if (state.overlay.kind === "viewPackage") return "viewer";
+    if (state.overlay.kind === "pipelineSettings") return "pipeline";
+    if (state.overlay.kind === "providerSettings") return "provider";
     return "editor";
   }
   if (state.filterActive) return "filter";
@@ -679,6 +923,7 @@ function footerContext(state) {
   if (state.view === "repositories") return "repositories";
   if (state.view === "context") return "context";
   if (state.view === "system") return "system";
+  if (state.view === "settings") return "settings";
   return "list";
 }
 
@@ -689,9 +934,13 @@ function footerContext(state) {
  */
 function buildFooter(state, layout, cols) {
   // Compact terminals keep the short list; otherwise width decides how many
-  // whole hints fit, so a wide terminal shows every relevant control.
-  const cap = layout.compact ? layout.footerHints : Number.POSITIVE_INFINITY;
-  const hints = footerHints(footerContext(state), state).slice(0, cap);
+  // whole hints fit, so a wide terminal shows every relevant control. The `?`
+  // affordance is part of the contract, so it survives the compact cut.
+  const all = footerHints(footerContext(state), state);
+  const keysHint = all.find((hint) => hint.keys === "?");
+  const primary = all.filter((hint) => hint.keys !== "?");
+  const cap = layout.compact ? Math.max(0, layout.footerHints - (keysHint ? 1 : 0)) : primary.length;
+  const hints = [...primary.slice(0, cap), ...(keysHint ? [keysHint] : [])];
   const right = state.lastRefreshAt ? `updated ${new Date(state.lastRefreshAt).toLocaleTimeString()}` : null;
   const budget = Math.max(0, cols - (right ? plainLength(right) + 2 : 0));
   const keysIndex = hints.findIndex((hint) => hint.keys === "?");
@@ -828,13 +1077,111 @@ function buildOverlay(state, layout, cols) {
     return { kind: "savePackage", title: "Save context package", lines, width, height, scroll: 0 };
   }
 
-  const markdown = overlay.package?.markdown ?? "";
-  const lines = formatMarkdown(markdown, { rendered: state.markdownView === "rendered", width: Math.max(20, width - 2) });
+  if (overlay.kind === "appendPackage") {
+    const lines = [
+      { text: `Append an iterative task or note to “${overlay.label}”.`, style: "dim" },
+      { text: "It is sent as additional_task through POST /packages/{id}/append.", style: "dim" },
+      { text: "" },
+      { prefix: `${GLYPH.pointer} `, value: overlay.value, cursor: overlay.cursor, placeholder: "(required)" },
+    ];
+    if (overlay.error) lines.push({ text: overlay.error, style: "error" });
+    if (overlay.busy) lines.push({ text: "appending…", style: "dim" });
+    return { kind: "appendPackage", title: "Append to package", lines, width, height, scroll: 0 };
+  }
+
+  if (overlay.kind === "exportPackage") {
+    const lines = [
+      { text: `Write the stored markdown of “${overlay.label}” to a local file.`, style: "dim" },
+      { text: "Nothing is regenerated and no backend export endpoint exists.", style: "dim" },
+      { text: "" },
+      { prefix: `${GLYPH.pointer} `, value: overlay.value, cursor: overlay.cursor, placeholder: "(required)" },
+      { text: "" },
+      { text: "relative paths resolve against the working directory; ~ expands to home", style: "dim" },
+    ];
+    if (overlay.error) lines.push({ text: overlay.error, style: "error" });
+    if (overlay.busy) lines.push({ text: "writing…", style: "dim" });
+    return { kind: "exportPackage", title: "Export package", lines, width, height, scroll: 0 };
+  }
+
+  if (overlay.kind === "providerSettings") {
+    const values = overlay.values;
+    const field = overlay.field;
+    const options = Array.isArray(overlay.options) ? overlay.options : [];
+    const providerLine =
+      field === "provider"
+        ? { text: `${GLYPH.pointer} provider:  ${values.provider}   (tab cycles: ${options.join(" · ")})`, style: "bold" }
+        : { text: `  provider:  ${values.provider}   (tab cycles)`, style: "dim" };
+    const lines = [
+      { text: "Hot-reloads and persists the active inference provider (POST /provider/update).", style: "dim" },
+      { text: "" },
+      providerLine,
+      fieldLine("endpoint", values.endpoint, overlay.cursors.endpoint, field === "endpoint", "(required)"),
+      fieldLine("model", values.model, overlay.cursors.model, field === "model", "(required)"),
+      fieldLine("api key", values.apiKey, overlay.cursors.apiKey, field === "apiKey", "local · openai-compatible only"),
+      { text: "" },
+      { text: "ctrl+p probes the endpoint without changing anything; tab on the model cycles discovered models", style: "dim" },
+    ];
+    if (Array.isArray(overlay.discovered)) {
+      lines.push({ text: "" }, { text: `discovered models (${overlay.discovered.length})`, style: "dim" });
+      if (overlay.discovered.length === 0) lines.push({ text: "none reported by the endpoint", style: "dim" });
+      for (const model of overlay.discovered.slice(0, 8)) {
+        lines.push({ text: `  ${model.label}${model.quantization ? `  ${model.quantization}` : ""}` });
+      }
+    }
+    if (overlay.probeError) lines.push({ text: "" }, { text: `probe: ${overlay.probeError}`, style: "error" });
+    if (overlay.error) lines.push({ text: overlay.error, style: "error" });
+    if (overlay.busy) lines.push({ text: "applying…", style: "dim" });
+    return { kind: "providerSettings", title: "Provider configuration", lines, width, height, scroll: 0 };
+  }
+
+  if (overlay.kind === "pipelineSettings") {
+    const settings = state.appSettings ?? {};
+    const cursor = overlay.cursor ?? 0;
+    const items = Array.isArray(overlay.items) ? overlay.items : [];
+    const lines = [
+      { text: "Persisted through POST /settings/cognee, then re-read from /settings.", style: "dim" },
+      { text: "" },
+    ];
+    items.forEach((setting, index) => {
+      const value = settings[setting.key];
+      const state_ = value === undefined || value === null ? UNAVAILABLE : value ? "enabled" : "disabled";
+      lines.push({
+        text: `${index === cursor ? GLYPH.pointer : " "} ${padTo(setting.label, 28)}${state_}`,
+        style: index === cursor ? "bold" : "dim",
+      });
+      lines.push({ text: `    ${setting.help}`, style: "dim" });
+    });
+    lines.push({ text: "" });
+    if (state.settingsBusy) lines.push({ text: "applying…", style: "dim" });
+    if (state.settingsError) lines.push({ text: state.settingsError, style: "error" });
+    lines.push({ text: "provider and model are editable with e in Settings · storage engines are fixed by the backend", style: "dim" });
+    return { kind: "pipelineSettings", title: "Pipeline settings", lines, width, height, scroll: 0 };
+  }
+
+  const pkg = overlay.package ?? {};
+  const meta = [
+    `repository: ${pkg.repository_name || UNAVAILABLE}${pkg.repository_branch ? ` · ${pkg.repository_branch}` : ""}${pkg.repository_commit ? ` @ ${String(pkg.repository_commit).slice(0, 8)}` : ""}`,
+    `task: ${pkg.task || pkg.objective || UNAVAILABLE}`,
+    `${formatCount(pkg.token_estimate)} tokens · ${formatCount(pkg.section_count)} sections · saved ${formatRelativeTime(pkg.created_at, state.nowMs)}`,
+    pkg.updated_at && pkg.updated_at !== pkg.created_at ? `updated ${formatRelativeTime(pkg.updated_at, state.nowMs)}` : null,
+    `id: ${pkg.id ?? UNAVAILABLE}`,
+  ].filter(Boolean);
+  const markdownLines = formatMarkdown(pkg.markdown ?? "", {
+    rendered: state.markdownView === "rendered",
+    width: Math.max(20, width - 2),
+  });
+  const lines = [
+    ...meta.map((text) => ({ text, style: "dim" })),
+    { text: "" },
+    { text: GLYPH.rule.repeat(Math.max(10, Math.min(width - 2, cols - 2))), style: "dim" },
+    { text: "" },
+    ...markdownLines.map((text) => ({ text })),
+  ];
   return {
     kind: "viewPackage",
     // The presentation mode leads the title so it survives title truncation.
-    title: `${state.markdownView} · ${overlay.package?.name ?? "package"}`,
-    lines: lines.map((text) => ({ text })),
+    title: `${state.markdownView} · ${pkg.name ?? "package"}`,
+    lines,
     width,
     height,
     scroll: state.scroll.viewer ?? 0,
@@ -856,7 +1203,7 @@ export function composeLines(model, styler) {
 
   if (model.operation) {
     const paint = model.operation.level === "error" ? styler.err : model.operation.level === "ok" ? styler.ok : styler.warn;
-    lines.push(fit(paint(model.operation.text), model.cols));
+    for (const line of model.operation.lines) lines.push(fit(paint(line), model.cols));
   }
   lines.push(footerLine(model, styler));
   return fitLines(lines, model);

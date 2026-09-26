@@ -6,7 +6,7 @@ import { buildModel, composeFrame, composeLines, createPlainStyler, HELP_NOTES }
 import { createStyler } from "../theme.mjs";
 import { layoutFor, windowStart, wrapStep, truncate } from "../layout.mjs";
 import { formatMarkdown } from "../markdown.mjs";
-import { char, key, plain, settle, startApp } from "./fixtures.mjs";
+import { PACKAGES, char, key, plain, settle, startApp } from "./fixtures.mjs";
 
 const ANSI = /\u001b\[[0-9;]*m/g;
 const strip = (text) => String(text).replace(ANSI, "");
@@ -127,12 +127,58 @@ describe("render: truthfulness", () => {
     await settle(2);
     await app.tick(Date.now() + 1000);
     const { lines } = frame(app, 120, 24);
-    const operationLine = lines.find((line) => line.includes("indexing alpha-service"));
+    const stageLine = lines.find((line) => line.includes("Indexing alpha-service"));
 
-    assert.ok(operationLine, "operation line is present while indexing");
-    assert.match(operationLine, /phase 2\/5/);
-    assert.doesNotMatch(operationLine, /%/);
-    assert.match(operationLine, /Extracting AST call graphs/);
+    assert.ok(stageLine, "the staging line is present while indexing");
+    assert.match(stageLine, /Extracting AST call graphs/);
+
+    // The backend reports processed/total files, so the bar is determinate and
+    // the counts are shown exactly as reported — never converted to a percent.
+    const progressLine = lines.find((line) => /[█░]/.test(line));
+    assert.ok(progressLine, "determinate progress is rendered when the backend reports files");
+    assert.match(progressLine, /0 \/ 10 files/);
+    assert.match(progressLine, /phase 2\/5/, "the phase index is shown alongside file progress");
+    assert.match(progressLine, /[█░]/);
+    assert.doesNotMatch(`${stageLine}\n${progressLine}`, /%/);
+    // There is no backend cancel contract, so no control offers one.
+    assert.doesNotMatch(lines.at(-1), /cancel/i, "the footer offers no cancellation while a run is active");
+
+    release();
+    await settle();
+  });
+
+  it("keeps indexing indeterminate when the backend reports no counts", async () => {
+    let release;
+    const pending = new Promise((resolve) => {
+      release = resolve;
+    });
+    const { app } = await startApp({
+      indexRepository: async () => {
+        await pending;
+        return { success: true, total_files: 0, processed_files: 0, failed_files: 0, summary: "done" };
+      },
+      repositoryProgress: {
+        success: true,
+        status: "indexing",
+        stage: "Embedding chunks",
+        stage_index: null,
+        stage_total: null,
+        processed_files: null,
+        total_files: null,
+        elapsed_ms: 0,
+      },
+    });
+
+    app.dispatch(char("i"));
+    await settle(2);
+    await app.tick(Date.now() + 1000);
+    const { lines } = frame(app, 120, 24);
+    const stageLine = lines.find((line) => line.includes("Indexing alpha-service"));
+
+    assert.ok(stageLine);
+    assert.match(stageLine, /Embedding chunks/);
+    assert.ok(!lines.some((line) => /[█░]/.test(line)), "no bar is drawn without backend counts");
+    assert.doesNotMatch(stageLine, /%/);
 
     release();
     await settle();
@@ -143,10 +189,10 @@ describe("render: truthfulness", () => {
     app.dispatch(char("i"));
     await settle();
     const { lines } = frame(app, 120, 24);
-    const operationLine = lines.find((line) => line.includes("indexed alpha-service"));
+    const operationLine = lines.find((line) => line.includes("Indexed alpha-service"));
 
-    assert.ok(operationLine);
-    assert.match(operationLine, /10\/10 files/);
+    assert.ok(operationLine, "the completion line persists after the run");
+    assert.match(operationLine, /10 files/);
     assert.doesNotMatch(operationLine, /%/);
   });
 
@@ -186,7 +232,7 @@ describe("render: truthfulness", () => {
     assert.match(text(lines), /cancellation: not supported by the backend/);
 
     app.dispatch(char("?"));
-    const help = text(frame(app, 120, 46).lines);
+    const help = text(frame(app, 120, 84).lines);
     for (const note of HELP_NOTES) assert.match(help, new RegExp(note.slice(0, 24).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   });
 
@@ -346,8 +392,8 @@ describe("render: system view", () => {
     app.dispatch(key("end")); // scroll to the end of the report
     const bottom = text(frame(app, 120, 44).lines);
     assert.match(bottom, /Storage|Diagnostics/);
-    assert.match(bottom, /provider switching: GUI only/);
-    assert.match(bottom, /settings mutation: GUI only/);
+    assert.match(bottom, /configuration\s+Settings view/);
+    assert.match(bottom, /configuration: Settings view/);
     assert.match(bottom, /cancellation: not supported by the backend/);
   });
 
@@ -360,6 +406,198 @@ describe("render: system view", () => {
 
     assert.ok(client.calls.some((call) => call.name === "exportDiagnostics"));
     assert.match(app.getState().notice.message, /re-track-diagnostics\.json/);
+  });
+});
+
+describe("render: settings view", () => {
+  it("renders the persisted configuration sections and provider detail", async () => {
+    const { app } = await startApp();
+    app.dispatch(char("5"));
+    await settle();
+
+    const body = text(frame(app, 120, 34).lines);
+    assert.match(body, /Storage & pipeline/);
+    assert.match(body, /Hardware & runtime/);
+    assert.match(body, /Capabilities/);
+    // Provider detail comes from the settings and health payloads, not invented.
+    assert.match(body, /configured model\s+phi3:mini/);
+    assert.match(body, /endpoint\s+http:\/\/127\.0\.0\.1:1234/);
+    assert.match(body, /press e to edit the provider/);
+
+    app.dispatch(key("down")); // Storage & pipeline
+    const storage = text(frame(app, 120, 34).lines);
+    assert.match(storage, /vector db\s+lancedb/);
+    assert.match(storage, /knowledge graph\s+enabled \(t toggles\)/);
+    assert.match(storage, /ingestion caching\s+enabled/);
+    assert.match(storage, /storage engines are fixed by the backend/);
+  });
+
+  it("renders the provider editor, its discovered models and its footer", async () => {
+    const { app } = await startApp();
+    app.dispatch(char("5"));
+    await settle();
+    app.dispatch(char("e"));
+
+    let lines = frame(app, 120, 34).lines;
+    let body = text(lines);
+    assert.match(body, /Provider configuration/);
+    assert.match(body, /POST \/provider\/update/);
+    assert.match(body, /provider:\s+lmstudio/);
+    assert.match(body, /tab cycles: lmstudio · ollama · openai_compatible/);
+    assert.match(body, /ctrl\+p probes/);
+    assert.match(lines.at(-1), /ctrl\+p probe/);
+    assert.match(lines.at(-1), /esc cancel/);
+
+    app.dispatch(key("ctrl", { char: "p" }));
+    await settle();
+    lines = frame(app, 120, 34).lines;
+    body = text(lines);
+    assert.match(body, /discovered models \(1\)/);
+    assert.match(body, /qwen2\.5-7b\s+Q4_K_M/);
+  });
+
+  it("renders a failed settings read as a warning instead of stale values", async () => {
+    const { app } = await startApp({ appSettings: () => Promise.reject(new Error("ECONNRESET")) });
+    app.dispatch(char("5"));
+    await settle();
+
+    const body = text(frame(app, 120, 34).lines);
+    assert.match(body, /settings unavailable: ECONNRESET/);
+    assert.doesNotMatch(body, /lancedb/, "no stale configuration is rendered as current");
+  });
+
+  it("renders the pipeline overlay from the payload the backend persists", async () => {
+    const { app } = await startApp();
+    app.dispatch(char("5"));
+    await settle();
+    app.dispatch(char("t"));
+    assert.equal(app.getState().overlay.kind, "pipelineSettings");
+
+    const body = text(frame(app, 120, 34).lines);
+    assert.match(body, /Pipeline settings/);
+    assert.match(body, /Knowledge graph extraction\s+enabled/);
+    assert.match(body, /Auto-link entities\s+disabled/);
+    assert.match(body, /Persisted through POST \/settings\/cognee/);
+
+    app.dispatch(key("escape"));
+    assert.equal(app.getState().overlay, null);
+  });
+});
+
+describe("render: package catalog and package actions", () => {
+  it("scopes the catalog and renders package metadata from the record", async () => {
+    const { app } = await startApp();
+    await app.loadPrompts();
+    app.dispatch(char("3"));
+    await settle();
+
+    let body = text(frame(app, 120, 30).lines);
+    assert.match(body, /Auth flow/, "suggestions are listed by default");
+    assert.match(body, /catalog: all/);
+
+    app.dispatch(char("p"));
+    body = text(frame(app, 120, 30).lines);
+    assert.doesNotMatch(body, /Auth flow/, "the packages-only catalog hides suggestions");
+    assert.match(body, /catalog: packages/);
+
+    // The repository column only earns its width on a wide terminal.
+    body = text(frame(app, 140, 30).lines);
+    assert.match(body, /alpha-service/, "the repository column comes from the package record");
+  });
+
+  it("renders the append and export dialogs against the selected package", async () => {
+    const { app } = await startApp(
+      {},
+      { exportMarkdown: async () => ({ path: "/tmp/auth-context.md" }), exportFileName: () => "auth-context.md" }
+    );
+    app.dispatch(char("3"));
+    app.dispatch(char("p"));
+
+    app.dispatch(char("A"));
+    let body = text(frame(app, 120, 30).lines);
+    assert.match(body, /Append to package/);
+    assert.match(body, /Auth context/);
+    assert.match(body, /POST \/packages\/\{id\}\/append/);
+
+    app.dispatch(key("escape"));
+    app.dispatch(char("e"));
+    body = text(frame(app, 120, 30).lines);
+    assert.match(body, /Export package/);
+    assert.match(body, /auth-context\.md/, "the dialog is prefilled with the derived file name");
+    assert.match(body, /no backend export endpoint exists/);
+  });
+});
+
+describe("render: responsive new surfaces", () => {
+  const SIZES = [
+    [120, 40],
+    [90, 24],
+    [60, 20],
+    [48, 16],
+  ];
+
+  it("keeps the indexing bar readable at every supported size", async () => {
+    let release;
+    const pending = new Promise((resolve) => {
+      release = resolve;
+    });
+    const { app } = await startApp({
+      indexRepository: async () => {
+        await pending;
+        return { success: true, total_files: 10, processed_files: 10, failed_files: 0, summary: "done" };
+      },
+    });
+    app.dispatch(char("i"));
+    await settle(2);
+    await app.tick(Date.now() + 1000);
+
+    for (const [cols, rows] of SIZES) {
+      const { lines } = frame(app, cols, rows);
+      const bar = lines.find((line) => /[█░]/.test(line));
+      assert.ok(bar, `bar present at ${cols}x${rows}`);
+      assert.match(bar, /0 \/ 10 files/);
+      assert.match(bar, /phase 2\/5/);
+      assert.doesNotMatch(bar, /%/);
+      assert.equal(lines.length, rows, `frame height at ${cols}x${rows}`);
+      for (const line of lines) assert.equal(strip(line).length, cols, `frame width at ${cols}x${rows}`);
+    }
+
+    release();
+    await settle();
+  });
+
+  it("keeps the package viewer scrollable and the settings navigable at every size", async () => {
+    const longMarkdown = Array.from({ length: 60 }, (_, index) => `## Section ${index}\n\n- item ${index}`).join("\n\n");
+    const { app } = await startApp({ getContextPackage: () => ({ ...PACKAGES[0], markdown: longMarkdown }) });
+
+    app.dispatch(char("3"));
+    app.dispatch(char("p"));
+    app.dispatch(key("enter"));
+    await settle();
+    assert.equal(app.getState().overlay.kind, "viewPackage");
+
+    for (const [cols, rows] of SIZES) {
+      frame(app, cols, rows); // publishes the scroll bound for this size
+      assert.ok(app.getState().viewport.viewerMax > 0, `viewer scrolls at ${cols}x${rows}`);
+      const before = app.getState().scroll.viewer;
+      app.dispatch(key("pageDown"));
+      assert.ok(app.getState().scroll.viewer > before, `viewer paged at ${cols}x${rows}`);
+      const { lines } = frame(app, cols, rows);
+      assert.equal(lines.length, rows);
+      assert.match(text(lines), /rendered · Auth context/);
+    }
+
+    app.dispatch(key("escape"));
+    app.dispatch(char("5"));
+    await settle();
+    for (const [cols, rows] of SIZES) {
+      frame(app, cols, rows);
+      app.dispatch(key("home"));
+      app.dispatch(key("down"));
+      assert.equal(app.getState().cursors.settings, 1, `settings navigable at ${cols}x${rows}`);
+      const footer = frame(app, cols, rows).lines.at(-1);
+      assert.match(footer, /\? keys/, `help affordance survives ${cols}x${rows}`);
+    }
   });
 });
 

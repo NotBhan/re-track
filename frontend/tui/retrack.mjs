@@ -25,6 +25,7 @@
 
 import { createBackendClient, BackendRequestError, BackendUnreachableError } from "../shared/backend-client.mjs";
 import { ensureBackend } from "./backend-lifecycle.mjs";
+import { packageFileName, writeMarkdownExport } from "./export.mjs";
 import { createApp, decodeInput } from "./state.mjs";
 import { buildModel, composeFrame } from "./render.mjs";
 import { createStyler } from "./theme.mjs";
@@ -81,8 +82,20 @@ function makeStartupReporter() {
   };
 }
 
+/**
+ * Local capabilities the state layer may invoke. Export writes the markdown
+ * that was already loaded from the backend to a user-chosen path; there is no
+ * backend export endpoint.
+ */
+function appOptions() {
+  return {
+    exportMarkdown: ({ target, markdown }) => writeMarkdownExport({ path: target, content: markdown }),
+    exportFileName: (name) => packageFileName(name),
+  };
+}
+
 async function runSnapshot(client) {
-  const app = createApp({ client });
+  const app = createApp({ client, ...appOptions() });
   await app.load();
   const state = app.getState();
 
@@ -99,7 +112,7 @@ async function runSnapshot(client) {
 }
 
 async function runInteractive(client, { onExit }) {
-  const app = createApp({ client });
+  const app = createApp({ client, ...appOptions() });
   const styler = createStyler({ enabled: !process.env.NO_COLOR });
 
   let finished = false;

@@ -10,15 +10,62 @@
 import { decodeChunk, applyEdit, stripMouseSequences } from "./keys.mjs";
 import { clamp, wrapStep } from "./layout.mjs";
 
-export const VIEWS = Object.freeze(["repositories", "code", "context", "system"]);
+export const VIEWS = Object.freeze(["repositories", "code", "context", "system", "settings"]);
 export const VIEW_LABELS = Object.freeze({
   repositories: "Repositories",
   code: "Code",
   context: "Context",
   system: "System",
+  settings: "Settings",
 });
 
 export const TOKEN_BUDGETS = Object.freeze([2048, 4096, 8192]);
+
+/** Settings sections (navigation); the renderer builds the rows for each one. */
+export const SETTINGS_SECTIONS = Object.freeze([
+  { key: "provider", label: "Provider" },
+  { key: "storage", label: "Storage & pipeline" },
+  { key: "hardware", label: "Hardware & runtime" },
+  { key: "capabilities", label: "Capabilities" },
+]);
+
+/**
+ * Inference providers the backend accepts for hot-reload (POST /provider/update).
+ * The same three the desktop provider picker offers.
+ */
+export const PROVIDER_OPTIONS = Object.freeze(["lmstudio", "ollama", "openai_compatible"]);
+
+/** Endpoint defaults used when cycling providers; a custom endpoint is kept. */
+export const PROVIDER_ENDPOINTS = Object.freeze({
+  lmstudio: "http://localhost:1234/v1",
+  ollama: "http://localhost:11434/v1",
+});
+
+/** Field order of the provider editor; `provider` cycles, the rest are text. */
+const PROVIDER_FIELDS = Object.freeze(["provider", "endpoint", "model", "apiKey"]);
+
+/**
+ * Pipeline settings the backend HTTP contract can persist (POST /settings/cognee).
+ * The storage engines the same request accepts are deliberately not exposed: the
+ * desktop UI disables them too, because the backend supports a single engine each.
+ */
+export const PIPELINE_SETTINGS = Object.freeze([
+  {
+    key: "enable_kg_extraction",
+    label: "Knowledge graph extraction",
+    help: "Extract entities and relationships into the graph store during ingestion",
+  },
+  {
+    key: "auto_link_entities",
+    label: "Auto-link entities",
+    help: "Link detected symbols and entities automatically",
+  },
+  {
+    key: "caching",
+    label: "Ingestion caching",
+    help: "Cache intermediate ingestion results",
+  },
+]);
 
 const NOTICE_TTL_MS = 4000;
 const PROGRESS_POLL_MS = 700;
@@ -41,10 +88,14 @@ function initialState() {
     detailedHealth: null,
     memoryStats: null,
     logs: null,
+    appSettings: null,
+    settingsError: null,
+    settingsBusy: false,
 
     repositories: [],
     packages: [],
-    prompts: { state: "idle", source: null, items: [], error: null },
+    packageScope: "all",
+    prompts: { state: "idle", source: null, items: [], error: null, repoId: null },
     context: null,
     contextError: null,
     progress: null,
@@ -61,7 +112,7 @@ function initialState() {
     tokenBudget: 4096,
     includeGraph: true,
 
-    cursors: { repositories: 0, code: 0, context: 0, system: 0 },
+    cursors: { repositories: 0, code: 0, context: 0, system: 0, settings: 0 },
     scroll: { inspector: 0, system: 0, viewer: 0 },
 
     notice: null,
@@ -76,6 +127,8 @@ const errorText = (error) => (error instanceof Error ? error.message : String(er
 export function createApp(options = {}) {
   const client = options.client;
   if (!client) throw new Error("createApp requires a client");
+  const exportMarkdown = options.exportMarkdown ?? null;
+  const exportFileName = options.exportFileName ?? ((name) => `${String(name ?? "").trim() || "context-package"}.md`);
 
   const now = options.now ?? (() => Date.now());
   const noticeTtlMs = options.noticeTtlMs ?? NOTICE_TTL_MS;
@@ -137,17 +190,33 @@ export function createApp(options = {}) {
   }
 
   function contextRows() {
-    const suggestions = (state.prompts.items ?? []).map((item) => ({
-      kind: "suggestion",
-      label: item.label,
-      prompt: item.prompt,
-    }));
+    // The catalog can be scoped to saved packages so they are navigable on
+    // their own, independently of the generated output and suggestions.
+    const suggestions =
+      state.packageScope === "packages"
+        ? []
+        : (state.prompts.items ?? []).map((item) => ({
+            kind: "suggestion",
+            label: item.label,
+            prompt: item.prompt,
+          }));
     const packages = (state.packages ?? []).map((pkg) => ({
       kind: "package",
       id: pkg.id,
       label: pkg.name,
-      task: pkg.task,
+      task: pkg.task || pkg.objective,
       tokens: pkg.token_estimate,
+      repository: pkg.repository_name,
+      branch: pkg.repository_branch,
+      commit: pkg.repository_commit,
+      created: pkg.created_at,
+      updated: pkg.updated_at,
+      sections: pkg.section_count,
+      compression: pkg.compression_ratio,
+      totalTime: pkg.total_time_ms,
+      memories: pkg.retrieved_memories,
+      deduplicated: pkg.deduplicated_memories,
+      tags: Array.isArray(pkg.tags) ? pkg.tags : [],
     }));
     return [...suggestions, ...packages];
   }
@@ -158,27 +227,42 @@ export function createApp(options = {}) {
     return rows[clamp(state.cursors.context, 0, rows.length - 1)];
   }
 
+  function settingsRows() {
+    return SETTINGS_SECTIONS.map((section) => ({ ...section }));
+  }
+
+  function selectedSettingsSection() {
+    return SETTINGS_SECTIONS[clamp(state.cursors.settings, 0, SETTINGS_SECTIONS.length - 1)] ?? null;
+  }
+
   function currentRows() {
     if (state.view === "repositories") return visibleRepositories();
     if (state.view === "code") return codeSymbols();
     if (state.view === "context") return contextRows();
+    if (state.view === "settings") return settingsRows();
     return [];
   }
 
   /* -------------------------------- loading -------------------------------- */
 
-  async function loadPrompts(repo) {
+  /**
+   * Suggested tasks for a repository. Generating them is not free, so an
+   * already-loaded set for the same repository is kept unless `force` is set
+   * (the `r` refresh); a failed load is always retried.
+   */
+  async function loadPrompts(repo, { force = false } = {}) {
     if (!repo?.id) {
-      set({ prompts: { state: "idle", source: null, items: [], error: null } });
+      set({ prompts: { state: "idle", source: null, items: [], error: null, repoId: null } });
       return;
     }
-    set({ prompts: { state: "loading", source: state.prompts.source, items: state.prompts.items, error: null } });
+    if (!force && state.prompts.repoId === repo.id && state.prompts.state === "loaded") return;
+    set({ prompts: { state: "loading", source: state.prompts.source, items: state.prompts.items, error: null, repoId: repo.id } });
     try {
       const payload = await client.repositoryPrompts(repo.id);
       const items = Array.isArray(payload?.prompts) ? payload.prompts : [];
-      set({ prompts: { state: "loaded", source: payload?.source ?? null, items, error: null } });
+      set({ prompts: { state: "loaded", source: payload?.source ?? null, items, error: null, repoId: repo.id } });
     } catch (error) {
-      set({ prompts: { state: "error", source: null, items: [], error: errorText(error) } });
+      set({ prompts: { state: "error", source: null, items: [], error: errorText(error), repoId: repo.id } });
     }
   }
 
@@ -250,6 +334,43 @@ export function createApp(options = {}) {
     });
   }
 
+  /**
+   * Settings answers "what is RE:Track configured to use?": the persisted
+   * application settings plus the storage/runtime detail the backend reports.
+   * `settingsError` keeps a failed settings read visible instead of rendering
+   * stale configuration as if it were current.
+   */
+  async function loadSettings() {
+    const results = await Promise.allSettled([client.appSettings(), client.detailedHealth()]);
+    const [appSettings, detailedHealth] = results;
+    set({
+      appSettings: appSettings.status === "fulfilled" ? appSettings.value : state.appSettings,
+      settingsError: appSettings.status === "rejected" ? errorText(appSettings.reason) : null,
+      detailedHealth: detailedHealth.status === "fulfilled" ? detailedHealth.value : state.detailedHealth,
+    });
+  }
+
+  /**
+   * Reconciled provider identity after a switch: the persisted settings, the
+   * health/status facts that verify it, and the authoritative provider status.
+   */
+  async function loadProviderContext() {
+    const results = await Promise.allSettled([
+      client.appSettings(),
+      client.health(),
+      client.status(),
+      client.providerStatus(),
+    ]);
+    const [settings, health, status, providerStatus] = results;
+    set({
+      appSettings: settings.status === "fulfilled" ? settings.value : state.appSettings,
+      settingsError: settings.status === "rejected" ? errorText(settings.reason) : null,
+      health: health.status === "fulfilled" ? health.value : state.health,
+      status: status.status === "fulfilled" ? status.value : state.status,
+      providerStatus: providerStatus.status === "fulfilled" ? providerStatus.value : state.providerStatus,
+    });
+  }
+
   /** Attach the operation line to a run started elsewhere (GUI/MCP) — read-only. */
   function adoptExternalIndexingRun(repositoriesValue) {
     if (state.operation?.kind === "synthesis") return;
@@ -264,6 +385,10 @@ export function createApp(options = {}) {
         stage: "indexing",
         stageIndex: null,
         stageTotal: null,
+        processedFiles: null,
+        totalFiles: null,
+        failedFiles: null,
+        elapsedMs: 0,
       };
     } else if (!running && state.operation?.kind === "indexing" && state.operation.external) {
       state.operation = null;
@@ -273,8 +398,9 @@ export function createApp(options = {}) {
   async function refresh({ quiet = false } = {}) {
     await loadSummary({ quiet });
     if (state.view === "system") await loadSystem();
+    if (state.view === "settings") await loadSettings();
     const repo = selectedRepository();
-    if (repo) await loadPrompts(repo);
+    if (repo) await loadPrompts(repo, { force: true });
     if (!quiet) notice("refreshed");
   }
 
@@ -293,18 +419,26 @@ export function createApp(options = {}) {
     }
     set(patch);
     if (view === "system") void loadSystem();
+    if (view === "settings") void loadSettings();
+    // Suggested tasks belong to the selected repository, so they are fetched
+    // when the workbench opens rather than waiting for an explicit refresh.
+    if (view === "context") void loadPrompts(selectedRepository());
   }
 
-  function moveCursor(deltaOrTarget) {
+  /** Jump the list cursor to an absolute row index (clamped). */
+  function moveCursor(target) {
     const rows = currentRows();
     if (rows.length === 0) return;
-    if (typeof deltaOrTarget === "number") {
-      state.cursors[state.view] = wrapStep(state.cursors[state.view], deltaOrTarget, rows.length);
-    } else {
-      state.cursors[state.view] = clamp(deltaOrTarget, 0, rows.length - 1);
-    }
+    state.cursors[state.view] = clamp(target, 0, rows.length - 1);
     state.scroll.inspector = 0;
     set({});
+  }
+
+  /** Move the list cursor `delta` rows with wrap-around (Torlink movement). */
+  function stepCursor(delta) {
+    const rows = currentRows();
+    if (rows.length === 0) return;
+    moveCursor(wrapStep(state.cursors[state.view], delta, rows.length));
   }
 
   function pageCursor(direction, pageSize) {
@@ -487,6 +621,253 @@ export function createApp(options = {}) {
     }
   }
 
+  /**
+   * The saved-package catalog is a first-class scope of the Context list:
+   * `p` switches between tasks/suggestions and packages alone.
+   */
+  function togglePackageScope() {
+    set({
+      packageScope: state.packageScope === "packages" ? "all" : "packages",
+      cursors: { ...state.cursors, context: 0 },
+      scroll: { ...state.scroll, inspector: 0 },
+    });
+  }
+
+  /** The package under the cursor, from the catalog or from the open viewer. */
+  function selectedPackage() {
+    if (state.overlay?.kind === "viewPackage" && state.overlay.package) {
+      return { id: state.overlay.package.id, label: state.overlay.package.name };
+    }
+    const row = selectedContextRow();
+    return row && row.kind === "package" ? { id: row.id, label: row.label } : null;
+  }
+
+  function openAppendPackage() {
+    const target = selectedPackage();
+    if (!target) {
+      notice("select a saved package first", "warn");
+      return;
+    }
+    openOverlay({ kind: "appendPackage", packageId: target.id, label: target.label, value: "", cursor: 0, error: null, busy: false });
+  }
+
+  async function runAppendPackage(packageId, note) {
+    const value = String(note ?? "").trim();
+    if (!value) {
+      overlayError("a task or note is required");
+      return;
+    }
+    set({ overlay: { ...state.overlay, busy: true, error: null } });
+    try {
+      const updated = await client.appendContextPackage(packageId, { task: value });
+      if (updated?.id) {
+        state.packages = state.packages.map((pkg) => (pkg.id === updated.id ? updated : pkg));
+      }
+      set({ overlay: null });
+      notice(`appended to ${updated?.name ?? packageId}`);
+      // Show the updated package from the append response, then reconcile the
+      // catalog with the backend.
+      if (updated?.id) await openPackageViewer(updated.id);
+      await loadSummary({ quiet: true });
+    } catch (error) {
+      set({ overlay: { ...state.overlay, busy: false, error: errorText(error) } });
+      notice(`append failed: ${errorText(error)}`, "error");
+    }
+  }
+
+  function openExportPackage() {
+    const target = selectedPackage();
+    if (!target) {
+      notice("select a saved package first", "warn");
+      return;
+    }
+    if (!exportMarkdown) {
+      notice("package export is unavailable in this session", "warn");
+      return;
+    }
+    const value = exportFileName(target.label);
+    openOverlay({ kind: "exportPackage", packageId: target.id, label: target.label, value, cursor: value.length, error: null, busy: false });
+  }
+
+  /**
+   * Write the package markdown that is already stored on the backend to a local
+   * file. Nothing is regenerated and no backend endpoint is invented — the
+   * report names the path that was actually written.
+   */
+  async function runExportPackage(packageId, target) {
+    const destination = String(target ?? "").trim();
+    if (!destination) {
+      overlayError("export path is required");
+      return;
+    }
+    set({ overlay: { ...state.overlay, busy: true, error: null } });
+    try {
+      const pkg = await client.getContextPackage(packageId);
+      // A missing package is a failure, never an empty file reported as success.
+      if (!pkg) throw new Error("package not found");
+      const written = await exportMarkdown({ target: destination, markdown: pkg.markdown ?? "", name: pkg.name ?? packageId });
+      set({ overlay: null });
+      notice(`exported ${pkg.name ?? packageId} to ${written?.path ?? destination}`);
+    } catch (error) {
+      set({ overlay: { ...state.overlay, busy: false, error: errorText(error) } });
+      notice(`export failed: ${errorText(error)}`, "error");
+    }
+  }
+
+  /* -------------------------------- settings -------------------------------- */
+
+  function openPipelineSettings() {
+    // The overlay carries its own item list so the renderer stays a pure
+    // presentation layer with no dependency on the state module.
+    openOverlay({ kind: "pipelineSettings", items: PIPELINE_SETTINGS, cursor: 0, error: null, busy: false });
+  }
+
+  function settingLabel(key) {
+    return PIPELINE_SETTINGS.find((item) => item.key === key)?.label ?? key;
+  }
+
+  /** Persist one pipeline boolean through POST /settings/cognee, then re-read it. */
+  async function toggleSetting(key) {
+    if (!PIPELINE_SETTINGS.some((item) => item.key === key)) {
+      notice(`${key}: not editable from the TUI`, "warn");
+      return;
+    }
+    if (state.settingsBusy) return;
+    const current = Boolean(state.appSettings?.[key]);
+    set({ settingsBusy: true, settingsError: null });
+    try {
+      await client.updateCogneeSettings({ [key]: !current });
+      await loadSettings();
+      notice(`${settingLabel(key)} ${current ? "disabled" : "enabled"}`);
+    } catch (error) {
+      set({ settingsError: errorText(error) });
+      notice(`settings update failed: ${errorText(error)}`, "error");
+    } finally {
+      set({ settingsBusy: false });
+    }
+  }
+
+  /**
+   * Provider configuration is a real HTTP mutation (POST /provider/update), so
+   * the Settings view exposes it rather than claiming it is GUI-only. The form
+   * is prefilled from the persisted settings and every value is re-read after
+   * saving; a custom endpoint is never overwritten by a provider switch.
+   */
+  function openProviderSettings() {
+    const settings = state.appSettings ?? {};
+    const provider =
+      settings.llm_provider ?? state.providerStatus?.provider ?? state.health?.provider_identity ?? PROVIDER_OPTIONS[1];
+    const endpoint =
+      settings.llm_endpoint ?? state.providerStatus?.base_url ?? PROVIDER_ENDPOINTS[provider] ?? "";
+    const model = settings.llm_model ?? state.health?.configured_model ?? state.status?.configured_model ?? "";
+    openOverlay({
+      kind: "providerSettings",
+      // The overlay carries its own option list so the renderer stays pure.
+      options: PROVIDER_OPTIONS,
+      field: "provider",
+      values: { provider, endpoint: String(endpoint), model: String(model), apiKey: "" },
+      cursors: { endpoint: String(endpoint).length, model: String(model).length, apiKey: 0 },
+      endpointEdited: false,
+      discovered: null,
+      probeError: null,
+      error: null,
+      busy: false,
+    });
+  }
+
+  /**
+   * Tab cycles the provider (carrying its default endpoint, unless the user has
+   * edited the endpoint in this form) or a discovered model.
+   */
+  function cycleProviderField(overlay) {
+    const values = overlay.values;
+    if (overlay.field === "provider") {
+      const index = PROVIDER_OPTIONS.indexOf(values.provider);
+      const provider = PROVIDER_OPTIONS[wrapStep(index, 1, PROVIDER_OPTIONS.length)];
+      const endpoint =
+        values.endpoint === "" || !overlay.endpointEdited
+          ? PROVIDER_ENDPOINTS[provider] ?? values.endpoint
+          : values.endpoint;
+      set({
+        overlay: {
+          ...overlay,
+          values: { ...values, provider, endpoint },
+          cursors: { ...overlay.cursors, endpoint: endpoint.length },
+        },
+      });
+      return;
+    }
+    if (overlay.field === "model" && Array.isArray(overlay.discovered) && overlay.discovered.length > 0) {
+      const names = overlay.discovered.map((model) => model.label);
+      const index = names.indexOf(values.model);
+      const model = names[(index + 1) % names.length];
+      set({ overlay: { ...overlay, values: { ...values, model }, cursors: { ...overlay.cursors, model: model.length } } });
+    }
+  }
+
+  /** Non-mutating discovery probe: it never changes the active provider. */
+  async function runProbeProvider() {
+    const overlay = state.overlay;
+    const base_url = overlay.values.endpoint.trim();
+    if (!base_url) {
+      overlayError("endpoint is required before probing");
+      return;
+    }
+    set({ overlay: { ...overlay, busy: true, probeError: null } });
+    try {
+      const result = await client.discoverProvider({
+        provider: overlay.values.provider,
+        base_url,
+        api_key: overlay.values.apiKey.trim() || "local",
+      });
+      const discovered = (Array.isArray(result?.models) ? result.models : [])
+        .map((model) => ({
+          id: model?.model_id ?? model?.name ?? null,
+          label: model?.name || model?.model_id || null,
+          quantization: model?.quantization ?? null,
+        }))
+        .filter((model) => model.label);
+      const status = String(result?.status ?? "");
+      const probeError = ["unreachable", "discovery_failed", "not_configured"].includes(status)
+        ? result?.error_details ?? result?.message ?? status
+        : null;
+      set({ overlay: { ...state.overlay, busy: false, discovered, probeError } });
+      notice(probeError ? `probe failed: ${probeError}` : `discovered ${discovered.length} models`, probeError ? "error" : "info");
+    } catch (error) {
+      set({ overlay: { ...state.overlay, busy: false, probeError: errorText(error) } });
+      notice(`probe failed: ${errorText(error)}`, "error");
+    }
+  }
+
+  async function runUpdateProvider() {
+    const overlay = state.overlay;
+    const endpoint = overlay.values.endpoint.trim();
+    const model = overlay.values.model.trim();
+    if (!endpoint) {
+      overlayError("endpoint is required");
+      return;
+    }
+    if (!model) {
+      overlayError("model is required");
+      return;
+    }
+    set({ overlay: { ...overlay, busy: true, error: null } });
+    try {
+      await client.updateProvider({
+        provider: overlay.values.provider,
+        base_url: endpoint,
+        model,
+        api_key: overlay.values.apiKey.trim() || "local",
+      });
+      set({ overlay: null });
+      notice(`provider switched to ${overlay.values.provider} · ${model}`);
+      await loadProviderContext();
+    } catch (error) {
+      set({ overlay: { ...state.overlay, busy: false, error: errorText(error) } });
+      notice(`provider update failed: ${errorText(error)}`, "error");
+    }
+  }
+
   function overlayError(message) {
     if (!state.overlay) return;
     set({ overlay: { ...state.overlay, error: message } });
@@ -509,16 +890,21 @@ export function createApp(options = {}) {
       return;
     }
 
+    const startedAt = now();
     set({
       operation: {
         kind: "indexing",
         repoId: repo.id,
         repoName: repo.name,
-        startedAt: now(),
+        startedAt,
         external: false,
         stage: "submitting",
         stageIndex: null,
         stageTotal: null,
+        processedFiles: null,
+        totalFiles: null,
+        failedFiles: null,
+        elapsedMs: 0,
       },
       progress: null,
       lastRun: null,
@@ -541,12 +927,14 @@ export function createApp(options = {}) {
           processedFiles: result?.processed_files ?? null,
           totalFiles: result?.total_files ?? null,
           failedFiles: result?.failed_files ?? null,
+          elapsedMs: now() - startedAt,
           finishedAt: now(),
         },
       });
+      const failed = result?.failed_files ?? 0;
       notice(
         ok
-          ? `indexed ${repo.name} · ${result?.processed_files ?? 0}/${result?.total_files ?? 0} files`
+          ? `indexed ${repo.name} · ${result?.processed_files ?? 0}/${result?.total_files ?? 0} files${failed > 0 ? ` · ${failed} failed` : ""}`
           : `indexing failed: ${result?.summary ?? "unknown error"}`,
         ok ? "info" : "error"
       );
@@ -558,13 +946,16 @@ export function createApp(options = {}) {
           repoName: repo.name,
           status: "error",
           stage: errorText(error),
+          elapsedMs: now() - startedAt,
           finishedAt: now(),
         },
       });
       notice(`indexing failed: ${errorText(error)}`, "error");
     } finally {
-      set({ operation: null, progress: null });
+      // Reconcile with the backend before dropping the operation state: the
+      // refreshed repository record is the authority for the completion line.
       await loadSummary({ quiet: true });
+      set({ operation: null, progress: null });
     }
   }
 
@@ -693,7 +1084,8 @@ export function createApp(options = {}) {
       });
       notice(`package saved: ${saved?.name ?? label}`);
       state.packages = [saved, ...state.packages.filter((pkg) => pkg.id !== saved?.id)];
-      set({});
+      // The saved package becomes immediately selectable in the catalog.
+      set({ packageScope: "packages", cursors: { ...state.cursors, context: 0 } });
     } catch (error) {
       notice(`save failed: ${errorText(error)}`, "error");
     }
@@ -713,8 +1105,28 @@ export function createApp(options = {}) {
   function overlayEditorTarget() {
     const overlay = state.overlay;
     if (!overlay) return null;
-    if (overlay.kind === "newTask") return { kind: "single", get: () => overlay, apply: (next) => set({ overlay: { ...overlay, ...next } }) };
-    if (overlay.kind === "savePackage") return { kind: "single", get: () => overlay, apply: (next) => set({ overlay: { ...overlay, ...next } }) };
+    if (["newTask", "savePackage", "appendPackage", "exportPackage"].includes(overlay.kind)) {
+      return { kind: "single", get: () => overlay, apply: (next) => set({ overlay: { ...overlay, ...next } }) };
+    }
+    if (overlay.kind === "providerSettings") {
+      const field = overlay.field;
+      // `provider` is a cycle field, never a text field.
+      if (!field || field === "provider") return null;
+      return {
+        kind: "field",
+        get: () => ({ value: overlay.values[field], cursor: overlay.cursors[field] }),
+        apply: ({ value, cursor }) =>
+          set({
+            overlay: {
+              ...overlay,
+              // Once the endpoint is touched, cycling providers keeps it.
+              endpointEdited: field === "endpoint" ? true : overlay.endpointEdited,
+              values: { ...overlay.values, [field]: value },
+              cursors: { ...overlay.cursors, [field]: cursor },
+            },
+          }),
+      };
+    }
     if (overlay.kind === "addRepo") {
       const field = overlay.field;
       return {
@@ -790,12 +1202,57 @@ export function createApp(options = {}) {
     if (overlay.kind === "viewPackage") {
       if (intent.name === "escape") closeOverlay();
       else if (intent.name === "char" && intent.char === "m") toggleMarkdown();
+      else if (intent.name === "char" && intent.char === "a") openAppendPackage();
+      else if (intent.name === "char" && intent.char === "e") openExportPackage();
       else if (intent.name === "down") scrollRegion("viewer", 1, state.viewport.viewerMax);
       else if (intent.name === "up") scrollRegion("viewer", -1, state.viewport.viewerMax);
       else if (intent.name === "pageDown") scrollRegion("viewer", 10, state.viewport.viewerMax);
       else if (intent.name === "pageUp") scrollRegion("viewer", -10, state.viewport.viewerMax);
       else if (intent.name === "home") scrollRegion("viewer", -(state.scroll.viewer ?? 0), state.viewport.viewerMax);
       else if (intent.name === "end") scrollRegion("viewer", state.viewport.viewerMax, state.viewport.viewerMax);
+      return undefined;
+    }
+
+    if (overlay.kind === "providerSettings") {
+      if (intent.name === "escape") {
+        closeOverlay();
+        return undefined;
+      }
+      if (intent.name === "up" || intent.name === "down") {
+        const step = intent.name === "down" ? 1 : -1;
+        const index = PROVIDER_FIELDS.indexOf(overlay.field);
+        const next = PROVIDER_FIELDS[wrapStep(index < 0 ? 0 : index, step, PROVIDER_FIELDS.length)];
+        set({ overlay: { ...overlay, field: next } });
+        return undefined;
+      }
+      if (intent.name === "tab") {
+        cycleProviderField(overlay);
+        return undefined;
+      }
+      if (intent.name === "ctrl" && intent.char === "p" && !overlay.busy) {
+        void runProbeProvider();
+        return undefined;
+      }
+      if (intent.name === "enter" && !overlay.busy) {
+        void runUpdateProvider();
+        return undefined;
+      }
+      dispatchEditorKey(intent, overlayEditorTarget());
+      return undefined;
+    }
+
+    if (overlay.kind === "pipelineSettings") {
+      const count = PIPELINE_SETTINGS.length;
+      if (intent.name === "escape") {
+        closeOverlay();
+        return undefined;
+      }
+      if (intent.name === "up") set({ overlay: { ...overlay, cursor: wrapStep(overlay.cursor ?? 0, -1, count) } });
+      else if (intent.name === "down") set({ overlay: { ...overlay, cursor: wrapStep(overlay.cursor ?? 0, 1, count) } });
+      else if (intent.name === "enter" || intent.name === "space") {
+        const setting = PIPELINE_SETTINGS[clamp(overlay.cursor ?? 0, 0, count - 1)];
+        if (setting) void toggleSetting(setting.key);
+      }
       return undefined;
     }
 
@@ -842,6 +1299,14 @@ export function createApp(options = {}) {
       }
       if (overlay.kind === "savePackage") {
         void runSavePackage(overlay.value);
+        return undefined;
+      }
+      if (overlay.kind === "appendPackage" && !overlay.busy) {
+        void runAppendPackage(overlay.packageId, overlay.value);
+        return undefined;
+      }
+      if (overlay.kind === "exportPackage" && !overlay.busy) {
+        void runExportPackage(overlay.packageId, overlay.value);
         return undefined;
       }
     }
@@ -899,7 +1364,7 @@ export function createApp(options = {}) {
 
   function handleMoveKey(intent, pageSize) {
     const delta = moveDelta(intent);
-    if (delta !== 0) moveCursor(delta);
+    if (delta !== 0) stepCursor(delta);
     else if (intent.name === "pageUp") pageCursor(-1, pageSize);
     else if (intent.name === "pageDown") pageCursor(1, pageSize);
     else if (intent.name === "home") moveCursor(0);
@@ -930,6 +1395,10 @@ export function createApp(options = {}) {
         enterInspector();
         return;
       }
+      if (state.view === "settings") {
+        enterInspector();
+        return;
+      }
       if (state.view === "context") {
         const row = selectedContextRow();
         if (row?.kind === "package") void openPackageViewer(row.id);
@@ -957,6 +1426,19 @@ export function createApp(options = {}) {
           break;
         case "n":
           if (state.view === "context") openNewTask();
+          break;
+        case "p":
+          if (state.view === "context") togglePackageScope();
+          break;
+        case "A":
+          if (state.view === "context") openAppendPackage();
+          break;
+        case "e":
+          if (state.view === "context") openExportPackage();
+          else if (state.view === "settings") openProviderSettings();
+          break;
+        case "t":
+          if (state.view === "settings") openPipelineSettings();
           break;
         case "S":
           if (state.view === "context") openSavePackage();
@@ -1011,7 +1493,7 @@ export function createApp(options = {}) {
       void refresh();
       return {};
     }
-    if (intent.name === "char" && ["1", "2", "3", "4"].includes(intent.char)) {
+    if (intent.name === "char" && ["1", "2", "3", "4", "5"].includes(intent.char)) {
       switchView(VIEWS[Number(intent.char) - 1]);
       return {};
     }
@@ -1083,9 +1565,11 @@ export function createApp(options = {}) {
 
     if (state.operation?.kind === "indexing" && nowMs - timers.lastProgressPoll >= progressPollMs) {
       timers.lastProgressPoll = nowMs;
+      const active = state.operation;
       try {
-        const payload = await client.repositoryProgress(state.operation.repoId);
-        if (payload) {
+        const payload = await client.repositoryProgress(active.repoId);
+        if (payload && state.operation?.kind === "indexing") {
+          const reportedElapsed = typeof payload.elapsed_ms === "number" && payload.elapsed_ms > 0 ? payload.elapsed_ms : null;
           set({
             progress: payload,
             operation: {
@@ -1093,8 +1577,35 @@ export function createApp(options = {}) {
               stage: payload.stage ?? state.operation.stage,
               stageIndex: payload.stage_index ?? null,
               stageTotal: payload.stage_total ?? null,
+              // File progress is only ever what the backend reports; absent
+              // fields stay null and render as indeterminate.
+              processedFiles: payload.processed_files ?? null,
+              totalFiles: payload.total_files ?? null,
+              failedFiles: payload.failed_files ?? null,
+              elapsedMs: reportedElapsed ?? nowMs - state.operation.startedAt,
             },
           });
+          // A run started elsewhere only ends when the backend says so: its
+          // terminal status is published here, and the reconciling read clears
+          // the operation (adoptExternalIndexingRun). A run this TUI started is
+          // settled by its own response instead.
+          if (active.external && (payload.status === "indexed" || payload.status === "error")) {
+            set({
+              lastRun: {
+                kind: "indexing",
+                repoId: active.repoId,
+                repoName: active.repoName,
+                status: payload.status,
+                stage: payload.error ?? payload.stage ?? null,
+                processedFiles: payload.processed_files ?? null,
+                totalFiles: payload.total_files ?? null,
+                failedFiles: payload.failed_files ?? null,
+                elapsedMs: reportedElapsed,
+                finishedAt: nowMs,
+              },
+            });
+            await loadSummary({ quiet: true });
+          }
         }
       } catch {
         // Transient poll failures leave the last known stage in place; the run
@@ -1134,6 +1645,7 @@ export function createApp(options = {}) {
     load: loadSummary,
     refresh,
     loadSystem,
+    loadSettings,
     switchView,
     setFocus,
     moveCursor,
@@ -1149,6 +1661,14 @@ export function createApp(options = {}) {
     requestDeleteRepository,
     requestDeletePackage,
     openPackageViewer,
+    togglePackageScope,
+    openAppendPackage,
+    openExportPackage,
+    openPipelineSettings,
+    toggleSetting,
+    openProviderSettings,
+    probeProvider: runProbeProvider,
+    updateProviderSettings: runUpdateProvider,
     closeOverlay,
     toggleMarkdown,
     cycleBudget,
@@ -1165,7 +1685,7 @@ export function createApp(options = {}) {
     deleteRepository: (id, label) => runDelete({ type: "deleteRepository", id, label }),
     importRepository: runImport,
     exportDiagnostics: runExportDiagnostics,
-    loadPrompts: () => loadPrompts(selectedRepository()),
+    loadPrompts: (options) => loadPrompts(selectedRepository(), options),
     setViewport: (patch) => {
       Object.assign(state.viewport, patch);
     },
@@ -1176,6 +1696,9 @@ export function createApp(options = {}) {
     codeSymbols,
     contextRows,
     selectedContextRow,
+    settingsRows,
+    selectedSettingsSection,
+    selectedPackage,
     currentRows,
   };
 }

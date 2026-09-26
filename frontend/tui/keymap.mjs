@@ -20,6 +20,7 @@ const NAVIGATE = "Navigate";
 const REPOSITORIES = "Repositories";
 const CONTEXT = "Context";
 const SYSTEM = "System";
+const SETTINGS = "Settings";
 const TEXT_INPUT = "Text input";
 const DIALOGS = "Dialogs";
 
@@ -33,7 +34,7 @@ export const HINTS = Object.freeze({
   activate: { keys: "enter", footer: "open", help: "Open the detail for the selection", group: NAVIGATE },
   back: { keys: "esc", footer: "back", help: "Back one level: detail → list → menu", group: NAVIGATE },
   switchPane: { keys: "tab", footer: "pane", help: "Cycle focus: menu → list → detail", group: NAVIGATE },
-  views: { keys: "1-4", footer: "views", help: "Jump to a destination (menu shortcut)", group: NAVIGATE },
+  views: { keys: "1-5", footer: "views", help: "Jump to a destination (menu shortcut)", group: NAVIGATE },
   keys: { keys: "?", footer: "keys", help: "Show this control reference", group: NAVIGATE },
   quit: { keys: "q", footer: "quit", help: "Quit (terminal restored, backend stopped)", group: NAVIGATE },
 
@@ -55,6 +56,14 @@ export const HINTS = Object.freeze({
   },
   savePackage: { keys: "S", footer: "save", help: "Save the context as a package", group: CONTEXT },
   deletePackage: { keys: "d", footer: "delete", help: "Delete the package (confirmation)", group: CONTEXT },
+  packageScope: { keys: "p", footer: "catalog", help: "Switch the catalog: tasks & packages / packages only", group: CONTEXT },
+  appendPackage: { keys: "A", footer: "append", help: "Append an iterative task or note to the package", group: CONTEXT },
+  exportPackage: { keys: "e", footer: "export", help: "Write the stored package markdown to a local file", group: CONTEXT },
+  viewerAppend: { keys: "a", footer: "append", help: "Append an iterative task or note to this package", group: CONTEXT },
+
+  sectionMove: { keys: "↑↓", footer: "section", help: "Move between settings sections", group: SETTINGS },
+  pipelineSettings: { keys: "t", footer: "pipeline", help: "Toggle the pipeline settings the backend persists", group: SETTINGS },
+  providerEdit: { keys: "e", footer: "provider", help: "Edit the inference provider (endpoint, model, API key)", group: SETTINGS },
 
   exportDiagnostics: { keys: "e", footer: "export", help: "Export a diagnostics bundle", group: SYSTEM },
   refresh: { keys: "r", footer: "refresh", help: "Refresh every pane from the backend", group: SYSTEM },
@@ -67,6 +76,9 @@ export const HINTS = Object.freeze({
   submit: { keys: "enter", footer: "submit", help: "Submit the field or form", group: DIALOGS },
   cancel: { keys: "esc", footer: "cancel", help: "Cancel and close", group: DIALOGS },
   confirm: { keys: "enter", footer: "confirm", help: "Confirm the action", group: DIALOGS },
+  toggleSetting: { keys: "enter", footer: "toggle", help: "Toggle the selected setting, then re-read it", group: DIALOGS },
+  providerProbe: { keys: "ctrl+p", footer: "probe", help: "Probe the endpoint for loaded models (changes nothing)", group: DIALOGS },
+  providerCycle: { keys: "tab", footer: "cycle", help: "Cycle the provider or a discovered model", group: DIALOGS },
   sourceToggle: { keys: "tab", footer: "source", help: "Switch source (local / GitHub)", group: DIALOGS },
   fieldMove: { keys: "↑↓", footer: "field", help: "Move between fields", group: DIALOGS },
   filterApply: { keys: "enter", footer: "apply", help: "Keep the filter and return", group: DIALOGS },
@@ -80,20 +92,21 @@ export const CONTEXTS = Object.freeze({
   rail: ["menuMove", "railOpen", "switchPane", "keys", "quit"],
   list: ["listMove", "activate", "switchPane", "keys"],
   repositories: ["listMove", "activate", "add", "index", "deleteRepo", "filter", "keys"],
-  context: ["listMove", "newTask", "contextOpen", "markdown", "savePackage", "keys"],
+  context: ["listMove", "newTask", "contextOpen", "packageScope", "savePackage", "appendPackage", "exportPackage", "markdown", "deletePackage", "keys"],
   system: ["scroll", "exportDiagnostics", "refresh", "keys"],
+  settings: ["sectionMove", "activate", "providerEdit", "pipelineSettings", "refresh", "keys"],
   inspector: ["scroll", "back", "switchPane", "keys"],
   filter: ["filterApply", "filterCancel", "cursorMove"],
   help: ["scroll", "helpClose"],
   confirm: ["confirm", "cancel"],
-  // Submit and cancel lead every dialog: narrower terminals drop the secondary
-  // field/source keys rather than the way out.
   addRepo: ["submit", "cancel", "sourceToggle", "fieldMove"],
   editor: ["submit", "cancel"],
-  viewer: ["scroll", "markdown", "viewerClose"],
+  pipeline: ["toggleSetting", "cancel"],
+  provider: ["submit", "providerProbe", "providerCycle", "cancel", "fieldMove"],
+  viewer: ["scroll", "viewerAppend", "exportPackage", "markdown", "viewerClose"],
 });
 
-const GROUP_ORDER = Object.freeze([NAVIGATE, REPOSITORIES, CONTEXT, SYSTEM, TEXT_INPUT, DIALOGS]);
+const GROUP_ORDER = Object.freeze([NAVIGATE, REPOSITORIES, CONTEXT, SYSTEM, SETTINGS, TEXT_INPUT, DIALOGS]);
 
 /** The `?` sheet: every hint, grouped for reference. Derived from HINTS. */
 export const HELP_GROUPS = Object.freeze(

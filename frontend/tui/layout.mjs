@@ -10,7 +10,7 @@ export const MIN_ROWS = 12;
 export const COMPACT_ROWS = 18;
 export const SIDE_BY_SIDE_COLS = 110;
 
-export const NAV_LABELS = Object.freeze(["Repositories", "Code", "Context", "System"]);
+export const NAV_LABELS = Object.freeze(["Repositories", "Code", "Context", "System", "Settings"]);
 
 const LONGEST_NAV_LABEL = NAV_LABELS.reduce((max, label) => Math.max(max, label.length), 0);
 
@@ -84,7 +84,9 @@ export function wrapToWidth(text, width) {
  * Frame budget and responsive class for the current terminal size.
  *
  * Chrome accounting is explicit so degenerate sizes degrade by arithmetic:
- * header (1) + rule (0/1) + operation (0/1) + footer (1).
+ * header (1) + rule (0/1) + operation block (0..2 rows) + footer (1).
+ * `operation` accepts the row count the operation block needs (a boolean is
+ * still accepted as "one row").
  */
 export function layoutFor({ cols, rows, operation = false }) {
   const tooSmall = cols < MIN_COLS || rows < MIN_ROWS;
@@ -92,7 +94,8 @@ export function layoutFor({ cols, rows, operation = false }) {
   const showRule = !compact;
   const showBadges = cols >= 72;
   const railWidth = Math.min(22, 2 + LONGEST_NAV_LABEL + (showBadges ? 5 : 0));
-  const chrome = 1 + (showRule ? 1 : 0) + (operation ? 1 : 0) + 1;
+  const operationRows = operation === true ? 1 : Math.max(0, Number(operation) || 0);
+  const chrome = 1 + (showRule ? 1 : 0) + operationRows + 1;
   const bodyRows = Math.max(4, rows - chrome);
   const sideBySide = cols >= SIDE_BY_SIDE_COLS;
   const available = Math.max(20, cols - railWidth - 2);

@@ -46,6 +46,10 @@ describe("shared backend client additions", () => {
     assert.equal(ENDPOINTS.diagnosticsExport, "/diagnostics/export");
     assert.equal(ENDPOINTS.recentLogs, "/logs/recent");
     assert.equal(ENDPOINTS.contextPackages, "/packages");
+    assert.equal(ENDPOINTS.settings, "/settings");
+    assert.equal(ENDPOINTS.settingsCognee, "/settings/cognee");
+    assert.equal(ENDPOINTS.providerUpdate, "/provider/update");
+    assert.equal(ENDPOINTS.providerDiscover, "/provider/discover");
   });
 
   it("creates a repository with the backend payload shape", async () => {
@@ -104,6 +108,49 @@ describe("shared backend client additions", () => {
     await client.deleteContextPackage("pkg-1");
     assert.equal(stub.seen.at(-1).method, "DELETE");
     assert.equal(stub.seen.at(-1).url, "/packages/pkg-1");
+  });
+
+  it("appends an iterative task to an existing package", async () => {
+    await client.appendContextPackage("pkg 1", { task: "add tests", markdown: "# more", objective: "goal" });
+    assert.equal(stub.seen.at(-1).method, "POST");
+    assert.equal(stub.seen.at(-1).url, "/packages/pkg%201/append");
+    assert.deepEqual(stub.seen.at(-1).body, {
+      additional_task: "add tests",
+      additional_markdown: "# more",
+      additional_objective: "goal",
+    });
+  });
+
+  it("updates and probes the inference provider over the existing endpoints", async () => {
+    await client.updateProvider({ provider: "ollama", base_url: "http://localhost:11434/v1", model: "llama3.2" });
+    assert.equal(stub.seen.at(-1).method, "POST");
+    assert.equal(stub.seen.at(-1).url, "/provider/update");
+    assert.deepEqual(stub.seen.at(-1).body, {
+      provider: "ollama",
+      base_url: "http://localhost:11434/v1",
+      model: "llama3.2",
+      api_key: "local",
+    });
+
+    await client.discoverProvider({ provider: "lmstudio", base_url: "http://localhost:1234/v1", api_key: "sk-x" });
+    assert.equal(stub.seen.at(-1).method, "POST");
+    assert.equal(stub.seen.at(-1).url, "/provider/discover");
+    assert.deepEqual(stub.seen.at(-1).body, {
+      provider: "lmstudio",
+      base_url: "http://localhost:1234/v1",
+      api_key: "sk-x",
+    });
+  });
+
+  it("reads and updates the persisted settings the backend exposes", async () => {
+    await client.appSettings();
+    assert.equal(stub.seen.at(-1).method, "GET");
+    assert.equal(stub.seen.at(-1).url, "/settings");
+
+    await client.updateCogneeSettings({ enable_kg_extraction: false });
+    assert.equal(stub.seen.at(-1).method, "POST");
+    assert.equal(stub.seen.at(-1).url, "/settings/cognee");
+    assert.deepEqual(stub.seen.at(-1).body, { enable_kg_extraction: false });
   });
 
   it("exports diagnostics and reads recent logs with a limit", async () => {

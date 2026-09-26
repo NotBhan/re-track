@@ -64,11 +64,26 @@ const PACKAGES = [
     id: "pkg-1",
     name: "Auth context",
     task: "Explain auth",
+    objective: "Explain auth",
+    repository_name: "alpha-service",
+    repository_branch: "main",
+    section_count: 3,
     markdown: "# Auth\n\n- session",
     token_estimate: 320,
     created_at: "2026-09-24T09:00:00Z",
+    updated_at: "2026-09-24T09:00:00Z",
+    tags: ["auth"],
   },
 ];
+
+const SETTINGS = {
+  data_root: "/home/u/.retrack",
+  vector_db: "lancedb",
+  graph_db: "kuzu",
+  enable_kg_extraction: true,
+  auto_link_entities: false,
+  caching: true,
+};
 
 const CONTEXT_OK = {
   success: true,
@@ -112,6 +127,8 @@ function makeClient(overrides = {}) {
     if (typeof result === "function") return result(...args);
     return result;
   };
+  // Persisted settings are per-client so a toggle + re-read is observable.
+  const settings = { ...SETTINGS };
   const base = {
     health: { status: "ok", provider_identity: "lmstudio", provider_reachable: true, concurrency_available_slots: 1, concurrency_queue_depth: 0, configured_model: "phi3:mini", active_model: null },
     status: { status: "ok", llm_provider: "lmstudio" },
@@ -130,8 +147,30 @@ function makeClient(overrides = {}) {
     getContextPackage: (id) => PACKAGES.find((pkg) => pkg.id === id),
     saveContextPackage: (payload) => ({ id: "pkg-new", created_at: "2026-09-25T12:00:00Z", ...payload }),
     deleteContextPackage: { success: true },
+    appendContextPackage: (id, payload) => ({ ...PACKAGES[0], id, task: payload.task, updated_at: "2026-09-25T13:00:00Z" }),
     agentContext: CONTEXT_OK,
     exportDiagnostics: { status: "ok", export_path: "/tmp/re-track-diagnostics.json" },
+    appSettings: () => ({ success: true, ...settings }),
+    updateCogneeSettings: (payload) => {
+      Object.assign(settings, payload);
+      return { success: true, ...settings };
+    },
+    updateProvider: (payload) => {
+      settings.llm_provider = payload.provider;
+      settings.llm_endpoint = payload.base_url;
+      settings.llm_model = payload.model;
+      return { success: true, ...payload };
+    },
+    discoverProvider: {
+      success: true,
+      provider: "lmstudio",
+      base_url: "http://127.0.0.1:1234/v1",
+      is_reachable: true,
+      status: "available",
+      models: [{ model_id: "qwen2.5-7b", name: "qwen2.5-7b", quantization: "Q4_K_M" }],
+      message: "",
+      error_details: null,
+    },
   };
   const client = { calls };
   for (const [name, value] of Object.entries({ ...base, ...overrides })) {
@@ -150,9 +189,9 @@ async function settle(times = 4) {
   }
 }
 
-async function startApp(overrides = {}) {
+async function startApp(overrides = {}, options = {}) {
   const client = makeClient(overrides);
-  const app = createApp({ client, now: () => Date.now() });
+  const app = createApp({ client, now: () => Date.now(), ...options });
   await app.load();
   return { app, client };
 }
@@ -210,6 +249,40 @@ describe("state: startup and loading", () => {
     await app.loadPrompts();
     assert.deepEqual(client.calls.at(-1), { name: "repositoryPrompts", args: ["repo-a"] });
     assert.equal(app.getState().prompts.items.length, 1);
+  });
+
+  it("fetches suggested tasks when the Context workbench opens, once per repository", async () => {
+    const { app, client } = await startApp();
+    assert.equal(callNames(client).filter((name) => name === "repositoryPrompts").length, 0);
+
+    app.switchView("context");
+    await settle();
+    assert.equal(callNames(client).filter((name) => name === "repositoryPrompts").length, 1);
+    assert.equal(app.getState().prompts.repoId, "repo-a");
+
+    // Re-entering the workbench keeps the loaded set; an explicit refresh re-reads it.
+    app.switchView("repositories");
+    app.switchView("context");
+    await settle();
+    assert.equal(callNames(client).filter((name) => name === "repositoryPrompts").length, 1);
+
+    await app.refresh();
+    assert.equal(callNames(client).filter((name) => name === "repositoryPrompts").length, 2);
+  });
+
+  it("bounds the Context catalog to the repository the suggestions belong to", async () => {
+    const { app, client } = await startApp();
+    app.switchView("context");
+    await settle();
+    assert.equal(app.getState().prompts.repoId, "repo-a");
+
+    // Move to the other repository, then open the workbench again.
+    app.switchView("repositories");
+    app.dispatch(key("down"));
+    app.switchView("context");
+    await settle();
+    assert.equal(client.calls.at(-1).args[0], "repo-b");
+    assert.equal(app.getState().prompts.repoId, "repo-b");
   });
 });
 
@@ -276,6 +349,20 @@ describe("state: navigation", () => {
     assert.equal(app.visibleRepositories().length, 2);
   });
 
+  it("jumps to the first and last row with home and end", async () => {
+    const { app } = await startApp();
+    app.dispatch(key("end"));
+    assert.equal(app.getState().cursors.repositories, 1, "end goes to the last row directly");
+    app.dispatch(key("home"));
+    assert.equal(app.getState().cursors.repositories, 0, "home returns to the first row");
+
+    // Absolute jumps and wrapping movement coexist.
+    app.dispatch(key("up"));
+    assert.equal(app.getState().cursors.repositories, 1, "↑ from the first row wraps to the last");
+    app.dispatch(key("down"));
+    assert.equal(app.getState().cursors.repositories, 0, "↓ from the last row wraps to the first");
+  });
+
   it("uses escape to walk back from inspector to list", async () => {
     const { app } = await startApp();
     app.openInspector();
@@ -336,6 +423,9 @@ describe("state: operations", () => {
     assert.equal(operation.stageIndex, 2);
     assert.equal(operation.stageTotal, 5);
     assert.equal(operation.stage, "Extracting AST call graphs and symbols...");
+    assert.equal(operation.processedFiles, 0, "file counts come from the backend as reported");
+    assert.equal(operation.totalFiles, 10);
+    assert.equal(operation.elapsedMs, 800, "the backend-reported elapsed time is kept");
     assert.equal(app.getState().progress.status, "indexing");
 
     release();
@@ -379,6 +469,20 @@ describe("state: operations", () => {
     assert.equal(state.operation, null);
     assert.equal(state.lastRun.status, "error");
     assert.match(state.notice.message, /disk full/);
+  });
+
+  it("records failed files and measured elapsed time on completion", async () => {
+    const { app } = await startApp({
+      indexRepository: { success: true, total_files: 10, processed_files: 8, failed_files: 2, summary: "Indexed 8/10 files" },
+    });
+
+    app.dispatch(char("i"));
+    await settle();
+
+    const run = app.getState().lastRun;
+    assert.equal(run.failedFiles, 2);
+    assert.ok(typeof run.elapsedMs === "number" && run.elapsedMs >= 0);
+    assert.match(app.getState().notice.message, /2 failed/);
   });
 
   it("scans the selected repository", async () => {
@@ -585,6 +689,345 @@ describe("state: packages", () => {
   });
 });
 
+describe("state: settings", () => {
+  it("loads the persisted settings and storage detail when the Settings view opens", async () => {
+    const { app, client } = await startApp();
+    app.dispatch(char("5"));
+    assert.equal(app.getState().view, "settings");
+    await settle();
+
+    assert.ok(client.calls.some((call) => call.name === "appSettings"));
+    assert.ok(client.calls.some((call) => call.name === "detailedHealth"));
+    assert.equal(app.getState().appSettings.vector_db, "lancedb");
+    assert.equal(app.getState().settingsError, null);
+  });
+
+  it("keeps a failed settings read visible instead of rendering stale configuration", async () => {
+    const { app } = await startApp({ appSettings: () => Promise.reject(new Error("settings unavailable")) });
+    app.dispatch(char("5"));
+    await settle();
+
+    assert.match(app.getState().settingsError, /settings unavailable/);
+    assert.equal(app.getState().appSettings, null);
+  });
+
+  it("persists a pipeline toggle through the backend and re-reads the stored value", async () => {
+    const { app, client } = await startApp();
+    app.dispatch(char("5"));
+    await settle();
+
+    app.dispatch(char("t"));
+    assert.equal(app.getState().overlay.kind, "pipelineSettings");
+    assert.equal(app.getState().overlay.cursor, 0);
+
+    app.dispatch(key("down")); // auto-link entities: currently disabled
+    app.dispatch(key("enter"));
+    await settle(8);
+
+    assert.deepEqual(client.calls.find((call) => call.name === "updateCogneeSettings").args, [{ auto_link_entities: true }]);
+    assert.equal(app.getState().appSettings.auto_link_entities, true, "the re-read reflects the backend value");
+    assert.match(app.getState().notice.message, /Auto-link entities enabled/);
+    assert.equal(app.getState().settingsBusy, false);
+  });
+
+  it("surfaces a settings write failure without changing the stored value", async () => {
+    const { app } = await startApp({
+      updateCogneeSettings: async () => {
+        throw new Error("write denied");
+      },
+    });
+    app.dispatch(char("5"));
+    await settle();
+    app.dispatch(char("t"));
+    app.dispatch(key("enter")); // knowledge graph extraction: enabled -> disabled
+    await settle();
+
+    assert.match(app.getState().settingsError, /write denied/);
+    assert.match(app.getState().notice.message, /settings update failed/);
+    assert.equal(app.getState().appSettings.enable_kg_extraction, true, "the failed write is not applied locally");
+    assert.equal(app.getState().settingsBusy, false);
+  });
+
+  it("refuses to toggle a setting the HTTP contract cannot persist", async () => {
+    const { app, client } = await startApp();
+    await app.toggleSetting("vector_db");
+    assert.match(app.getState().notice.message, /not editable from the TUI/);
+    assert.equal(client.calls.filter((call) => call.name === "updateCogneeSettings").length, 0);
+  });
+});
+
+describe("state: provider editing", () => {
+  it("opens the provider editor prefilled from the persisted settings", async () => {
+    const { app } = await startApp();
+    app.dispatch(char("5"));
+    await settle();
+    app.dispatch(char("e"));
+
+    const overlay = app.getState().overlay;
+    assert.equal(overlay.kind, "providerSettings");
+    assert.equal(overlay.values.provider, "lmstudio");
+    assert.equal(overlay.values.endpoint, "http://127.0.0.1:1234/v1");
+    assert.equal(overlay.values.model, "phi3:mini");
+    assert.deepEqual(overlay.options, ["lmstudio", "ollama", "openai_compatible"]);
+  });
+
+  it("cycles the provider with its default endpoint and keeps a custom endpoint", async () => {
+    const { app } = await startApp();
+    app.dispatch(char("5"));
+    await settle();
+    app.dispatch(char("e"));
+
+    app.dispatch(key("tab")); // lmstudio -> ollama
+    assert.equal(app.getState().overlay.values.provider, "ollama");
+    assert.equal(app.getState().overlay.values.endpoint, "http://localhost:11434/v1");
+
+    // A custom endpoint survives cycling the provider away and back.
+    app.dispatch(key("down")); // endpoint
+    app.dispatch(key("ctrl", { char: "u" }));
+    for (const value of "http://box:9999/v1") app.dispatch(char(value));
+    app.dispatch(key("down")); // model
+    app.dispatch(key("down")); // apiKey
+    app.dispatch(key("down")); // wraps back to provider
+    assert.equal(app.getState().overlay.field, "provider");
+    app.dispatch(key("tab"));
+    assert.equal(app.getState().overlay.values.endpoint, "http://box:9999/v1");
+  });
+
+  it("probes the endpoint and lists discovered models without changing the provider", async () => {
+    const { app, client } = await startApp();
+    app.dispatch(char("5"));
+    await settle();
+    app.dispatch(char("e"));
+    app.dispatch(key("ctrl", { char: "p" }));
+    await settle();
+
+    assert.deepEqual(client.calls.find((call) => call.name === "discoverProvider").args, [
+      { provider: "lmstudio", base_url: "http://127.0.0.1:1234/v1", api_key: "local" },
+    ]);
+    assert.deepEqual(app.getState().overlay.discovered, [
+      { id: "qwen2.5-7b", label: "qwen2.5-7b", quantization: "Q4_K_M" },
+    ]);
+    assert.match(app.getState().notice.message, /discovered 1 models/);
+    assert.equal(client.calls.filter((call) => call.name === "updateProvider").length, 0);
+  });
+
+  it("cycles a discovered model into the model field", async () => {
+    const { app } = await startApp();
+    app.dispatch(char("5"));
+    await settle();
+    app.dispatch(char("e"));
+    app.dispatch(key("ctrl", { char: "p" }));
+    await settle();
+
+    app.dispatch(key("down"));
+    app.dispatch(key("down")); // model field
+    assert.equal(app.getState().overlay.field, "model");
+    app.dispatch(key("tab"));
+    assert.equal(app.getState().overlay.values.model, "qwen2.5-7b");
+    assert.equal(app.getState().overlay.cursors.model, "qwen2.5-7b".length);
+  });
+
+  it("reports an unreachable probe truthfully and saves nothing", async () => {
+    const { app, client } = await startApp({
+      discoverProvider: {
+        success: true,
+        provider: "lmstudio",
+        base_url: "http://127.0.0.1:1234/v1",
+        is_reachable: false,
+        status: "unreachable",
+        models: [],
+        message: "",
+        error_details: "connection refused",
+      },
+    });
+    app.dispatch(char("5"));
+    await settle();
+    app.dispatch(char("e"));
+    app.dispatch(key("ctrl", { char: "p" }));
+    await settle();
+
+    assert.match(app.getState().overlay.probeError, /connection refused/);
+    assert.match(app.getState().notice.message, /probe failed/);
+    assert.equal(client.calls.filter((call) => call.name === "updateProvider").length, 0);
+  });
+
+  it("saves the provider through the backend and re-reads the authoritative values", async () => {
+    const { app, client } = await startApp();
+    app.dispatch(char("5"));
+    await settle();
+    app.dispatch(char("e"));
+
+    app.dispatch(key("tab")); // ollama
+    app.dispatch(key("down")); // endpoint
+    app.dispatch(key("ctrl", { char: "u" }));
+    for (const value of "http://localhost:11434/v1") app.dispatch(char(value));
+    app.dispatch(key("down")); // model
+    app.dispatch(key("ctrl", { char: "u" }));
+    for (const value of "llama3.2") app.dispatch(char(value));
+    app.dispatch(key("enter"));
+    await settle(8);
+
+    assert.deepEqual(client.calls.find((call) => call.name === "updateProvider").args, [
+      { provider: "ollama", base_url: "http://localhost:11434/v1", model: "llama3.2", api_key: "local" },
+    ]);
+    assert.equal(app.getState().overlay, null);
+    assert.match(app.getState().notice.message, /provider switched to ollama · llama3\.2/);
+    assert.equal(app.getState().appSettings.llm_provider, "ollama", "the re-read reflects the backend");
+  });
+
+  it("validates required fields and keeps backend failures visible", async () => {
+    const { app, client } = await startApp({
+      updateProvider: async () => {
+        throw new Error("switch refused");
+      },
+    });
+    app.dispatch(char("5"));
+    await settle();
+    app.dispatch(char("e"));
+
+    app.dispatch(key("down"));
+    app.dispatch(key("down")); // model
+    app.dispatch(key("ctrl", { char: "u" }));
+    app.dispatch(key("enter"));
+    assert.match(app.getState().overlay.error, /model is required/);
+    assert.equal(client.calls.filter((call) => call.name === "updateProvider").length, 0);
+
+    for (const value of "phi4") app.dispatch(char(value));
+    app.dispatch(key("enter"));
+    await settle();
+
+    assert.equal(app.getState().overlay.kind, "providerSettings");
+    assert.match(app.getState().overlay.error, /switch refused/);
+    assert.match(app.getState().notice.message, /provider update failed/);
+  });
+});
+
+describe("state: package catalog, append and export", () => {
+  it("scopes the catalog to saved packages on p", async () => {
+    const { app } = await startApp();
+    await app.loadPrompts();
+    app.dispatch(char("3"));
+    assert.ok(app.contextRows().some((row) => row.kind === "suggestion"));
+
+    app.dispatch(char("p"));
+    assert.equal(app.getState().packageScope, "packages");
+    assert.ok(app.contextRows().every((row) => row.kind === "package"));
+    assert.equal(app.getState().cursors.context, 0, "the cursor is reset for the new scope");
+
+    app.dispatch(char("p"));
+    assert.equal(app.getState().packageScope, "all");
+  });
+
+  it("appends an iterative task to the selected package and shows the updated version", async () => {
+    const { app, client } = await startApp();
+    app.dispatch(char("3"));
+    app.dispatch(char("p")); // packages only: the saved package is the first row
+    app.dispatch(char("A"));
+    assert.equal(app.getState().overlay.kind, "appendPackage");
+
+    app.dispatch(key("enter"));
+    assert.match(app.getState().overlay.error, /required/);
+    assert.equal(client.calls.filter((call) => call.name === "appendContextPackage").length, 0);
+
+    for (const value of "add tests") app.dispatch(char(value));
+    app.dispatch(key("enter"));
+    await settle(8);
+
+    assert.deepEqual(client.calls.find((call) => call.name === "appendContextPackage").args, ["pkg-1", { task: "add tests" }]);
+    assert.equal(app.getState().overlay.kind, "viewPackage", "the updated package is shown after appending");
+    assert.match(app.getState().notice.message, /appended to Auth context/);
+  });
+
+  it("keeps the append dialog open with the backend error when the append fails", async () => {
+    const { app } = await startApp({
+      appendContextPackage: async () => {
+        throw new Error("package is locked");
+      },
+    });
+    app.dispatch(char("3"));
+    app.dispatch(char("p"));
+    app.dispatch(char("A"));
+    for (const value of "note") app.dispatch(char(value));
+    app.dispatch(key("enter"));
+    await settle();
+
+    assert.equal(app.getState().overlay.kind, "appendPackage");
+    assert.match(app.getState().overlay.error, /package is locked/);
+    assert.match(app.getState().notice.message, /append failed/);
+  });
+
+  it("writes the stored markdown through the local export capability", async () => {
+    const writes = [];
+    const { app, client } = await startApp(
+      {},
+      {
+        exportMarkdown: async ({ target, markdown }) => {
+          writes.push({ target, markdown });
+          return { path: "/tmp/auth-context.md", bytes: markdown.length };
+        },
+        exportFileName: (name) => `${String(name).toLowerCase().replace(/\s+/g, "-")}.md`,
+      }
+    );
+
+    app.dispatch(char("3"));
+    app.dispatch(char("p"));
+    app.dispatch(char("e"));
+    assert.equal(app.getState().overlay.kind, "exportPackage");
+    assert.equal(app.getState().overlay.value, "auth-context.md", "the dialog is prefilled with a readable name");
+
+    app.dispatch(key("enter"));
+    await settle();
+
+    assert.deepEqual(client.calls.find((call) => call.name === "getContextPackage").args, ["pkg-1"]);
+    assert.equal(writes.length, 1);
+    assert.equal(writes[0].markdown, PACKAGES[0].markdown, "the stored markdown is written unchanged");
+    assert.match(app.getState().notice.message, /exported Auth context to \/tmp\/auth-context\.md/);
+    assert.equal(app.getState().overlay, null);
+  });
+
+  it("states that export is unavailable and reports write failures honestly", async () => {
+    const withoutCapability = await startApp();
+    withoutCapability.app.dispatch(char("3"));
+    withoutCapability.app.dispatch(char("p"));
+    withoutCapability.app.dispatch(char("e"));
+    assert.equal(withoutCapability.app.getState().overlay, null);
+    assert.match(withoutCapability.app.getState().notice.message, /export is unavailable/);
+
+    const failing = await startApp(
+      {},
+      {
+        exportMarkdown: async () => {
+          throw new Error("EACCES: permission denied");
+        },
+        exportFileName: () => "auth.md",
+      }
+    );
+    failing.app.dispatch(char("3"));
+    failing.app.dispatch(char("p"));
+    failing.app.dispatch(char("e"));
+    failing.app.dispatch(key("enter"));
+    await settle();
+
+    assert.equal(failing.app.getState().overlay.kind, "exportPackage");
+    assert.match(failing.app.getState().overlay.error, /EACCES/);
+    assert.match(failing.app.getState().notice.message, /export failed/);
+
+    // A package the backend cannot return is an error, not an empty export.
+    const missing = await startApp(
+      { getContextPackage: () => null },
+      { exportMarkdown: async () => ({ path: "/tmp/x.md" }), exportFileName: () => "x.md" }
+    );
+    missing.app.dispatch(char("3"));
+    missing.app.dispatch(char("p"));
+    missing.app.dispatch(char("e"));
+    missing.app.dispatch(key("enter"));
+    await settle();
+
+    assert.match(missing.app.getState().overlay.error, /package not found/);
+    assert.match(missing.app.getState().notice.message, /export failed/);
+  });
+});
+
 describe("state: notices and viewport", () => {
   it("expires transient notices on tick", async () => {
     const { app } = await startApp();
@@ -634,5 +1077,75 @@ describe("state: notices and viewport", () => {
     assert.equal(app.getState().operation.kind, "indexing");
     assert.equal(app.getState().operation.external, true);
     assert.equal(client.calls.filter((call) => call.name === "indexRepository").length, 0);
+  });
+
+  it("completes an adopted external run from the backend's terminal progress", async () => {
+    let lists = 0;
+    const { app } = await startApp({
+      listRepositories: () => {
+        lists += 1;
+        const status = lists <= 1 ? "indexing" : "indexed";
+        return { success: true, repositories: [{ ...REPOS[1], status, file_count: 10 }], total_count: 1 };
+      },
+      repositoryProgress: {
+        success: true,
+        status: "indexed",
+        stage: "Indexing completed",
+        processed_files: 10,
+        total_files: 10,
+        failed_files: 0,
+        elapsed_ms: 4200,
+        error: null,
+      },
+    });
+    assert.equal(app.getState().operation.external, true);
+
+    await app.tick(Date.now() + 1000);
+
+    assert.equal(app.getState().operation, null, "the operation line must not spin after the run is over");
+    assert.equal(app.getState().lastRun.status, "indexed");
+    assert.equal(app.getState().lastRun.processedFiles, 10);
+    assert.equal(app.getState().lastRun.totalFiles, 10);
+    assert.equal(app.getState().lastRun.elapsedMs, 4200);
+  });
+
+  it("fails an adopted external run with the backend's own error text", async () => {
+    let lists = 0;
+    const { app } = await startApp({
+      listRepositories: () => {
+        lists += 1;
+        const status = lists <= 1 ? "indexing" : "error";
+        return { success: true, repositories: [{ ...REPOS[1], status }], total_count: 1 };
+      },
+      repositoryProgress: {
+        success: true,
+        status: "error",
+        stage: "Indexing failed",
+        processed_files: 0,
+        total_files: 0,
+        elapsed_ms: 900,
+        error: "embedding endpoint refused the connection",
+      },
+    });
+
+    await app.tick(Date.now() + 1000);
+
+    assert.equal(app.getState().operation, null);
+    assert.equal(app.getState().lastRun.status, "error");
+    assert.equal(app.getState().lastRun.stage, "embedding endpoint refused the connection");
+  });
+
+  it("keeps an adopted external run while the backend still reports indexing", async () => {
+    const { app } = await startApp({
+      listRepositories: { success: true, repositories: [{ ...REPOS[1], status: "indexing" }], total_count: 1 },
+      repositoryProgress: { success: true, status: "indexing", stage: "Extracting AST call graphs and symbols...", stage_index: 2, stage_total: 5, elapsed_ms: 800 },
+    });
+
+    await app.tick(Date.now() + 1000);
+
+    assert.equal(app.getState().operation.kind, "indexing");
+    assert.equal(app.getState().operation.stage, "Extracting AST call graphs and symbols...");
+    assert.equal(app.getState().operation.stageIndex, 2);
+    assert.equal(app.getState().lastRun, null);
   });
 });
