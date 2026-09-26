@@ -6,7 +6,7 @@ import { buildModel, composeFrame, composeLines, createPlainStyler, HELP_NOTES }
 import { createStyler } from "../theme.mjs";
 import { layoutFor, windowStart, wrapStep, truncate } from "../layout.mjs";
 import { formatMarkdown } from "../markdown.mjs";
-import { PACKAGES, char, key, plain, settle, startApp } from "./fixtures.mjs";
+import { PACKAGES, char, key, plain, publishViewport, settle, startApp } from "./fixtures.mjs";
 
 const ANSI = /\u001b\[[0-9;]*m/g;
 const strip = (text) => String(text).replace(ANSI, "");
@@ -14,12 +14,7 @@ const strip = (text) => String(text).replace(ANSI, "");
 function frame(app, cols, rows, options = {}) {
   const model = buildModel(app, { cols, rows, spinnerFrame: options.spinnerFrame ?? 0 });
   // Mirror the entry point: scroll bounds are published from the built model.
-  app.setViewport({
-    pageSize: Math.max(3, model.view.list.height - 1),
-    inspectorMax: model.scrollMax.inspector,
-    systemMax: model.scrollMax.system,
-    viewerMax: model.scrollMax.viewer,
-  });
+  publishViewport(app, model);
   return {
     model,
     lines: composeLines(model, options.styler ?? plain).map(strip),
@@ -432,28 +427,83 @@ describe("render: settings view", () => {
     assert.match(storage, /storage engines are fixed by the backend/);
   });
 
-  it("renders the provider editor, its discovered models and its footer", async () => {
+  it("renders the provider editor, its model selector and its footer", async () => {
     const { app } = await startApp();
     app.dispatch(char("5"));
     await settle();
     app.dispatch(char("e"));
+    await settle();
 
     let lines = frame(app, 120, 34).lines;
     let body = text(lines);
     assert.match(body, /Provider configuration/);
     assert.match(body, /POST \/provider\/update/);
     assert.match(body, /provider:\s+lmstudio/);
-    assert.match(body, /tab cycles: lmstudio · ollama · openai_compatible/);
-    assert.match(body, /ctrl\+p probes/);
+    assert.match(body, /enter or tab: lmstudio · ollama · openai_compatible/);
+    assert.match(body, /available:\s+1 models · enter to select/, "the editor reports the provider's list");
+    assert.match(body, /the model is chosen, never typed/);
+    assert.doesNotMatch(body, /model:\s+\S+\s+\(required\)/, "the model is not a text field");
+    assert.match(lines.at(-1), /enter select\/save/, "the footer says what enter does on each row");
     assert.match(lines.at(-1), /ctrl\+p probe/);
     assert.match(lines.at(-1), /esc cancel/);
 
-    app.dispatch(key("ctrl", { char: "p" }));
-    await settle();
+    // The model row opens the selector, which lists exactly what the endpoint
+    // reported — name, quantization and the saved/selected markers.
+    app.dispatch(key("down"));
+    app.dispatch(key("down"));
+    app.dispatch(key("down"));
+    app.dispatch(key("enter"));
+    assert.equal(app.getState().overlay.kind, "modelSelect");
     lines = frame(app, 120, 34).lines;
     body = text(lines);
-    assert.match(body, /discovered models \(1\)/);
+    assert.match(body, /Select model · 1 available/);
     assert.match(body, /qwen2\.5-7b\s+Q4_K_M/);
+    assert.match(body, /provider lmstudio · http:\/\/127\.0\.0\.1:1234\/v1/, "the list names the endpoint it read");
+    assert.match(lines.at(-1), /enter select/);
+  });
+
+  it("marks the saved and the unsaved selection in the model list", async () => {
+    const { app } = await startApp({
+      discoverProvider: {
+        success: true,
+        status: "available",
+        models: [
+          { model_id: "phi3:mini", name: "phi3:mini", quantization: "unknown" },
+          { model_id: "qwen2.5-7b", name: "qwen2.5-7b", quantization: "Q4_K_M" },
+        ],
+        message: "",
+      },
+    });
+    app.dispatch(char("5"));
+    await settle();
+    app.dispatch(char("e"));
+    await settle();
+
+    app.dispatch(key("down"));
+    app.dispatch(key("down"));
+    app.dispatch(key("down"));
+    app.dispatch(key("enter"));
+    const before = text(frame(app, 120, 34).lines);
+    assert.match(before, /phi3:mini\s+\(saved · selected\)/, "the authoritative model is marked as both");
+
+    // Highlighting is not selecting: the marker moves only when the model is
+    // chosen, and even then nothing is persisted.
+    app.dispatch(key("down"));
+    const highlighted = text(frame(app, 120, 34).lines);
+    assert.match(highlighted, /▍ qwen2\.5-7b Q4_K_M/, "the highlight is visible without color");
+    assert.match(highlighted, /phi3:mini\s+\(saved · selected\)/, "the highlight alone changes no selection");
+
+    app.dispatch(key("enter"));
+    const editor = text(frame(app, 120, 34).lines);
+    assert.match(editor, /Provider configuration/);
+    assert.match(editor, /model:\s+qwen2\.5-7b/, "the editor shows the chosen model");
+    assert.match(editor, /saved:\s+lmstudio · phi3:mini/, "and still shows what is actually configured");
+
+    // Reopening the list shows the chosen model as selected-but-unsaved.
+    app.dispatch(key("enter"));
+    const chosen = text(frame(app, 120, 34).lines);
+    assert.match(chosen, /qwen2\.5-7b Q4_K_M\s+\(selected\)/);
+    assert.match(chosen, /phi3:mini\s+\(saved\)/, "the authoritative model keeps the saved marker");
   });
 
   it("renders a failed settings read as a warning instead of stale values", async () => {

@@ -25,11 +25,59 @@ export function wrapStep(current, delta, length) {
   return (((current + delta) % length) + length) % length;
 }
 
+/* ------------------------------- scrolling -------------------------------- */
+/*
+ * One scrolling model for every surface, in two flavours:
+ *
+ *   followWindow  cursor-driven lists — the window follows the selection
+ *   offsetWindow  offset-driven panes — the window starts at the scroll value
+ *
+ * Both return the same shape ({ start, end, above, below }) so panes render
+ * their slice and their "more content" marker from one calculation. These are
+ * pure: state owns the cursor/offset, the renderer owns the geometry.
+ */
+
+/** Largest usable offset for a pane of `height` rows showing `total` rows. */
+export function scrollMax(total, height) {
+  return Math.max(0, Math.floor(total) - Math.max(1, Math.floor(height)));
+}
+
+/** Page jump for a pane: a page keeps one row of overlap (Torlink's rule). */
+export function pageStep(height) {
+  return Math.max(1, Math.floor(height) - 1);
+}
+
+/** Cursor-following window: keeps the selection visible and roughly centred. */
+export function followWindow(cursor, total, height) {
+  const rows = Math.max(1, Math.floor(height));
+  const count = Math.max(0, Math.floor(total));
+  const start = count <= rows ? 0 : clamp(Math.floor(cursor) - Math.floor(rows / 2), 0, count - rows);
+  return { start, end: Math.min(count, start + rows), above: start > 0, below: start + rows < count };
+}
+
+/** Offset window: the window starts at the scroll value, clamped to the content. */
+export function offsetWindow(offset, total, height) {
+  const rows = Math.max(1, Math.floor(height));
+  const count = Math.max(0, Math.floor(total));
+  const start = clamp(Math.floor(offset) || 0, 0, scrollMax(count, rows));
+  return { start, end: Math.min(count, start + rows), above: start > 0, below: start + rows < count };
+}
+
 /** First visible row for a cursor inside a window of `height` rows. */
 export function windowStart(cursor, total, height) {
-  if (total <= height) return 0;
-  const half = Math.floor(height / 2);
-  return clamp(cursor - half, 0, total - height);
+  return followWindow(cursor, total, height).start;
+}
+
+/**
+ * Restrained "more content" marker: shown only on the side that actually has
+ * more, and never colour-dependent.
+ */
+export function moreMarker(window) {
+  if (!window) return "";
+  if (window.above && window.below) return "↑↓ more";
+  if (window.above) return "↑ more";
+  if (window.below) return "↓ more";
+  return "";
 }
 
 export function truncate(text, width, ellipsis = "…") {

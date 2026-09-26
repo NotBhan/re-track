@@ -10,7 +10,19 @@
  * backend response; missing data renders as `unavailable`/`none`/`never`.
  */
 
-import { layoutFor, padTo, padStart, truncate, windowStart, wrapToWidth, clamp } from "./layout.mjs";
+import {
+  layoutFor,
+  padTo,
+  padStart,
+  truncate,
+  wrapToWidth,
+  clamp,
+  followWindow,
+  offsetWindow,
+  pageStep,
+  scrollMax,
+  moreMarker,
+} from "./layout.mjs";
 import { HELP_GROUPS, footerHints } from "./keymap.mjs";
 import { formatMarkdown } from "./markdown.mjs";
 import {
@@ -172,8 +184,9 @@ export function buildModel(app, options = {}) {
     view: null,
     operation: buildOperation(state, layout, spinnerFrame, cols),
     footer: buildFooter(state, layout, cols),
-    overlay: state.overlay ? buildOverlay(state, layout, cols) : null,
-    scrollMax: { inspector: 0, system: 0, viewer: 0 },
+    overlay: state.overlay ? buildOverlay(app, state, layout, cols) : null,
+    scrollMax: { detail: 0, system: 0, viewer: 0, help: 0, overlay: 0 },
+    pageSteps: { detail: 1, system: 1, viewer: 1, help: 1, overlay: 1, model: 1 },
   };
 
   model.header.noticeText = state.notice
@@ -181,11 +194,34 @@ export function buildModel(app, options = {}) {
     : null;
 
   model.view = buildView(app, state, layout);
-  model.scrollMax.inspector = Math.max(0, model.view.inspector.lines.length - (model.layout.bodyRows - 2));
-  model.scrollMax.system = Math.max(0, model.view.list.rows.length - model.view.list.height);
-  model.scrollMax.viewer = model.overlay && (model.overlay.kind === "viewPackage" || model.overlay.kind === "help")
-    ? Math.max(0, model.overlay.lines.length - (model.layout.bodyRows - 2))
-    : 0;
+
+  // The pane heights the views actually render determine every scroll bound,
+  // so state clamps against what is on screen instead of an estimate.
+  const bannerRows = model.view.banner && !model.view.inspector.open ? model.view.banner.lines.length : 0;
+  const headerRows = (model.view.list.filterActive || model.view.list.filter ? 1 : 0) + bannerRows;
+  model.view.list.height = Math.max(1, layout.bodyRows - 1 - headerRows);
+  model.view.inspector.height = Math.max(1, layout.bodyRows - 1);
+
+  const overlayHeight = model.overlay ? Math.max(1, layout.bodyRows - 2) : 0;
+  const overlayLines_count = model.overlay?.lines.length ?? 0;
+  const kind = model.overlay?.kind ?? null;
+  const formOverlay = ["confirm", "addRepo", "newTask", "savePackage", "appendPackage", "exportPackage", "providerSettings", "pipelineSettings"].includes(kind);
+
+  model.scrollMax = {
+    detail: scrollMax(model.view.inspector.lines.length, model.view.inspector.height),
+    system: scrollMax(model.view.list.rows.length, model.view.list.height),
+    viewer: kind === "viewPackage" ? scrollMax(overlayLines_count, overlayHeight) : 0,
+    help: kind === "help" ? scrollMax(overlayLines_count, overlayHeight) : 0,
+    overlay: formOverlay ? scrollMax(overlayLines_count, overlayHeight) : 0,
+  };
+  model.pageSteps = {
+    detail: pageStep(model.view.inspector.height),
+    system: pageStep(model.view.list.height),
+    viewer: pageStep(overlayHeight),
+    help: pageStep(overlayHeight),
+    overlay: pageStep(overlayHeight),
+    model: pageStep(model.overlay?.list?.height ?? 8),
+  };
 
   return model;
 }
@@ -240,10 +276,13 @@ function buildView(app, state, layout) {
   const inspector = {
     title: "Inspector",
     lines: [],
-    scroll: state.scroll.inspector ?? 0,
+    // Each destination owns its detail offset, so switching views keeps them
+    // independent and returning restores the previous position.
+    scroll: state.scroll[state.view] ?? 0,
     focused: state.focus === "inspector",
     open: state.inspectorOpen,
     width: layout.sideBySide ? layout.inspectorWidth : layout.listWidth + layout.inspectorWidth + 1,
+    height: Math.max(1, layout.bodyRows - 1),
   };
 
   if (state.view === "repositories") buildRepositories(app, state, layout, list, inspector);
@@ -380,6 +419,12 @@ function buildRepositories(app, state, layout, list, inspector) {
   }
 }
 
+/** Width the symbol name gets in the code list: the file column goes first. */
+function symbolLabelWidth(layout) {
+  const fileWidth = layout.listWidth >= 56 ? 20 : 0;
+  return Math.max(12, layout.listWidth - 4 - 10 - fileWidth);
+}
+
 function buildCode(app, state, layout, list, inspector) {
   const repo = app.selectedRepository();
   if (!repo) {
@@ -404,9 +449,11 @@ function buildCode(app, state, layout, list, inspector) {
       group: "symbols",
       node,
       cells: [
-        cell(truncate(node.label ?? node.id ?? `symbol ${index + 1}`, layout.listWidth - 34), (text, styler) => styler.bold(text)),
+        // The symbol name is the point of the row: it keeps its room and the
+        // file column is what narrow terminals drop.
+        cell(truncate(node.label ?? node.id ?? `symbol ${index + 1}`, symbolLabelWidth(layout)), (text, styler) => styler.bold(text)),
         cell(` ${truncate(node.kind ?? "symbol", 10)}`, (text, styler) => styler.dim(text)),
-        cell(` ${truncate(node.file ?? UNAVAILABLE, 20)}`, (text, styler) => styler.dim(text)),
+        ...(layout.listWidth >= 56 ? [cell(` ${truncate(node.file ?? UNAVAILABLE, 20)}`, (text, styler) => styler.dim(text))] : []),
       ],
     })),
   ];
@@ -915,6 +962,7 @@ function footerContext(state) {
     if (state.overlay.kind === "viewPackage") return "viewer";
     if (state.overlay.kind === "pipelineSettings") return "pipeline";
     if (state.overlay.kind === "providerSettings") return "provider";
+    if (state.overlay.kind === "modelSelect") return "modelSelect";
     return "editor";
   }
   if (state.filterActive) return "filter";
@@ -1007,7 +1055,24 @@ function helpLines(cols) {
   return [...body, "", ...HELP_NOTES];
 }
 
-function buildOverlay(state, layout, cols) {
+/**
+ * What the model list currently holds, in one line: the discovery fetch state
+ * plus the backend's own status/message. Providers that cannot enumerate their
+ * models say so here instead of offering a dead selector.
+ */
+function modelStatusText(models) {
+  const state_ = models?.state ?? "idle";
+  if (state_ === "loading") return "loading models…";
+  if (state_ === "ready") return `${formatCount(models.items.length)} models · enter to select`;
+  if (state_ === "empty") return `no models available${models.message ? ` · ${models.message}` : ""}`;
+  if (state_ === "failed") {
+    const detail = [models.message, models.errorDetails].filter(Boolean).join(" · ");
+    return `model selection: unavailable${detail ? ` · ${detail}` : ""}`;
+  }
+  return "not read yet · ctrl+p reads the endpoint";
+}
+
+function buildOverlay(app, state, layout, cols) {
   const overlay = state.overlay;
   const width = Math.max(24, Math.min(cols, 76));
   const height = Math.max(1, layout.bodyRows - 2);
@@ -1021,7 +1086,7 @@ function buildOverlay(state, layout, cols) {
     for (const line of lines) {
       if (line.style === undefined && line.text !== "") line.style = "dim";
     }
-    return { kind: "help", title: "Keyboard", lines, width, height, scroll: state.scroll.viewer ?? 0 };
+    return { kind: "help", title: "Keyboard", lines, width, height, scroll: state.scroll.help ?? 0 };
   }
 
   if (overlay.kind === "confirm") {
@@ -1041,7 +1106,7 @@ function buildOverlay(state, layout, cols) {
       ],
       width,
       height,
-      scroll: 0,
+      scroll: state.scroll.overlay ?? 0,
     };
   }
 
@@ -1054,7 +1119,7 @@ function buildOverlay(state, layout, cols) {
       fieldLine("name", overlay.values.name, overlay.cursors.name, overlay.field === "name", "(optional)"),
     ];
     if (overlay.error) lines.push({ text: overlay.error, style: "error" });
-    return { kind: "addRepo", title: "Add repository", lines, width, height, scroll: 0 };
+    return { kind: "addRepo", title: "Add repository", lines, width, height, scroll: state.scroll.overlay ?? 0 };
   }
 
   if (overlay.kind === "newTask") {
@@ -1064,7 +1129,7 @@ function buildOverlay(state, layout, cols) {
       { prefix: `${GLYPH.pointer} `, value: overlay.value, cursor: overlay.cursor, placeholder: "(required)" },
     ];
     if (overlay.error) lines.push({ text: overlay.error, style: "error" });
-    return { kind: "newTask", title: `New task · ${Math.round(state.tokenBudget / 1024)}K budget${state.includeGraph ? " · AST graph" : ""}`, lines, width, height, scroll: 0 };
+    return { kind: "newTask", title: `New task · ${Math.round(state.tokenBudget / 1024)}K budget${state.includeGraph ? " · AST graph" : ""}`, lines, width, height, scroll: state.scroll.overlay ?? 0 };
   }
 
   if (overlay.kind === "savePackage") {
@@ -1074,7 +1139,7 @@ function buildOverlay(state, layout, cols) {
       { prefix: `${GLYPH.pointer} `, value: overlay.value, cursor: overlay.cursor, placeholder: "(required)" },
     ];
     if (overlay.error) lines.push({ text: overlay.error, style: "error" });
-    return { kind: "savePackage", title: "Save context package", lines, width, height, scroll: 0 };
+    return { kind: "savePackage", title: "Save context package", lines, width, height, scroll: state.scroll.overlay ?? 0 };
   }
 
   if (overlay.kind === "appendPackage") {
@@ -1086,7 +1151,7 @@ function buildOverlay(state, layout, cols) {
     ];
     if (overlay.error) lines.push({ text: overlay.error, style: "error" });
     if (overlay.busy) lines.push({ text: "appending…", style: "dim" });
-    return { kind: "appendPackage", title: "Append to package", lines, width, height, scroll: 0 };
+    return { kind: "appendPackage", title: "Append to package", lines, width, height, scroll: state.scroll.overlay ?? 0 };
   }
 
   if (overlay.kind === "exportPackage") {
@@ -1100,38 +1165,102 @@ function buildOverlay(state, layout, cols) {
     ];
     if (overlay.error) lines.push({ text: overlay.error, style: "error" });
     if (overlay.busy) lines.push({ text: "writing…", style: "dim" });
-    return { kind: "exportPackage", title: "Export package", lines, width, height, scroll: 0 };
+    return { kind: "exportPackage", title: "Export package", lines, width, height, scroll: state.scroll.overlay ?? 0 };
   }
 
   if (overlay.kind === "providerSettings") {
-    const values = overlay.values;
-    const field = overlay.field;
-    const options = Array.isArray(overlay.options) ? overlay.options : [];
+    const draft = state.providerDraft;
+    // The draft belongs to the overlay; without it there is nothing to edit.
+    if (!draft) return null;
+    const values = draft.values;
+    const field = draft.field;
+    const options = Array.isArray(draft.options) ? draft.options : [];
+    const selected = draft.selected?.label ?? null;
+    // One label column for every row so the values line up under each other.
+    const describe = (...parts) => `${padTo(parts[0], 11)}${parts.slice(1).filter(Boolean).join(" · ")}`;
     const providerLine =
       field === "provider"
-        ? { text: `${GLYPH.pointer} provider:  ${values.provider}   (tab cycles: ${options.join(" · ")})`, style: "bold" }
-        : { text: `  provider:  ${values.provider}   (tab cycles)`, style: "dim" };
+        ? { text: `${GLYPH.pointer} ${describe("provider:", values.provider, `(enter or tab: ${options.join(" · ")})`)}`, style: "bold" }
+        : { text: `  ${describe("provider:", values.provider)}`, style: "dim" };
+    const modelLine = field === "model"
+      ? { text: `${GLYPH.pointer} ${describe("model:", selected ?? "none selected", "(enter opens the provider's list)")}`, style: "bold" }
+      : { text: `  ${describe("model:", selected ?? "none selected")}`, style: "dim" };
+    const models = state.models ?? {};
     const lines = [
       { text: "Hot-reloads and persists the active inference provider (POST /provider/update).", style: "dim" },
       { text: "" },
       providerLine,
-      fieldLine("endpoint", values.endpoint, overlay.cursors.endpoint, field === "endpoint", "(required)"),
-      fieldLine("model", values.model, overlay.cursors.model, field === "model", "(required)"),
-      fieldLine("api key", values.apiKey, overlay.cursors.apiKey, field === "apiKey", "local · openai-compatible only"),
+      fieldLine("endpoint", values.endpoint, draft.cursors.endpoint, field === "endpoint", "(required)"),
+      fieldLine("api key", values.apiKey, draft.cursors.apiKey, field === "apiKey", "local · openai-compatible only"),
+      modelLine,
       { text: "" },
-      { text: "ctrl+p probes the endpoint without changing anything; tab on the model cycles discovered models", style: "dim" },
+      { text: `  ${describe("saved:", draft.saved?.provider ?? UNAVAILABLE, draft.saved?.model ?? "no model recorded")}`, style: "dim" },
+      { text: `  ${describe("available:", modelStatusText(models))}`, style: models.state === "failed" ? "error" : "dim" },
+      { text: "" },
+      { text: "ctrl+p re-reads the endpoint (changes nothing) · the model is chosen, never typed", style: "dim" },
     ];
-    if (Array.isArray(overlay.discovered)) {
-      lines.push({ text: "" }, { text: `discovered models (${overlay.discovered.length})`, style: "dim" });
-      if (overlay.discovered.length === 0) lines.push({ text: "none reported by the endpoint", style: "dim" });
-      for (const model of overlay.discovered.slice(0, 8)) {
-        lines.push({ text: `  ${model.label}${model.quantization ? `  ${model.quantization}` : ""}` });
-      }
+    if (draft.error) lines.push({ text: "", style: "dim" }, { text: draft.error, style: "error" });
+    if (draft.busy) lines.push({ text: "applying…", style: "dim" });
+    return { kind: "providerSettings", title: "Provider configuration", lines, width, height, scroll: state.scroll.overlay ?? 0 };
+  }
+
+  if (overlay.kind === "modelSelect") {
+    const draft = state.providerDraft ?? {};
+    const models = state.models ?? {};
+    const filter = String(overlay.filter ?? "");
+    const rows = app.visibleModels();
+    const cursor = clamp(overlay.cursor ?? 0, 0, Math.max(0, rows.length - 1));
+    const header = [
+      { text: `provider ${draft.values?.provider ?? UNAVAILABLE} · ${draft.values?.endpoint || UNAVAILABLE}`, style: "dim" },
+      { text: modelStatusText(models), style: models.state === "failed" ? "error" : "dim" },
+      { text: "" },
+    ];
+    if (overlay.filterActive || filter) {
+      header.push({ prefix: `${GLYPH.pointer} `, value: filter, cursor: overlay.filterCursor ?? filter.length, placeholder: "filter models…" });
     }
-    if (overlay.probeError) lines.push({ text: "" }, { text: `probe: ${overlay.probeError}`, style: "error" });
-    if (overlay.error) lines.push({ text: overlay.error, style: "error" });
-    if (overlay.busy) lines.push({ text: "applying…", style: "dim" });
-    return { kind: "providerSettings", title: "Provider configuration", lines, width, height, scroll: 0 };
+    // The list follows the highlight, exactly like every other list pane.
+    const listHeight = Math.max(1, height - header.length - 1);
+    const window = followWindow(cursor, rows.length, listHeight);
+    const body = [];
+    if (window.above || window.below) {
+      body.push({ text: moreMarker(window), style: "dim" });
+    }
+    if (rows.length === 0) {
+      body.push({
+        text: models.state === "ready" ? "no model matches the filter" : "no models to show",
+        style: "dim",
+      });
+    }
+    for (let index = window.start; index < window.end; index += 1) {
+      const model = rows[index];
+      const here = index === cursor;
+      const marks = [
+        draft.saved?.model && model.label === draft.saved.model ? "saved" : null,
+        draft.selected?.label === model.label ? "selected" : null,
+      ].filter(Boolean);
+      const quantization = model.quantization && model.quantization !== "unknown" ? ` ${model.quantization}` : "";
+      const label = truncate(`${model.label}${quantization}`, Math.max(12, width - 16 - marks.join(" · ").length));
+      body.push({
+        text: `${here ? GLYPH.pointer : " "} ${label}${marks.length ? `  (${marks.join(" · ")})` : ""}`,
+        style: here ? "bold" : "dim",
+      });
+    }
+    const current = rows[cursor];
+    if (current?.warning) {
+      for (const piece of wrapToWidth(current.warning, Math.max(20, width - 2))) body.push({ text: piece, style: "dim" });
+    }
+    if (models.state === "failed" && models.errorDetails) {
+      for (const piece of wrapToWidth(models.errorDetails, Math.max(20, width - 2))) body.push({ text: piece, style: "dim" });
+    }
+    return {
+      kind: "modelSelect",
+      title: `Select model · ${rows.length} available`,
+      lines: [...header, ...body],
+      width,
+      height,
+      list: { height: listHeight },
+      scroll: state.scroll.overlay ?? 0,
+    };
   }
 
   if (overlay.kind === "pipelineSettings") {
@@ -1155,7 +1284,7 @@ function buildOverlay(state, layout, cols) {
     if (state.settingsBusy) lines.push({ text: "applying…", style: "dim" });
     if (state.settingsError) lines.push({ text: state.settingsError, style: "error" });
     lines.push({ text: "provider and model are editable with e in Settings · storage engines are fixed by the backend", style: "dim" });
-    return { kind: "pipelineSettings", title: "Pipeline settings", lines, width, height, scroll: 0 };
+    return { kind: "pipelineSettings", title: "Pipeline settings", lines, width, height, scroll: state.scroll.overlay ?? 0 };
   }
 
   const pkg = overlay.package ?? {};
@@ -1296,34 +1425,39 @@ function listContent(model, styler) {
   const width = model.layout.sideBySide && !model.view.fullWidth
     ? model.layout.listWidth
     : model.layout.listWidth + model.layout.inspectorWidth + 1;
-  const lines = [titleRule(list.title, list.subtitle, width, styler, list.focused)];
+  const header = [];
 
   if (list.filterActive || list.filter) {
     const prefix = list.filterActive ? `${GLYPH.pointer} ` : "filter: ";
     const body = list.filterActive
       ? editorText(list.filter, list.filterCursor, styler, "type to filter…")
       : truncate(list.filter, Math.max(4, width - prefix.length));
-    lines.push(fit(`${styler.dim(prefix)}${body}`, width));
+    header.push(fit(`${styler.dim(prefix)}${body}`, width));
   }
 
   if (model.view.banner && !model.view.inspector.open) {
     for (const line of model.view.banner.lines) {
       const paint = model.view.banner.level === "error" ? styler.err : styler.warn;
-      lines.push(fit(paint(truncate(line, width)), width));
+      header.push(fit(paint(truncate(line, width)), width));
     }
   }
 
-  const height = Math.max(1, model.layout.bodyRows - lines.length);
+  // The height was fixed when the view was built, so the published scroll
+  // bound and this window always agree.
+  const height = list.height;
+  // Cursor-driven lists follow the selection; the system report is a plain
+  // offset pane (its "cursor" is the scroll position itself).
+  const window = list.offsetMode
+    ? offsetWindow(list.cursor, list.rows.length, height)
+    : followWindow(list.cursor, list.rows.length, height);
+  const lines = [titleRule(list.title, list.subtitle, width, styler, list.focused, moreMarker(window)), ...header];
+
   if (list.rows.length === 0) {
     lines.push(fit(styler.dim(list.empty ?? "nothing to show"), width));
     return lines;
   }
 
-  const start = list.offsetMode
-    ? clamp(list.cursor, 0, Math.max(0, list.rows.length - height))
-    : windowStart(list.cursor, list.rows.length, height);
-
-  for (let index = start; index < Math.min(list.rows.length, start + height); index += 1) {
+  for (let index = window.start; index < window.end; index += 1) {
     const row = list.rows[index];
     const selected = index === list.cursor;
     const marker = selected ? GLYPH.pointer : " ";
@@ -1349,10 +1483,10 @@ function renderRow(row, styler, width) {
 function inspectorContent(model, styler) {
   const inspector = model.view.inspector;
   const width = model.layout.sideBySide ? model.layout.inspectorWidth : model.layout.listWidth + model.layout.inspectorWidth + 1;
-  const lines = [titleRule(inspector.title, null, width, styler, inspector.focused)];
   const height = Math.max(1, model.layout.bodyRows - 1);
-  const start = clamp(inspector.scroll ?? 0, 0, Math.max(0, inspector.lines.length - height));
-  for (let index = start; index < Math.min(inspector.lines.length, start + height); index += 1) {
+  const window = offsetWindow(inspector.scroll ?? 0, inspector.lines.length, height);
+  const lines = [titleRule(inspector.title, null, width, styler, inspector.focused, moreMarker(window))];
+  for (let index = window.start; index < window.end; index += 1) {
     const entry = inspector.lines[index];
     const text = entry.cells ? joinCells(entry.cells, styler, width) : String(entry.text ?? "");
     lines.push(fit(text, width));
@@ -1360,20 +1494,28 @@ function inspectorContent(model, styler) {
   return lines;
 }
 
-function titleRule(title, subtitle, width, styler, focused) {
+/**
+ * A pane title with its rule. `more` is the restrained scroll marker
+ * (`↑ more` / `↓ more` / `↑↓ more`), drawn right-aligned inside the rule and
+ * only when the pane actually has content beyond the window.
+ */
+function titleRule(title, subtitle, width, styler, focused, more = "") {
   const label = subtitle ? `${title} · ${subtitle}` : title;
   const marker = focused ? `${GLYPH.pointer} ` : "";
-  const head = truncate(`${marker}${label} `, Math.max(4, width - 2));
-  const rule = GLYPH.rule.repeat(Math.max(0, width - head.length - 1));
+  const tail = more ? `${more} ` : "";
+  const head = truncate(`${marker}${label} `, Math.max(4, width - 2 - tail.length));
+  const rule = GLYPH.rule.repeat(Math.max(0, width - head.length - tail.length - 1));
   const styled = focused ? styler.bold(head) : styler.dim(head);
-  return `${styled}${styler.rule(rule)}`;
+  const suffix = tail ? styler.dim(tail) : "";
+  return `${styled}${suffix}${styler.rule(rule)}`;
 }
 
 function overlayLines(model, styler) {
   const overlay = model.overlay;
-  const lines = [titleRule(overlay.title, null, model.cols, styler, true), ""];
   const height = Math.max(1, model.layout.bodyRows - 2);
-  const start = clamp(overlay.scroll ?? 0, 0, Math.max(0, overlay.lines.length - height));
+  const window = offsetWindow(overlay.scroll ?? 0, overlay.lines.length, height);
+  const lines = [titleRule(overlay.title, null, model.cols, styler, true, moreMarker(window)), ""];
+  const start = window.start;
   for (let index = start; index < Math.min(overlay.lines.length, start + height); index += 1) {
     const line = overlay.lines[index];
     const text = String(line.text ?? "");

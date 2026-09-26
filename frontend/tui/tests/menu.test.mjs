@@ -15,7 +15,7 @@ import assert from "node:assert/strict";
 import { buildModel, composeFrame, composeLines, createPlainStyler } from "../render.mjs";
 import { createStyler } from "../theme.mjs";
 import { CONTEXTS, HELP_GROUPS, HINTS, footerHints } from "../keymap.mjs";
-import { char, key, plain, settle, startApp } from "./fixtures.mjs";
+import { char, key, plain, publishViewport, settle, startApp } from "./fixtures.mjs";
 
 const ANSI = /\u001b\[[0-9;]*m/g;
 const strip = (text) => String(text).replace(ANSI, "");
@@ -25,13 +25,7 @@ function frame(app, cols, rows, options = {}) {
   const styler = options.styler ?? plain;
   const model = buildModel(app, { cols, rows, spinnerFrame: options.spinnerFrame ?? 0 });
   // Mirror the entry point: the layout facts the state layer needs are published here.
-  app.setViewport({
-    pageSize: Math.max(3, model.view.list.height - 1),
-    inspectorMax: model.scrollMax.inspector,
-    systemMax: model.scrollMax.system,
-    viewerMax: model.scrollMax.viewer,
-    sideBySide: model.layout.sideBySide,
-  });
+  publishViewport(app, model);
   return { model, lines: composeLines(model, styler).map(strip) };
 }
 
@@ -196,10 +190,14 @@ describe("menu: input precedence", () => {
     app.dispatch(char("?"));
     assert.equal(app.getState().overlay.kind, "help");
 
-    app.setViewport({ viewerMax: 12 });
+    app.setViewport({ helpMax: 12, helpPage: 4 });
     app.dispatch(key("down"));
+    app.dispatch(char("j"));
     assert.equal(app.getState().overlay.kind, "help", "scroll keys do not dismiss the sheet");
-    assert.equal(app.getState().scroll.viewer, 1);
+    assert.equal(app.getState().scroll.help, 2, "↑↓ and j/k both scroll the sheet");
+    app.dispatch(key("pageDown"));
+    assert.equal(app.getState().scroll.help, 6, "PgDn pages by the sheet's own height");
+    assert.equal(app.getState().scroll.viewer, 0, "the package viewer keeps its own offset");
 
     app.dispatch(char("x"));
     assert.equal(app.getState().overlay, null, "any other key closes the sheet");
@@ -248,13 +246,23 @@ describe("menu: focus", () => {
     assert.equal(wide.app.getState().inspectorOpen, true, "the wide inspector is a pane, not a mode");
   });
 
-  it("never focuses a hidden inspector", async () => {
-    const { app } = await startApp();
-    app.setViewport({ sideBySide: true });
-    assert.equal(app.getState().inspectorOpen, false);
+  it("tabs into the inspector only while it is on screen", async () => {
+    // Side by side the pane is always visible, so it is part of the cycle even
+    // before it has been "opened" — its scroll position must stay reachable.
+    const wide = await startApp();
+    wide.app.setViewport({ sideBySide: true });
+    wide.app.dispatch(key("tab"));
+    assert.equal(wide.app.getState().focus, "inspector", "the visible pane is reachable with tab");
+    wide.app.dispatch(key("tab"));
+    assert.equal(wide.app.getState().focus, "rail");
+
+    // Below the breakpoint it is a mode: hidden until opened, so never focused.
+    const medium = await startApp();
+    medium.app.setViewport({ sideBySide: false });
+    assert.equal(medium.app.getState().inspectorOpen, false);
     for (let step = 0; step < 5; step += 1) {
-      app.dispatch(key("tab"));
-      assert.notEqual(app.getState().focus, "inspector");
+      medium.app.dispatch(key("tab"));
+      assert.notEqual(medium.app.getState().focus, "inspector");
     }
   });
 
@@ -307,6 +315,12 @@ describe("menu: rendering", () => {
     const listFocused = text(frame(app, 120, 30).lines);
     assert.doesNotMatch(listFocused, /▍ Workspace/);
     assert.match(listFocused, /▍ Repositories \(2\)/, "the active destination keeps its marker");
+    assert.match(listFocused, /▍ Repositories · 2 tracked/, "the list pane is marked while it owns the keyboard");
+
+    app.dispatch(key("tab"));
+    const inspectorFocused = text(frame(app, 120, 30).lines);
+    assert.match(inspectorFocused, /▍ alpha-service/, "the detail pane is marked while it owns the keyboard");
+    assert.match(inspectorFocused, /▍ Repositories \(2\)/, "the active destination keeps its marker");
 
     app.dispatch(key("tab"));
     const railFocused = text(frame(app, 120, 30).lines);
@@ -346,6 +360,9 @@ describe("menu: rendering", () => {
       footerHints("repositories", app.getState()).filter((hint) => shown(footerOf(app, cols), hint) === true).length;
     assert.ok(countAt(48) < countAt(120), "the hint count shrinks with the terminal");
 
+    // The wide layout shows the detail pane, so tab walks list → detail → rail.
+    app.dispatch(key("tab"));
+    assert.match(footerOf(app, 120), /↑↓ scroll/, "the detail pane advertises scrolling");
     app.dispatch(key("tab"));
     assert.match(footerOf(app, 120), /↑↓ view/, "the rail advertises menu movement");
     assert.match(footerOf(app, 120), /q quit/, "the rail advertises quitting");
@@ -383,7 +400,8 @@ describe("menu: rendering", () => {
 
     frame(app, 48, 16); // publishes the scroll bound for a short terminal
     app.dispatch(key("end"));
-    assert.ok(app.getState().scroll.viewer > 0, "the sheet scrolls instead of being truncated");
+    assert.ok(app.getState().scroll.help > 0, "the sheet scrolls instead of being truncated");
+    assert.match(text(frame(app, 48, 16).lines), /↑ more/, "the sheet marks the content above the window");
   });
 
   it("renders an obvious input cursor in both styling modes", async () => {

@@ -214,4 +214,65 @@ export async function startApp(overrides = {}, options = {}) {
   return { app, client };
 }
 
+/**
+ * Deliberately oversized fixtures: more rows than any viewport these suites
+ * use, so scrolling is exercised against real overflow rather than the five
+ * repositories a developer happens to have.
+ */
+export function manyRepositories(count = 40) {
+  return Array.from({ length: count }, (_, index) => ({
+    ...REPOS[0],
+    id: `repo-${index}`,
+    name: `service-${String(index).padStart(2, "0")}`,
+    file_count: 10 + index,
+    summary: `Summary for service-${index}`,
+  }));
+}
+
+export function manySymbols(count = 120) {
+  return Array.from({ length: count }, (_, index) => ({
+    id: `sym-${index}`,
+    label: `symbol_${String(index).padStart(3, "0")}`,
+    file: `src/module_${index}.py`,
+    kind: index % 2 === 0 ? "function" : "class",
+    line: index + 1,
+  }));
+}
+
+export function manyPackages(count = 30, markdownLines = 120) {
+  return Array.from({ length: count }, (_, index) => ({
+    id: `pkg-${index}`,
+    name: `package-${String(index).padStart(2, "0")}`,
+    task: `task ${index}`,
+    markdown: Array.from({ length: markdownLines }, (_, line) => `## Section ${line}\n\n- item ${line}`).join("\n\n"),
+    token_estimate: 100 + index,
+    section_count: 3,
+    repository_name: "alpha-service",
+    created_at: "2026-09-24T09:00:00Z",
+  }));
+}
+
+/**
+ * Mirror the entry point: every scroll bound and page step the state layer
+ * clamps against is published from the built frame. Both frame helpers use this
+ * so a test can never drift from what `retrack.mjs` publishes.
+ */
+export function publishViewport(app, model) {
+  app.setViewport({
+    pageSize: Math.max(3, model.view.list.height - 1),
+    detailMax: model.scrollMax.detail,
+    detailPage: model.pageSteps.detail,
+    systemMax: model.scrollMax.system,
+    systemPage: model.pageSteps.system,
+    viewerMax: model.scrollMax.viewer,
+    viewerPage: model.pageSteps.viewer,
+    helpMax: model.scrollMax.help,
+    helpPage: model.pageSteps.help,
+    overlayMax: model.scrollMax.overlay,
+    overlayPage: model.pageSteps.overlay,
+    modelPage: model.pageSteps.model,
+    sideBySide: model.layout.sideBySide,
+  });
+}
+
 export const plain = createPlainStyler();

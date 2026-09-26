@@ -65,6 +65,11 @@ export const HINTS = Object.freeze({
   pipelineSettings: { keys: "t", footer: "pipeline", help: "Toggle the pipeline settings the backend persists", group: SETTINGS },
   providerEdit: { keys: "e", footer: "provider", help: "Edit the inference provider (endpoint, model, API key)", group: SETTINGS },
 
+  providerSubmit: { keys: "enter", footer: "select/save", help: "Open the model list on the model row, save the form on any other row", group: DIALOGS },
+  modelPick: { keys: "enter", footer: "select", help: "Choose from the models the provider reports", group: DIALOGS },
+  modelFilter: { keys: "/", footer: "filter", help: "Filter the reported models — never a model name field", group: DIALOGS },
+  modelMove: { keys: "↑↓", footer: "model", help: "Move between the provider's models (wraps)", group: DIALOGS },
+
   exportDiagnostics: { keys: "e", footer: "export", help: "Export a diagnostics bundle", group: SYSTEM },
   refresh: { keys: "r", footer: "refresh", help: "Refresh every pane from the backend", group: SYSTEM },
 
@@ -102,7 +107,8 @@ export const CONTEXTS = Object.freeze({
   addRepo: ["submit", "cancel", "sourceToggle", "fieldMove"],
   editor: ["submit", "cancel"],
   pipeline: ["toggleSetting", "cancel"],
-  provider: ["submit", "providerProbe", "providerCycle", "cancel", "fieldMove"],
+  provider: ["providerSubmit", "providerProbe", "providerCycle", "cancel", "fieldMove"],
+  modelSelect: ["modelMove", "modelPick", "modelFilter", "cancel"],
   viewer: ["scroll", "viewerAppend", "exportPackage", "markdown", "viewerClose"],
 });
 

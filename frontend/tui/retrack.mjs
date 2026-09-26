@@ -130,13 +130,21 @@ async function runInteractive(client, { onExit }) {
     const cols = process.stdout.columns || 100;
     const rows = process.stdout.rows || 30;
     const model = buildModel(app, { cols, rows, spinnerFrame });
-    // Scroll bounds are derived from the built frame, so the state layer always
-    // clamps paging against what is actually on screen.
+    // Every scroll bound and page step comes from the built frame, so the state
+    // layer clamps against what is actually on screen — one owner per surface.
     app.setViewport({
       pageSize: Math.max(3, model.view.list.height - 1),
-      inspectorMax: model.scrollMax.inspector,
+      detailMax: model.scrollMax.detail,
+      detailPage: model.pageSteps.detail,
       systemMax: model.scrollMax.system,
+      systemPage: model.pageSteps.system,
       viewerMax: model.scrollMax.viewer,
+      viewerPage: model.pageSteps.viewer,
+      helpMax: model.scrollMax.help,
+      helpPage: model.pageSteps.help,
+      overlayMax: model.scrollMax.overlay,
+      overlayPage: model.pageSteps.overlay,
+      modelPage: model.pageSteps.model,
       // Focus rules depend on whether the inspector is a pane or a mode.
       sideBySide: model.layout.sideBySide,
     });

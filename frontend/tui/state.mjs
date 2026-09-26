@@ -41,8 +41,12 @@ export const PROVIDER_ENDPOINTS = Object.freeze({
   ollama: "http://localhost:11434/v1",
 });
 
-/** Field order of the provider editor; `provider` cycles, the rest are text. */
-const PROVIDER_FIELDS = Object.freeze(["provider", "endpoint", "model", "apiKey"]);
+/**
+ * Field order of the provider editor. `provider` cycles (tab) or opens a choice
+ * list (enter), `endpoint`/`apiKey` are text, and `model` opens the selector —
+ * there is deliberately no field in which a model name could be typed.
+ */
+const PROVIDER_FIELDS = Object.freeze(["provider", "endpoint", "apiKey", "model"]);
 
 /**
  * Pipeline settings the backend HTTP contract can persist (POST /settings/cognee).
@@ -91,6 +95,10 @@ function initialState() {
     appSettings: null,
     settingsError: null,
     settingsBusy: false,
+    // Provider editor draft (open only while its overlay is) and the model
+    // discovery result for the endpoint it points at.
+    providerDraft: null,
+    models: { state: "idle", provider: null, endpoint: null, status: null, items: [], message: null, errorDetails: null },
 
     repositories: [],
     packages: [],
@@ -113,11 +121,23 @@ function initialState() {
     includeGraph: true,
 
     cursors: { repositories: 0, code: 0, context: 0, system: 0, settings: 0 },
-    scroll: { inspector: 0, system: 0, viewer: 0 },
+    // One scroll offset per surface that can overflow: each destination keeps
+    // its own detail position, and the two scrolling overlays keep theirs.
+    scroll: { repositories: 0, code: 0, context: 0, settings: 0, system: 0, viewer: 0, help: 0 },
 
     notice: null,
     operation: null,
-    viewport: { pageSize: 8, inspectorMax: 0, systemMax: 0, viewerMax: 0 },
+    viewport: {
+      pageSize: 8,
+      detailMax: 0,
+      detailPage: 8,
+      systemMax: 0,
+      systemPage: 8,
+      viewerMax: 0,
+      viewerPage: 8,
+      helpMax: 0,
+      helpPage: 8,
+    },
     nowMs: 0,
   };
 }
@@ -408,14 +428,19 @@ export function createApp(options = {}) {
 
   function switchView(view) {
     if (!VIEWS.includes(view)) return;
-    const patch = { view, overlay: null, filterActive: false, scroll: { ...state.scroll } };
+    // Every destination keeps its own detail scroll position (and so does the
+    // system report), because switching away and back should not lose the spot.
+    const patch = { view, overlay: null, filterActive: false, providerDraft: null };
     // Below the side-by-side breakpoint the inspector is a mode, and Torlink's
     // rule is that a region's mode resets once focus leaves it: switching
     // destinations from the menu must not leave the previous detail covering
     // the new list.
     if (!state.viewport.sideBySide) patch.inspectorOpen = false;
-    if (view === "system") {
-      patch.scroll.system = 0;
+    // System has no detail pane, so focus must never rest on a pane that is not
+    // on screen: the report itself is the scrolled region there.
+    if (view === "system" && state.focus === "inspector") {
+      patch.focus = "list";
+      patch.inspectorOpen = false;
     }
     set(patch);
     if (view === "system") void loadSystem();
@@ -430,7 +455,7 @@ export function createApp(options = {}) {
     const rows = currentRows();
     if (rows.length === 0) return;
     state.cursors[state.view] = clamp(target, 0, rows.length - 1);
-    state.scroll.inspector = 0;
+    state.scroll[state.view] = 0;
     set({});
   }
 
@@ -452,9 +477,23 @@ export function createApp(options = {}) {
     const index = visibleRepositories().findIndex((repo) => repo.id === id);
     if (index < 0) return;
     state.cursors.repositories = index;
-    state.scroll.inspector = 0;
+    state.scroll.repositories = 0;
     set({ view: "repositories" });
     void loadPrompts(selectedRepository());
+  }
+
+  /** Every destination has a detail pane except System, which is one report. */
+  function hasDetailPane() {
+    return state.view !== "system";
+  }
+
+  /**
+   * The detail pane is on screen whenever it is a mode that was opened, or the
+   * terminal is wide enough to show it side by side (its scroll position is
+   * then reachable with `tab` without opening anything first).
+   */
+  function detailVisible() {
+    return hasDetailPane() && (state.inspectorOpen || state.viewport.sideBySide);
   }
 
   /**
@@ -462,7 +501,7 @@ export function createApp(options = {}) {
    * that loses focus closes, so focus never rests on a hidden region.
    */
   function cycleFocus() {
-    const order = state.inspectorOpen ? ["rail", "list", "inspector"] : ["rail", "list"];
+    const order = detailVisible() ? ["rail", "list", "inspector"] : ["rail", "list"];
     const current = order.indexOf(state.focus);
     const next = order[wrapStep(current, 1, order.length)];
     const patch = { focus: next };
@@ -477,12 +516,12 @@ export function createApp(options = {}) {
   }
 
   function openInspector() {
-    set({ inspectorOpen: true, scroll: { ...state.scroll, inspector: 0 } });
+    set({ inspectorOpen: true, scroll: { ...state.scroll, [state.view]: 0 } });
   }
 
   /** Open the detail and hand it the keyboard — the menu's activation target. */
   function enterInspector() {
-    set({ inspectorOpen: true, focus: "inspector", scroll: { ...state.scroll, inspector: 0 } });
+    set({ inspectorOpen: true, focus: "inspector", scroll: { ...state.scroll, [state.view]: 0 } });
   }
 
   function closeInspector() {
@@ -515,19 +554,29 @@ export function createApp(options = {}) {
 
   function focusRight() {
     if (state.focus === "rail") setFocus("list");
-    else if (state.focus === "list" && state.inspectorOpen && state.viewport.sideBySide) setFocus("inspector");
+    else if (state.focus === "list" && detailVisible() && state.viewport.sideBySide) setFocus("inspector");
   }
 
+  /**
+   * Scroll one surface by `delta`, clamped to the bound the renderer published.
+   * `detail` resolves to the active destination, so every view scrolls its own
+   * position and switching destinations never moves another pane.
+   */
   function scrollRegion(region, delta, size) {
-    const key = region === "system" ? "system" : region === "viewer" ? "viewer" : "inspector";
+    const key = region === "detail" ? state.view : region;
     const current = state.scroll[key] ?? 0;
     const max = Math.max(0, size);
     state.scroll[key] = clamp(current + delta, 0, max);
     set({});
   }
 
+  /**
+   * Rendered and raw markdown are two views of the same output. The offset is
+   * kept across the toggle and clamped by the next frame, so switching does not
+   * throw the reader back to the top of a long package.
+   */
   function toggleMarkdown() {
-    set({ markdownView: state.markdownView === "rendered" ? "raw" : "rendered", scroll: { ...state.scroll, viewer: 0 } });
+    set({ markdownView: state.markdownView === "rendered" ? "raw" : "rendered" });
   }
 
   function cycleBudget() {
@@ -560,15 +609,18 @@ export function createApp(options = {}) {
   /* -------------------------------- overlays -------------------------------- */
 
   function openOverlay(overlay) {
-    set({ overlay, scroll: { ...state.scroll, viewer: 0 } });
+    set({ overlay });
   }
 
+  /** Close the open overlay; any provider draft belongs to it and goes with it. */
   function closeOverlay() {
-    set({ overlay: null });
+    set({ overlay: null, providerDraft: null });
   }
 
   function openHelp() {
+    // The reference sheet opens at the top; its own offset is kept while open.
     openOverlay({ kind: "help" });
+    set({ scroll: { ...state.scroll, help: 0 } });
   }
 
   function openAddRepository() {
@@ -615,7 +667,10 @@ export function createApp(options = {}) {
   async function openPackageViewer(packageId) {
     try {
       const pkg = await client.getContextPackage(packageId);
+      // Reading a package never regenerates it and never touches the stored
+      // record; the viewer opens at the top of what was already persisted.
       openOverlay({ kind: "viewPackage", package: pkg });
+      set({ scroll: { ...state.scroll, viewer: 0 } });
     } catch (error) {
       notice(errorText(error), "error");
     }
@@ -629,7 +684,7 @@ export function createApp(options = {}) {
     set({
       packageScope: state.packageScope === "packages" ? "all" : "packages",
       cursors: { ...state.cursors, context: 0 },
-      scroll: { ...state.scroll, inspector: 0 },
+      scroll: { ...state.scroll, context: 0 },
     });
   }
 
@@ -747,130 +802,238 @@ export function createApp(options = {}) {
     }
   }
 
-  /**
-   * Provider configuration is a real HTTP mutation (POST /provider/update), so
-   * the Settings view exposes it rather than claiming it is GUI-only. The form
-   * is prefilled from the persisted settings and every value is re-read after
-   * saving; a custom endpoint is never overwritten by a provider switch.
-   */
-  function openProviderSettings() {
+  /* ---------------------------- provider + models --------------------------- */
+
+  /** The authoritative persisted provider/model, for the saved-vs-selected split. */
+  function savedProviderIdentity() {
     const settings = state.appSettings ?? {};
     const provider =
       settings.llm_provider ?? state.providerStatus?.provider ?? state.health?.provider_identity ?? PROVIDER_OPTIONS[1];
-    const endpoint =
-      settings.llm_endpoint ?? state.providerStatus?.base_url ?? PROVIDER_ENDPOINTS[provider] ?? "";
-    const model = settings.llm_model ?? state.health?.configured_model ?? state.status?.configured_model ?? "";
-    openOverlay({
-      kind: "providerSettings",
-      // The overlay carries its own option list so the renderer stays pure.
-      options: PROVIDER_OPTIONS,
-      field: "provider",
-      values: { provider, endpoint: String(endpoint), model: String(model), apiKey: "" },
-      cursors: { endpoint: String(endpoint).length, model: String(model).length, apiKey: 0 },
-      endpointEdited: false,
-      discovered: null,
-      probeError: null,
-      error: null,
-      busy: false,
-    });
+    const endpoint = settings.llm_endpoint ?? state.providerStatus?.base_url ?? PROVIDER_ENDPOINTS[provider] ?? "";
+    const model = settings.llm_model ?? state.health?.configured_model ?? state.status?.configured_model ?? null;
+    return { provider, endpoint: String(endpoint ?? ""), model: model ? String(model) : null };
   }
 
   /**
-   * Tab cycles the provider (carrying its default endpoint, unless the user has
-   * edited the endpoint in this form) or a discovered model.
+   * Discover the models the provider endpoint actually serves
+   * (POST /provider/discover). Nothing is invented here: the list is whatever
+   * the endpoint returned, and a provider that cannot enumerate them keeps the
+   * backend's own status/message so the UI can say why.
    */
-  function cycleProviderField(overlay) {
-    const values = overlay.values;
-    if (overlay.field === "provider") {
-      const index = PROVIDER_OPTIONS.indexOf(values.provider);
-      const provider = PROVIDER_OPTIONS[wrapStep(index, 1, PROVIDER_OPTIONS.length)];
-      const endpoint =
-        values.endpoint === "" || !overlay.endpointEdited
-          ? PROVIDER_ENDPOINTS[provider] ?? values.endpoint
-          : values.endpoint;
+  async function discoverModels({ provider, endpoint, apiKey }) {
+    const baseUrl = String(endpoint ?? "").trim();
+    if (!baseUrl) {
       set({
-        overlay: {
-          ...overlay,
-          values: { ...values, provider, endpoint },
-          cursors: { ...overlay.cursors, endpoint: endpoint.length },
+        models: {
+          state: "failed",
+          provider,
+          endpoint: baseUrl,
+          status: "not_configured",
+          items: [],
+          message: "Provider endpoint URL is not configured.",
+          errorDetails: null,
         },
       });
       return;
     }
-    if (overlay.field === "model" && Array.isArray(overlay.discovered) && overlay.discovered.length > 0) {
-      const names = overlay.discovered.map((model) => model.label);
-      const index = names.indexOf(values.model);
-      const model = names[(index + 1) % names.length];
-      set({ overlay: { ...overlay, values: { ...values, model }, cursors: { ...overlay.cursors, model: model.length } } });
-    }
-  }
-
-  /** Non-mutating discovery probe: it never changes the active provider. */
-  async function runProbeProvider() {
-    const overlay = state.overlay;
-    const base_url = overlay.values.endpoint.trim();
-    if (!base_url) {
-      overlayError("endpoint is required before probing");
-      return;
-    }
-    set({ overlay: { ...overlay, busy: true, probeError: null } });
+    set({ models: { state: "loading", provider, endpoint: baseUrl, status: null, items: [], message: null, errorDetails: null } });
     try {
-      const result = await client.discoverProvider({
-        provider: overlay.values.provider,
-        base_url,
-        api_key: overlay.values.apiKey.trim() || "local",
-      });
-      const discovered = (Array.isArray(result?.models) ? result.models : [])
+      const result = await client.discoverProvider({ provider, base_url: baseUrl, api_key: String(apiKey ?? "").trim() || "local" });
+      const items = (Array.isArray(result?.models) ? result.models : [])
         .map((model) => ({
-          id: model?.model_id ?? model?.name ?? null,
+          id: model?.model_id ?? null,
           label: model?.name || model?.model_id || null,
           quantization: model?.quantization ?? null,
+          warning: model?.warning ?? null,
         }))
         .filter((model) => model.label);
       const status = String(result?.status ?? "");
-      const probeError = ["unreachable", "discovery_failed", "not_configured"].includes(status)
-        ? result?.error_details ?? result?.message ?? status
-        : null;
-      set({ overlay: { ...state.overlay, busy: false, discovered, probeError } });
-      notice(probeError ? `probe failed: ${probeError}` : `discovered ${discovered.length} models`, probeError ? "error" : "info");
+      const failed = ["unreachable", "discovery_failed", "not_configured"].includes(status);
+      set({
+        models: {
+          state: items.length > 0 ? "ready" : failed ? "failed" : "empty",
+          provider,
+          endpoint: baseUrl,
+          status: status || null,
+          items,
+          message: result?.message ?? null,
+          errorDetails: result?.error_details ?? null,
+        },
+      });
     } catch (error) {
-      set({ overlay: { ...state.overlay, busy: false, probeError: errorText(error) } });
-      notice(`probe failed: ${errorText(error)}`, "error");
+      set({
+        models: {
+          state: "failed",
+          provider,
+          endpoint: baseUrl,
+          status: null,
+          items: [],
+          message: errorText(error),
+          errorDetails: null,
+        },
+      });
     }
   }
 
+  /**
+   * Provider configuration is a real HTTP mutation (POST /provider/update), so
+   * the Settings view exposes it rather than claiming it is GUI-only. The draft
+   * is prefilled from the persisted settings, the model comes from the
+   * provider's own list (never typed), and every value is re-read after saving.
+   */
+  function openProviderSettings() {
+    const saved = savedProviderIdentity();
+    set({
+      providerDraft: {
+        // The overlay carries its own option list so the renderer stays pure.
+        options: PROVIDER_OPTIONS,
+        field: "provider",
+        values: { provider: saved.provider, endpoint: saved.endpoint, apiKey: "" },
+        cursors: { endpoint: saved.endpoint.length, apiKey: 0 },
+        saved,
+        // Chosen in the selector, persisted only by the save action.
+        selected: saved.model ? { id: saved.model, label: saved.model, quantization: null, warning: null } : null,
+        endpointEdited: false,
+        error: null,
+        busy: false,
+      },
+      overlay: { kind: "providerSettings" },
+    });
+    void discoverModels({ provider: saved.provider, endpoint: saved.endpoint, apiKey: "" });
+  }
+
+  function closeProviderEditor() {
+    closeOverlay();
+  }
+
+  /** Back from the selector to the editor it belongs to — the draft survives. */
+  function closeModelSelect() {
+    if (state.providerDraft) set({ overlay: { kind: "providerSettings" } });
+    else closeOverlay();
+  }
+
+  /**
+   * Switching provider switches the model list with it: the previous selection
+   * is dropped and the new provider is queried for what it actually serves.
+   */
+  function applyProvider(provider) {
+    const draft = state.providerDraft;
+    if (!draft) return;
+    const values = draft.values;
+    const endpoint =
+      values.endpoint === "" || !draft.endpointEdited
+        ? PROVIDER_ENDPOINTS[provider] ?? values.endpoint
+        : values.endpoint;
+    set({
+      providerDraft: {
+        ...draft,
+        values: { ...values, provider, endpoint },
+        cursors: { ...draft.cursors, endpoint: endpoint.length },
+        selected: null,
+        error: null,
+      },
+    });
+    void discoverModels({ provider, endpoint, apiKey: values.apiKey });
+  }
+
+  /** Tab/enter on the provider row: cycle to the next supported provider. */
+  function cycleProviderField() {
+    const draft = state.providerDraft;
+    if (!draft) return;
+    const index = PROVIDER_OPTIONS.indexOf(draft.values.provider);
+    applyProvider(PROVIDER_OPTIONS[wrapStep(index, 1, PROVIDER_OPTIONS.length)]);
+  }
+
+  /** Re-read the endpoint without changing anything (the probe never mutates). */
+  async function runProbeProvider() {
+    const draft = state.providerDraft;
+    if (!draft) return;
+    const endpoint = draft.values.endpoint.trim();
+    if (!endpoint) {
+      overlayError("endpoint is required before probing");
+      return;
+    }
+    await discoverModels({ provider: draft.values.provider, endpoint, apiKey: draft.values.apiKey });
+    const models = state.models;
+    if (models.state === "ready") notice(`discovered ${models.items.length} models`);
+    else notice(`model discovery: ${models.message ?? models.status ?? "no models"}`, models.state === "empty" ? "warn" : "error");
+  }
+
+  /* ----------------------------- model selector ----------------------------- */
+
+  /**
+   * The selector lists the provider's own models and nothing else. It filters
+   * the returned list only — there is no field that could name a model the
+   * provider never reported.
+   */
+  function openModelSelect() {
+    const draft = state.providerDraft;
+    if (!draft) return;
+    const items = state.models.items ?? [];
+    const wanted = draft.selected?.label ?? draft.saved.model;
+    const index = items.findIndex((model) => model.label === wanted || model.id === draft.selected?.id);
+    set({ overlay: { kind: "modelSelect", cursor: index >= 0 ? index : 0, filter: "", filterActive: false } });
+    if (state.models.state === "idle" || state.models.endpoint !== draft.values.endpoint) {
+      void discoverModels({ provider: draft.values.provider, endpoint: draft.values.endpoint, apiKey: draft.values.apiKey });
+    }
+  }
+
+  /** The provider models matching the selector's filter (a filter, never an input). */
+  function visibleModels() {
+    const items = state.models.items ?? [];
+    const filter = state.overlay?.kind === "modelSelect" ? String(state.overlay.filter ?? "").trim().toLowerCase() : "";
+    if (!filter) return items;
+    return items.filter((model) => `${model.label} ${model.id ?? ""}`.toLowerCase().includes(filter));
+  }
+
+  function selectModel(model) {
+    const draft = state.providerDraft;
+    if (!draft || !model) return;
+    set({
+      providerDraft: { ...draft, selected: { id: model.id, label: model.label, quantization: model.quantization ?? null, warning: model.warning ?? null }, error: null },
+      overlay: { kind: "providerSettings" },
+    });
+  }
+
   async function runUpdateProvider() {
-    const overlay = state.overlay;
-    const endpoint = overlay.values.endpoint.trim();
-    const model = overlay.values.model.trim();
+    const draft = state.providerDraft;
+    if (!draft) return;
+    const endpoint = draft.values.endpoint.trim();
     if (!endpoint) {
       overlayError("endpoint is required");
       return;
     }
-    if (!model) {
-      overlayError("model is required");
+    if (!draft.selected) {
+      overlayError("select a model from the provider's list");
       return;
     }
-    set({ overlay: { ...overlay, busy: true, error: null } });
+    const model = draft.selected.label;
+    set({ providerDraft: { ...draft, busy: true, error: null } });
     try {
       await client.updateProvider({
-        provider: overlay.values.provider,
+        provider: draft.values.provider,
         base_url: endpoint,
         model,
-        api_key: overlay.values.apiKey.trim() || "local",
+        api_key: draft.values.apiKey.trim() || "local",
       });
-      set({ overlay: null });
-      notice(`provider switched to ${overlay.values.provider} · ${model}`);
+      closeProviderEditor();
+      notice(`provider switched to ${draft.values.provider} · ${model}`);
       await loadProviderContext();
     } catch (error) {
-      set({ overlay: { ...state.overlay, busy: false, error: errorText(error) } });
+      const current = state.providerDraft;
+      if (current) set({ providerDraft: { ...current, busy: false, error: errorText(error) } });
       notice(`provider update failed: ${errorText(error)}`, "error");
     }
   }
 
   function overlayError(message) {
-    if (!state.overlay) return;
-    set({ overlay: { ...state.overlay, error: message } });
+    const overlay = state.overlay;
+    if (!overlay) return;
+    if (overlay.kind === "providerSettings" && state.providerDraft) {
+      set({ providerDraft: { ...state.providerDraft, error: message } });
+      return;
+    }
+    set({ overlay: { ...overlay, error: message } });
   }
 
   /* ------------------------------- operations ------------------------------- */
@@ -1109,20 +1272,23 @@ export function createApp(options = {}) {
       return { kind: "single", get: () => overlay, apply: (next) => set({ overlay: { ...overlay, ...next } }) };
     }
     if (overlay.kind === "providerSettings") {
-      const field = overlay.field;
-      // `provider` is a cycle field, never a text field.
-      if (!field || field === "provider") return null;
+      const draft = state.providerDraft;
+      if (!draft) return null;
+      const field = draft.field;
+      // `provider` cycles and `model` opens the provider's list: neither is a
+      // text field, so no typed model name can ever reach the backend.
+      if (!field || field === "provider" || field === "model") return null;
       return {
         kind: "field",
-        get: () => ({ value: overlay.values[field], cursor: overlay.cursors[field] }),
+        get: () => ({ value: draft.values[field], cursor: draft.cursors[field] }),
         apply: ({ value, cursor }) =>
           set({
-            overlay: {
-              ...overlay,
+            providerDraft: {
+              ...state.providerDraft,
               // Once the endpoint is touched, cycling providers keeps it.
-              endpointEdited: field === "endpoint" ? true : overlay.endpointEdited,
-              values: { ...overlay.values, [field]: value },
-              cursors: { ...overlay.cursors, [field]: cursor },
+              endpointEdited: field === "endpoint" ? true : draft.endpointEdited,
+              values: { ...draft.values, [field]: value },
+              cursors: { ...draft.cursors, [field]: cursor },
             },
           }),
       };
@@ -1146,6 +1312,9 @@ export function createApp(options = {}) {
   }
 
   function dispatchEditorKey(intent, target) {
+    // Rows that are not text fields (the provider's provider/model rows) have no
+    // editor target: a keystroke there is a no-op, never an input.
+    if (!target) return false;
     const names = {
       backspace: { type: "backspace" },
       left: { type: "left" },
@@ -1177,15 +1346,28 @@ export function createApp(options = {}) {
     const overlay = state.overlay;
     if (!overlay) return undefined;
 
+    /**
+     * Movement inside a region that also owns text fields: ↑↓ always move
+     * between fields, while the j/k aliases are ordinary characters whenever a
+     * field holds the keyboard.
+     */
+    const fieldDelta = (intent, editing) => {
+      const alias = intent.name === "char" && (intent.char === "j" || intent.char === "k");
+      return editing && alias ? 0 : moveDelta(intent);
+    };
+
+
     if (overlay.kind === "help") {
-      // The reference sheet scrolls; every other key dismisses it (Torlink).
-      const max = state.viewport.viewerMax;
-      if (intent.name === "up") scrollRegion("viewer", -1, max);
-      else if (intent.name === "down") scrollRegion("viewer", 1, max);
-      else if (intent.name === "pageUp") scrollRegion("viewer", -10, max);
-      else if (intent.name === "pageDown") scrollRegion("viewer", 10, max);
-      else if (intent.name === "home") scrollRegion("viewer", -(state.scroll.viewer ?? 0), max);
-      else if (intent.name === "end") scrollRegion("viewer", max, max);
+      // The reference sheet scrolls with its own offset; every other key
+      // dismisses it (Torlink). It is never clipped, only windowed.
+      const max = state.viewport.helpMax;
+      const page = state.viewport.helpPage;
+      const delta = moveDelta(intent);
+      if (delta !== 0) scrollRegion("help", delta, max);
+      else if (intent.name === "pageUp") scrollRegion("help", -page, max);
+      else if (intent.name === "pageDown") scrollRegion("help", page, max);
+      else if (intent.name === "home") scrollRegion("help", -(state.scroll.help ?? 0), max);
+      else if (intent.name === "end") scrollRegion("help", max, max);
       else if (intent.name !== "unknown") closeOverlay();
       return undefined;
     }
@@ -1200,41 +1382,93 @@ export function createApp(options = {}) {
     }
 
     if (overlay.kind === "viewPackage") {
+      // Reading a package is a pure scroll: no regeneration, no backend call,
+      // and the offset survives the rendered/raw toggle.
+      const max = state.viewport.viewerMax;
+      const page = state.viewport.viewerPage;
+      const delta = moveDelta(intent);
       if (intent.name === "escape") closeOverlay();
       else if (intent.name === "char" && intent.char === "m") toggleMarkdown();
       else if (intent.name === "char" && intent.char === "a") openAppendPackage();
       else if (intent.name === "char" && intent.char === "e") openExportPackage();
-      else if (intent.name === "down") scrollRegion("viewer", 1, state.viewport.viewerMax);
-      else if (intent.name === "up") scrollRegion("viewer", -1, state.viewport.viewerMax);
-      else if (intent.name === "pageDown") scrollRegion("viewer", 10, state.viewport.viewerMax);
-      else if (intent.name === "pageUp") scrollRegion("viewer", -10, state.viewport.viewerMax);
-      else if (intent.name === "home") scrollRegion("viewer", -(state.scroll.viewer ?? 0), state.viewport.viewerMax);
-      else if (intent.name === "end") scrollRegion("viewer", state.viewport.viewerMax, state.viewport.viewerMax);
+      else if (delta !== 0) scrollRegion("viewer", delta, max);
+      else if (intent.name === "pageDown") scrollRegion("viewer", page, max);
+      else if (intent.name === "pageUp") scrollRegion("viewer", -page, max);
+      else if (intent.name === "home") scrollRegion("viewer", -(state.scroll.viewer ?? 0), max);
+      else if (intent.name === "end") scrollRegion("viewer", max, max);
+      return undefined;
+    }
+
+    if (overlay.kind === "modelSelect") {
+      // The selector lists only models the provider returned. `/` filters that
+      // list — it can never name a model the provider did not report.
+      const models = visibleModels();
+      const count = models.length;
+      const page = Math.max(1, state.viewport.modelPage);
+      const filter = String(overlay.filter ?? "");
+      if (overlay.filterActive) {
+        if (intent.name === "escape") set({ overlay: { ...overlay, filterActive: false, filter: "", cursor: 0 } });
+        else if (intent.name === "enter") set({ overlay: { ...overlay, filterActive: false, cursor: 0 } });
+        else if (intent.name === "down") set({ overlay: { ...overlay, filterActive: false } });
+        else {
+          dispatchEditorKey(intent, {
+            kind: "field",
+            get: () => ({ value: filter, cursor: overlay.filterCursor ?? filter.length }),
+            apply: ({ value, cursor }) =>
+              set({ overlay: { ...overlay, filter: value, filterCursor: cursor, cursor: 0 } }),
+          });
+        }
+        return undefined;
+      }
+      const delta = moveDelta(intent);
+      const cursor = clamp(overlay.cursor ?? 0, 0, Math.max(0, count - 1));
+      // esc clears an applied filter first, then walks back to the editor — the
+      // same rule the list filter follows.
+      if (intent.name === "escape") {
+        if (filter) set({ overlay: { ...overlay, filter: "", filterActive: false, cursor: 0 } });
+        else closeModelSelect();
+      }
+      else if (intent.name === "char" && intent.char === "/") set({ overlay: { ...overlay, filterActive: true, filterCursor: filter.length } });
+      else if (delta !== 0 && count > 0) set({ overlay: { ...overlay, cursor: wrapStep(cursor, delta, count) } });
+      else if (intent.name === "pageUp") set({ overlay: { ...overlay, cursor: clamp(cursor - page, 0, Math.max(0, count - 1)) } });
+      else if (intent.name === "pageDown") set({ overlay: { ...overlay, cursor: clamp(cursor + page, 0, Math.max(0, count - 1)) } });
+      else if (intent.name === "home") set({ overlay: { ...overlay, cursor: 0 } });
+      else if (intent.name === "end") set({ overlay: { ...overlay, cursor: Math.max(0, count - 1) } });
+      else if (intent.name === "enter" && count > 0) selectModel(models[cursor]);
       return undefined;
     }
 
     if (overlay.kind === "providerSettings") {
-      if (intent.name === "escape") {
+      const draft = state.providerDraft;
+      if (!draft) {
         closeOverlay();
         return undefined;
       }
-      if (intent.name === "up" || intent.name === "down") {
-        const step = intent.name === "down" ? 1 : -1;
-        const index = PROVIDER_FIELDS.indexOf(overlay.field);
-        const next = PROVIDER_FIELDS[wrapStep(index < 0 ? 0 : index, step, PROVIDER_FIELDS.length)];
-        set({ overlay: { ...overlay, field: next } });
+      const busy = draft.busy;
+      const delta = fieldDelta(intent, Boolean(overlayEditorTarget()));
+      if (intent.name === "escape") {
+        closeProviderEditor();
+        return undefined;
+      }
+      if (delta !== 0) {
+        const index = PROVIDER_FIELDS.indexOf(draft.field);
+        const next = PROVIDER_FIELDS[wrapStep(index < 0 ? 0 : index, delta, PROVIDER_FIELDS.length)];
+        set({ providerDraft: { ...draft, field: next } });
         return undefined;
       }
       if (intent.name === "tab") {
-        cycleProviderField(overlay);
+        cycleProviderField();
         return undefined;
       }
-      if (intent.name === "ctrl" && intent.char === "p" && !overlay.busy) {
+      if (intent.name === "ctrl" && intent.char === "p" && !busy) {
         void runProbeProvider();
         return undefined;
       }
-      if (intent.name === "enter" && !overlay.busy) {
-        void runUpdateProvider();
+      if (intent.name === "enter" && !busy) {
+        // The model row opens the provider's own model list; every other row
+        // submits the form.
+        if (draft.field === "model") openModelSelect();
+        else void runUpdateProvider();
         return undefined;
       }
       dispatchEditorKey(intent, overlayEditorTarget());
@@ -1243,16 +1477,36 @@ export function createApp(options = {}) {
 
     if (overlay.kind === "pipelineSettings") {
       const count = PIPELINE_SETTINGS.length;
+      const delta = moveDelta(intent);
       if (intent.name === "escape") {
         closeOverlay();
         return undefined;
       }
-      if (intent.name === "up") set({ overlay: { ...overlay, cursor: wrapStep(overlay.cursor ?? 0, -1, count) } });
-      else if (intent.name === "down") set({ overlay: { ...overlay, cursor: wrapStep(overlay.cursor ?? 0, 1, count) } });
+      if (delta !== 0) set({ overlay: { ...overlay, cursor: wrapStep(overlay.cursor ?? 0, delta, count) } });
       else if (intent.name === "enter" || intent.name === "space") {
         const setting = PIPELINE_SETTINGS[clamp(overlay.cursor ?? 0, 0, count - 1)];
         if (setting) void toggleSetting(setting.key);
       }
+      return undefined;
+    }
+
+    // Form-like overlays own ↑↓ for their fields/items, so their content pages
+    // with PgUp/PgDn — and with Home/End whenever no text field owns the caret.
+    // The bound comes from the rendered overlay, so nothing is ever clipped.
+    if (intent.name === "pageUp") {
+      scrollRegion("overlay", -state.viewport.overlayPage, state.viewport.overlayMax);
+      return undefined;
+    }
+    if (intent.name === "pageDown") {
+      scrollRegion("overlay", state.viewport.overlayPage, state.viewport.overlayMax);
+      return undefined;
+    }
+    if ((intent.name === "home" || intent.name === "end") && !overlayEditorTarget()) {
+      scrollRegion(
+        "overlay",
+        intent.name === "home" ? -(state.scroll.overlay ?? 0) : state.viewport.overlayMax,
+        state.viewport.overlayMax
+      );
       return undefined;
     }
 
@@ -1265,7 +1519,7 @@ export function createApp(options = {}) {
         set({ overlay: { ...overlay, source: overlay.source === "local" ? "github" : "local" } });
         return undefined;
       }
-      if (intent.name === "up" || intent.name === "down") {
+      if (fieldDelta(intent, Boolean(overlayEditorTarget())) !== 0) {
         set({ overlay: { ...overlay, field: overlay.field === "path" ? "name" : "path" } });
         return undefined;
       }
@@ -1374,10 +1628,11 @@ export function createApp(options = {}) {
   function handleListAction(intent, pageSize) {
     if (state.view === "system") {
       const max = state.viewport.systemMax;
+      const page = Math.max(1, state.viewport.systemPage);
       const delta = moveDelta(intent);
       if (delta !== 0) scrollRegion("system", delta, max);
-      else if (intent.name === "pageUp") scrollRegion("system", -(pageSize - 1), max);
-      else if (intent.name === "pageDown") scrollRegion("system", pageSize - 1, max);
+      else if (intent.name === "pageUp") scrollRegion("system", -page, max);
+      else if (intent.name === "pageDown") scrollRegion("system", page, max);
       else if (intent.name === "home") scrollRegion("system", -(state.scroll.system ?? 0), max);
       else if (intent.name === "end") scrollRegion("system", max, max);
       else if (intent.name === "char" && intent.char === "e") void runExportDiagnostics();
@@ -1527,14 +1782,15 @@ export function createApp(options = {}) {
     const pageSize = Math.max(3, state.viewport.pageSize);
 
     if (state.focus === "inspector") {
-      const max = state.viewport.inspectorMax;
+      const max = state.viewport.detailMax;
+      const page = Math.max(1, state.viewport.detailPage);
       const view = state.view;
       const delta = moveDelta(intent);
-      if (delta !== 0) scrollRegion("inspector", delta, max);
-      else if (intent.name === "pageUp") scrollRegion("inspector", -(pageSize - 1), max);
-      else if (intent.name === "pageDown") scrollRegion("inspector", pageSize - 1, max);
-      else if (intent.name === "home") scrollRegion("inspector", -(state.scroll.inspector ?? 0), max);
-      else if (intent.name === "end") scrollRegion("inspector", max, max);
+      if (delta !== 0) scrollRegion("detail", delta, max);
+      else if (intent.name === "pageUp") scrollRegion("detail", -page, max);
+      else if (intent.name === "pageDown") scrollRegion("detail", page, max);
+      else if (intent.name === "home") scrollRegion("detail", -(state.scroll[state.view] ?? 0), max);
+      else if (intent.name === "end") scrollRegion("detail", max, max);
       else if (intent.name === "char" && intent.char === "m" && view === "context") toggleMarkdown();
       else if (intent.name === "char" && intent.char === "i" && view === "repositories") {
         void runIndex(selectedRepository());
@@ -1669,6 +1925,10 @@ export function createApp(options = {}) {
     openProviderSettings,
     probeProvider: runProbeProvider,
     updateProviderSettings: runUpdateProvider,
+    cycleProvider: cycleProviderField,
+    openModelSelect,
+    selectModel,
+    closeModelSelect,
     closeOverlay,
     toggleMarkdown,
     cycleBudget,
@@ -1699,6 +1959,7 @@ export function createApp(options = {}) {
     settingsRows,
     selectedSettingsSection,
     selectedPackage,
+    visibleModels,
     currentRows,
   };
 }

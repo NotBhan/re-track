@@ -2,6 +2,22 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 
 import { createApp, TOKEN_BUDGETS } from "../state.mjs";
+import { buildModel, composeLines, createPlainStyler } from "../render.mjs";
+import { publishViewport } from "./fixtures.mjs";
+
+const plainView = createPlainStyler();
+
+/** Build (and publish) a frame so state clamps against real geometry. */
+function render(app, cols = 100, rows = 30) {
+  const model = buildModel(app, { cols, rows, spinnerFrame: 0 });
+  publishViewport(app, model);
+  return model;
+}
+
+/** The frame's plain text — used where a test asserts what the user sees. */
+function renderText(app, cols = 100, rows = 30) {
+  return composeLines(render(app, cols, rows), plainView).join("\n");
+}
 
 /* --------------------------------- fixtures -------------------------------- */
 
@@ -757,148 +773,287 @@ describe("state: settings", () => {
 });
 
 describe("state: provider editing", () => {
-  it("opens the provider editor prefilled from the persisted settings", async () => {
-    const { app } = await startApp();
-    app.dispatch(char("5"));
+  const MODELS = [
+    { model_id: "qwen2.5-7b", name: "qwen2.5-7b", quantization: "Q4_K_M" },
+    { model_id: "phi-4-mini", name: "phi-4-mini", quantization: "Q6_K" },
+    { model_id: "llama3.2", name: "llama3.2", quantization: "unknown" },
+  ];
+
+  const openEditor = async (overrides = {}) => {
+    const started = await startApp(overrides);
+    started.app.dispatch(char("5"));
     await settle();
-    app.dispatch(char("e"));
-
-    const overlay = app.getState().overlay;
-    assert.equal(overlay.kind, "providerSettings");
-    assert.equal(overlay.values.provider, "lmstudio");
-    assert.equal(overlay.values.endpoint, "http://127.0.0.1:1234/v1");
-    assert.equal(overlay.values.model, "phi3:mini");
-    assert.deepEqual(overlay.options, ["lmstudio", "ollama", "openai_compatible"]);
-  });
-
-  it("cycles the provider with its default endpoint and keeps a custom endpoint", async () => {
-    const { app } = await startApp();
-    app.dispatch(char("5"));
+    started.app.dispatch(char("e"));
     await settle();
-    app.dispatch(char("e"));
+    return started;
+  };
 
-    app.dispatch(key("tab")); // lmstudio -> ollama
-    assert.equal(app.getState().overlay.values.provider, "ollama");
-    assert.equal(app.getState().overlay.values.endpoint, "http://localhost:11434/v1");
+  it("opens the editor prefilled from the persisted settings and reads the endpoint", async () => {
+    const { app, client } = await openEditor();
+    const draft = app.getState().providerDraft;
+    const state = app.getState();
 
-    // A custom endpoint survives cycling the provider away and back.
-    app.dispatch(key("down")); // endpoint
-    app.dispatch(key("ctrl", { char: "u" }));
-    for (const value of "http://box:9999/v1") app.dispatch(char(value));
-    app.dispatch(key("down")); // model
-    app.dispatch(key("down")); // apiKey
-    app.dispatch(key("down")); // wraps back to provider
-    assert.equal(app.getState().overlay.field, "provider");
-    app.dispatch(key("tab"));
-    assert.equal(app.getState().overlay.values.endpoint, "http://box:9999/v1");
-  });
+    assert.equal(state.overlay.kind, "providerSettings");
+    assert.equal(draft.values.provider, "lmstudio");
+    assert.equal(draft.values.endpoint, "http://127.0.0.1:1234/v1");
+    assert.equal(draft.saved.model, "phi3:mini", "the saved model comes from the verified configuration");
+    assert.equal(draft.selected.label, "phi3:mini", "the editor opens on the saved model, unsaved");
+    assert.deepEqual(draft.options, ["lmstudio", "ollama", "openai_compatible"]);
 
-  it("probes the endpoint and lists discovered models without changing the provider", async () => {
-    const { app, client } = await startApp();
-    app.dispatch(char("5"));
-    await settle();
-    app.dispatch(char("e"));
-    app.dispatch(key("ctrl", { char: "p" }));
-    await settle();
-
+    // Opening the editor is what reads the endpoint; nothing is mutated by it.
     assert.deepEqual(client.calls.find((call) => call.name === "discoverProvider").args, [
       { provider: "lmstudio", base_url: "http://127.0.0.1:1234/v1", api_key: "local" },
     ]);
-    assert.deepEqual(app.getState().overlay.discovered, [
-      { id: "qwen2.5-7b", label: "qwen2.5-7b", quantization: "Q4_K_M" },
-    ]);
-    assert.match(app.getState().notice.message, /discovered 1 models/);
+    assert.equal(state.models.state, "ready");
     assert.equal(client.calls.filter((call) => call.name === "updateProvider").length, 0);
   });
 
-  it("cycles a discovered model into the model field", async () => {
-    const { app } = await startApp();
-    app.dispatch(char("5"));
-    await settle();
-    app.dispatch(char("e"));
-    app.dispatch(key("ctrl", { char: "p" }));
-    await settle();
+  it("shows the discovery state while the models are still loading", async () => {
+    let release;
+    const pending = new Promise((resolve) => {
+      release = resolve;
+    });
+    const { app } = await openEditor({
+      discoverProvider: async () => {
+        await pending;
+        return { success: true, status: "available", models: MODELS, message: "", error_details: null };
+      },
+    });
 
-    app.dispatch(key("down"));
-    app.dispatch(key("down")); // model field
-    assert.equal(app.getState().overlay.field, "model");
-    app.dispatch(key("tab"));
-    assert.equal(app.getState().overlay.values.model, "qwen2.5-7b");
-    assert.equal(app.getState().overlay.cursors.model, "qwen2.5-7b".length);
+    assert.equal(app.getState().models.state, "loading");
+    assert.deepEqual(app.visibleModels(), [], "no model is offered before the provider answers");
+    release();
+    await settle();
+    assert.equal(app.getState().models.state, "ready");
+    assert.deepEqual(app.visibleModels().map((model) => model.label), ["qwen2.5-7b", "phi-4-mini", "llama3.2"]);
   });
 
-  it("reports an unreachable probe truthfully and saves nothing", async () => {
-    const { app, client } = await startApp({
+  it("reports a reachable but empty model list as unavailable", async () => {
+    const { app } = await openEditor({
       discoverProvider: {
         success: true,
-        provider: "lmstudio",
-        base_url: "http://127.0.0.1:1234/v1",
-        is_reachable: false,
+        status: "reachable_but_empty",
+        models: [],
+        message: "Provider is reachable at http://127.0.0.1:1234/v1, but no models are currently loaded or available.",
+        error_details: null,
+      },
+    });
+
+    assert.equal(app.getState().models.state, "empty");
+    assert.deepEqual(app.visibleModels(), []);
+    assert.match(renderText(app), /no models available/, "the editor says why selection is unavailable");
+  });
+
+  it("keeps the backend's own reason when discovery fails and saves nothing", async () => {
+    const { app, client } = await openEditor({
+      discoverProvider: {
+        success: true,
         status: "unreachable",
         models: [],
-        message: "",
+        message: "Provider endpoint 'http://127.0.0.1:1234/v1' is unreachable. Verify host and port.",
         error_details: "connection refused",
       },
     });
-    app.dispatch(char("5"));
-    await settle();
-    app.dispatch(char("e"));
-    app.dispatch(key("ctrl", { char: "p" }));
-    await settle();
 
-    assert.match(app.getState().overlay.probeError, /connection refused/);
-    assert.match(app.getState().notice.message, /probe failed/);
+    assert.equal(app.getState().models.state, "failed");
+    assert.equal(app.getState().models.status, "unreachable");
+    assert.match(app.getState().models.message, /unreachable/);
+
+    // The saved model stays what it was; the failed read offers nothing new.
+    for (const _ of ["provider", "endpoint", "apiKey"]) app.dispatch(key("down"));
+    app.dispatch(key("enter"));
+    assert.equal(app.getState().overlay.kind, "modelSelect");
+    assert.deepEqual(app.visibleModels(), [], "a failed discovery offers no models");
+    app.dispatch(key("enter"));
+    assert.equal(app.getState().overlay.kind, "modelSelect", "there is nothing to select");
+    assert.equal(app.getState().providerDraft.selected.label, "phi3:mini");
+    assert.match(renderText(app, 90, 24), /model selection: unavailable/, "the reason is on screen");
     assert.equal(client.calls.filter((call) => call.name === "updateProvider").length, 0);
   });
 
-  it("saves the provider through the backend and re-reads the authoritative values", async () => {
-    const { app, client } = await startApp();
-    app.dispatch(char("5"));
-    await settle();
-    app.dispatch(char("e"));
+  it("reports a network failure of the discovery probe as an unavailable model list", async () => {
+    const { app } = await openEditor({
+      discoverProvider: async () => {
+        throw new Error("ECONNREFUSED http://127.0.0.1:1234/v1");
+      },
+    });
 
-    app.dispatch(key("tab")); // ollama
-    app.dispatch(key("down")); // endpoint
-    app.dispatch(key("ctrl", { char: "u" }));
-    for (const value of "http://localhost:11434/v1") app.dispatch(char(value));
-    app.dispatch(key("down")); // model
-    app.dispatch(key("ctrl", { char: "u" }));
-    for (const value of "llama3.2") app.dispatch(char(value));
-    app.dispatch(key("enter"));
-    await settle(8);
-
-    assert.deepEqual(client.calls.find((call) => call.name === "updateProvider").args, [
-      { provider: "ollama", base_url: "http://localhost:11434/v1", model: "llama3.2", api_key: "local" },
-    ]);
-    assert.equal(app.getState().overlay, null);
-    assert.match(app.getState().notice.message, /provider switched to ollama · llama3\.2/);
-    assert.equal(app.getState().appSettings.llm_provider, "ollama", "the re-read reflects the backend");
+    assert.equal(app.getState().models.state, "failed");
+    assert.match(app.getState().models.message, /ECONNREFUSED/);
+    assert.deepEqual(app.visibleModels(), [], "a failed probe offers no models");
+    assert.match(renderText(app, 100, 30), /model selection: unavailable/);
   });
 
-  it("validates required fields and keeps backend failures visible", async () => {
-    const { app, client } = await startApp({
+  it("drops the old model and reads the new provider when the provider changes", async () => {
+    const { app, client } = await openEditor();
+    assert.equal(app.getState().providerDraft.selected.label, "phi3:mini");
+
+    app.dispatch(key("tab")); // lmstudio -> ollama
+    await settle();
+
+    const draft = app.getState().providerDraft;
+    assert.equal(draft.values.provider, "ollama");
+    assert.equal(draft.values.endpoint, "http://localhost:11434/v1", "the provider's default endpoint comes with it");
+    assert.equal(draft.selected, null, "a model discovered for another provider is not this provider's model");
+    assert.deepEqual(client.calls.filter((call) => call.name === "discoverProvider").at(-1).args, [
+      { provider: "ollama", base_url: "http://localhost:11434/v1", api_key: "local" },
+    ]);
+  });
+
+  it("keeps a custom endpoint when cycling providers", async () => {
+    const { app } = await openEditor();
+    app.dispatch(key("down")); // endpoint
+    app.dispatch(key("ctrl", { char: "u" }));
+    for (const value of "http://box:9999/v1") app.dispatch(char(value));
+    app.dispatch(key("down")); // api key
+    app.dispatch(key("down")); // model
+    app.dispatch(key("down")); // wraps to provider
+    assert.equal(app.getState().providerDraft.field, "provider");
+
+    app.dispatch(key("tab"));
+    assert.equal(app.getState().providerDraft.values.endpoint, "http://box:9999/v1");
+  });
+
+  it("opens the provider's model list and selects with enter, without saving", async () => {
+    const { app, client } = await openEditor({ discoverProvider: { success: true, status: "available", models: MODELS, message: "" } });
+
+    for (const _ of ["provider", "endpoint", "apiKey"]) app.dispatch(key("down"));
+    assert.equal(app.getState().providerDraft.field, "model");
+
+    app.dispatch(key("enter"));
+    assert.equal(app.getState().overlay.kind, "modelSelect");
+    assert.deepEqual(app.visibleModels().map((model) => model.label), ["qwen2.5-7b", "phi-4-mini", "llama3.2"]);
+
+    app.dispatch(key("down"));
+    app.dispatch(key("down"));
+    app.dispatch(key("enter"));
+    assert.equal(app.getState().overlay.kind, "providerSettings", "the selector returns to the editor");
+    assert.equal(app.getState().providerDraft.selected.label, "llama3.2");
+    assert.equal(
+      client.calls.filter((call) => call.name === "updateProvider").length,
+      0,
+      "highlighting a model never persists it"
+    );
+  });
+
+  it("closes the model list with esc and keeps the previous selection", async () => {
+    const { app } = await openEditor({ discoverProvider: { success: true, status: "available", models: MODELS, message: "" } });
+    app.dispatch(key("down"));
+    app.dispatch(key("down"));
+    app.dispatch(key("down")); // model
+    app.dispatch(key("enter"));
+    app.dispatch(key("down"));
+    app.dispatch(key("escape"));
+
+    assert.equal(app.getState().overlay.kind, "providerSettings");
+    assert.equal(app.getState().providerDraft.selected.label, "phi3:mini", "esc cancels the highlight");
+  });
+
+  it("filters the provider's models and never names one itself", async () => {
+    const { app } = await openEditor({ discoverProvider: { success: true, status: "available", models: MODELS, message: "" } });
+    for (const _ of ["provider", "endpoint", "apiKey"]) app.dispatch(key("down"));
+    app.dispatch(key("enter"));
+
+    app.dispatch(char("/"));
+    for (const value of "phi") app.dispatch(char(value));
+    assert.deepEqual(app.visibleModels().map((model) => model.label), ["phi-4-mini"], "the filter narrows the returned list");
+
+    // A filter that matches nothing offers nothing — it cannot invent a model.
+    for (const _ of ["q", "w", "e", "n", "9"]) app.dispatch(char(_));
+    assert.deepEqual(app.visibleModels(), []);
+    app.dispatch(key("enter"));
+    assert.equal(app.getState().overlay.kind, "modelSelect");
+    assert.equal(app.getState().providerDraft.selected.label, "phi3:mini", "an empty filter cannot select anything");
+
+    app.dispatch(key("escape"));
+    assert.equal(app.getState().overlay.filter, "", "esc clears the filter first");
+    assert.equal(app.getState().overlay.kind, "modelSelect");
+    app.dispatch(key("escape"));
+    assert.equal(app.getState().overlay.kind, "providerSettings", "a second esc walks back to the editor");
+  });
+
+  it("scrolls a long model list and only ever selects a reported model", async () => {
+    const many = Array.from({ length: 40 }, (_, index) => ({ model_id: `model-${index}`, name: `model-${index}`, quantization: "unknown" }));
+    const { app } = await openEditor({ discoverProvider: { success: true, status: "available", models: many, message: "" } });
+    for (const _ of ["provider", "endpoint", "apiKey"]) app.dispatch(key("down"));
+    app.dispatch(key("enter"));
+    render(app, 90, 24);
+
+    app.dispatch(key("pageDown"));
+    app.dispatch(key("end"));
+    assert.equal(app.getState().overlay.cursor, 39);
+    const selected = app.visibleModels()[app.getState().overlay.cursor];
+    assert.equal(selected.label, "model-39");
+
+    app.dispatch(key("enter"));
+    assert.equal(app.getState().providerDraft.selected.label, "model-39");
+    const chosen = app.getState().providerDraft.selected.label;
+    assert.ok(
+      many.some((model) => (model.name ?? model.model_id) === chosen),
+      "the chosen model is one the provider actually reported"
+    );
+  });
+
+  it("saves the chosen model through the backend and re-reads the authoritative values", async () => {
+    const { app, client } = await openEditor({ discoverProvider: { success: true, status: "available", models: MODELS, message: "" } });
+    app.dispatch(key("down"));
+    app.dispatch(key("down"));
+    app.dispatch(key("down"));
+    app.dispatch(key("enter")); // open the list (the saved model is not in it)
+    assert.equal(app.visibleModels()[app.getState().overlay.cursor].label, "qwen2.5-7b");
+    app.dispatch(key("enter")); // choose it
+
+    app.dispatch(key("up")); // back to a non-model row
+    app.dispatch(key("enter")); // save
+    await settle(10);
+
+    assert.deepEqual(client.calls.find((call) => call.name === "updateProvider").args, [
+      { provider: "lmstudio", base_url: "http://127.0.0.1:1234/v1", model: "qwen2.5-7b", api_key: "local" },
+    ]);
+    assert.equal(app.getState().overlay, null);
+    assert.equal(app.getState().providerDraft, null);
+    assert.match(app.getState().notice.message, /provider switched to lmstudio · qwen2\.5-7b/);
+    assert.equal(app.getState().appSettings.llm_model, "qwen2.5-7b", "the re-read reflects the backend");
+  });
+
+  it("refuses to save without a chosen model and keeps backend failures visible", async () => {
+    const { app, client } = await openEditor({
+      discoverProvider: { success: true, status: "available", models: MODELS, message: "" },
       updateProvider: async () => {
         throw new Error("switch refused");
       },
     });
-    app.dispatch(char("5"));
+    app.dispatch(key("tab")); // changing provider clears the selection
     await settle();
-    app.dispatch(char("e"));
-
-    app.dispatch(key("down"));
-    app.dispatch(key("down")); // model
-    app.dispatch(key("ctrl", { char: "u" }));
+    assert.equal(app.getState().providerDraft.selected, null);
     app.dispatch(key("enter"));
-    assert.match(app.getState().overlay.error, /model is required/);
+    await settle();
+    assert.match(app.getState().providerDraft.error, /select a model from the provider's list/);
     assert.equal(client.calls.filter((call) => call.name === "updateProvider").length, 0);
 
-    for (const value of "phi4") app.dispatch(char(value));
+    app.dispatch(key("down"));
+    app.dispatch(key("down"));
+    app.dispatch(key("down")); // model
     app.dispatch(key("enter"));
-    await settle();
+    app.dispatch(key("enter")); // choose the highlighted model
+    app.dispatch(key("up"));
+    app.dispatch(key("enter"));
+    await settle(10);
 
-    assert.equal(app.getState().overlay.kind, "providerSettings");
-    assert.match(app.getState().overlay.error, /switch refused/);
+    assert.equal(app.getState().overlay.kind, "providerSettings", "a failed save keeps the form open");
+    assert.match(app.getState().providerDraft.error, /switch refused/);
     assert.match(app.getState().notice.message, /provider update failed/);
+  });
+
+  it("has no model text field: typing on the model row changes nothing", async () => {
+    const { app } = await openEditor({ discoverProvider: { success: true, status: "available", models: MODELS, message: "" } });
+    for (const _ of ["provider", "endpoint", "apiKey"]) app.dispatch(key("down"));
+    assert.equal(app.getState().providerDraft.field, "model");
+
+    for (const value of "not-a-real-model") app.dispatch(char(value));
+    assert.equal(app.getState().providerDraft.selected.label, "phi3:mini", "the selection is untouched by typing");
+    assert.equal(app.getState().overlay.kind, "providerSettings");
+    assert.equal(app.getState().models.items.some((model) => model.label === "not-a-real-model"), false);
   });
 });
 
@@ -1059,13 +1214,18 @@ describe("state: notices and viewport", () => {
     assert.ok(client.calls.length > callsBefore, "a retry was issued while unreachable");
   });
 
-  it("accepts viewport metrics used for paging and scrolling bounds", async () => {
+  it("accepts the viewport metrics the frame publishes for paging and bounds", async () => {
     const { app } = await startApp();
-    app.setViewport({ pageSize: 2, inspectorMax: 5, systemMax: 3, viewerMax: 4 });
+    app.setViewport({ pageSize: 2, detailMax: 5, systemMax: 3, viewerMax: 4, helpMax: 1, overlayMax: 2 });
     assert.equal(app.getState().viewport.pageSize, 2);
+    assert.equal(app.getState().viewport.detailMax, 5);
 
     app.dispatch(key("pageDown"));
     assert.equal(app.getState().cursors.repositories, 1);
+
+    app.dispatch(key("enter")); // focus the detail, then clamp against its bound
+    app.dispatch(key("end"));
+    assert.equal(app.getState().scroll.repositories, 5, "the detail clamps at the published bound");
   });
 
   it("aggregates external indexing runs without starting a new one", async () => {
