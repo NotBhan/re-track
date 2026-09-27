@@ -216,6 +216,11 @@ export function createApp(options = {}) {
   function contextRows() {
     // The catalog can be scoped to saved packages so they are navigable on
     // their own, independently of the generated output and suggestions.
+    // "Run new task" leads the catalog as a visible way into the custom prompt
+    // (`n` opens the same dialog from anywhere in the view); the packages-only
+    // scope stays packages alone, so the action row is not repeated there.
+    const newTask =
+      state.packageScope === "packages" ? [] : [{ kind: "task", label: "Run new task" }];
     const suggestions =
       state.packageScope === "packages"
         ? []
@@ -242,7 +247,7 @@ export function createApp(options = {}) {
       deduplicated: pkg.deduplicated_memories,
       tags: Array.isArray(pkg.tags) ? pkg.tags : [],
     }));
-    return [...suggestions, ...packages];
+    return [...newTask, ...suggestions, ...packages];
   }
 
   function selectedContextRow() {

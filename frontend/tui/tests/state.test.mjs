@@ -331,6 +331,33 @@ describe("state: startup and loading", () => {
     assert.equal(client.calls.at(-1).args[0], "repo-b");
     assert.equal(app.getState().prompts.repoId, "repo-b");
   });
+
+  it("leads the catalog with a custom-task row while suggestions keep their prefill", async () => {
+    const { app, client } = await startApp();
+    app.dispatch(char("3"));
+    await settle();
+
+    assert.equal(app.contextRows()[0].kind, "task", "the action row leads the catalog");
+    assert.match(app.contextRows()[0].label, /run new task/i);
+
+    // ↓ reaches the first suggestion; its prompt still prefills the dialog.
+    app.dispatch(key("down"));
+    assert.equal(app.selectedContextRow().kind, "suggestion");
+    app.dispatch(key("enter"));
+    assert.equal(app.getState().overlay.value, "Explain the auth flow");
+    app.dispatch(key("escape"));
+
+    // The action row opens an empty prompt and submits the typed task verbatim.
+    app.dispatch(key("home"));
+    assert.equal(app.selectedContextRow().kind, "task");
+    app.dispatch(key("enter"));
+    assert.equal(app.getState().overlay.value, "", "a custom task is never prefilled");
+    for (const value of "trace the evidence gate") app.dispatch(char(value));
+    app.dispatch(key("enter"));
+    await settle(4);
+
+    assert.equal(client.calls.find((call) => call.name === "agentContext").args[0].taskPrompt, "trace the evidence gate");
+  });
 });
 
 describe("state: navigation", () => {

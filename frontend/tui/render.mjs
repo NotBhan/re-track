@@ -519,8 +519,17 @@ function buildContext(app, state, layout, list, inspector) {
     return;
   }
 
-  list.rows = rows.map((row) =>
-    row.kind === "suggestion"
+  list.rows = rows.map((row) => {
+    if (row.kind === "task") {
+      return {
+        kind: "task",
+        cells: [
+          cell(truncate(row.label, Math.max(12, layout.listWidth - 16)), (text, styler) => styler.bold(text)),
+          cell(" prompt", (text, styler) => styler.dim(text)),
+        ],
+      };
+    }
+    return row.kind === "suggestion"
       ? {
           kind: "suggestion",
           cells: [cell(truncate(row.label ?? row.prompt, layout.listWidth - 16), (text, styler) => styler.bold(text)), cell(" task", (text, styler) => styler.dim(text))],
@@ -538,15 +547,12 @@ function buildContext(app, state, layout, list, inspector) {
             ...(layout.listWidth >= 66 ? [cell(` ${truncate(formatRelativeTime(row.created, state.nowMs), 8)}`, (text, styler) => styler.dim(text))] : []),
             cell(" pkg", (text, styler) => styler.dim(text)),
           ],
-        }
-  );
+        };
+  });
+  // The catalog is empty only in the packages-only scope; the default scope
+  // always leads with the "Run new task" action row.
   if (list.rows.length === 0) {
-    list.empty =
-      state.packageScope === "packages"
-        ? "no saved packages yet · generate context (n) and press S to save one"
-        : state.prompts.state === "loading"
-          ? "loading suggested tasks…"
-          : "no suggestions or packages · press n for a task, p for the catalog";
+    list.empty = "no saved packages yet · generate context (n) and press S to save one";
   }
 
   if (state.operation?.kind === "synthesis") {
@@ -577,6 +583,25 @@ function buildContext(app, state, layout, list, inspector) {
       inspector.lines = [
         cell("No task or package selected.", (text, styler) => styler.dim(text)),
         cell("Press n to describe a task, or select a suggestion with ↑↓.", (text, styler) => styler.dim(text)),
+      ];
+      return;
+    }
+    if (selected.kind === "task") {
+      const others = rows.filter((row) => row.kind !== "task").length;
+      const status =
+        state.prompts.state === "loading"
+          ? "loading suggested tasks…"
+          : state.prompts.state === "error"
+            ? "suggested tasks unavailable"
+            : others === 0
+              ? "no suggested tasks or packages yet"
+              : null;
+      inspector.lines = [
+        cell("New task", (text, styler) => styler.dim(text)),
+        cell("Describe a task in your own words.", (text, styler) => styler.bold(text)),
+        cell(""),
+        cell("Press enter to write a new task prompt.", (text, styler) => styler.dim(text)),
+        ...(status ? [cell(""), cell(status, (text, styler) => styler.dim(text))] : []),
       ];
       return;
     }

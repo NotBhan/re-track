@@ -280,6 +280,38 @@ describe("render: context output", () => {
   });
 });
 
+describe("render: context catalog", () => {
+  it("shows the run-new-task action at the top of the catalog with its own inspector copy", async () => {
+    const { app } = await startApp();
+    app.dispatch(char("3"));
+    await settle(2);
+
+    const body = text(frame(app, 120, 40).lines);
+    assert.match(body, /Run new task\s+prompt/, "the action row leads the catalog");
+    assert.match(body, /Auth flow/, "suggestions still follow it");
+    assert.match(body, /Auth context/, "saved packages still follow it");
+    assert.match(body, /New task/);
+    assert.match(body, /Describe a task in your own words\./);
+    assert.match(body, /Press enter to write a new task prompt\./);
+
+    // Moving down reaches the first suggestion, whose own inspector takes over.
+    app.dispatch(key("down"));
+    const moved = text(frame(app, 120, 40).lines);
+    assert.match(moved, /Suggested task/);
+    assert.doesNotMatch(moved, /Press enter to write a new task prompt\./);
+  });
+
+  it("keeps the action row out of the packages-only catalog", async () => {
+    const { app } = await startApp();
+    app.dispatch(char("3"));
+    app.dispatch(char("p"));
+
+    const body = text(frame(app, 120, 40).lines);
+    assert.doesNotMatch(body, /Run new task/);
+    assert.match(body, /Auth context/);
+  });
+});
+
 describe("render: context evidence", () => {
   /** Run a manually typed task through the same path the `n` dialog uses. */
   const manualTask = async (agentContext, prompt) => {
