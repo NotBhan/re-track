@@ -417,13 +417,16 @@ describe("render: settings view", () => {
     // Provider detail comes from the settings and health payloads, not invented.
     assert.match(body, /configured model\s+phi3:mini/);
     assert.match(body, /endpoint\s+http:\/\/127\.0\.0\.1:1234/);
-    assert.match(body, /press e to edit the provider/);
+    assert.match(body, /changes save automatically/);
+    assert.match(body, /R restores the mutable settings/);
 
     app.dispatch(key("down")); // Storage & pipeline
     const storage = text(frame(app, 120, 34).lines);
     assert.match(storage, /vector db\s+lancedb/);
-    assert.match(storage, /knowledge graph\s+enabled \(t toggles\)/);
+    assert.match(storage, /knowledge graph\s+enabled \(t toggles/);
+    assert.match(storage, /auto-link entities\s+disabled \(t toggles/);
     assert.match(storage, /ingestion caching\s+enabled/);
+    assert.match(storage, /pipeline changes are written on the toggle/);
     assert.match(storage, /storage engines are fixed by the backend/);
   });
 
@@ -440,10 +443,10 @@ describe("render: settings view", () => {
     assert.match(body, /POST \/provider\/update/);
     assert.match(body, /provider:\s+lmstudio/);
     assert.match(body, /enter or tab: lmstudio · ollama · openai_compatible/);
-    assert.match(body, /available:\s+1 models · enter to select/, "the editor reports the provider's list");
-    assert.match(body, /the model is chosen, never typed/);
+    assert.match(body, /available:\s+1 models · enter selects and saves/, "the editor reports the provider's list");
+    assert.match(body, /the model is chosen from the provider's list, never typed/);
     assert.doesNotMatch(body, /model:\s+\S+\s+\(required\)/, "the model is not a text field");
-    assert.match(lines.at(-1), /enter select\/save/, "the footer says what enter does on each row");
+    assert.match(lines.at(-1), /enter save now/, "the footer says what enter does on each row");
     assert.match(lines.at(-1), /ctrl\+p probe/);
     assert.match(lines.at(-1), /esc cancel/);
 
@@ -462,8 +465,8 @@ describe("render: settings view", () => {
     assert.match(lines.at(-1), /enter select/);
   });
 
-  it("marks the saved and the unsaved selection in the model list", async () => {
-    const { app } = await startApp({
+  it("marks the saved model and commits when one is chosen", async () => {
+    const { app, client } = await startApp({
       discoverProvider: {
         success: true,
         status: "available",
@@ -484,26 +487,36 @@ describe("render: settings view", () => {
     app.dispatch(key("down"));
     app.dispatch(key("enter"));
     const before = text(frame(app, 120, 34).lines);
-    assert.match(before, /phi3:mini\s+\(saved · selected\)/, "the authoritative model is marked as both");
+    assert.match(before, /▍ phi3:mini\s+\(saved\)/, "the authoritative model is marked as saved");
 
-    // Highlighting is not selecting: the marker moves only when the model is
-    // chosen, and even then nothing is persisted.
+    // Highlighting is not selecting: the marker stays put and nothing is written.
     app.dispatch(key("down"));
     const highlighted = text(frame(app, 120, 34).lines);
     assert.match(highlighted, /▍ qwen2\.5-7b Q4_K_M/, "the highlight is visible without color");
-    assert.match(highlighted, /phi3:mini\s+\(saved · selected\)/, "the highlight alone changes no selection");
+    assert.match(highlighted, /phi3:mini\s+\(saved\)/, "the highlight alone changes no selection");
+    assert.equal(client.calls.filter((call) => call.name === "updateProvider").length, 0);
 
+    // Choosing is committing: the model is saved through POST /provider/update
+    // (there is no separate save step) and the editor closes on the write.
     app.dispatch(key("enter"));
-    const editor = text(frame(app, 120, 34).lines);
-    assert.match(editor, /Provider configuration/);
-    assert.match(editor, /model:\s+qwen2\.5-7b/, "the editor shows the chosen model");
-    assert.match(editor, /saved:\s+lmstudio · phi3:mini/, "and still shows what is actually configured");
+    await settle(14);
+    const updates = client.calls.filter((call) => call.name === "updateProvider");
+    assert.equal(updates.length, 1, "choosing a model is the commit");
+    assert.equal(updates[0].args[0].provider, "lmstudio");
+    assert.equal(updates[0].args[0].model, "qwen2.5-7b");
+    assert.equal(app.getState().overlay, null, "the saved configuration closes the editor");
+    assert.match(app.getState().notice.message, /✓ provider updated · lmstudio · qwen2\.5-7b/);
 
-    // Reopening the list shows the chosen model as selected-but-unsaved.
+    // Reopening shows the model that is now actually configured as saved.
+    app.dispatch(char("e"));
+    await settle();
+    app.dispatch(key("down"));
+    app.dispatch(key("down"));
+    app.dispatch(key("down"));
     app.dispatch(key("enter"));
-    const chosen = text(frame(app, 120, 34).lines);
-    assert.match(chosen, /qwen2\.5-7b Q4_K_M\s+\(selected\)/);
-    assert.match(chosen, /phi3:mini\s+\(saved\)/, "the authoritative model keeps the saved marker");
+    const saved = text(frame(app, 120, 34).lines);
+    assert.match(saved, /▍ qwen2\.5-7b Q4_K_M\s+\(saved\)/, "the new authoritative model leads the list");
+    assert.doesNotMatch(saved, /phi3:mini\s+\(saved\)/, "the superseded model is no longer marked");
   });
 
   it("renders a failed settings read as a warning instead of stale values", async () => {
@@ -527,7 +540,7 @@ describe("render: settings view", () => {
     assert.match(body, /Pipeline settings/);
     assert.match(body, /Knowledge graph extraction\s+enabled/);
     assert.match(body, /Auto-link entities\s+disabled/);
-    assert.match(body, /Persisted through POST \/settings\/cognee/);
+    assert.match(body, /saved automatically through POST \/settings\/cognee/);
 
     app.dispatch(key("escape"));
     assert.equal(app.getState().overlay, null);

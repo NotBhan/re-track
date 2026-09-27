@@ -49,6 +49,7 @@ from app.application.dto.memory import (
 from app.application.dto.packages import (
     ContextPackageAppendRequest,
     ContextPackageListResponse,
+    ContextPackageReplaceRequest,
     ContextPackageResponse,
     ContextPackageSaveRequest,
 )
@@ -114,6 +115,7 @@ __all__ = [
     "ContextPackageResponse",
     "ContextPackageListResponse",
     "ContextPackageAppendRequest",
+    "ContextPackageReplaceRequest",
     # System
     "HealthResponse",
     "DetailedHealthResponse",

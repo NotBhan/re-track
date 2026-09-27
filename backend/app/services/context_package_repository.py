@@ -41,6 +41,12 @@ class ContextPackageRepository(ABC):
     ) -> Optional[SavedContextPackage]:
         ...
 
+    @abstractmethod
+    async def replace(
+        self, package_id: str, replacement: SavedContextPackage
+    ) -> Optional[SavedContextPackage]:
+        ...
+
 
 class JsonContextPackageRepository(ContextPackageRepository):
     """JSON file-backed implementation of ContextPackageRepository.
@@ -191,3 +197,24 @@ class JsonContextPackageRepository(ContextPackageRepository):
         packages[package_id] = self._to_dict(pkg)
         self._save_all(packages)
         return pkg
+
+    async def replace(
+        self, package_id: str, replacement: SavedContextPackage
+    ) -> Optional[SavedContextPackage]:
+        """Supersede an existing package's stored record with the given replacement.
+
+        The write is the same atomic tmp-file + rename used everywhere else, so a
+        failure leaves the previously stored package exactly as it was. A
+        replacement whose id does not match the addressed package is refused
+        rather than silently stored under a different key.
+        """
+        packages = self._load()
+        if package_id not in packages:
+            return None
+        if replacement.id != package_id:
+            raise ValueError(
+                f"Replacement id {replacement.id!r} does not match the addressed package {package_id!r}"
+            )
+        packages[package_id] = self._to_dict(replacement)
+        self._save_all(packages)
+        return replacement

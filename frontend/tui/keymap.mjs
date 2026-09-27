@@ -60,13 +60,28 @@ export const HINTS = Object.freeze({
   appendPackage: { keys: "A", footer: "append", help: "Append an iterative task or note to the package", group: CONTEXT },
   exportPackage: { keys: "e", footer: "export", help: "Write the stored package markdown to a local file", group: CONTEXT },
   viewerAppend: { keys: "a", footer: "append", help: "Append an iterative task or note to this package", group: CONTEXT },
+  copyOutput: { keys: "c", footer: "copy", help: "Copy the generated Markdown exactly as it was produced", group: CONTEXT },
+  copyPackage: { keys: "c", footer: "copy", help: "Copy this package's stored Markdown exactly as it is stored", group: CONTEXT },
+  resynthesize: {
+    keys: "r",
+    footer: "re-synth",
+    help: "Regenerate this package's context from its stored task and repository (replaces, never appends)",
+    group: CONTEXT,
+  },
+  resynthesizeSelected: {
+    keys: "R",
+    footer: "re-synth",
+    help: "Regenerate the selected package (confirmation; its generated context is replaced)",
+    group: CONTEXT,
+  },
 
   sectionMove: { keys: "↑↓", footer: "section", help: "Move between settings sections", group: SETTINGS },
-  pipelineSettings: { keys: "t", footer: "pipeline", help: "Toggle the pipeline settings the backend persists", group: SETTINGS },
-  providerEdit: { keys: "e", footer: "provider", help: "Edit the inference provider (endpoint, model, API key)", group: SETTINGS },
+  pipelineSettings: { keys: "t", footer: "pipeline", help: "Toggle the pipeline settings the backend persists (saved immediately)", group: SETTINGS },
+  providerEdit: { keys: "e", footer: "provider", help: "Edit the inference provider (saved automatically, no save step)", group: SETTINGS },
+  resetSettings: { keys: "R", footer: "reset", help: "Restore mutable settings to the application defaults (confirmation)", group: SETTINGS },
 
-  providerSubmit: { keys: "enter", footer: "select/save", help: "Open the model list on the model row, save the form on any other row", group: DIALOGS },
-  modelPick: { keys: "enter", footer: "select", help: "Choose from the models the provider reports", group: DIALOGS },
+  providerSubmit: { keys: "enter", footer: "save now", help: "Save this configuration now (provider, endpoint, API key, model — written as one update)", group: DIALOGS },
+  modelPick: { keys: "enter", footer: "select", help: "Choose a reported model — choosing saves the configuration", group: DIALOGS },
   modelFilter: { keys: "/", footer: "filter", help: "Filter the reported models — never a model name field", group: DIALOGS },
   modelMove: { keys: "↑↓", footer: "model", help: "Move between the provider's models (wraps)", group: DIALOGS },
 
@@ -97,10 +112,11 @@ export const CONTEXTS = Object.freeze({
   rail: ["menuMove", "railOpen", "switchPane", "keys", "quit"],
   list: ["listMove", "activate", "switchPane", "keys"],
   repositories: ["listMove", "activate", "add", "index", "deleteRepo", "filter", "keys"],
-  context: ["listMove", "newTask", "contextOpen", "packageScope", "savePackage", "appendPackage", "exportPackage", "markdown", "deletePackage", "keys"],
+  context: ["listMove", "newTask", "contextOpen", "packageScope", "savePackage", "appendPackage", "exportPackage", "markdown", "resynthesizeSelected", "deletePackage", "keys"],
   system: ["scroll", "exportDiagnostics", "refresh", "keys"],
-  settings: ["sectionMove", "activate", "providerEdit", "pipelineSettings", "refresh", "keys"],
+  settings: ["sectionMove", "activate", "providerEdit", "pipelineSettings", "resetSettings", "refresh", "keys"],
   inspector: ["scroll", "back", "switchPane", "keys"],
+  contextInspector: ["scroll", "copyOutput", "savePackage", "back", "keys"],
   filter: ["filterApply", "filterCancel", "cursorMove"],
   help: ["scroll", "helpClose"],
   confirm: ["confirm", "cancel"],
@@ -109,7 +125,7 @@ export const CONTEXTS = Object.freeze({
   pipeline: ["toggleSetting", "cancel"],
   provider: ["providerSubmit", "providerProbe", "providerCycle", "cancel", "fieldMove"],
   modelSelect: ["modelMove", "modelPick", "modelFilter", "cancel"],
-  viewer: ["scroll", "viewerAppend", "exportPackage", "markdown", "viewerClose"],
+  viewer: ["scroll", "copyPackage", "resynthesize", "viewerAppend", "exportPackage", "markdown", "viewerClose"],
 });
 
 const GROUP_ORDER = Object.freeze([NAVIGATE, REPOSITORIES, CONTEXT, SYSTEM, SETTINGS, TEXT_INPUT, DIALOGS]);

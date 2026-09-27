@@ -256,6 +256,90 @@ class ApplicationContainer:
         except Exception as e:
             logger.warning("Purging applied environment failed: %s", e)
 
+    async def reset_configuration(self) -> dict:
+        """Restore every persisted-overridable setting to its application default.
+
+        Deterministic order, and the persisted file is the authority throughout:
+
+        1. resolve the application defaults *without* the persisted layer,
+        2. write them (one atomic file replace); a failed write leaves the stored
+           configuration as it was and puts the live object back on it,
+        3. rebuild every runtime component that derives from configuration — the
+           interactive provider, the semantic-memory provider/generator, the
+           environment Cognee reads, and Cognee's own configuration.
+
+        Raises instead of returning a partial success: the caller reports the
+        failure rather than claiming the settings were reset.
+        """
+        from app.models.errors import ConfigurationError
+
+        defaults = Settings.application_defaults()
+        settings = self.settings or get_settings()
+        settings.restore_application_defaults()
+        if not settings.save_persisted_settings():
+            settings.reload_configuration()
+            raise ConfigurationError(
+                f"Failed to write {settings.settings_store_path}; the persisted configuration was left unchanged."
+            )
+        self.settings = settings
+
+        # Authoritative verification: re-resolve from disk (persisted layer
+        # included) and compare every managed field with the defaults that were
+        # requested, so a partial write can never be reported as a reset.
+        persisted = Settings(
+            settings_store_path=settings.settings_store_path,
+            legacy_settings_store_path=settings.legacy_settings_store_path,
+        )
+        expected = defaults.managed_configuration()
+        actual = persisted.managed_configuration()
+        mismatched = sorted(key for key, value in expected.items() if actual.get(key) != value)
+        if mismatched:
+            raise ConfigurationError(
+                "Settings reset did not reach the application defaults for: " + ", ".join(mismatched)
+            )
+
+        llm_endpoint = settings.llm_endpoint or settings.ollama.llm_endpoint
+        llm_api_key = settings.llm_api_key or "local"
+        llm_model = settings.ollama.llm_model
+        self.llm_provider = LLMProviderService(
+            provider_type=_provider_type_for(settings.llm_provider),
+            base_url=llm_endpoint,
+            api_key=llm_api_key,
+            default_model=llm_model,
+        )
+        self.intent_parser = IntentParserService(self.llm_provider)
+        # The semantic-memory extraction identity is part of the reset (its model
+        # is `ollama.memory_model`), so the live provider and generator are rebuilt
+        # from the restored values instead of keeping the pre-reset connection.
+        self.memory_provider = self._build_memory_provider()
+        self.semantic_memory_generator = SemanticMemoryGenerator(
+            memory_provider=self.memory_provider,
+            repository=self.semantic_memory_repository,
+            settings=settings,
+        )
+        if self.indexing_service is not None:
+            self.indexing_service._semantic_memory_generator = self.semantic_memory_generator
+
+        settings.apply_to_environment()
+        settings.configure_cognee()
+
+        logger.info(
+            "Configuration reset to application defaults | interactive=%s/%s/%s | semantic_memory=%s",
+            settings.llm_provider,
+            llm_endpoint,
+            llm_model,
+            settings.semantic_memory_identity()["provider"] or "unconfigured",
+        )
+        return {
+            "success": True,
+            "llm_provider": settings.llm_provider,
+            "llm_endpoint": llm_endpoint,
+            "llm_model": llm_model,
+            "enable_kg_extraction": settings.storage.enable_kg_extraction,
+            "auto_link_entities": settings.storage.auto_link_entities,
+            "caching": settings.service.caching,
+        }
+
     async def update_provider(
         self,
         provider: str,
@@ -387,6 +471,7 @@ class ApplicationContainer:
             cognee_service_getter=lambda: self.cognee_service,
             llm_provider_getter=lambda: self.llm_provider,
             provider_updater_fn=self.update_provider,
+            configuration_resetter_fn=self.reset_configuration,
             telemetry_port=self.telemetry,
             concurrency_guard=self.concurrency_guard,
         )

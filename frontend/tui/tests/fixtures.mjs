@@ -145,14 +145,16 @@ export function makeClient(overrides = {}) {
     if (typeof result === "function") return result(...args);
     return result;
   };
-  // Persisted settings are per-client so a toggle + re-read is observable.
+  // Persisted settings and packages are per-client so a write + re-read is
+  // observable (a toggle, a provider update, a reset, a re-synthesis).
   const settings = { ...APP_SETTINGS };
+  const packageStore = new Map(PACKAGES.map((pkg) => [pkg.id, { ...pkg }]));
   const base = {
     health: HEALTH,
     status: { status: "ok", llm_provider: "lmstudio" },
     providerStatus: { success: true, provider: "lmstudio", is_reachable: true, health_state: "healthy", base_url: "http://127.0.0.1:1234/v1" },
     listRepositories: { success: true, repositories: REPOS, total_count: REPOS.length },
-    listContextPackages: { success: true, packages: PACKAGES, total_count: PACKAGES.length },
+    listContextPackages: () => ({ success: true, packages: [...packageStore.values()], total_count: packageStore.size }),
     memoryStats: { success: true, dataset_count: 2, total_size_display: "1.2 MB", knowledge_graph_status: "extracted" },
     detailedHealth: { status: "ok", storage_paths: { canonical_root: "/home/u/.retrack" } },
     recentLogs: { status: "ok", count: 1, logs: [{ timestamp: "2026-09-25T10:00:00Z", level: "INFO", message: "boot" }] },
@@ -162,10 +164,28 @@ export function makeClient(overrides = {}) {
     createRepository: { id: "repo-new", name: "gamma-service", local_path: "/work/gamma", status: "registered" },
     scanRepository: { success: true, file_count: 7, languages: ["Go"] },
     deleteRepository: { success: true },
-    getContextPackage: (id) => PACKAGES.find((pkg) => pkg.id === id),
-    saveContextPackage: (payload) => ({ id: "pkg-new", created_at: "2026-09-25T12:00:00Z", ...payload }),
-    deleteContextPackage: { success: true },
-    appendContextPackage: (id, payload) => ({ ...PACKAGES[0], id, task: payload.task, updated_at: "2026-09-25T13:00:00Z" }),
+    getContextPackage: (id) => packageStore.get(id) ?? null,
+    saveContextPackage: (payload) => {
+      const saved = { id: "pkg-new", created_at: "2026-09-25T12:00:00Z", updated_at: "2026-09-25T12:00:00Z", ...payload };
+      packageStore.set(saved.id, saved);
+      return saved;
+    },
+    deleteContextPackage: (id) => {
+      packageStore.delete(id);
+      return { success: true, message: `Context package ${id} deleted` };
+    },
+    appendContextPackage: (id, payload) => {
+      const pkg = { ...packageStore.get(id), id, task: payload.task, updated_at: "2026-09-25T13:00:00Z" };
+      packageStore.set(id, pkg);
+      return pkg;
+    },
+    replaceContextPackage: (id, payload) => {
+      const previous = packageStore.get(id);
+      if (!previous) throw new Error(`package ${id} not found`);
+      const replacement = { ...previous, ...payload, id, updated_at: "2026-09-26T12:00:00Z" };
+      packageStore.set(id, replacement);
+      return replacement;
+    },
     agentContext: CONTEXT_OK,
     exportDiagnostics: { status: "ok", export_path: "/tmp/re-track-diagnostics.json" },
     appSettings: () => ({ success: true, ...settings }),
@@ -178,6 +198,17 @@ export function makeClient(overrides = {}) {
       settings.llm_endpoint = payload.base_url;
       settings.llm_model = payload.model;
       return { success: true, ...payload };
+    },
+    resetSettings: () => {
+      Object.assign(settings, {
+        llm_provider: "ollama",
+        llm_endpoint: "http://localhost:11434/v1",
+        llm_model: "phi3:mini-reset",
+        enable_kg_extraction: true,
+        auto_link_entities: false,
+        caching: false,
+      });
+      return { success: true, ...settings };
     },
     discoverProvider: {
       success: true,
@@ -196,6 +227,27 @@ export function makeClient(overrides = {}) {
     client[name] = record(name, value);
   }
   return client;
+}
+
+/**
+ * A clipboard adapter that records every copy. `result` may be a verdict object
+ * or a function of (text, label) returning one.
+ */
+export function clipboardAdapter(result = { ok: true, mechanism: "test", unconfirmed: false }) {
+  const copies = [];
+  const copyText = async (text, label) => {
+    copies.push({ text, label });
+    const verdict = typeof result === "function" ? await result(text, label) : result;
+    if (verdict.message) return verdict;
+    return {
+      ...verdict,
+      message: verdict.ok
+        ? `✓ copied ${label} to the clipboard (${verdict.mechanism ?? "test"})`
+        : `✗ clipboard unavailable · ${verdict.reason ?? "none"}`,
+    };
+  };
+  copyText.copies = copies;
+  return copyText;
 }
 
 export const key = (name, extra = {}) => ({ name, ...extra });

@@ -43,6 +43,7 @@ from app.application.dto import (
     # Packages
     ContextPackageAppendRequest,
     ContextPackageListResponse,
+    ContextPackageReplaceRequest,
     ContextPackageResponse,
     ContextPackageSaveRequest,
     # System
@@ -96,6 +97,7 @@ __all__ = [
     "ContextPackageResponse",
     "ContextPackageListResponse",
     "ContextPackageAppendRequest",
+    "ContextPackageReplaceRequest",
     "HealthResponse",
     "BackendStatusResponse",
     "CogneeSettingsRequest",

@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from app.api.schemas import (
     ContextPackageAppendRequest,
+    ContextPackageReplaceRequest,
     ContextPackageSaveRequest,
     ErrorResponse,
 )
@@ -81,5 +82,26 @@ async def packages_append_endpoint(
     if result is None:
         raise HTTPException(status_code=404, detail="Package not found")
     if isinstance(result, ErrorResponse):
+        raise HTTPException(status_code=500, detail=result.model_dump())
+    return result.model_dump()
+
+
+@router.put("/packages/{package_id}")
+async def packages_replace_endpoint(
+    package_id: str,
+    request: ContextPackageReplaceRequest,
+    package_use_cases: PackageUseCases = Depends(get_package_use_cases),
+) -> dict[str, Any]:
+    """Replace an existing context package's generated content (re-synthesis).
+
+    Addressed by id and superseding, so a re-synthesis never creates a second
+    package. The stored record is only written once the replacement is complete.
+    """
+    result = await package_use_cases.replace_context_package(package_id, request)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Package not found")
+    if isinstance(result, ErrorResponse):
+        if result.error == "NotFoundError":
+            raise HTTPException(status_code=404, detail=result.message)
         raise HTTPException(status_code=500, detail=result.model_dump())
     return result.model_dump()

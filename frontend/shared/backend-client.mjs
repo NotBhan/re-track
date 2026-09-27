@@ -30,6 +30,7 @@ export const ENDPOINTS = Object.freeze({
   providerDiscover: "/provider/discover",
   settings: "/settings",
   settingsCognee: "/settings/cognee",
+  settingsReset: "/settings/reset",
   generateContext: "/context",
   agentContext: "/api/v1/context",
   index: "/index",
@@ -178,6 +179,16 @@ export function createBackendClient(options = {}) {
         },
         timeoutMs: 15_000,
       }),
+    /**
+     * Replace an existing package's generated content (mirrors
+     * ContextPackageReplaceRequest). Re-synthesis, not append: the addressed
+     * package is superseded, so no second package is created.
+     */
+    replaceContextPackage: (packageId, payload) =>
+      request("PUT", `${ENDPOINTS.contextPackages}/${encodeURIComponent(packageId)}`, {
+        body: payload,
+        timeoutMs: 15_000,
+      }),
     deleteContextPackage: (packageId) =>
       request("DELETE", `${ENDPOINTS.contextPackages}/${encodeURIComponent(packageId)}`, {
         timeoutMs: 15_000,
@@ -204,9 +215,17 @@ export function createBackendClient(options = {}) {
     /** Persistent application settings (AppSettingsResponse). */
     appSettings: () => request("GET", ENDPOINTS.settings, { timeoutMs: 10_000 }),
 
-    /** Persist Cognee pipeline parameters (the only settings mutation exposed over HTTP). */
+    /** Persist Cognee pipeline parameters (POST /settings/cognee). */
     updateCogneeSettings: (payload) =>
       request("POST", ENDPOINTS.settingsCognee, { body: payload, timeoutMs: 20_000 }),
+
+    /**
+     * Restore mutable configuration to the application defaults (POST
+     * /settings/reset). Configuration only — repositories, packages, memory and
+     * indexed data are untouched — and the response is the authoritative
+     * read-back of the stored settings.
+     */
+    resetSettings: () => request("POST", ENDPOINTS.settingsReset, { body: {}, timeoutMs: 30_000 }),
 
     /** Active-repository Context Package synthesis (the GUI's generate_context path). */
     generateContext: ({ task, datasets, top_k }) =>

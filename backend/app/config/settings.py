@@ -120,6 +120,38 @@ CONFIGURATION_PRECEDENCE: tuple[str, ...] = (
     "field defaults",
 )
 
+# Every managed field the persisted store can override, in the exact shape the
+# ``~/.retrack/settings.json`` reader consumes it. "Restore application defaults"
+# restores precisely this set: configuration only, never repositories, packages,
+# memory, indexed data, or any other filesystem state.
+_PERSISTED_FIELD_PATHS: tuple[tuple[str, ...], ...] = (
+    ("llm_provider",),
+    ("llm_endpoint",),
+    ("llm_api_key",),
+    ("embedding_provider",),
+    ("embedding_endpoint",),
+    ("embedding_api_key",),
+    ("semantic_memory_provider",),
+    ("semantic_memory_endpoint",),
+    ("semantic_memory_api_key",),
+    ("ollama", "llm_model"),
+    ("ollama", "memory_model"),
+    ("ollama", "embedding_model"),
+    ("ollama", "embedding_dimensions"),
+    ("ollama", "host"),
+    ("ollama", "port"),
+    ("storage", "vector_db"),
+    ("storage", "graph_db"),
+    ("storage", "relational_db"),
+    ("storage", "enable_kg_extraction"),
+    ("storage", "auto_link_entities"),
+    ("service", "caching"),
+    ("logging", "level"),
+    ("logging", "max_bytes"),
+    ("logging", "backup_count"),
+    ("logging", "enable_file_logging"),
+)
+
 # Values RE:Track itself wrote into os.environ, keyed by variable name.
 _applied_environment: dict[str, str] = {}
 # Snapshot of operator-supplied values before RE:Track wrote them, for restoration on purge.
@@ -128,6 +160,11 @@ _operator_snapshot: dict[str, str] = {}
 # Fields explicitly supplied to the Settings constructor for the active construction.
 _explicit_init_fields: contextvars.ContextVar[frozenset[str]] = contextvars.ContextVar(
     "retrack_explicit_settings_fields", default=frozenset()
+)
+
+# Set while resolving application defaults, so the persisted layer is skipped.
+_skip_persisted_layer: contextvars.ContextVar[bool] = contextvars.ContextVar(
+    "retrack_skip_persisted_settings", default=False
 )
 
 
@@ -366,6 +403,50 @@ class Settings(BaseSettings):
         """Return the documented configuration precedence, highest priority first."""
         return CONFIGURATION_PRECEDENCE
 
+    @classmethod
+    def application_defaults(cls) -> "Settings":
+        """Resolve the configuration a fresh installation would use.
+
+        Identical to ``Settings()`` except that the persisted layer
+        (``~/.retrack/settings.json``) is excluded. What remains is exactly the
+        documented precedence below that layer — operator environment variables
+        and ``backend/.env`` over the field defaults — so an operator override is
+        respected by a reset instead of being silently discarded.
+        """
+        token = _skip_persisted_layer.set(True)
+        try:
+            return cls()
+        finally:
+            _skip_persisted_layer.reset(token)
+
+    def restore_application_defaults(self) -> None:
+        """Overwrite every persisted-overridable field with its application default.
+
+        Only the fields ``load_persisted_settings`` can override are touched, so a
+        reset is a configuration-only operation: repositories, context packages,
+        memory, and indexed data are never involved.
+        """
+        defaults = Settings.application_defaults()
+        for path in _PERSISTED_FIELD_PATHS:
+            if len(path) == 1:
+                setattr(self, path[0], getattr(defaults, path[0]))
+            else:
+                setattr(getattr(self, path[0]), path[1], getattr(getattr(defaults, path[0]), path[1]))
+
+    def managed_configuration(self) -> dict[str, Any]:
+        """Return every persisted-overridable field as a flat ``section.field`` mapping.
+
+        Used to verify a reset against the resolved defaults: two configurations
+        are equivalent exactly when these mappings agree.
+        """
+        values: dict[str, Any] = {}
+        for path in _PERSISTED_FIELD_PATHS:
+            if len(path) == 1:
+                values[path[0]] = getattr(self, path[0])
+            else:
+                values[".".join(path)] = getattr(getattr(self, path[0]), path[1])
+        return values
+
     def load_persisted_settings(
         self,
         store_path: Path | None = None,
@@ -378,6 +459,10 @@ class Settings(BaseSettings):
         ``storage``, ``service``) that must not be overwritten — used to honour
         explicit constructor arguments, which outrank persisted settings.
         """
+        if _skip_persisted_layer.get():
+            # Resolving application defaults: the persisted layer is what a reset
+            # is measured against, so it must not participate.
+            return
         exclude_ollama = "ollama" in exclude
         exclude_storage = "storage" in exclude
         exclude_service = "service" in exclude
@@ -468,8 +553,13 @@ class Settings(BaseSettings):
         except Exception as e:
             logger.warning("Failed to load persistent settings from %s: %s", target_path, e)
 
-    def save_persisted_settings(self, store_path: Path | None = None) -> None:
-        """Save current user-customized settings atomically to canonical persistent JSON file with 0600 permissions."""
+    def save_persisted_settings(self, store_path: Path | None = None) -> bool:
+        """Save current user-customized settings atomically to canonical persistent JSON file with 0600 permissions.
+
+        Returns whether the file was actually written. Callers that report success
+        to a user (a settings reset) must treat ``False`` as a failure; callers
+        that only log keep working unchanged.
+        """
         path = store_path or self.settings_store_path
         try:
             import json
@@ -525,8 +615,10 @@ class Settings(BaseSettings):
             except OSError:
                 pass
             logger.info("Saved persistent settings atomically to %s (0600 permissions)", path)
+            return True
         except Exception as e:
             logger.error("Failed to save persistent settings to %s: %s", path, e)
+            return False
 
     @model_validator(mode="after")
     def _resolve_configuration_precedence(self) -> "Settings":

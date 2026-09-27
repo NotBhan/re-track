@@ -38,3 +38,19 @@ async def settings_cognee_update_endpoint(
     if isinstance(result, ErrorResponse):
         raise HTTPException(status_code=500, detail=result.model_dump())
     return result.model_dump()
+
+
+@router.post("/settings/reset")
+async def settings_reset_endpoint(
+    system_use_cases: SystemUseCases = Depends(get_system_use_cases),
+) -> dict[str, Any]:
+    """Restore mutable configuration to the application defaults.
+
+    Configuration only: repositories, context packages, memory, and indexed data
+    are untouched. The response is the authoritative read-back of the stored
+    settings after the reset, and a failure is reported as one.
+    """
+    result = await system_use_cases.reset_settings()
+    if isinstance(result, ErrorResponse):
+        raise HTTPException(status_code=500, detail=result.model_dump())
+    return result.model_dump()

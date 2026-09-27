@@ -205,7 +205,20 @@ export function buildModel(app, options = {}) {
   const overlayHeight = model.overlay ? Math.max(1, layout.bodyRows - 2) : 0;
   const overlayLines_count = model.overlay?.lines.length ?? 0;
   const kind = model.overlay?.kind ?? null;
-  const formOverlay = ["confirm", "addRepo", "newTask", "savePackage", "appendPackage", "exportPackage", "providerSettings", "pipelineSettings"].includes(kind);
+  // Form-like overlays that page as a whole (PgUp/PgDn, and Home/End while no
+  // text field owns the caret): their content must be able to outgrow the body.
+  const formOverlay = [
+    "confirm",
+    "resetSettings",
+    "resynthesize",
+    "addRepo",
+    "newTask",
+    "savePackage",
+    "appendPackage",
+    "exportPackage",
+    "providerSettings",
+    "pipelineSettings",
+  ].includes(kind);
 
   model.scrollMax = {
     detail: scrollMax(model.view.inspector.lines.length, model.view.inspector.height),
@@ -596,7 +609,7 @@ function buildContext(app, state, layout, list, inspector) {
       cell(""),
       ...wrapToWidth(pkg?.task ?? "", Math.max(20, inspector.width - 2)).map((piece) => cell(piece)),
       cell(""),
-      cell("enter opens the package · A appends · e exports", (text, styler) => styler.dim(text)),
+      cell("enter opens the package · R re-synthesizes it · A appends · e exports", (text, styler) => styler.dim(text)),
     ];
     return;
   }
@@ -643,7 +656,7 @@ function buildContext(app, state, layout, list, inspector) {
   }
   lines.push(cell(`tokens: ${formatCount(result.estimated_tokens)} · generation ${formatDuration(result.generation_time_ms)}`, (text, styler) => styler.dim(text)));
   lines.push(cell(""));
-  lines.push(cell(`output · ${state.markdownView === "rendered" ? "rendered" : "raw"} (m toggles)`, (text, styler) => styler.dim(text)));
+  lines.push(cell(`output · ${state.markdownView === "rendered" ? "rendered" : "raw"} (m toggles) · c copies the markdown`, (text, styler) => styler.dim(text)));
 
   const markdownLines = formatMarkdown(result.context_markdown ?? "", {
     rendered: state.markdownView === "rendered",
@@ -675,7 +688,11 @@ const CAPABILITIES = Object.freeze([
   ["package viewer", "available (Context · enter)"],
   ["package save", "available (Context · S)"],
   ["package append", "available (POST /packages/{id}/append)"],
+  ["package re-synthesis", "available (PUT /packages/{id}) · viewer r"],
   ["package export", "local file export (no backend endpoint)"],
+  ["clipboard copy", "terminal clipboard (native utility or OSC 52)"],
+  ["settings auto-save", "available (no save step: toggle, choose, or leave the field)"],
+  ["settings reset", "available (POST /settings/reset) · Settings · R"],
   ["diagnostics export", "available (System · e)"],
   ["pipeline toggles", "editable here (t)"],
   ["provider configuration", "editable here (e)"],
@@ -747,7 +764,8 @@ function buildSettings(app, state, layout, list, inspector) {
       detailRow("model", health.semantic_memory_model ?? status.semantic_memory_model ?? settings.memory_model, width),
       detailRow("state", health.semantic_memory_state ?? status.semantic_memory_state, width),
       cell(""),
-      cell("press e to edit the provider, endpoint, model and API key", (text, styler) => styler.dim(text)),
+      cell("changes save automatically: e edits the provider, model and API key", (text, styler) => styler.dim(text)),
+      cell("R restores the mutable settings to the backend's application defaults", (text, styler) => styler.dim(text)),
     ];
     return;
   }
@@ -756,7 +774,7 @@ function buildSettings(app, state, layout, list, inspector) {
     const toggle = (key) => {
       const value = settings[key];
       if (value === undefined || value === null) return null;
-      return `${value ? "enabled" : "disabled"} (t toggles)`;
+      return `${value ? "enabled" : "disabled"} (t toggles · saved immediately)`;
     };
     inspector.title = "Storage & pipeline";
     inspector.lines = [
@@ -778,6 +796,7 @@ function buildSettings(app, state, layout, list, inspector) {
       detailRow("knowledge graph", toggle("enable_kg_extraction"), width),
       detailRow("auto-link entities", toggle("auto_link_entities"), width),
       detailRow("ingestion caching", toggle("caching"), width),
+      cell("pipeline changes are written on the toggle — there is no save step", (text, styler) => styler.dim(text)),
     ];
     return;
   }
@@ -820,7 +839,8 @@ function buildSettings(app, state, layout, list, inspector) {
       )
     ),
     cell(""),
-    cell("Pipeline toggles are persisted through POST /settings/cognee and re-read after saving.", (text, styler) => styler.dim(text)),
+    cell("Pipeline toggles and the provider configuration are saved automatically.", (text, styler) => styler.dim(text)),
+    cell("R restores the mutable settings to the application defaults (configuration only).", (text, styler) => styler.dim(text)),
     cell("Everything else configured in the desktop GUI has no terminal mutation surface.", (text, styler) => styler.dim(text)),
   ];
 }
@@ -958,6 +978,8 @@ function footerContext(state) {
   if (state.overlay) {
     if (state.overlay.kind === "help") return "help";
     if (state.overlay.kind === "confirm") return "confirm";
+    if (state.overlay.kind === "resetSettings") return "confirm";
+    if (state.overlay.kind === "resynthesize") return "confirm";
     if (state.overlay.kind === "addRepo") return "addRepo";
     if (state.overlay.kind === "viewPackage") return "viewer";
     if (state.overlay.kind === "pipelineSettings") return "pipeline";
@@ -967,7 +989,8 @@ function footerContext(state) {
   }
   if (state.filterActive) return "filter";
   if (state.focus === "rail") return "rail";
-  if (state.focus === "inspector") return "inspector";
+  // The generated output has its own actions; every other detail pane scrolls.
+  if (state.focus === "inspector") return state.view === "context" ? "contextInspector" : "inspector";
   if (state.view === "repositories") return "repositories";
   if (state.view === "context") return "context";
   if (state.view === "system") return "system";
@@ -1063,7 +1086,7 @@ function helpLines(cols) {
 function modelStatusText(models) {
   const state_ = models?.state ?? "idle";
   if (state_ === "loading") return "loading models…";
-  if (state_ === "ready") return `${formatCount(models.items.length)} models · enter to select`;
+  if (state_ === "ready") return `${formatCount(models.items.length)} models · enter selects and saves`;
   if (state_ === "empty") return `no models available${models.message ? ` · ${models.message}` : ""}`;
   if (state_ === "failed") {
     const detail = [models.message, models.errorDetails].filter(Boolean).join(" · ");
@@ -1108,6 +1131,39 @@ function buildOverlay(app, state, layout, cols) {
       height,
       scroll: state.scroll.overlay ?? 0,
     };
+  }
+
+  if (overlay.kind === "resetSettings") {
+    const lines = [
+      { text: "Reset settings?", style: "bold" },
+      { text: "" },
+      { text: "This restores mutable RE:Track settings to their application defaults:", style: "dim" },
+      { text: "· pipeline toggles, provider, endpoint, model and API key", style: "dim" },
+      { text: "· resolved by the backend from its own configuration source", style: "dim" },
+      { text: "" },
+      { text: "Repositories, packages, memory and indexed data are not touched.", style: "dim" },
+    ];
+    if (overlay.error) lines.push({ text: "" }, { text: overlay.error, style: "error" });
+    if (overlay.busy) lines.push({ text: "" }, { text: "resetting…", style: "dim" });
+    return { kind: "resetSettings", title: "Reset settings", lines, width, height, scroll: state.scroll.overlay ?? 0 };
+  }
+
+  if (overlay.kind === "resynthesize") {
+    const plan = overlay.plan ?? {};
+    const lines = [
+      { text: `Re-synthesize “${plan.name ?? UNAVAILABLE}”?`, style: "bold" },
+      { text: "" },
+      { text: "Regenerates this package's context from its stored definition:", style: "dim" },
+      { text: `  task        ${plan.task ?? UNAVAILABLE}` },
+      { text: `  repository  ${plan.repository ?? UNAVAILABLE}` },
+      { text: `  options     ${Math.round((plan.maxTokens ?? 0) / 1024)}K budget · AST graph ${plan.includeStructuralGraph ? "on" : "off"} (current Context settings)`, style: "dim" },
+      { text: "" },
+      { text: "The stored markdown is replaced, never appended to. If generation or", style: "dim" },
+      { text: "persistence fails, the package stays exactly as it is now.", style: "dim" },
+    ];
+    if (overlay.error) lines.push({ text: "" }, { text: overlay.error, style: "error" });
+    if (overlay.busy) lines.push({ text: "" }, { text: "synthesizing…", style: "dim" });
+    return { kind: "resynthesize", title: "Re-synthesize package", lines, width, height, scroll: state.scroll.overlay ?? 0 };
   }
 
   if (overlay.kind === "addRepo") {
@@ -1187,7 +1243,8 @@ function buildOverlay(app, state, layout, cols) {
       : { text: `  ${describe("model:", selected ?? "none selected")}`, style: "dim" };
     const models = state.models ?? {};
     const lines = [
-      { text: "Hot-reloads and persists the active inference provider (POST /provider/update).", style: "dim" },
+      { text: "Saved automatically through POST /provider/update — there is no separate save step.", style: "dim" },
+      { text: "Changing the provider re-reads its models; choosing one writes the whole configuration.", style: "dim" },
       { text: "" },
       providerLine,
       fieldLine("endpoint", values.endpoint, draft.cursors.endpoint, field === "endpoint", "(required)"),
@@ -1197,7 +1254,8 @@ function buildOverlay(app, state, layout, cols) {
       { text: `  ${describe("saved:", draft.saved?.provider ?? UNAVAILABLE, draft.saved?.model ?? "no model recorded")}`, style: "dim" },
       { text: `  ${describe("available:", modelStatusText(models))}`, style: models.state === "failed" ? "error" : "dim" },
       { text: "" },
-      { text: "ctrl+p re-reads the endpoint (changes nothing) · the model is chosen, never typed", style: "dim" },
+      { text: "enter saves this configuration · ctrl+p re-reads the endpoint (changes nothing)", style: "dim" },
+      { text: "the model is chosen from the provider's list, never typed", style: "dim" },
     ];
     if (draft.error) lines.push({ text: "", style: "dim" }, { text: draft.error, style: "error" });
     if (draft.busy) lines.push({ text: "applying…", style: "dim" });
@@ -1268,7 +1326,7 @@ function buildOverlay(app, state, layout, cols) {
     const cursor = overlay.cursor ?? 0;
     const items = Array.isArray(overlay.items) ? overlay.items : [];
     const lines = [
-      { text: "Persisted through POST /settings/cognee, then re-read from /settings.", style: "dim" },
+      { text: "Changes are saved automatically through POST /settings/cognee, then re-read.", style: "dim" },
       { text: "" },
     ];
     items.forEach((setting, index) => {
@@ -1281,7 +1339,7 @@ function buildOverlay(app, state, layout, cols) {
       lines.push({ text: `    ${setting.help}`, style: "dim" });
     });
     lines.push({ text: "" });
-    if (state.settingsBusy) lines.push({ text: "applying…", style: "dim" });
+    if (state.settingsBusy) lines.push({ text: "saving…", style: "dim" });
     if (state.settingsError) lines.push({ text: state.settingsError, style: "error" });
     lines.push({ text: "provider and model are editable with e in Settings · storage engines are fixed by the backend", style: "dim" });
     return { kind: "pipelineSettings", title: "Pipeline settings", lines, width, height, scroll: state.scroll.overlay ?? 0 };
@@ -1299,12 +1357,16 @@ function buildOverlay(app, state, layout, cols) {
     rendered: state.markdownView === "rendered",
     width: Math.max(20, width - 2),
   });
+  const actions =
+    "c copies this markdown · r re-synthesizes it · a appends · e exports · esc closes · d deletes from the Context list";
   const lines = [
     ...meta.map((text) => ({ text, style: "dim" })),
     { text: "" },
     { text: GLYPH.rule.repeat(Math.max(10, Math.min(width - 2, cols - 2))), style: "dim" },
     { text: "" },
     ...markdownLines.map((text) => ({ text })),
+    { text: "" },
+    { text: actions, style: "dim" },
   ];
   return {
     kind: "viewPackage",

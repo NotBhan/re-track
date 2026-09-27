@@ -46,12 +46,14 @@ class SystemUseCases:
         telemetry_port: Optional[HardwareTelemetryPort] = None,
         concurrency_guard: Optional[Any] = None,
         version: Optional[str] = None,
+        configuration_resetter_fn: Optional[Callable[[], Coroutine[Any, Any, dict | ErrorResponse]]] = None,
     ) -> None:
         from app import __version__
         self._get_settings = settings_getter
         self._get_cognee = cognee_service_getter
         self._get_llm_provider = llm_provider_getter
         self._update_provider_fn = provider_updater_fn
+        self._reset_configuration_fn = configuration_resetter_fn
         self._telemetry = telemetry_port
         self._concurrency_guard = concurrency_guard
         self.version = version or __version__
@@ -740,6 +742,47 @@ class SystemUseCases:
             return ErrorResponse(
                 error=type(e).__name__,
                 message=f"Failed to update settings: {e}",
+            )
+
+    async def reset_settings(self) -> AppSettingsResponse | ErrorResponse:
+        """Restore mutable configuration to the application defaults and read it back.
+
+        The reset itself is delegated to the composition root, which owns the
+        configuration source and the runtime wiring: it resolves the defaults,
+        verifies the write, and rebuilds the components that derive from it. This
+        use case never reports success from its own request — the response is the
+        authoritative read-back of what is now stored.
+        """
+        start = time.monotonic()
+        try:
+            if self._reset_configuration_fn is None:
+                return ErrorResponse(
+                    error="NotSupportedError",
+                    message="Settings reset is not available: no configuration reset handler is registered.",
+                )
+
+            result = await self._reset_configuration_fn()
+            if isinstance(result, ErrorResponse):
+                return result
+
+            response = await self.get_app_settings()
+            elapsed = time.monotonic() - start
+            if isinstance(response, ErrorResponse):
+                logger.error("use_case: reset_settings() read-back failed | %.2fs | %s", elapsed, response.message)
+                return response
+            logger.info(
+                "use_case: reset_settings() complete | provider=%s | model=%s | %.2fs",
+                response.llm_provider,
+                response.llm_model,
+                elapsed,
+            )
+            return response
+        except Exception as e:
+            elapsed = time.monotonic() - start
+            logger.error("use_case: reset_settings() failed | %.2fs | %s", elapsed, e)
+            return ErrorResponse(
+                error=type(e).__name__,
+                message=f"Failed to reset settings: {e}",
             )
 
     async def get_provider_status(self) -> ProviderStatusResponse | ErrorResponse:

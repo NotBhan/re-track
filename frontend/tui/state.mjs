@@ -149,6 +149,10 @@ export function createApp(options = {}) {
   if (!client) throw new Error("createApp requires a client");
   const exportMarkdown = options.exportMarkdown ?? null;
   const exportFileName = options.exportFileName ?? ((name) => `${String(name ?? "").trim() || "context-package"}.md`);
+  // Clipboard adapter (frontend/tui/clipboard.mjs in the real entry point):
+  // `(text, label) => Promise<{ok, message}>`. Absent means this session has no
+  // clipboard, and the Copy action says so instead of pretending to work.
+  const copyText = options.copyText ?? null;
 
   const now = options.now ?? (() => Date.now());
   const noticeTtlMs = options.noticeTtlMs ?? NOTICE_TTL_MS;
@@ -781,7 +785,11 @@ export function createApp(options = {}) {
     return PIPELINE_SETTINGS.find((item) => item.key === key)?.label ?? key;
   }
 
-  /** Persist one pipeline boolean through POST /settings/cognee, then re-read it. */
+  /**
+   * Persist one pipeline boolean through POST /settings/cognee and re-read it.
+   * There is no Save step: the toggle *is* the commit, and the value shown after
+   * it is the one the backend now stores.
+   */
   async function toggleSetting(key) {
     if (!PIPELINE_SETTINGS.some((item) => item.key === key)) {
       notice(`${key}: not editable from the TUI`, "warn");
@@ -793,18 +801,119 @@ export function createApp(options = {}) {
     try {
       await client.updateCogneeSettings({ [key]: !current });
       await loadSettings();
-      notice(`${settingLabel(key)} ${current ? "disabled" : "enabled"}`);
+      notice(`✓ saved · ${settingLabel(key)} ${current ? "disabled" : "enabled"}`);
     } catch (error) {
-      set({ settingsError: errorText(error) });
-      notice(`settings update failed: ${errorText(error)}`, "error");
+      notice(`✗ save failed · ${settingLabel(key)} · ${errorText(error)}`, "error");
+      // Keep the failure visible in the overlay that owns the toggle, and re-read
+      // the stored value so nothing that was not saved is shown as saved.
+      if (state.overlay?.kind === "pipelineSettings") {
+        set({ overlay: { ...state.overlay, error: errorText(error) } });
+      }
+      await loadSettings();
     } finally {
       set({ settingsBusy: false });
     }
   }
 
+  /* ---------------------------- settings reset ------------------------------ */
+
+  /**
+   * Reset restores the *mutable* configuration — the settings the HTTP contract
+   * persists — to the application defaults the backend resolves from its own
+   * configuration source. Nothing else is touched, which is why the overlay says
+   * so before the user confirms.
+   */
+  function requestResetSettings() {
+    openOverlay({ kind: "resetSettings", error: null, busy: false });
+  }
+
+  async function runResetSettings() {
+    if (state.settingsBusy) return;
+    set({ settingsBusy: true, settingsError: null, overlay: { ...state.overlay, busy: true, error: null } });
+    try {
+      const reset = await client.resetSettings();
+      closeOverlay();
+      // The response is the authoritative read-back; reconcile the runtime facts
+      // that qualify it (health/status/provider) with the same values.
+      set({ appSettings: reset ?? state.appSettings, settingsError: null });
+      await loadProviderContext();
+      notice("✓ settings reset to application defaults");
+    } catch (error) {
+      set({ settingsError: errorText(error) });
+      notice(`✗ reset failed · ${errorText(error)}`, "error");
+      // Show what is actually stored, never the values the reset would have set.
+      await loadSettings();
+      if (state.overlay?.kind === "resetSettings") {
+        set({ overlay: { ...state.overlay, busy: false, error: errorText(error) } });
+      }
+    } finally {
+      set({ settingsBusy: false });
+    }
+  }
+
+  /* -------------------------------- clipboard ------------------------------- */
+
+  /**
+   * Copy the exact markdown the backend produced. The rendered/raw toggle only
+   * changes what is drawn on screen: the clipboard always receives the source
+   * Markdown, never terminal escape sequences or reflowed text.
+   */
+  async function copyMarkdown(markdown, label) {
+    const text = typeof markdown === "string" ? markdown : "";
+    if (text.trim() === "") {
+      notice("nothing to copy: no generated markdown yet", "warn");
+      return false;
+    }
+    if (!copyText) {
+      notice("✗ clipboard unavailable · this session has no clipboard adapter", "error");
+      return false;
+    }
+    try {
+      const result = await copyText(text, label);
+      notice(result?.message ?? (result?.ok ? `✓ copied ${label}` : "✗ clipboard unavailable"), result?.ok ? "info" : "error");
+      return Boolean(result?.ok);
+    } catch (error) {
+      notice(`✗ clipboard unavailable · ${errorText(error)}`, "error");
+      return false;
+    }
+  }
+
+  /** Copy from the generated output view — available as soon as synthesis returned. */
+  function copyContext() {
+    if (state.operation) {
+      notice(
+        state.operation.kind === "synthesis"
+          ? "synthesis is running · copy is available when it finishes"
+          : "an operation is running · copy is available when it finishes",
+        "warn"
+      );
+      return;
+    }
+    const result = state.context;
+    if (!result || typeof result.context_markdown !== "string") {
+      notice("nothing to copy: generate context first", "warn");
+      return;
+    }
+    void copyMarkdown(result.context_markdown, "the generated markdown");
+  }
+
+  /** Copy the stored markdown of the package open in the viewer. */
+  function copyPackage() {
+    const pkg = state.overlay?.kind === "viewPackage" ? state.overlay.package : null;
+    if (!pkg) {
+      notice("open a saved package first", "warn");
+      return;
+    }
+    if (typeof pkg.markdown !== "string" || pkg.markdown.trim() === "") {
+      notice(`nothing to copy: ${pkg.name ?? pkg.id ?? "this package"} has no stored markdown`, "warn");
+      return;
+    }
+    void copyMarkdown(pkg.markdown, `“${pkg.name ?? pkg.id}”`);
+  }
+
   /* ---------------------------- provider + models --------------------------- */
 
-  /** The authoritative persisted provider/model, for the saved-vs-selected split. */
+  /** The authoritative persisted provider/model, for the saved-vs-chosen split. */
   function savedProviderIdentity() {
     const settings = state.appSettings ?? {};
     const provider =
@@ -815,6 +924,52 @@ export function createApp(options = {}) {
   }
 
   /**
+   * The discovery result that belongs to the draft on screen. Discovery is keyed
+   * on provider + endpoint so a result for another endpoint can never validate a
+   * commit for this one.
+   */
+  function modelsForDraft(draft) {
+    const models = state.models ?? {};
+    const endpoint = String(draft?.values?.endpoint ?? "").trim();
+    if (models.endpoint !== endpoint || models.provider !== draft?.values?.provider) return null;
+    return models;
+  }
+
+  /** The provider's own list for the draft, and only when it actually answered. */
+  function discoveredModels(draft) {
+    const models = modelsForDraft(draft);
+    return models && models.state === "ready" ? models.items ?? [] : [];
+  }
+
+  function modelInList(draft, label) {
+    if (!label) return null;
+    return discoveredModels(draft).find((model) => model.label === label) ?? null;
+  }
+
+  /**
+   * The model a commit would persist: the one chosen in the selector, or the
+   * stored one while the provider still reports it. Null means the configuration
+   * cannot be written — RE:Track never saves a model the endpoint did not report.
+   */
+  function committableModel(draft) {
+    return modelInList(draft, draft?.selected?.label) ?? modelInList(draft, draft?.saved?.model);
+  }
+
+  /** Why a commit cannot proceed, in the backend's own words when it gave any. */
+  function commitFailureReason(models) {
+    const current = models ?? state.models ?? {};
+    if (current.state === "idle" || current.state === "loading") return "still reading the provider's models";
+    if (current.state === "empty") {
+      return current.message ? `the provider reported no models · ${current.message}` : "the provider reported no models";
+    }
+    if (current.state === "failed") return current.message ?? "the provider could not be read";
+    return "select a model from the provider's list";
+  }
+
+  /** The discovery probe in flight, so a commit can wait for the answer it needs. */
+  let discoveryInFlight = null;
+
+  /**
    * Discover the models the provider endpoint actually serves
    * (POST /provider/discover). Nothing is invented here: the list is whatever
    * the endpoint returned, and a provider that cannot enumerate them keeps the
@@ -822,64 +977,114 @@ export function createApp(options = {}) {
    */
   async function discoverModels({ provider, endpoint, apiKey }) {
     const baseUrl = String(endpoint ?? "").trim();
-    if (!baseUrl) {
-      set({
-        models: {
-          state: "failed",
-          provider,
-          endpoint: baseUrl,
-          status: "not_configured",
-          items: [],
-          message: "Provider endpoint URL is not configured.",
-          errorDetails: null,
-        },
-      });
-      return;
-    }
-    set({ models: { state: "loading", provider, endpoint: baseUrl, status: null, items: [], message: null, errorDetails: null } });
+    const run = (async () => {
+      if (!baseUrl) {
+        set({
+          models: {
+            state: "failed",
+            provider,
+            endpoint: baseUrl,
+            status: "not_configured",
+            items: [],
+            message: "Provider endpoint URL is not configured.",
+            errorDetails: null,
+          },
+        });
+        return;
+      }
+      set({ models: { state: "loading", provider, endpoint: baseUrl, status: null, items: [], message: null, errorDetails: null } });
+      try {
+        const result = await client.discoverProvider({ provider, base_url: baseUrl, api_key: String(apiKey ?? "").trim() || "local" });
+        const items = (Array.isArray(result?.models) ? result.models : [])
+          .map((model) => ({
+            id: model?.model_id ?? null,
+            label: model?.name || model?.model_id || null,
+            quantization: model?.quantization ?? null,
+            warning: model?.warning ?? null,
+          }))
+          .filter((model) => model.label);
+        const status = String(result?.status ?? "");
+        const failed = ["unreachable", "discovery_failed", "not_configured"].includes(status);
+        set({
+          models: {
+            state: items.length > 0 ? "ready" : failed ? "failed" : "empty",
+            provider,
+            endpoint: baseUrl,
+            status: status || null,
+            items,
+            message: result?.message ?? null,
+            errorDetails: result?.error_details ?? null,
+          },
+        });
+      } catch (error) {
+        set({
+          models: {
+            state: "failed",
+            provider,
+            endpoint: baseUrl,
+            status: null,
+            items: [],
+            message: errorText(error),
+            errorDetails: null,
+          },
+        });
+      }
+      dropStaleSelection({ provider, endpoint: baseUrl });
+    })();
+
+    discoveryInFlight = { provider, endpoint: baseUrl, promise: run };
     try {
-      const result = await client.discoverProvider({ provider, base_url: baseUrl, api_key: String(apiKey ?? "").trim() || "local" });
-      const items = (Array.isArray(result?.models) ? result.models : [])
-        .map((model) => ({
-          id: model?.model_id ?? null,
-          label: model?.name || model?.model_id || null,
-          quantization: model?.quantization ?? null,
-          warning: model?.warning ?? null,
-        }))
-        .filter((model) => model.label);
-      const status = String(result?.status ?? "");
-      const failed = ["unreachable", "discovery_failed", "not_configured"].includes(status);
-      set({
-        models: {
-          state: items.length > 0 ? "ready" : failed ? "failed" : "empty",
-          provider,
-          endpoint: baseUrl,
-          status: status || null,
-          items,
-          message: result?.message ?? null,
-          errorDetails: result?.error_details ?? null,
-        },
-      });
-    } catch (error) {
-      set({
-        models: {
-          state: "failed",
-          provider,
-          endpoint: baseUrl,
-          status: null,
-          items: [],
-          message: errorText(error),
-          errorDetails: null,
-        },
-      });
+      await run;
+    } finally {
+      if (discoveryInFlight?.promise === run) discoveryInFlight = null;
     }
   }
 
   /**
-   * Provider configuration is a real HTTP mutation (POST /provider/update), so
-   * the Settings view exposes it rather than claiming it is GUI-only. The draft
-   * is prefilled from the persisted settings, the model comes from the
-   * provider's own list (never typed), and every value is re-read after saving.
+   * A model chosen for one provider/endpoint is not that provider's model: when
+   * the answer for the draft arrives without it, the choice is cleared instead of
+   * being carried into a configuration the endpoint never reported.
+   */
+  function dropStaleSelection({ provider, endpoint }) {
+    const draft = state.providerDraft;
+    if (!draft) return;
+    if (draft.values.provider !== provider || String(draft.values.endpoint).trim() !== endpoint) return;
+    const items = state.models.items ?? [];
+    if (state.models.state !== "ready") return;
+    const chosen = draft.selected?.label;
+    if (chosen && !items.some((model) => model.label === chosen)) {
+      set({ providerDraft: { ...draft, selected: null } });
+    }
+  }
+
+  /**
+   * Have an answer for the draft's provider + endpoint before a commit validates
+   * against it: wait for the probe already running, or start one.
+   */
+  async function ensureModels(draft) {
+    const endpoint = String(draft?.values?.endpoint ?? "").trim();
+    if (!endpoint) return null;
+    const inFlight = discoveryInFlight;
+    if (inFlight && inFlight.provider === draft.values.provider && inFlight.endpoint === endpoint) {
+      await inFlight.promise;
+    }
+    const current = modelsForDraft(state.providerDraft);
+    if (!current || current.state === "idle" || current.state === "loading") {
+      await discoverModels({
+        provider: state.providerDraft.values.provider,
+        endpoint: String(state.providerDraft.values.endpoint ?? "").trim(),
+        apiKey: state.providerDraft.values.apiKey,
+      });
+    }
+    return modelsForDraft(state.providerDraft);
+  }
+
+  /**
+   * Provider configuration is a real HTTP mutation (POST /provider/update) that
+   * writes provider, endpoint, API key and model as one configuration. The
+   * Settings view exposes it rather than claiming it is GUI-only. The draft is
+   * prefilled from the persisted settings, the model comes from the provider's
+   * own list (never typed), and every value is re-read after saving.
    */
   function openProviderSettings() {
     const saved = savedProviderIdentity();
@@ -891,8 +1096,9 @@ export function createApp(options = {}) {
         values: { provider: saved.provider, endpoint: saved.endpoint, apiKey: "" },
         cursors: { endpoint: saved.endpoint.length, apiKey: 0 },
         saved,
-        // Chosen in the selector, persisted only by the save action.
-        selected: saved.model ? { id: saved.model, label: saved.model, quantization: null, warning: null } : null,
+        // Chosen here; the stored model stays the stored model until a choice is
+        // made, and choosing is what persists it (there is no separate save).
+        selected: null,
         endpointEdited: false,
         error: null,
         busy: false,
@@ -913,8 +1119,11 @@ export function createApp(options = {}) {
   }
 
   /**
-   * Switching provider switches the model list with it: the previous selection
-   * is dropped and the new provider is queried for what it actually serves.
+   * Switching provider switches the model list with it: the previous selection is
+   * dropped here and again if the answer for the new endpoint does not include it
+   * (dropStaleSelection), and the new provider is queried for what it serves.
+   * Nothing is persisted by highlighting a provider: a commit carries a
+   * provider-reported model, so it is the model choice that writes both.
    */
   function applyProvider(provider) {
     const draft = state.providerDraft;
@@ -986,6 +1195,12 @@ export function createApp(options = {}) {
     return items.filter((model) => `${model.label} ${model.id ?? ""}`.toLowerCase().includes(filter));
   }
 
+  /**
+   * Choosing is committing: the selected model is written through
+   * POST /provider/update together with the provider it belongs to, and the
+   * authoritative values are re-read. Merely highlighting a row in the list
+   * persists nothing.
+   */
   function selectModel(model) {
     const draft = state.providerDraft;
     if (!draft || !model) return;
@@ -993,36 +1208,49 @@ export function createApp(options = {}) {
       providerDraft: { ...draft, selected: { id: model.id, label: model.label, quantization: model.quantization ?? null, warning: model.warning ?? null }, error: null },
       overlay: { kind: "providerSettings" },
     });
+    void runUpdateProvider();
   }
 
+  /**
+   * Commit the provider configuration. POST /provider/update is the only write,
+   * and it always carries a model this endpoint reported, so a provider change
+   * can never be persisted as an invalid provider/model combination.
+   */
   async function runUpdateProvider() {
     const draft = state.providerDraft;
-    if (!draft) return;
-    const endpoint = draft.values.endpoint.trim();
+    if (!draft || draft.busy) return;
+    const endpoint = state.providerDraft.values.endpoint.trim();
     if (!endpoint) {
       overlayError("endpoint is required");
       return;
     }
-    if (!draft.selected) {
-      overlayError("select a model from the provider's list");
+
+    const models = await ensureModels(state.providerDraft);
+    const current = state.providerDraft;
+    if (!current) return;
+    const model = committableModel(current);
+    if (!model) {
+      const reason = commitFailureReason(models);
+      overlayError(reason);
+      notice(`✗ provider not saved · ${reason}`, "error");
       return;
     }
-    const model = draft.selected.label;
-    set({ providerDraft: { ...draft, busy: true, error: null } });
+
+    set({ providerDraft: { ...state.providerDraft, busy: true, error: null } });
     try {
       await client.updateProvider({
-        provider: draft.values.provider,
+        provider: current.values.provider,
         base_url: endpoint,
-        model,
-        api_key: draft.values.apiKey.trim() || "local",
+        model: model.label,
+        api_key: current.values.apiKey.trim() || "local",
       });
       closeProviderEditor();
-      notice(`provider switched to ${draft.values.provider} · ${model}`);
+      notice(`✓ provider updated · ${current.values.provider} · ${model.label}`);
       await loadProviderContext();
     } catch (error) {
-      const current = state.providerDraft;
-      if (current) set({ providerDraft: { ...current, busy: false, error: errorText(error) } });
-      notice(`provider update failed: ${errorText(error)}`, "error");
+      const active = state.providerDraft;
+      if (active) set({ providerDraft: { ...active, busy: false, error: errorText(error) } });
+      notice(`✗ save failed · provider · ${errorText(error)}`, "error");
     }
   }
 
@@ -1034,6 +1262,176 @@ export function createApp(options = {}) {
       return;
     }
     set({ overlay: { ...overlay, error: message } });
+  }
+
+  /* ------------------------------- re-synthesis ------------------------------ */
+
+  /** The package a re-synthesis would regenerate: the open viewer, else the catalog row. */
+  function resynthesisSource() {
+    if (state.overlay?.kind === "viewPackage" && state.overlay.package) return state.overlay.package;
+    const row = selectedContextRow();
+    if (!row || row.kind !== "package") return null;
+    return state.packages.find((item) => item.id === row.id) ?? { id: row.id, name: row.label };
+  }
+
+  /** The registered repository a package belongs to, by id and then by name. */
+  function repositoryForPackage(pkg) {
+    const repositories = state.repositories ?? [];
+    const byId = pkg?.repository_id ? repositories.find((repo) => repo.id === pkg.repository_id) : null;
+    const byName = pkg?.repository_name ? repositories.find((repo) => repo.name === pkg.repository_name) : null;
+    return byId ?? byName ?? null;
+  }
+
+  /**
+   * Everything a regeneration needs, resolved and validated before it starts.
+   *
+   * The basis is the package's own stored definition — never the row that happens
+   * to be selected in the context list. Generation options are the current
+   * Context settings (token budget, AST graph), because the package record does
+   * not store the configuration it was generated with; they are shown before the
+   * run so the basis is never implicit.
+   */
+  function resynthesisPlan(pkg) {
+    if (!pkg?.id) return { error: "select a saved package first" };
+    const task = String(pkg.task || pkg.objective || "").trim();
+    if (!task) return { error: `${pkg.name ?? pkg.id}: the package stores no task to regenerate` };
+    const repo = repositoryForPackage(pkg);
+    if (!repo) {
+      return {
+        error: `${pkg.name ?? pkg.id}: repository ${pkg.repository_name || pkg.repository_id || "unknown"} is not registered here`,
+      };
+    }
+    return {
+      packageId: pkg.id,
+      name: pkg.name || pkg.id,
+      task,
+      repo,
+      objective: pkg.objective ?? "",
+      maxTokens: state.tokenBudget,
+      includeStructuralGraph: state.includeGraph,
+      repository: `${repo.name}${pkg.repository_branch ? ` · ${pkg.repository_branch}` : ""}`,
+      storedTokens: pkg.token_estimate ?? null,
+      storedUpdatedAt: pkg.updated_at ?? null,
+    };
+  }
+
+  function requestResynthesize() {
+    if (state.operation) {
+      notice(
+        state.operation.kind === "synthesis" ? "a synthesis is already running" : "another operation is in progress",
+        "warn"
+      );
+      return;
+    }
+    const plan = resynthesisPlan(resynthesisSource());
+    if (plan.error) {
+      notice(plan.error, "warn");
+      return;
+    }
+    // Only a run started from the viewer carries it: cancelling (and a failed
+    // regeneration) returns to the package the reader was already reading,
+    // while a run started from the catalog closes back onto the catalog.
+    const source = state.overlay?.kind === "viewPackage" ? state.overlay.package : null;
+    openOverlay({ kind: "resynthesize", plan, source, error: null, busy: false });
+  }
+
+  /**
+   * Regenerate a package from its stored task and repository against the current
+   * repository, evidence and configuration.
+   *
+   * Failure safety is the point of the order here: generation happens first, the
+   * replacement is written only once a non-empty result exists, and the record is
+   * re-read afterwards so the viewer shows what was actually persisted. A failure
+   * at any step leaves the previously stored package exactly as it was, and no
+   * second package is ever created.
+   */
+  async function runResynthesize(plan, source = null) {
+    if (!plan) return;
+    if (state.operation) {
+      notice("another operation is in progress", "warn");
+      return;
+    }
+
+    closeOverlay();
+    set({
+      operation: {
+        kind: "synthesis",
+        repoId: plan.repo.id,
+        repoName: plan.repo.name,
+        packageId: plan.packageId,
+        packageName: plan.name,
+        reSynthesis: true,
+        startedAt: now(),
+        runtimeState: "submitting",
+      },
+      contextError: null,
+    });
+
+    let stored = false;
+    try {
+      const response = await client.agentContext({
+        taskPrompt: plan.task,
+        repositoryPath: plan.repo.local_path,
+        datasetName: plan.repo.name,
+        maxTokens: plan.maxTokens,
+        includeStructuralGraph: plan.includeStructuralGraph,
+      });
+      const markdown = typeof response?.context_markdown === "string" ? response.context_markdown : "";
+      if (response?.success === false || markdown.trim() === "") {
+        throw new Error("the regeneration returned no context");
+      }
+
+      await client.replaceContextPackage(plan.packageId, {
+        markdown,
+        objective: response.task_summary || undefined,
+        token_estimate: response.estimated_tokens ?? undefined,
+        total_time_ms: response.generation_time_ms ?? response.total_time_ms ?? undefined,
+        repository_commit: plan.repo.commit_hash || undefined,
+      });
+      stored = true;
+
+      // Re-read the stored record: the viewer then shows what the backend holds,
+      // and the catalog is reconciled from the same authoritative read.
+      const updated = await client.getContextPackage(plan.packageId);
+      if (updated?.id) {
+        state.packages = state.packages.map((pkg) => (pkg.id === updated.id ? updated : pkg));
+        // The viewer the run was started from is reopened on the regenerated
+        // record; its scroll offset is untouched, so the reader keeps their place.
+        if (source) set({ overlay: { kind: "viewPackage", package: updated } });
+      }
+      notice(`✓ re-synthesized ${plan.name} · ${updated?.token_estimate ?? "unavailable"} tokens`);
+      await loadSummary({ quiet: true });
+    } catch (error) {
+      notice(
+        `✗ re-synthesis failed · ${errorText(error)} · ${
+          stored ? `${plan.name} was updated but could not be reloaded` : `${plan.name} is unchanged`
+        }`,
+        "error"
+      );
+      // The stored package is unchanged: show it as it is, so a failed
+      // regeneration leaves the reader where they were with a usable package.
+      await reopenUnchanged(source, plan);
+    } finally {
+      set({ operation: null });
+    }
+  }
+
+  /**
+   * Re-read a package that survived a failed regeneration. Only a run started
+   * from the viewer reopens it: a run started from the catalog leaves the reader
+   * where they were, and either way the stored record is untouched.
+   */
+  async function reopenUnchanged(source, plan) {
+    if (!source) return;
+    try {
+      const stored = await client.getContextPackage(plan.packageId);
+      if (!stored) return;
+      state.packages = state.packages.map((pkg) => (pkg.id === stored.id ? stored : pkg));
+      openOverlay({ kind: "viewPackage", package: stored });
+    } catch {
+      // Reporting the failed regeneration is what matters; the catalog already
+      // holds the untouched package.
+    }
   }
 
   /* ------------------------------- operations ------------------------------- */
@@ -1381,14 +1779,37 @@ export function createApp(options = {}) {
       return undefined;
     }
 
+    if (overlay.kind === "resetSettings") {
+      // Reset is a real mutation of the stored configuration: it is confirmed
+      // explicitly, and the overlay stays open while it runs.
+      if (intent.name === "enter" && !overlay.busy) void runResetSettings();
+      else if (intent.name === "escape" && !overlay.busy) closeOverlay();
+      return undefined;
+    }
+
+    if (overlay.kind === "resynthesize") {
+      // Regeneration replaces stored content, so it is confirmed with the basis
+      // on screen (task, repository, generation options) before it runs.
+      if (intent.name === "enter" && !overlay.busy) void runResynthesize(overlay.plan, overlay.source ?? null);
+      else if (intent.name === "escape" && !overlay.busy) {
+        // Cancelling returns to the package the confirmation was opened from.
+        if (overlay.source) set({ overlay: { kind: "viewPackage", package: overlay.source } });
+        else closeOverlay();
+      }
+      return undefined;
+    }
+
     if (overlay.kind === "viewPackage") {
       // Reading a package is a pure scroll: no regeneration, no backend call,
-      // and the offset survives the rendered/raw toggle.
+      // and the offset survives the rendered/raw toggle. Copy hands over the
+      // stored markdown verbatim; re-synthesis regenerates it.
       const max = state.viewport.viewerMax;
       const page = state.viewport.viewerPage;
       const delta = moveDelta(intent);
       if (intent.name === "escape") closeOverlay();
       else if (intent.name === "char" && intent.char === "m") toggleMarkdown();
+      else if (intent.name === "char" && intent.char === "c") copyPackage();
+      else if (intent.name === "char" && intent.char === "r") requestResynthesize();
       else if (intent.name === "char" && intent.char === "a") openAppendPackage();
       else if (intent.name === "char" && intent.char === "e") openExportPackage();
       else if (delta !== 0) scrollRegion("viewer", delta, max);
@@ -1698,6 +2119,12 @@ export function createApp(options = {}) {
         case "S":
           if (state.view === "context") openSavePackage();
           break;
+        case "R":
+          // Regeneration of an existing package (confirmed, then replaces it in
+          // place) / restoring the mutable configuration to its defaults.
+          if (state.view === "context") requestResynthesize();
+          else if (state.view === "settings") requestResetSettings();
+          break;
         case "m":
           if (state.view === "context") toggleMarkdown();
           break;
@@ -1792,6 +2219,7 @@ export function createApp(options = {}) {
       else if (intent.name === "home") scrollRegion("detail", -(state.scroll[state.view] ?? 0), max);
       else if (intent.name === "end") scrollRegion("detail", max, max);
       else if (intent.name === "char" && intent.char === "m" && view === "context") toggleMarkdown();
+      else if (intent.name === "char" && intent.char === "c" && view === "context") copyContext();
       else if (intent.name === "char" && intent.char === "i" && view === "repositories") {
         void runIndex(selectedRepository());
       } else if (intent.name === "char" && intent.char === "d" && view === "repositories") {
@@ -1922,6 +2350,8 @@ export function createApp(options = {}) {
     openExportPackage,
     openPipelineSettings,
     toggleSetting,
+    requestResetSettings,
+    resetSettings: runResetSettings,
     openProviderSettings,
     probeProvider: runProbeProvider,
     updateProviderSettings: runUpdateProvider,
@@ -1929,6 +2359,12 @@ export function createApp(options = {}) {
     openModelSelect,
     selectModel,
     closeModelSelect,
+    copyContext,
+    copyPackage,
+    requestResynthesize,
+    resynthesize: runResynthesize,
+    resynthesisPlan,
+    resynthesisSource,
     closeOverlay,
     toggleMarkdown,
     cycleBudget,

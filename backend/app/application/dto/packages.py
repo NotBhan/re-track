@@ -62,3 +62,26 @@ class ContextPackageAppendRequest(BaseModel):
     additional_task: str = Field(..., min_length=1)
     additional_markdown: str = ""
     additional_objective: str = ""
+
+
+class ContextPackageReplaceRequest(BaseModel):
+    """Replacement generated content for an existing saved package (re-synthesis).
+
+    This updates a package in place: the record's identity (id, name, task,
+    repository identity, creation time, tags) is preserved by the backend, and
+    only the fields the generation actually produced are replaced. Absent fields
+    keep their stored value, so a client never has to invent a zero. Appending
+    additional context is a different operation (`/append`) and is never used as
+    a substitute for regeneration.
+    """
+
+    markdown: str = Field(..., min_length=1, description="Newly generated markdown (a replacement must replace content)")
+    objective: str | None = Field(default=None, description="Derived objective of the regeneration")
+    section_count: int | None = Field(default=None, description="Section count of the new markdown")
+    token_estimate: int | None = Field(default=None, description="Token estimate of the new markdown")
+    retrieved_memories: int | None = Field(default=None, description="Memories retrieved for this generation")
+    deduplicated_memories: int | None = Field(default=None, description="Memories after deduplication")
+    compression_ratio: float | None = Field(default=None, description="Input/output token ratio")
+    total_time_ms: float | None = Field(default=None, description="Generation time in milliseconds")
+    repository_commit: str | None = Field(default=None, description="Repository commit the regeneration ran against")
+    indexing_version: str | None = Field(default=None, description="Indexing version the regeneration ran against")

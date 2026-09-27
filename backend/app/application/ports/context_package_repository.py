@@ -31,3 +31,12 @@ class ContextPackageRepositoryPort(Protocol):
     ) -> Optional[Any]:
         """Append an iterative follow-up query to an existing context package."""
         ...
+
+    async def replace(self, package_id: str, replacement: Any) -> Optional[Any]:
+        """Replace the generated content of an existing package, preserving its identity.
+
+        Distinct from ``append``: the stored record is superseded by the given
+        replacement rather than extended. Returns None when the package does not
+        exist, and leaves the stored record untouched on any write failure.
+        """
+        ...

@@ -25,6 +25,7 @@
 
 import { createBackendClient, BackendRequestError, BackendUnreachableError } from "../shared/backend-client.mjs";
 import { ensureBackend } from "./backend-lifecycle.mjs";
+import { createClipboard } from "./clipboard.mjs";
 import { packageFileName, writeMarkdownExport } from "./export.mjs";
 import { createApp, decodeInput } from "./state.mjs";
 import { buildModel, composeFrame } from "./render.mjs";
@@ -85,12 +86,14 @@ function makeStartupReporter() {
 /**
  * Local capabilities the state layer may invoke. Export writes the markdown
  * that was already loaded from the backend to a user-chosen path; there is no
- * backend export endpoint.
+ * backend export endpoint. Copy hands the same backend markdown to the system
+ * clipboard through the terminal (clipboard.mjs) — no model call, no re-render.
  */
 function appOptions() {
   return {
     exportMarkdown: ({ target, markdown }) => writeMarkdownExport({ path: target, content: markdown }),
     exportFileName: (name) => packageFileName(name),
+    copyText: createClipboard(),
   };
 }
 

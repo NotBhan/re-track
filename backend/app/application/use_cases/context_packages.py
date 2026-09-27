@@ -4,6 +4,7 @@ Coordinates CRUD operations for saved Context Packages.
 All dependencies are explicitly injected via constructor capability ports.
 """
 
+import dataclasses
 from datetime import datetime, timezone
 import logging
 import time
@@ -13,6 +14,7 @@ import uuid
 from app.application.dto import (
     ContextPackageAppendRequest,
     ContextPackageListResponse,
+    ContextPackageReplaceRequest,
     ContextPackageResponse,
     ContextPackageSaveRequest,
     ErrorResponse,
@@ -186,6 +188,83 @@ class PackageUseCases:
             return ErrorResponse(
                 error=type(e).__name__,
                 message=f"Failed to delete context package: {e}",
+            )
+
+    async def replace_context_package(
+        self,
+        package_id: str,
+        request: ContextPackageReplaceRequest,
+    ) -> ContextPackageResponse | ErrorResponse:
+        """Replace an existing package's generated content with a new synthesis.
+
+        Re-synthesis, not append: the record is addressed by id and superseded, so
+        no second package is created. Everything that identifies the package — its
+        id, name, task, repository identity, creation time and tags — is preserved;
+        only the fields the new generation produced are refreshed. The stored
+        record is written once, after the replacement has been assembled, so a
+        failed generation or a failed write leaves the previous package intact.
+        """
+        start = time.monotonic()
+        logger.info("use_case: replace_context_package() | id=%s", package_id)
+
+        try:
+            if not self._repo:
+                return ErrorResponse(error="NotFoundError", message=f"Context package {package_id} not found")
+
+            res = self._repo.get(package_id)
+            existing = await res if hasattr(res, "__await__") else res
+            if not existing:
+                return ErrorResponse(
+                    error="NotFoundError",
+                    message=f"Context package {package_id} not found",
+                )
+
+            now = datetime.now(timezone.utc).isoformat()
+            replacement = dataclasses.replace(
+                existing,
+                markdown=request.markdown,
+                objective=request.objective if request.objective is not None else existing.objective,
+                section_count=request.section_count if request.section_count is not None else existing.section_count,
+                token_estimate=request.token_estimate if request.token_estimate is not None else existing.token_estimate,
+                retrieved_memories=(
+                    request.retrieved_memories if request.retrieved_memories is not None else existing.retrieved_memories
+                ),
+                deduplicated_memories=(
+                    request.deduplicated_memories
+                    if request.deduplicated_memories is not None
+                    else existing.deduplicated_memories
+                ),
+                compression_ratio=(
+                    request.compression_ratio if request.compression_ratio is not None else existing.compression_ratio
+                ),
+                total_time_ms=int(
+                    request.total_time_ms if request.total_time_ms is not None else existing.total_time_ms
+                ),
+                repository_commit=(
+                    request.repository_commit if request.repository_commit is not None else existing.repository_commit
+                ),
+                indexing_version=(
+                    request.indexing_version if request.indexing_version is not None else existing.indexing_version
+                ),
+                updated_at=now,
+            )
+
+            replaced_res = self._repo.replace(package_id, replacement)
+            replaced = await replaced_res if hasattr(replaced_res, "__await__") else replaced_res
+            if not replaced:
+                return ErrorResponse(
+                    error="NotFoundError",
+                    message=f"Context package {package_id} not found",
+                )
+            elapsed = time.monotonic() - start
+            logger.info("use_case: replace_context_package() complete | id=%s | %.2fs", package_id, elapsed)
+            return _pkg_to_response(replaced)
+        except Exception as e:
+            elapsed = time.monotonic() - start
+            logger.error("use_case: replace_context_package() failed | id=%s | %.2fs | %s", package_id, elapsed, e)
+            return ErrorResponse(
+                error=type(e).__name__,
+                message=f"Failed to replace context package: {e}",
             )
 
     async def append_context_package(

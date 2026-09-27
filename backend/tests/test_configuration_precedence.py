@@ -627,3 +627,159 @@ def test_health_reports_embedding_independently_of_llm():
     # Embedding health is independent and truthful.
     assert health.embedding_state == "available"
     assert health.embedding_provider == "openai_compatible"
+
+
+# ------------------------------------------- 9. application defaults & settings reset
+def _isolated_settings(store: Path, legacy: Path) -> Settings:
+    """A settings instance whose persisted layer is a temp file, never the user's store."""
+    return Settings(settings_store_path=store, legacy_settings_store_path=legacy)
+
+
+def test_application_defaults_ignore_the_persisted_customization(tmp_path: Path):
+    """The defaults a reset restores come from the configuration source, not from user state."""
+    store = tmp_path / "settings.json"
+    legacy = tmp_path / "legacy.json"
+
+    customized = _isolated_settings(store, legacy)
+    customized.llm_provider = "customized_provider"
+    customized.llm_endpoint = "http://127.0.0.1:4321/v1"
+    customized.ollama.llm_model = "customized-model"
+    customized.storage.auto_link_entities = True
+    assert customized.save_persisted_settings() is True
+
+    reloaded = _isolated_settings(store, legacy)
+    assert reloaded.llm_provider == "customized_provider"
+    assert reloaded.ollama.llm_model == "customized-model"
+
+    defaults = Settings.application_defaults()
+    changed = sorted(
+        key for key, value in reloaded.managed_configuration().items() if defaults.managed_configuration()[key] != value
+    )
+    assert changed == [
+        "llm_endpoint",
+        "llm_provider",
+        "ollama.llm_model",
+        "storage.auto_link_entities",
+    ], "the defaults differ from the customization in exactly the customized fields"
+
+    # The defaults are the configuration source without the persisted layer: the
+    # operator environment and backend/.env still apply, so a reset can never
+    # demote an operator override.
+    detached = Settings(
+        settings_store_path=tmp_path / "absent.json",
+        legacy_settings_store_path=tmp_path / "absent-legacy.json",
+    )
+    assert defaults.managed_configuration() == detached.managed_configuration()
+
+
+def test_restore_application_defaults_is_configuration_only(tmp_path: Path):
+    """A reset restores configuration and never touches repository or package state."""
+    store = tmp_path / "settings.json"
+    legacy = tmp_path / "legacy.json"
+    settings = _isolated_settings(store, legacy)
+    settings.llm_provider = "customized_provider"
+    settings.llm_endpoint = "http://127.0.0.1:4321/v1"
+    settings.ollama.llm_model = "customized-model"
+    settings.ollama.memory_model = "customized-memory-model"
+    settings.storage.enable_kg_extraction = False
+    settings.storage.auto_link_entities = True
+    settings.service.caching = True
+    assert settings.save_persisted_settings() is True
+
+    packages = tmp_path / "context_packages.json"
+    packages.write_text('{"pkg-1": {"id": "pkg-1", "markdown": "# Context"}}', encoding="utf-8")
+    repositories = tmp_path / "indexed_repos.json"
+    repositories.write_text('[{"id": "repo-a", "name": "alpha"}]', encoding="utf-8")
+    untouched = (packages.read_bytes(), repositories.read_bytes())
+
+    settings.restore_application_defaults()
+
+    assert settings.managed_configuration() == Settings.application_defaults().managed_configuration()
+    assert settings.llm_provider != "customized_provider"
+    assert settings.ollama.llm_model != "customized-model"
+    assert (packages.read_bytes(), repositories.read_bytes()) == untouched, "a reset is configuration-only"
+
+
+def test_a_reset_round_trips_through_the_settings_file(tmp_path: Path):
+    """After a reset is written, a fresh instance resolves the defaults — not the old customization."""
+    store = tmp_path / "settings.json"
+    legacy = tmp_path / "legacy.json"
+    settings = _isolated_settings(store, legacy)
+    settings.llm_provider = "customized_provider"
+    settings.ollama.llm_model = "customized-model"
+    settings.storage.auto_link_entities = True
+    assert settings.save_persisted_settings() is True
+
+    settings.restore_application_defaults()
+    assert settings.save_persisted_settings() is True
+
+    reloaded = _isolated_settings(store, legacy)
+    assert reloaded.llm_provider != "customized_provider"
+    assert reloaded.ollama.llm_model != "customized-model"
+    assert reloaded.managed_configuration() == Settings.application_defaults().managed_configuration()
+
+
+def test_save_persisted_settings_reports_a_failed_write(tmp_path: Path):
+    """The write verdict is honest: a caller that reports success must be able to see a failure."""
+    settings = _isolated_settings(tmp_path / "unused.json", tmp_path / "unused-legacy.json")
+    unwritable = tmp_path / "as-directory"
+    unwritable.mkdir()
+
+    assert settings.save_persisted_settings(store_path=unwritable) is False
+    assert settings.save_persisted_settings(store_path=tmp_path / "written.json") is True
+
+
+# ------------------------------------------- 10. reset use case
+def _reset_use_cases(settings: Settings, reset_fn, updater=None):
+    from app.application.use_cases.system import SystemUseCases
+
+    return SystemUseCases(
+        settings_getter=lambda: settings,
+        cognee_service_getter=lambda: None,
+        llm_provider_getter=lambda: None,
+        provider_updater_fn=updater,
+        configuration_resetter_fn=reset_fn,
+    )
+
+
+def test_reset_settings_returns_the_authoritative_read_back(tmp_path: Path):
+    """The response is what is stored after the reset, not what the reset claimed."""
+    settings = _isolated_settings(tmp_path / "s.json", tmp_path / "l.json")
+    settings.llm_provider = "customized_provider"
+    settings.llm_endpoint = "http://127.0.0.1:4321/v1"
+    settings.ollama.llm_model = "customized-model"
+
+    calls: list[str] = []
+
+    async def reset():
+        calls.append("reset")
+        settings.restore_application_defaults()
+        return {"success": True}
+
+    response = asyncio.run(_reset_use_cases(settings, reset).reset_settings())
+
+    assert calls == ["reset"]
+    assert response.success is True
+    assert response.llm_provider != "customized_provider"
+    assert response.llm_model != "customized-model"
+
+
+def test_reset_settings_reports_a_missing_handler_instead_of_a_false_success(tmp_path: Path):
+    settings = _isolated_settings(tmp_path / "s.json", tmp_path / "l.json")
+    response = asyncio.run(_reset_use_cases(settings, None).reset_settings())
+
+    assert response.error == "NotSupportedError"
+    assert "not available" in response.message
+
+
+def test_reset_settings_reports_a_failed_reset_without_claiming_success(tmp_path: Path):
+    settings = _isolated_settings(tmp_path / "s.json", tmp_path / "l.json")
+
+    async def reset():
+        raise RuntimeError("settings store is read-only")
+
+    response = asyncio.run(_reset_use_cases(settings, reset).reset_settings())
+
+    assert response.error == "RuntimeError"
+    assert "read-only" in response.message
+    assert not isinstance(response, type(None))

@@ -165,11 +165,13 @@ MANDATORY_ROUTES = [
     ("GET", "/packages/{package_id}"),
     ("DELETE", "/packages/{package_id}"),
     ("POST", "/packages/{package_id}/append"),
+    ("PUT", "/packages/{package_id}"),
     # Benchmarks
     ("POST", "/benchmarks/run"),
     # Settings
     ("GET", "/settings"),
     ("POST", "/settings/cognee"),
+    ("POST", "/settings/reset"),
 ]
 
 
@@ -191,7 +193,7 @@ def _extract_all_app_routes(application) -> list[tuple[str, str]]:
 
 
 class TestRouteInventoryAndParity:
-    """Verify all 29 route operations are registered on FastAPI with exact methods and paths."""
+    """Verify every mandatory route operation is registered on FastAPI with exact methods and paths."""
 
     def test_all_mandatory_routes_registered_exactly_once(self):
         registered_routes = _extract_all_app_routes(app)
@@ -319,6 +321,107 @@ class TestRouterEndpointsExecution:
         resp = test_client.get("/settings")
         assert resp.status_code == 200
         assert resp.json()["llm_model"] == "qwen2.5-coder:7b"
+
+    def test_settings_reset_endpoint_returns_the_read_back(self, test_client):
+        mock_container = ApplicationContainer.create()
+        mock_sys = MagicMock()
+        mock_sys.reset_settings = AsyncMock(
+            return_value=AppSettingsResponse(
+                success=True,
+                vector_db="lancedb",
+                graph_db="kuzu",
+                relational_db="sqlite",
+                enable_kg_extraction=True,
+                auto_link_entities=False,
+                caching=False,
+                data_root="/tmp/retrack",
+                system_root="/tmp/retrack",
+                llm_provider="ollama",
+                llm_model="phi3:mini",
+            )
+        )
+        mock_container.get_system_use_cases = MagicMock(return_value=mock_sys)
+        set_container(mock_container)
+
+        resp = test_client.post("/settings/reset")
+
+        assert resp.status_code == 200
+        assert resp.json()["llm_model"] == "phi3:mini"
+
+    def test_settings_reset_endpoint_reports_a_failed_reset(self, test_client):
+        mock_container = ApplicationContainer.create()
+        mock_sys = MagicMock()
+        mock_sys.reset_settings = AsyncMock(
+            return_value=ErrorResponse(error="ConfigurationError", message="Failed to write settings store")
+        )
+        mock_container.get_system_use_cases = MagicMock(return_value=mock_sys)
+        set_container(mock_container)
+
+        resp = test_client.post("/settings/reset")
+
+        assert resp.status_code == 500
+        assert resp.json()["detail"]["error"] == "ConfigurationError"
+
+    def test_packages_replace_endpoint_returns_the_updated_package(self, test_client):
+        mock_container = ApplicationContainer.create()
+        mock_pkg = MagicMock()
+        mock_pkg.replace_context_package = AsyncMock(
+            return_value=ContextPackageResponse(
+                id="pkg-1",
+                name="Auth context",
+                task="Explain auth",
+                objective="Explain auth",
+                repository_id="repo-1",
+                repository_name="alpha",
+                repository_branch="main",
+                repository_commit="abcdef1",
+                indexing_version="1.0.0",
+                markdown="# Regenerated",
+                section_count=2,
+                token_estimate=64,
+                retrieved_memories=3,
+                deduplicated_memories=2,
+                compression_ratio=1.0,
+                total_time_ms=120.0,
+                created_at="2026-09-24T09:00:00Z",
+                updated_at="2026-09-26T09:00:00Z",
+                tags=[],
+            )
+        )
+        mock_container.get_package_use_cases = MagicMock(return_value=mock_pkg)
+        set_container(mock_container)
+
+        resp = test_client.put("/packages/pkg-1", json={"markdown": "# Regenerated", "token_estimate": 64})
+
+        assert resp.status_code == 200
+        assert resp.json()["id"] == "pkg-1"
+        assert resp.json()["markdown"] == "# Regenerated"
+        assert mock_pkg.replace_context_package.await_args.args[0] == "pkg-1"
+
+    def test_packages_replace_endpoint_404_when_missing(self, test_client):
+        mock_container = ApplicationContainer.create()
+        mock_pkg = MagicMock()
+        mock_pkg.replace_context_package = AsyncMock(
+            return_value=ErrorResponse(error="NotFoundError", message="Context package gone not found")
+        )
+        mock_container.get_package_use_cases = MagicMock(return_value=mock_pkg)
+        set_container(mock_container)
+
+        resp = test_client.put("/packages/gone", json={"markdown": "# Regenerated"})
+
+        assert resp.status_code == 404
+
+    def test_packages_replace_endpoint_rejects_empty_markdown(self, test_client):
+        mock_container = ApplicationContainer.create()
+        mock_pkg = MagicMock()
+        mock_pkg.replace_context_package = AsyncMock()
+        mock_container.get_package_use_cases = MagicMock(return_value=mock_pkg)
+        set_container(mock_container)
+
+        resp = test_client.put("/packages/pkg-1", json={"markdown": ""})
+
+        assert resp.status_code == 422, "a replacement can never wipe the stored content"
+        assert mock_pkg.replace_context_package.await_count == 0
 
     def test_benchmarks_run_endpoint(self, test_client):
         mock_container = ApplicationContainer.create()

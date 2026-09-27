@@ -80,7 +80,7 @@ After meaningful changes:
 Before completing work:
 
 ```bash
-# Backend unit & integration tests (866 passed)
+# Backend unit & integration tests (1024 passed)
 cd backend && uv run pytest tests/ -q
 
 # AST integrity tests

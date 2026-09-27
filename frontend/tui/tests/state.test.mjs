@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 
 import { createApp, TOKEN_BUDGETS } from "../state.mjs";
 import { buildModel, composeLines, createPlainStyler } from "../render.mjs";
-import { publishViewport } from "./fixtures.mjs";
+import { publishViewport, clipboardAdapter } from "./fixtures.mjs";
 
 const plainView = createPlainStyler();
 
@@ -143,14 +143,16 @@ function makeClient(overrides = {}) {
     if (typeof result === "function") return result(...args);
     return result;
   };
-  // Persisted settings are per-client so a toggle + re-read is observable.
+  // Persisted settings and packages are per-client so a write + re-read is
+  // observable (a toggle, a provider update, a reset, a re-synthesis).
   const settings = { ...SETTINGS };
+  const packageStore = new Map(PACKAGES.map((pkg) => [pkg.id, { ...pkg }]));
   const base = {
     health: { status: "ok", provider_identity: "lmstudio", provider_reachable: true, concurrency_available_slots: 1, concurrency_queue_depth: 0, configured_model: "phi3:mini", active_model: null },
     status: { status: "ok", llm_provider: "lmstudio" },
     providerStatus: { success: true, provider: "lmstudio", is_reachable: true, health_state: "healthy", base_url: "http://127.0.0.1:1234/v1" },
     listRepositories: { success: true, repositories: REPOS, total_count: REPOS.length },
-    listContextPackages: { success: true, packages: PACKAGES, total_count: PACKAGES.length },
+    listContextPackages: () => ({ success: true, packages: [...packageStore.values()], total_count: packageStore.size }),
     memoryStats: { success: true, dataset_count: 2, total_size_display: "1.2 MB", knowledge_graph_status: "extracted" },
     detailedHealth: { status: "ok", storage_paths: { canonical_root: "/home/u/.retrack" } },
     recentLogs: { status: "ok", count: 1, logs: [{ timestamp: "2026-09-25T10:00:00Z", level: "INFO", message: "boot" }] },
@@ -160,10 +162,28 @@ function makeClient(overrides = {}) {
     createRepository: { id: "repo-new", name: "gamma-service", local_path: "/work/gamma", status: "registered" },
     scanRepository: { success: true, file_count: 7, languages: ["Go"] },
     deleteRepository: { success: true },
-    getContextPackage: (id) => PACKAGES.find((pkg) => pkg.id === id),
-    saveContextPackage: (payload) => ({ id: "pkg-new", created_at: "2026-09-25T12:00:00Z", ...payload }),
-    deleteContextPackage: { success: true },
-    appendContextPackage: (id, payload) => ({ ...PACKAGES[0], id, task: payload.task, updated_at: "2026-09-25T13:00:00Z" }),
+    getContextPackage: (id) => packageStore.get(id) ?? null,
+    saveContextPackage: (payload) => {
+      const saved = { id: "pkg-new", created_at: "2026-09-25T12:00:00Z", updated_at: "2026-09-25T12:00:00Z", ...payload };
+      packageStore.set(saved.id, saved);
+      return saved;
+    },
+    deleteContextPackage: (id) => {
+      packageStore.delete(id);
+      return { success: true, message: `Context package ${id} deleted` };
+    },
+    appendContextPackage: (id, payload) => {
+      const pkg = { ...packageStore.get(id), id, task: payload.task, updated_at: "2026-09-25T13:00:00Z" };
+      packageStore.set(id, pkg);
+      return pkg;
+    },
+    replaceContextPackage: (id, payload) => {
+      const previous = packageStore.get(id);
+      if (!previous) throw new Error(`package ${id} not found`);
+      const replacement = { ...previous, ...payload, id, updated_at: "2026-09-26T12:00:00Z" };
+      packageStore.set(id, replacement);
+      return replacement;
+    },
     agentContext: CONTEXT_OK,
     exportDiagnostics: { status: "ok", export_path: "/tmp/re-track-diagnostics.json" },
     appSettings: () => ({ success: true, ...settings }),
@@ -176,6 +196,17 @@ function makeClient(overrides = {}) {
       settings.llm_endpoint = payload.base_url;
       settings.llm_model = payload.model;
       return { success: true, ...payload };
+    },
+    resetSettings: () => {
+      Object.assign(settings, {
+        llm_provider: "ollama",
+        llm_endpoint: "http://localhost:11434/v1",
+        llm_model: "phi3:mini-reset",
+        enable_kg_extraction: true,
+        auto_link_entities: false,
+        caching: false,
+      });
+      return { success: true, ...settings };
     },
     discoverProvider: {
       success: true,
@@ -742,7 +773,8 @@ describe("state: settings", () => {
 
     assert.deepEqual(client.calls.find((call) => call.name === "updateCogneeSettings").args, [{ auto_link_entities: true }]);
     assert.equal(app.getState().appSettings.auto_link_entities, true, "the re-read reflects the backend value");
-    assert.match(app.getState().notice.message, /Auto-link entities enabled/);
+    assert.match(app.getState().notice.message, /✓ saved · Auto-link entities enabled/);
+    assert.deepEqual(client.calls.find((call) => call.name === "appSettings").args, [], "the value shown is read back");
     assert.equal(app.getState().settingsBusy, false);
   });
 
@@ -758,8 +790,8 @@ describe("state: settings", () => {
     app.dispatch(key("enter")); // knowledge graph extraction: enabled -> disabled
     await settle();
 
-    assert.match(app.getState().settingsError, /write denied/);
-    assert.match(app.getState().notice.message, /settings update failed/);
+    assert.match(app.getState().overlay.error, /write denied/, "the failure stays visible in the overlay");
+    assert.match(app.getState().notice.message, /✗ save failed · Knowledge graph extraction · write denied/);
     assert.equal(app.getState().appSettings.enable_kg_extraction, true, "the failed write is not applied locally");
     assert.equal(app.getState().settingsBusy, false);
   });
@@ -769,6 +801,91 @@ describe("state: settings", () => {
     await app.toggleSetting("vector_db");
     assert.match(app.getState().notice.message, /not editable from the TUI/);
     assert.equal(client.calls.filter((call) => call.name === "updateCogneeSettings").length, 0);
+  });
+});
+
+describe("state: settings reset", () => {
+  const openReset = async (overrides = {}) => {
+    const started = await startApp(overrides);
+    started.app.dispatch(char("5"));
+    await settle();
+    started.app.dispatch(char("R"));
+    return started;
+  };
+
+  it("offers a confirmed reset from the Settings view", async () => {
+    const { app, client } = await openReset();
+
+    assert.equal(app.getState().overlay.kind, "resetSettings");
+    assert.equal(client.calls.filter((call) => call.name === "resetSettings").length, 0, "opening the dialog writes nothing");
+
+    app.dispatch(key("enter"));
+    await settle(8);
+
+    assert.equal(client.calls.filter((call) => call.name === "resetSettings").length, 1);
+    assert.equal(app.getState().overlay, null);
+    assert.match(app.getState().notice.message, /✓ settings reset to application defaults/);
+    assert.equal(app.getState().appSettings.llm_model, "phi3:mini-reset", "the values shown are the read-back");
+    assert.equal(app.getState().appSettings.auto_link_entities, false);
+  });
+
+  it("cancels without touching the backend", async () => {
+    const { app, client } = await openReset();
+    const before = { ...app.getState().appSettings };
+
+    app.dispatch(key("escape"));
+
+    assert.equal(app.getState().overlay, null);
+    assert.equal(client.calls.filter((call) => call.name === "resetSettings").length, 0);
+    assert.deepEqual(app.getState().appSettings, before, "cancelling leaves the stored settings alone");
+  });
+
+  it("reports a failed reset, keeps the dialog open and re-reads the stored values", async () => {
+    const { app, client } = await openReset({
+      resetSettings: async () => {
+        throw new Error("settings store is read-only");
+      },
+      updateProvider: async () => {
+        throw new Error("unused");
+      },
+    });
+    const before = { ...app.getState().appSettings };
+
+    app.dispatch(key("enter"));
+    await settle(8);
+
+    assert.equal(app.getState().overlay.kind, "resetSettings");
+    assert.match(app.getState().overlay.error, /read-only/);
+    assert.match(app.getState().notice.message, /✗ reset failed/);
+    assert.deepEqual(app.getState().appSettings, before, "no partial reset is shown as applied");
+    assert.ok(client.calls.some((call) => call.name === "appSettings"), "the authoritative values are re-read");
+    assert.equal(app.getState().settingsBusy, false);
+  });
+
+  it("is configuration-only: no repository, package or memory data is deleted", async () => {
+    const { app, client } = await openReset();
+    const packages = app.getState().packages.length;
+    const repositories = app.getState().repositories.length;
+
+    app.dispatch(key("enter"));
+    await settle(10);
+
+    for (const name of ["deleteRepository", "deleteContextPackage", "forget", "cognify"]) {
+      assert.equal(client.calls.filter((call) => call.name === name).length, 0, `${name} must not be called`);
+    }
+    assert.equal(app.getState().packages.length, packages);
+    assert.equal(app.getState().repositories.length, repositories);
+  });
+
+  it("keeps the reset action discoverable in the footer and the capability matrix", async () => {
+    const { app } = await startApp();
+    app.dispatch(char("5"));
+    await settle();
+
+    const footer = render(app, 120, 34).footer.hints.map((hint) => hint.keys);
+    assert.ok(footer.includes("R"), "the reset control is advertised");
+    const detail = renderText(app, 120, 34);
+    assert.match(detail, /restore|default/i, "the settings detail explains what reset does");
   });
 });
 
@@ -797,7 +914,7 @@ describe("state: provider editing", () => {
     assert.equal(draft.values.provider, "lmstudio");
     assert.equal(draft.values.endpoint, "http://127.0.0.1:1234/v1");
     assert.equal(draft.saved.model, "phi3:mini", "the saved model comes from the verified configuration");
-    assert.equal(draft.selected.label, "phi3:mini", "the editor opens on the saved model, unsaved");
+    assert.equal(draft.selected, null, "nothing is chosen until the user chooses: opening saves nothing");
     assert.deepEqual(draft.options, ["lmstudio", "ollama", "openai_compatible"]);
 
     // Opening the editor is what reads the endpoint; nothing is mutated by it.
@@ -806,6 +923,91 @@ describe("state: provider editing", () => {
     ]);
     assert.equal(state.models.state, "ready");
     assert.equal(client.calls.filter((call) => call.name === "updateProvider").length, 0);
+  });
+
+  it("saves the whole configuration when a model is chosen, with no separate save step", async () => {
+    const { app, client } = await openEditor({
+      discoverProvider: { success: true, status: "available", models: MODELS, message: "" },
+    });
+
+    for (const _ of ["provider", "endpoint", "apiKey"]) app.dispatch(key("down"));
+    assert.equal(app.getState().providerDraft.field, "model");
+    app.dispatch(key("enter")); // open the provider's list
+    app.dispatch(key("enter")); // choose the highlighted model
+    await settle(10);
+
+    assert.deepEqual(client.calls.find((call) => call.name === "updateProvider").args, [
+      { provider: "lmstudio", base_url: "http://127.0.0.1:1234/v1", model: "qwen2.5-7b", api_key: "local" },
+    ]);
+    assert.match(app.getState().notice.message, /✓ provider updated · lmstudio · qwen2\.5-7b/);
+    assert.equal(app.getState().overlay, null, "the editor closes once the configuration is saved");
+    assert.equal(app.getState().appSettings.llm_model, "qwen2.5-7b", "the values shown are the read-back");
+  });
+
+  it("carries the stored model into a provider change only when the new provider reports it", async () => {
+    const { app, client } = await openEditor({
+      discoverProvider: { success: true, status: "available", models: [{ model_id: "phi3:mini", name: "phi3:mini" }, ...MODELS], message: "" },
+    });
+
+    app.dispatch(key("tab")); // lmstudio -> ollama: the endpoint changes with it
+    await settle();
+    app.dispatch(key("enter"));
+    await settle(10);
+
+    const call = client.calls.find((entry) => entry.name === "updateProvider");
+    assert.equal(call.args[0].provider, "ollama");
+    assert.equal(call.args[0].base_url, "http://localhost:11434/v1");
+    assert.equal(call.args[0].model, "phi3:mini", "the stored model is kept because the provider reported it");
+    assert.match(app.getState().notice.message, /✓ provider updated/);
+  });
+
+  it("refuses to save while the stored model is not offered by the endpoint", async () => {
+    const { app, client } = await openEditor({
+      discoverProvider: { success: true, status: "available", models: MODELS, message: "" },
+    });
+
+    app.dispatch(key("enter"));
+    await settle(10);
+
+    assert.match(app.getState().providerDraft.error, /select a model from the provider's list/);
+    assert.equal(client.calls.filter((call) => call.name === "updateProvider").length, 0, "nothing invalid is saved");
+    assert.equal(app.getState().overlay.kind, "providerSettings", "the editor stays open");
+  });
+
+  it("does not persist a provider merely because it is highlighted", async () => {
+    const { app, client } = await openEditor({
+      discoverProvider: { success: true, status: "available", models: MODELS, message: "" },
+    });
+
+    app.dispatch(key("tab")); // lmstudio -> ollama (highlighted, not saved)
+    app.dispatch(key("tab")); // ollama -> openai_compatible
+    await settle();
+
+    assert.equal(app.getState().providerDraft.values.provider, "openai_compatible");
+    assert.equal(client.calls.filter((call) => call.name === "updateProvider").length, 0, "cycling saves nothing");
+  });
+
+  it("waits for the provider's answer before judging a commit", async () => {
+    let release;
+    const pending = new Promise((resolve) => {
+      release = resolve;
+    });
+    const { app, client } = await openEditor({
+      discoverProvider: async ({ provider, base_url }) => {
+        await pending;
+        return { success: true, status: "available", models: MODELS, message: "", provider, base_url };
+      },
+    });
+    assert.equal(app.getState().models.state, "loading");
+
+    app.dispatch(key("enter")); // commit while discovery is still in flight
+    await settle(2);
+    release();
+    await settle(12);
+
+    assert.equal(app.getState().models.state, "ready");
+    assert.equal(client.calls.filter((call) => call.name === "updateProvider").length, 0);
+    assert.match(app.getState().providerDraft.error, /select a model from the provider's list/);
   });
 
   it("shows the discovery state while the models are still loading", async () => {
@@ -859,14 +1061,14 @@ describe("state: provider editing", () => {
     assert.equal(app.getState().models.status, "unreachable");
     assert.match(app.getState().models.message, /unreachable/);
 
-    // The saved model stays what it was; the failed read offers nothing new.
+    // The failed read offers nothing new, and choosing is impossible.
     for (const _ of ["provider", "endpoint", "apiKey"]) app.dispatch(key("down"));
     app.dispatch(key("enter"));
     assert.equal(app.getState().overlay.kind, "modelSelect");
     assert.deepEqual(app.visibleModels(), [], "a failed discovery offers no models");
     app.dispatch(key("enter"));
     assert.equal(app.getState().overlay.kind, "modelSelect", "there is nothing to select");
-    assert.equal(app.getState().providerDraft.selected.label, "phi3:mini");
+    assert.equal(app.getState().providerDraft.selected, null);
     assert.match(renderText(app, 90, 24), /model selection: unavailable/, "the reason is on screen");
     assert.equal(client.calls.filter((call) => call.name === "updateProvider").length, 0);
   });
@@ -885,8 +1087,10 @@ describe("state: provider editing", () => {
   });
 
   it("drops the old model and reads the new provider when the provider changes", async () => {
-    const { app, client } = await openEditor();
-    assert.equal(app.getState().providerDraft.selected.label, "phi3:mini");
+    const { app, client } = await openEditor({
+      discoverProvider: { success: true, status: "available", models: MODELS, message: "" },
+    });
+    assert.equal(app.getState().providerDraft.selected, null);
 
     app.dispatch(key("tab")); // lmstudio -> ollama
     await settle();
@@ -898,6 +1102,34 @@ describe("state: provider editing", () => {
     assert.deepEqual(client.calls.filter((call) => call.name === "discoverProvider").at(-1).args, [
       { provider: "ollama", base_url: "http://localhost:11434/v1", api_key: "local" },
     ]);
+  });
+
+  it("clears a chosen model the new endpoint does not report", async () => {
+    const { app } = await openEditor({
+      discoverProvider: async ({ base_url }) => ({
+        success: true,
+        status: "available",
+        models: base_url.includes("11434") ? [{ model_id: "llama3.2", name: "llama3.2" }] : MODELS,
+        message: "",
+      }),
+      // The commit is refused, so the editor stays open with the choice visible.
+      updateProvider: async () => {
+        throw new Error("provider offline");
+      },
+    });
+
+    for (const _ of ["provider", "endpoint", "apiKey"]) app.dispatch(key("down"));
+    app.dispatch(key("enter"));
+    app.dispatch(key("enter")); // choose qwen2.5-7b
+    await settle(10);
+    assert.equal(app.getState().overlay.kind, "providerSettings");
+    assert.equal(app.getState().providerDraft.selected.label, "qwen2.5-7b");
+
+    app.dispatch(key("tab")); // -> ollama, whose list is llama3.2 only
+    await settle(10);
+
+    assert.equal(app.getState().providerDraft.selected, null, "the stale choice is cleared, never carried over");
+    assert.deepEqual(app.getState().models.items.map((model) => model.label), ["llama3.2"]);
   });
 
   it("keeps a custom endpoint when cycling providers", async () => {
@@ -914,8 +1146,13 @@ describe("state: provider editing", () => {
     assert.equal(app.getState().providerDraft.values.endpoint, "http://box:9999/v1");
   });
 
-  it("opens the provider's model list and selects with enter, without saving", async () => {
-    const { app, client } = await openEditor({ discoverProvider: { success: true, status: "available", models: MODELS, message: "" } });
+  it("opens the provider's model list, and only choosing persists anything", async () => {
+    const { app, client } = await openEditor({
+      discoverProvider: { success: true, status: "available", models: MODELS, message: "" },
+      updateProvider: async () => {
+        throw new Error("provider offline");
+      },
+    });
 
     for (const _ of ["provider", "endpoint", "apiKey"]) app.dispatch(key("down"));
     assert.equal(app.getState().providerDraft.field, "model");
@@ -924,20 +1161,26 @@ describe("state: provider editing", () => {
     assert.equal(app.getState().overlay.kind, "modelSelect");
     assert.deepEqual(app.visibleModels().map((model) => model.label), ["qwen2.5-7b", "phi-4-mini", "llama3.2"]);
 
+    // Highlighting two rows down persists nothing.
     app.dispatch(key("down"));
     app.dispatch(key("down"));
-    app.dispatch(key("enter"));
-    assert.equal(app.getState().overlay.kind, "providerSettings", "the selector returns to the editor");
-    assert.equal(app.getState().providerDraft.selected.label, "llama3.2");
+    assert.equal(client.calls.filter((call) => call.name === "updateProvider").length, 0, "highlighting saves nothing");
+
+    app.dispatch(key("enter")); // choose: this is the commit
+    await settle(10);
+
+    assert.equal(app.getState().providerDraft.selected.label, "llama3.2", "the chosen model is the one persisted");
     assert.equal(
       client.calls.filter((call) => call.name === "updateProvider").length,
-      0,
-      "highlighting a model never persists it"
+      1,
+      "choosing saves through the backend exactly once"
     );
+    assert.match(app.getState().notice.message, /✗ save failed · provider · provider offline/);
+    assert.equal(app.getState().overlay.kind, "providerSettings", "a refused save keeps the editor open");
   });
 
-  it("closes the model list with esc and keeps the previous selection", async () => {
-    const { app } = await openEditor({ discoverProvider: { success: true, status: "available", models: MODELS, message: "" } });
+  it("closes the model list with esc without choosing or saving", async () => {
+    const { app, client } = await openEditor({ discoverProvider: { success: true, status: "available", models: MODELS, message: "" } });
     app.dispatch(key("down"));
     app.dispatch(key("down"));
     app.dispatch(key("down")); // model
@@ -946,11 +1189,17 @@ describe("state: provider editing", () => {
     app.dispatch(key("escape"));
 
     assert.equal(app.getState().overlay.kind, "providerSettings");
-    assert.equal(app.getState().providerDraft.selected.label, "phi3:mini", "esc cancels the highlight");
+    assert.equal(app.getState().providerDraft.selected, null, "esc cancels the highlight");
+    assert.equal(client.calls.filter((call) => call.name === "updateProvider").length, 0);
   });
 
   it("filters the provider's models and never names one itself", async () => {
-    const { app } = await openEditor({ discoverProvider: { success: true, status: "available", models: MODELS, message: "" } });
+    const { app, client } = await openEditor({
+      discoverProvider: { success: true, status: "available", models: MODELS, message: "" },
+      updateProvider: async () => {
+        throw new Error("provider offline");
+      },
+    });
     for (const _ of ["provider", "endpoint", "apiKey"]) app.dispatch(key("down"));
     app.dispatch(key("enter"));
 
@@ -963,7 +1212,8 @@ describe("state: provider editing", () => {
     assert.deepEqual(app.visibleModels(), []);
     app.dispatch(key("enter"));
     assert.equal(app.getState().overlay.kind, "modelSelect");
-    assert.equal(app.getState().providerDraft.selected.label, "phi3:mini", "an empty filter cannot select anything");
+    assert.equal(app.getState().providerDraft.selected, null, "an empty filter cannot select anything");
+    assert.equal(client.calls.filter((call) => call.name === "updateProvider").length, 0);
 
     app.dispatch(key("escape"));
     assert.equal(app.getState().overlay.filter, "", "esc clears the filter first");
@@ -974,7 +1224,12 @@ describe("state: provider editing", () => {
 
   it("scrolls a long model list and only ever selects a reported model", async () => {
     const many = Array.from({ length: 40 }, (_, index) => ({ model_id: `model-${index}`, name: `model-${index}`, quantization: "unknown" }));
-    const { app } = await openEditor({ discoverProvider: { success: true, status: "available", models: many, message: "" } });
+    const { app } = await openEditor({
+      discoverProvider: { success: true, status: "available", models: many, message: "" },
+      updateProvider: async () => {
+        throw new Error("provider offline");
+      },
+    });
     for (const _ of ["provider", "endpoint", "apiKey"]) app.dispatch(key("down"));
     app.dispatch(key("enter"));
     render(app, 90, 24);
@@ -986,37 +1241,33 @@ describe("state: provider editing", () => {
     assert.equal(selected.label, "model-39");
 
     app.dispatch(key("enter"));
-    assert.equal(app.getState().providerDraft.selected.label, "model-39");
     const chosen = app.getState().providerDraft.selected.label;
+    assert.equal(chosen, "model-39");
     assert.ok(
       many.some((model) => (model.name ?? model.model_id) === chosen),
       "the chosen model is one the provider actually reported"
     );
   });
 
-  it("saves the chosen model through the backend and re-reads the authoritative values", async () => {
+  it("saves the chosen model with the choice, then re-reads the authoritative values", async () => {
     const { app, client } = await openEditor({ discoverProvider: { success: true, status: "available", models: MODELS, message: "" } });
-    app.dispatch(key("down"));
-    app.dispatch(key("down"));
-    app.dispatch(key("down"));
+    for (const _ of ["provider", "endpoint", "apiKey"]) app.dispatch(key("down"));
     app.dispatch(key("enter")); // open the list (the saved model is not in it)
     assert.equal(app.visibleModels()[app.getState().overlay.cursor].label, "qwen2.5-7b");
-    app.dispatch(key("enter")); // choose it
-
-    app.dispatch(key("up")); // back to a non-model row
-    app.dispatch(key("enter")); // save
+    app.dispatch(key("enter")); // choose it — no separate save step
     await settle(10);
 
     assert.deepEqual(client.calls.find((call) => call.name === "updateProvider").args, [
       { provider: "lmstudio", base_url: "http://127.0.0.1:1234/v1", model: "qwen2.5-7b", api_key: "local" },
     ]);
+    assert.equal(client.calls.filter((call) => call.name === "updateProvider").length, 1, "exactly one write");
     assert.equal(app.getState().overlay, null);
     assert.equal(app.getState().providerDraft, null);
-    assert.match(app.getState().notice.message, /provider switched to lmstudio · qwen2\.5-7b/);
+    assert.match(app.getState().notice.message, /✓ provider updated · lmstudio · qwen2\.5-7b/);
     assert.equal(app.getState().appSettings.llm_model, "qwen2.5-7b", "the re-read reflects the backend");
   });
 
-  it("refuses to save without a chosen model and keeps backend failures visible", async () => {
+  it("refuses to save without an acceptable model and keeps backend failures visible", async () => {
     const { app, client } = await openEditor({
       discoverProvider: { success: true, status: "available", models: MODELS, message: "" },
       updateProvider: async () => {
@@ -1027,22 +1278,18 @@ describe("state: provider editing", () => {
     await settle();
     assert.equal(app.getState().providerDraft.selected, null);
     app.dispatch(key("enter"));
-    await settle();
+    await settle(10);
     assert.match(app.getState().providerDraft.error, /select a model from the provider's list/);
     assert.equal(client.calls.filter((call) => call.name === "updateProvider").length, 0);
 
-    app.dispatch(key("down"));
-    app.dispatch(key("down"));
-    app.dispatch(key("down")); // model
+    for (const _ of ["endpoint", "apiKey", "model"]) app.dispatch(key("down"));
     app.dispatch(key("enter"));
-    app.dispatch(key("enter")); // choose the highlighted model
-    app.dispatch(key("up"));
-    app.dispatch(key("enter"));
+    app.dispatch(key("enter")); // choose the highlighted model: this saves
     await settle(10);
 
     assert.equal(app.getState().overlay.kind, "providerSettings", "a failed save keeps the form open");
     assert.match(app.getState().providerDraft.error, /switch refused/);
-    assert.match(app.getState().notice.message, /provider update failed/);
+    assert.match(app.getState().notice.message, /✗ save failed · provider · switch refused/);
   });
 
   it("has no model text field: typing on the model row changes nothing", async () => {
@@ -1051,9 +1298,377 @@ describe("state: provider editing", () => {
     assert.equal(app.getState().providerDraft.field, "model");
 
     for (const value of "not-a-real-model") app.dispatch(char(value));
-    assert.equal(app.getState().providerDraft.selected.label, "phi3:mini", "the selection is untouched by typing");
+    assert.equal(app.getState().providerDraft.selected, null, "the selection is untouched by typing");
     assert.equal(app.getState().overlay.kind, "providerSettings");
     assert.equal(app.getState().models.items.some((model) => model.label === "not-a-real-model"), false);
+  });
+});
+
+describe("state: re-synthesis", () => {
+  const openPackage = async (overrides = {}) => {
+    const started = await startApp(overrides);
+    started.app.dispatch(char("3"));
+    started.app.dispatch(char("p")); // packages-only catalog: the saved package leads
+    started.app.dispatch(key("enter"));
+    await settle();
+    return started;
+  };
+
+  it("offers re-synthesis from the viewer with the package's own basis", async () => {
+    const { app, client } = await openPackage();
+    app.dispatch(char("r"));
+
+    const plan = app.getState().overlay.plan;
+    assert.equal(app.getState().overlay.kind, "resynthesize");
+    assert.equal(plan.packageId, "pkg-1");
+    assert.equal(plan.task, "Explain auth", "the stored task is the basis, never the selected row");
+    assert.equal(plan.repo.id, "repo-a", "the repository comes from the package's stored identity");
+    assert.equal(client.calls.filter((call) => call.name === "agentContext").length, 0, "nothing runs before confirmation");
+
+    app.dispatch(key("escape"));
+    assert.equal(app.getState().overlay.kind, "viewPackage", "esc returns to the package");
+    assert.equal(client.calls.filter((call) => call.name === "agentContext").length, 0);
+  });
+
+  it("regenerates in place: one generation, one replacement, no second package", async () => {
+    const { app, client } = await openPackage();
+    const before = app.getState().overlay.package.markdown;
+
+    app.dispatch(char("r"));
+    app.dispatch(key("enter"));
+    await settle(14);
+
+    const generation = client.calls.filter((call) => call.name === "agentContext");
+    assert.equal(generation.length, 1, "the model is called exactly once");
+    assert.deepEqual(generation[0].args, [
+      {
+        taskPrompt: "Explain auth",
+        repositoryPath: "/work/alpha",
+        datasetName: "alpha-service",
+        maxTokens: app.getState().tokenBudget,
+        includeStructuralGraph: true,
+      },
+    ]);
+
+    const replacement = client.calls.filter((call) => call.name === "replaceContextPackage");
+    assert.equal(replacement.length, 1, "one replacement, addressed by id");
+    assert.equal(replacement[0].args[0], "pkg-1");
+    assert.equal(replacement[0].args[1].markdown, CONTEXT_OK.context_markdown, "the generated markdown is stored verbatim");
+    assert.equal(replacement[0].args[1].repository_commit, "abcdef1234567890");
+
+    assert.equal(client.calls.filter((call) => call.name === "saveContextPackage").length, 0, "no second package is created");
+    assert.equal(app.getState().packages.length, 1);
+    assert.notEqual(app.getState().overlay.package.markdown, before, "the viewer shows the regenerated content");
+    assert.equal(app.getState().overlay.package.markdown, CONTEXT_OK.context_markdown);
+    assert.equal(app.getState().overlay.kind, "viewPackage", "the regenerated package stays open");
+    assert.equal(app.getState().operation, null);
+    assert.match(app.getState().notice.message, /✓ re-synthesized Auth context/);
+  });
+
+  it("preserves the reader's scroll position through the replacement", async () => {
+    const { app } = await openPackage();
+    app.setViewport({ viewerMax: 40, viewerPage: 8 });
+    app.dispatch(key("down"));
+    app.dispatch(key("down"));
+    const offset = app.getState().scroll.viewer;
+    assert.ok(offset > 0);
+
+    app.dispatch(char("r"));
+    app.dispatch(key("enter"));
+    await settle(14);
+
+    assert.equal(app.getState().scroll.viewer, offset);
+  });
+
+  it("keeps the stored package intact when generation fails", async () => {
+    const { app, client } = await openPackage({
+      agentContext: async () => {
+        throw new Error("provider exploded");
+      },
+    });
+    const before = app.getState().overlay.package.markdown;
+
+    app.dispatch(char("r"));
+    app.dispatch(key("enter"));
+    await settle(14);
+
+    assert.match(app.getState().notice.message, /✗ re-synthesis failed · provider exploded · Auth context is unchanged/);
+    assert.equal(client.calls.filter((call) => call.name === "replaceContextPackage").length, 0);
+    assert.equal(app.getState().overlay.package.markdown, before);
+    assert.equal(app.getState().packages[0].markdown, before);
+    assert.equal(app.getState().operation, null);
+  });
+
+  it("never overwrites the package with an empty regeneration", async () => {
+    const { app, client } = await openPackage({
+      agentContext: { success: true, context_markdown: "", task_summary: "Explain auth" },
+    });
+    const before = app.getState().overlay.package.markdown;
+
+    app.dispatch(char("r"));
+    app.dispatch(key("enter"));
+    await settle(14);
+
+    assert.equal(client.calls.filter((call) => call.name === "replaceContextPackage").length, 0);
+    assert.match(app.getState().notice.message, /returned no context/);
+    assert.equal(app.getState().overlay.package.markdown, before);
+  });
+
+  it("keeps the stored package intact when persistence fails", async () => {
+    const { app, client } = await openPackage({
+      replaceContextPackage: async () => {
+        throw new Error("package store is read-only");
+      },
+    });
+    const before = app.getState().overlay.package.markdown;
+
+    app.dispatch(char("r"));
+    app.dispatch(key("enter"));
+    await settle(14);
+
+    assert.equal(client.calls.filter((call) => call.name === "replaceContextPackage").length, 1);
+    assert.match(app.getState().notice.message, /✗ re-synthesis failed · package store is read-only · Auth context is unchanged/);
+    assert.equal(app.getState().overlay.package.markdown, before, "the previous package stays usable");
+    assert.equal(app.getState().packages[0].markdown, before);
+  });
+
+  it("re-synthesizes the package selected in the catalog with R", async () => {
+    const { app, client } = await startApp();
+    app.dispatch(char("3"));
+    app.dispatch(char("p"));
+
+    app.dispatch(char("R"));
+    assert.equal(app.getState().overlay.kind, "resynthesize");
+    app.dispatch(key("enter"));
+    await settle(14);
+
+    assert.equal(client.calls.filter((call) => call.name === "agentContext").length, 1);
+    assert.equal(client.calls.filter((call) => call.name === "replaceContextPackage").length, 1);
+    assert.equal(app.getState().overlay, null, "no viewer was open, so none is reopened");
+  });
+
+  it("refuses when the package's repository is no longer registered", async () => {
+    const { app, client } = await startApp({
+      getContextPackage: () => ({ ...PACKAGES[0], repository_id: "repo-gone", repository_name: "gone-service" }),
+    });
+    app.dispatch(char("3"));
+    app.dispatch(char("p"));
+    app.dispatch(key("enter"));
+    await settle();
+
+    app.dispatch(char("r"));
+
+    assert.equal(app.getState().overlay.kind, "viewPackage", "no confirmation is offered for an impossible run");
+    assert.match(app.getState().notice.message, /repository gone-service is not registered/);
+    assert.equal(client.calls.filter((call) => call.name === "agentContext").length, 0);
+  });
+
+  it("blocks re-synthesis while a synthesis is already running", async () => {
+    let release;
+    const pending = new Promise((resolve) => {
+      release = resolve;
+    });
+    const { app, client } = await startApp({
+      agentContext: async () => {
+        await pending;
+        return CONTEXT_OK;
+      },
+    });
+    app.dispatch(char("3"));
+    app.dispatch(char("n"));
+    for (const value of "explain auth") app.dispatch(char(value));
+    app.dispatch(key("enter"));
+    await settle(2);
+    assert.equal(app.getState().operation.kind, "synthesis");
+
+    app.dispatch(char("p"));
+    app.dispatch(key("enter"));
+    await settle(2);
+    app.dispatch(char("r"));
+
+    assert.equal(app.getState().overlay.kind, "viewPackage", "re-synthesis is not offered while one runs");
+    assert.match(app.getState().notice.message, /synthesis is already running/);
+    assert.equal(client.calls.filter((call) => call.name === "agentContext").length, 1);
+
+    release();
+    await settle(14);
+    assert.equal(client.calls.filter((call) => call.name === "replaceContextPackage").length, 0);
+  });
+
+  it("keeps append distinct from re-synthesis", async () => {
+    const { app, client } = await openPackage();
+
+    app.dispatch(char("a")); // append, from the viewer
+    assert.equal(app.getState().overlay.kind, "appendPackage");
+    for (const value of "add tests") app.dispatch(char(value));
+    app.dispatch(key("enter"));
+    await settle(12);
+
+    assert.equal(client.calls.filter((call) => call.name === "appendContextPackage").length, 1);
+    assert.equal(client.calls.filter((call) => call.name === "replaceContextPackage").length, 0);
+    assert.equal(client.calls.filter((call) => call.name === "agentContext").length, 0);
+    assert.match(app.getState().notice.message, /appended to/);
+  });
+});
+
+describe("state: clipboard", () => {
+  const CONTEXT_WITH_MARKDOWN = CONTEXT_OK.context_markdown;
+
+  /** Generate context so the output view has something to copy. */
+  const generate = async (overrides = {}, options = {}) => {
+    const started = await startApp(overrides, options);
+    started.app.dispatch(char("3"));
+    started.app.dispatch(char("n"));
+    for (const value of "explain auth") started.app.dispatch(char(value));
+    started.app.dispatch(key("enter"));
+    await settle(12);
+    started.app.setFocus("inspector");
+    return started;
+  };
+
+  it("copies the generated Markdown exactly, without escape sequences", async () => {
+    const copyText = clipboardAdapter();
+    const { app, client } = await generate({}, { copyText });
+
+    app.dispatch(char("c"));
+    await settle(4);
+
+    assert.equal(copyText.copies.length, 1);
+    assert.equal(copyText.copies[0].text, CONTEXT_WITH_MARKDOWN, "byte-for-byte the backend markdown");
+    assert.equal(copyText.copies[0].text.includes("\u001b"), false, "no terminal escapes are copied");
+    assert.match(app.getState().notice.message, /✓ copied the generated markdown to the clipboard/);
+    assert.equal(client.calls.filter((call) => call.name === "agentContext").length, 1, "copying never regenerates");
+  });
+
+  it("copies the underlying Markdown whether the view is rendered or raw", async () => {
+    const copyText = clipboardAdapter();
+    const { app } = await generate({}, { copyText });
+
+    assert.equal(app.getState().markdownView, "rendered");
+    app.dispatch(char("c"));
+    await settle(4);
+    app.dispatch(char("m")); // switch to raw
+    assert.equal(app.getState().markdownView, "raw");
+    app.dispatch(char("c"));
+    await settle(4);
+
+    assert.equal(copyText.copies.length, 2);
+    assert.equal(copyText.copies[0].text, CONTEXT_WITH_MARKDOWN);
+    assert.equal(copyText.copies[1].text, CONTEXT_WITH_MARKDOWN, "rendering never changes what is copied");
+  });
+
+  it("copies the stored Markdown from the package viewer", async () => {
+    const copyText = clipboardAdapter();
+    const { app, client } = await startApp({}, { copyText });
+    app.dispatch(char("3"));
+    app.dispatch(char("p"));
+    app.dispatch(key("enter"));
+    await settle();
+
+    app.dispatch(char("c"));
+    await settle(4);
+
+    assert.equal(copyText.copies[0].text, PACKAGES[0].markdown);
+    assert.match(app.getState().notice.message, /✓ copied “Auth context”/);
+    assert.equal(client.calls.filter((call) => call.name === "getContextPackage").length, 1, "the open package is not re-fetched");
+  });
+
+  it("has nothing to copy before a generation ran", async () => {
+    const copyText = clipboardAdapter();
+    const { app } = await startApp({}, { copyText });
+    app.dispatch(char("3"));
+    app.setFocus("inspector");
+
+    app.dispatch(char("c"));
+    await settle(2);
+
+    assert.equal(copyText.copies.length, 0);
+    assert.match(app.getState().notice.message, /nothing to copy: generate context first/);
+  });
+
+  it("reports a clipboard failure truthfully instead of claiming a copy", async () => {
+    const copyText = clipboardAdapter({ ok: false, mechanism: "none", reason: "no clipboard utility is installed" });
+    const { app } = await generate({}, { copyText });
+
+    app.dispatch(char("c"));
+    await settle(4);
+
+    assert.match(app.getState().notice.message, /✗ clipboard unavailable · no clipboard utility is installed/);
+    assert.equal(app.getState().notice.level, "error");
+  });
+
+  it("states that the session has no clipboard adapter", async () => {
+    const { app } = await generate();
+
+    app.dispatch(char("c"));
+    await settle(2);
+
+    assert.match(app.getState().notice.message, /✗ clipboard unavailable · this session has no clipboard adapter/);
+  });
+
+  it("reports an adapter that throws as unavailable", async () => {
+    const copyText = async () => {
+      throw new Error("ENOTTY: not a terminal");
+    };
+    const { app } = await generate({}, { copyText });
+
+    app.dispatch(char("c"));
+    await settle(4);
+
+    assert.match(app.getState().notice.message, /✗ clipboard unavailable · ENOTTY/);
+  });
+
+  it("refuses to copy while a synthesis is running", async () => {
+    let release;
+    const pending = new Promise((resolve) => {
+      release = resolve;
+    });
+    const copyText = clipboardAdapter();
+    const { app } = await startApp(
+      {
+        agentContext: async () => {
+          await pending;
+          return CONTEXT_OK;
+        },
+      },
+      { copyText }
+    );
+    app.dispatch(char("3"));
+    app.dispatch(char("n"));
+    for (const value of "explain auth") app.dispatch(char(value));
+    app.dispatch(key("enter"));
+    await settle(2);
+    app.setFocus("inspector");
+
+    app.dispatch(char("c"));
+    await settle(2);
+    assert.equal(copyText.copies.length, 0);
+    assert.match(app.getState().notice.message, /synthesis is running · copy is available when it finishes/);
+
+    release();
+    await settle(12);
+    app.setFocus("inspector");
+    app.dispatch(char("c"));
+    await settle(4);
+    assert.equal(copyText.copies.length, 1, "copy is available as soon as the output exists");
+  });
+
+  it("copies the regenerated markdown after a re-synthesis", async () => {
+    const copyText = clipboardAdapter();
+    const { app } = await startApp({}, { copyText });
+    app.dispatch(char("3"));
+    app.dispatch(char("p"));
+    app.dispatch(key("enter"));
+    await settle();
+
+    app.dispatch(char("r"));
+    app.dispatch(key("enter"));
+    await settle(14);
+
+    app.dispatch(char("c"));
+    await settle(4);
+
+    assert.equal(copyText.copies[0].text, CONTEXT_OK.context_markdown, "the viewer copies what is now stored");
   });
 });
 
