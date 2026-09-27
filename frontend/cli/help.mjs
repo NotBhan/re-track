@@ -48,6 +48,35 @@ export const COMMANDS = {
     options: [],
     examples: ["retrack status", "retrack status --json"],
   },
+  list: {
+    usage: "retrack list <repositories|packages>",
+    summary: "List tracked repositories or saved context packages",
+    description: [
+      "Lists the resources the backend reports. Both targets have their own reference:",
+      "`retrack help list repositories` and `retrack help list packages`.",
+    ],
+    args: [
+      ["repositories", "Tracked repositories (name, path, status, files, languages, indexed time)"],
+      ["packages", "Saved context packages (id, name, repository, tokens, updated)"],
+    ],
+    options: [],
+    examples: ["retrack list repositories", "retrack list packages", "retrack list packages --json"],
+  },
+  delete: {
+    usage: "retrack delete <package|repository> <target> --yes",
+    summary: "Delete a stored package or a managed repository",
+    description: [
+      "Destructive: both forms require --yes and the CLI never prompts. Deleting a",
+      "repository also clears its indexed memory. Each target has its own reference:",
+      "`retrack help delete package` and `retrack help delete repository`.",
+    ],
+    args: [
+      ["package <id>", "Stored context package id from `retrack list packages`"],
+      ["repository <path|name>", "Repository path or name from `retrack list repositories`"],
+    ],
+    options: [["--yes", "Confirm the deletion (required)"]],
+    examples: ["retrack delete package 5f3a9c2b1d --yes", "retrack delete repository ~/Projects/old --yes"],
+  },
   "list-repositories": {
     usage: "retrack list repositories",
     summary: "Tracked repositories",
@@ -142,8 +171,10 @@ export const COMMANDS = {
     usage: 'retrack append package <id> "<text>"',
     summary: "Append a task/note to a stored package",
     description: [
-      "Appends additional task context to an existing package (POST /packages/{id}/append).",
-      "This is not re-synthesis: append never regenerates or replaces stored content.",
+      "Appends the note to an existing package (POST /packages/{id}/append): the note",
+      "becomes the package's task and is added to the stored Markdown after a",
+      "separator, so it stays visible in the package content. This is not",
+      "re-synthesis: append never regenerates content and invokes no model.",
     ],
     args: [
       ["<id>", "Package id"],
@@ -268,7 +299,6 @@ const TOPIC_ALIASES = {
   repositories: "list-repositories",
   package: "list-packages",
   packages: "list-packages",
-  list: "list-repositories",
 };
 
 export function resolveHelpTopic(value) {
@@ -276,6 +306,56 @@ export function resolveHelpTopic(value) {
   if (COMMANDS[value]) return value;
   const alias = TOPIC_ALIASES[value];
   return alias ?? null;
+}
+
+/**
+ * The help page a command line should show under `--help` / `-h`, resolved
+ * without validating the command's arguments: `retrack construct --help` must
+ * work even though the prompt is missing, and `retrack delete --help` must
+ * work without a target. Returns null for verbs that name no command.
+ */
+export function resolveCommandHelpKey(positionals) {
+  const [verb, noun] = positionals;
+  if (!verb) return null;
+
+  if (verb === "list") {
+    if (noun === undefined) return "list";
+    if (noun === "repositories") return "list-repositories";
+    if (noun === "packages") return "list-packages";
+    return null;
+  }
+  if (verb === "delete") {
+    if (noun === undefined) return "delete";
+    if (noun === "package") return "delete-package";
+    if (noun === "repository") return "delete-repository";
+    return null;
+  }
+
+  const singleNoun = {
+    show: ["package", "show-package"],
+    append: ["package", "append-package"],
+    export: ["package", "export-package"],
+    resynthesize: ["package", "resynthesize-package"],
+  };
+  if (singleNoun[verb]) {
+    const [expected, key] = singleNoun[verb];
+    return noun === undefined || noun === expected ? key : null;
+  }
+
+  const plain = {
+    help: "help",
+    health: "health",
+    status: "status",
+    memory: "memory",
+    benchmark: "benchmark",
+    settings: "settings",
+    provider: "provider",
+    select: "select",
+    index: "index",
+    scan: "scan",
+    construct: "construct",
+  };
+  return plain[verb] ?? null;
 }
 
 function renderOptionLines(options) {

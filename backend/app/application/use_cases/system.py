@@ -4,6 +4,7 @@ Coordinates hardware telemetry, service status, settings persistence, and provid
 All dependencies are explicitly injected via constructor capability ports.
 """
 
+import json
 import logging
 import time
 from typing import Any, Callable, Coroutine, Optional
@@ -32,6 +33,26 @@ from app.models.errors import CogneeServiceError
 from app.models.provider import ProviderType
 
 logger = logging.getLogger(__name__)
+
+
+def _count_json_records(candidates: list) -> int:
+    """Count the records in the first readable JSON store among `candidates`.
+
+    The canonical stores (repositories.json, context_packages.json) are JSON
+    objects keyed by id; older layouts wrote a bare list. Both shapes count as
+    records, and a missing or unreadable store falls through to the next
+    candidate rather than reporting a count the store cannot back.
+    """
+    for path in candidates:
+        if not path.exists():
+            continue
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        if isinstance(data, (list, dict)):
+            return len(data)
+    return 0
 
 
 class SystemUseCases:
@@ -186,7 +207,6 @@ class SystemUseCases:
             # Phase 9C storage and cache checks
             from pathlib import Path
             import os
-            import json
 
             canonical_root = Path.home() / ".retrack"
             legacy_root = Path.home() / ".andes"
@@ -206,33 +226,24 @@ class SystemUseCases:
                         except OSError:
                             pass
 
-            # Repo count
-            repo_count = 0
-            repo_file = canonical_root / "indexed_repos.json"
-            if not repo_file.exists():
-                repo_file = canonical_root / "repositories.json"
-            if not repo_file.exists() and legacy_root.exists():
-                repo_file = legacy_root / "indexed_repos.json"
-            if repo_file.exists():
-                try:
-                    r_data = json.loads(repo_file.read_text(encoding="utf-8"))
-                    if isinstance(r_data, list):
-                        repo_count = len(r_data)
-                except Exception:
-                    pass
-
-            # Package count
-            pkg_count = 0
-            pkg_file = canonical_root / "context_packages.json"
-            if not pkg_file.exists() and legacy_root.exists():
-                pkg_file = legacy_root / "context_packages.json"
-            if pkg_file.exists():
-                try:
-                    p_data = json.loads(pkg_file.read_text(encoding="utf-8"))
-                    if isinstance(p_data, list):
-                        pkg_count = len(p_data)
-                except Exception:
-                    pass
+            # Registered repositories and saved packages, counted from the same
+            # stores the /repos and /packages contracts read: repositories.json
+            # is the registered catalog, while indexed_repos.json is the
+            # indexed-metadata store and only holds indexed records.
+            repo_count = _count_json_records(
+                [
+                    canonical_root / "repositories.json",
+                    canonical_root / "indexed_repos.json",
+                    legacy_root / "repositories.json",
+                    legacy_root / "indexed_repos.json",
+                ]
+            )
+            pkg_count = _count_json_records(
+                [
+                    canonical_root / "context_packages.json",
+                    legacy_root / "context_packages.json",
+                ]
+            )
 
             # Concurrency metrics
             c_queue_depth = 0

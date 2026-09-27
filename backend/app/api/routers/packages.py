@@ -55,6 +55,8 @@ async def packages_get_endpoint(
     if result is None:
         raise HTTPException(status_code=404, detail="Package not found")
     if isinstance(result, ErrorResponse):
+        if result.error == "NotFoundError":
+            raise HTTPException(status_code=404, detail=result.message)
         raise HTTPException(status_code=500, detail=result.model_dump())
     return result.model_dump()
 
@@ -67,6 +69,8 @@ async def packages_delete_endpoint(
     """Delete a context package."""
     result = await package_use_cases.delete_context_package(package_id)
     if isinstance(result, ErrorResponse):
+        if result.error == "NotFoundError":
+            raise HTTPException(status_code=404, detail=result.message)
         raise HTTPException(status_code=500, detail=result.model_dump())
     return result
 
@@ -82,6 +86,8 @@ async def packages_append_endpoint(
     if result is None:
         raise HTTPException(status_code=404, detail="Package not found")
     if isinstance(result, ErrorResponse):
+        if result.error == "NotFoundError":
+            raise HTTPException(status_code=404, detail=result.message)
         raise HTTPException(status_code=500, detail=result.model_dump())
     return result.model_dump()
 

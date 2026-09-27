@@ -102,6 +102,44 @@ describe("cli commands: help and usage", () => {
   });
 });
 
+describe("cli commands: command-level help", () => {
+  const HELP_CASES = [
+    [["construct", "--help"], /retrack construct "<prompt>" \[<budget>\]/],
+    [["construct", "-h"], /retrack construct "<prompt>" \[<budget>\]/],
+    [["list", "--help"], /retrack list <repositories\|packages>/],
+    [["list", "packages", "--help"], /retrack list packages/],
+    [["list", "repositories", "-h"], /retrack list repositories/],
+    [["show", "--help"], /retrack show package <id>/],
+    [["append", "--help"], /retrack append package <id> "<text>"/],
+    [["delete", "--help"], /retrack delete <package\|repository>/],
+    [["delete", "package", "--help"], /retrack delete package <id> --yes/],
+    [["delete", "repository", "-h"], /retrack delete repository <path\|name> --yes/],
+    [["export", "--help"], /retrack export package <id> <path>/],
+    [["resynthesize", "--help"], /retrack resynthesize package <id> --yes/],
+    [["index", "--help"], /retrack index \[<path>\]/],
+    [["index", "-h"], /retrack index \[<path>\]/],
+  ];
+
+  it("prints command help before validating arguments, without a backend", async () => {
+    for (const [args, expected] of HELP_CASES) {
+      // An unreachable backend URL proves help neither connects nor starts one.
+      const result = await runCli(args, {
+        env: { RETRACK_BACKEND_URL: "http://127.0.0.1:1", RETRACK_CLI_STATE: path.join(os.tmpdir(), "retrack-cli-help-unused.json") },
+      });
+      assert.equal(result.code, 0, `${args.join(" ")} should exit 0, stderr: ${result.stderr}`);
+      assert.match(result.stdout, expected, `${args.join(" ")} should print its own help`);
+      assert.equal(result.stdout.includes("error:"), false, `${args.join(" ")} must not print an error`);
+      assert.equal(result.stderr, "", `${args.join(" ")} must not start a backend or report anything`);
+    }
+  });
+
+  it("still rejects unknown commands with --help", async () => {
+    const result = await runCli(["bogus", "--help"]);
+    assert.equal(result.code, 2);
+    assert.match(result.stderr, /unknown command: bogus/);
+  });
+});
+
 describe("cli commands: repositories", () => {
   it("lists repositories with backend fields and raw JSON", async () => {
     await withStub({}, async ({ run, stub }) => {
@@ -352,14 +390,26 @@ describe("cli commands: packages", () => {
     });
   });
 
-  it("appends a task without regenerating anything", async () => {
+  it("appends the note to both the task and the stored Markdown, without regenerating", async () => {
     await withStub({}, async ({ run, stub }) => {
+      const before = stub.state.packages[0].markdown;
       const result = await run(["append", "package", "pkg-1", "Include deployment considerations"]);
       assert.equal(result.code, 0);
       assert.match(result.stdout, /appended to Auth context \(pkg-1\)/);
+
       const call = stub.requests.find((entry) => entry.route === "POST /packages/pkg-1/append");
-      assert.equal(call.body.additional_task, "Include deployment considerations");
-      assert.equal(stub.requests.some((entry) => entry.route === "POST /api/v1/context"), false, "append never regenerates");
+      assert.deepEqual(
+        [call.body.additional_task, call.body.additional_markdown],
+        ["Include deployment considerations", "Include deployment considerations"],
+        "the supplied note is sent as both the task and the markdown the backend appends"
+      );
+
+      const stored = stub.state.packages[0];
+      assert.equal(stored.task, "Include deployment considerations");
+      assert.match(stored.markdown, /Include deployment considerations$/, "the note is represented in the stored content");
+      assert.ok(stored.markdown.startsWith(before), "append extends the content instead of replacing it");
+      assert.equal(stored.id, "pkg-1", "the package identity is unchanged");
+      assert.equal(stub.requests.some((entry) => entry.route === "POST /api/v1/context"), false, "append invokes no model");
     });
   });
 

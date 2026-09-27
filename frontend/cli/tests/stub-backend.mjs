@@ -229,9 +229,12 @@ export async function startStubBackend(overrides = {}) {
       const pkg = state.packages.find((item) => item.id === packageId);
       if (!pkg) return notFound("package");
       if (action === "append") {
-        pkg.task = `${pkg.task}\n${body?.additional_task ?? ""}`.trim();
-        pkg.token_estimate += 32;
-        pkg.updated_at = "2026-09-26T10:00:00+00:00";
+        // Mirrors JsonContextPackageRepository.append: the additional task
+        // replaces the stored task, the additional markdown extends the stored
+        // content after a separator, and nothing else moves.
+        pkg.markdown += `\n\n---\n\n${body?.additional_markdown ?? ""}`;
+        pkg.task = body?.additional_task ?? pkg.task;
+        if (body?.additional_objective) pkg.objective = body.additional_objective;
         return send(200, pkg);
       }
       if (request.method === "GET") return send(200, pkg);

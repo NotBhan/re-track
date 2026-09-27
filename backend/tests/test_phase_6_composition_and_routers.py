@@ -298,6 +298,63 @@ class TestRouterEndpointsExecution:
         assert resp.status_code == 404
         assert resp.json()["detail"] == "Package not found"
 
+    def test_packages_get_404_when_use_case_reports_not_found(self, test_client):
+        """The production path: the use case answers ErrorResponse(NotFoundError)."""
+        mock_container = ApplicationContainer.create()
+        mock_pkg = MagicMock()
+        mock_pkg.get_context_package = AsyncMock(
+            return_value=ErrorResponse(error="NotFoundError", message="Context package gone not found")
+        )
+        mock_container.get_package_use_cases = MagicMock(return_value=mock_pkg)
+        set_container(mock_container)
+
+        resp = test_client.get("/packages/gone")
+
+        assert resp.status_code == 404, "a missing package is a not-found condition, not a server error"
+        assert resp.json()["detail"] == "Context package gone not found"
+        assert "Traceback" not in resp.text
+
+    def test_packages_get_404_for_an_arbitrary_id(self, test_client):
+        mock_container = ApplicationContainer.create()
+        mock_pkg = MagicMock()
+        mock_pkg.get_context_package = AsyncMock(
+            return_value=ErrorResponse(error="NotFoundError", message="Context package !! not found")
+        )
+        mock_container.get_package_use_cases = MagicMock(return_value=mock_pkg)
+        set_container(mock_container)
+
+        resp = test_client.get("/packages/!!")
+
+        assert resp.status_code == 404
+
+    def test_packages_delete_404_when_use_case_reports_not_found(self, test_client):
+        mock_container = ApplicationContainer.create()
+        mock_pkg = MagicMock()
+        mock_pkg.delete_context_package = AsyncMock(
+            return_value=ErrorResponse(error="NotFoundError", message="Context package gone not found")
+        )
+        mock_container.get_package_use_cases = MagicMock(return_value=mock_pkg)
+        set_container(mock_container)
+
+        resp = test_client.delete("/packages/gone")
+
+        assert resp.status_code == 404
+        assert resp.json()["detail"] == "Context package gone not found"
+
+    def test_packages_append_404_when_use_case_reports_not_found(self, test_client):
+        mock_container = ApplicationContainer.create()
+        mock_pkg = MagicMock()
+        mock_pkg.append_context_package = AsyncMock(
+            return_value=ErrorResponse(error="NotFoundError", message="Context package gone not found")
+        )
+        mock_container.get_package_use_cases = MagicMock(return_value=mock_pkg)
+        set_container(mock_container)
+
+        resp = test_client.post("/packages/gone/append", json={"additional_task": "more"})
+
+        assert resp.status_code == 404
+        assert resp.json()["detail"] == "Context package gone not found"
+
     def test_settings_endpoints(self, test_client):
         mock_container = ApplicationContainer.create()
         mock_sys = MagicMock()

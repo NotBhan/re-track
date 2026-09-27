@@ -22,7 +22,7 @@ import path from "node:path";
 
 import { createBackendClient, BackendRequestError, BackendUnreachableError } from "../shared/backend-client.mjs";
 import { parseArgv, parseTokenBudget, assertOptions, UsageError } from "./args.mjs";
-import { renderMainHelp, renderCommandHelp, resolveHelpTopic } from "./help.mjs";
+import { renderMainHelp, renderCommandHelp, resolveHelpTopic, resolveCommandHelpKey } from "./help.mjs";
 import { readSelection, writeSelection, SelectionError } from "./selection.mjs";
 import { ensureBackend, BackendStartupError } from "./backend-lifecycle.mjs";
 
@@ -488,7 +488,11 @@ async function cmdShowPackage(ctx, id) {
 async function cmdAppendPackage(ctx, id, text) {
   let updated;
   try {
-    updated = await ctx.client.appendContextPackage(id, { task: text });
+    // The backend contract is explicit: `additional_task` becomes the package's
+    // task metadata and `additional_markdown` is what extends the stored
+    // Markdown (after a separator). The note is user content, so it is sent as
+    // both — sending an empty Markdown field is what made the append invisible.
+    updated = await ctx.client.appendContextPackage(id, { task: text, markdown: text });
   } catch (error) {
     throw mapNotFound(error, `package not found: ${id}`);
   }
@@ -798,12 +802,19 @@ async function main(argv) {
     return 0;
   }
 
+  // Command-level help is resolved before routing: `retrack construct --help`
+  // and `retrack delete --help` must work without the arguments those commands
+  // require, and without a backend, a selection or any filesystem access.
+  if (flags.help) {
+    const helpKey = resolveCommandHelpKey(positionals);
+    if (helpKey) {
+      out(`${renderCommandHelp(helpKey)}\n`);
+      return 0;
+    }
+  }
+
   const command = routeCommand(positionals, { flags, options });
   assertOptions(used, [...GLOBAL_OPTIONS, ...command.options], verb);
-  if (flags.help) {
-    out(`${renderCommandHelp(command.key)}\n`);
-    return 0;
-  }
 
   const context = { client: null, json: Boolean(flags.json), flags, options };
   if (command.local) return (await command.run(context)) ?? 0;

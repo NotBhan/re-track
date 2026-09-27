@@ -35,7 +35,7 @@ retrack <command> [arguments] [options]
 | `scan [<path>]` | Refresh languages/frameworks/size without indexing |
 | `construct "<prompt>" [<budget>]` | Generate a context package for a task |
 | `show package <id>` | Print a stored package and its Markdown |
-| `append package <id> "<text>"` | Append a task/note to a stored package |
+| `append package <id> "<text>"` | Append a task/note to a stored package (the note becomes its task **and** extends the stored Markdown; never regenerates) |
 | `delete package <id> --yes` | Delete a stored package |
 | `export package <id> <path>` | Write the stored Markdown to a file |
 | `resynthesize package <id> --yes` | Regenerate a stored package in place |
@@ -74,6 +74,10 @@ retrack resynthesize package 5f3a9c2b1d --yes
 # Token budgets
 
 `construct` and `resynthesize` accept `4k` / `8k` / `16k` / `32k` (`k` = 1024, case-insensitive) or a plain integer. The backend contract is `max_tokens >= 100` with no upper bound, so nothing below 100 is accepted and no maximum is invented at the CLI boundary. The default is `4k` (4096). The budget may be positional (`construct "..." 4k`) or a flag (`--budget 4k`) — never both.
+
+---
+
+Every command answers `retrack <command> --help` (and `-h`) with its own reference: the help key is resolved from the command path before argument validation, so `retrack construct --help` and `retrack delete --help` work with no arguments, no backend, no selection and no filesystem access. Grouped verbs (`list`, `delete`) have their own reference page and their concrete forms (`list packages`, `delete repository`) resolve to theirs.
 
 ---
 
@@ -120,6 +124,7 @@ A command works without a manually started backend:
 5. Output never invents values for fields the backend did not return; missing data is stated as missing.
 6. No interactive prompts. Destructive commands (`delete`, `resynthesize`) require `--yes`; the CLI is safe to run from scripts.
 7. The CLI never creates a second package, never regenerates as part of `append`, and never overwrites a file without `--force`.
+8. `append package` sends the supplied note as both the append's task and its Markdown, because the backend contract replaces the task metadata and extends the stored content from those two fields; an append never invokes a model.
 
 ---
 
