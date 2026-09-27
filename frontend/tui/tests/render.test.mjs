@@ -6,7 +6,7 @@ import { buildModel, composeFrame, composeLines, createPlainStyler, HELP_NOTES }
 import { createStyler } from "../theme.mjs";
 import { layoutFor, windowStart, wrapStep, truncate } from "../layout.mjs";
 import { formatMarkdown } from "../markdown.mjs";
-import { PACKAGES, char, key, plain, publishViewport, settle, startApp } from "./fixtures.mjs";
+import { CONTEXT_OK, PACKAGES, char, key, plain, publishViewport, settle, startApp } from "./fixtures.mjs";
 
 const ANSI = /\u001b\[[0-9;]*m/g;
 const strip = (text) => String(text).replace(ANSI, "");
@@ -277,6 +277,84 @@ describe("render: context output", () => {
     const raw = text(frame(app, 100, 24).lines);
     assert.match(raw, /# Auth/);
     assert.match(raw, /raw/);
+  });
+});
+
+describe("render: context evidence", () => {
+  /** Run a manually typed task through the same path the `n` dialog uses. */
+  const manualTask = async (agentContext, prompt) => {
+    const started = await startApp({ agentContext });
+    started.app.dispatch(char("3"));
+    started.app.dispatch(char("n"));
+    for (const value of prompt) started.app.dispatch(char(value));
+    started.app.dispatch(key("enter"));
+    await settle(4);
+    return started;
+  };
+
+  it("renders the evidence the engine gathered for a custom prompt", async () => {
+    const files = ["backend/app/services/evidence_service.py", "backend/app/application/use_cases/context.py"];
+    const { app, client } = await manualTask(
+      {
+        ...CONTEXT_OK,
+        evidence_state: "sufficient",
+        evidence_score: 0.502,
+        evidence_confidence: 0.5,
+        extracted_symbols: [],
+        evidence_symbols: [],
+        related_files: files,
+        evidence_files: files,
+        missing_evidence: [],
+        abstained: false,
+      },
+      "how does the evidence service assess evidence"
+    );
+
+    assert.equal(
+      client.calls.find((entry) => entry.name === "agentContext").args[0].taskPrompt,
+      "how does the evidence service assess evidence",
+      "the custom prompt reaches the backend verbatim"
+    );
+
+    const body = text(frame(app, 120, 60).lines);
+    assert.match(body, /state: Sufficient\s+strength: 50%/);
+    assert.match(body, /confidence: Single-channel/);
+    assert.match(body, /files \(2\): backend\/app\/services\/evidence_servi/, "the evidence files the engine verified are shown");
+    assert.doesNotMatch(body, /engine abstained/);
+  });
+
+  it("shows the no-evidence state and the engine's reason for a manual task that matches nothing", async () => {
+    const { app } = await manualTask(
+      {
+        ...CONTEXT_OK,
+        evidence_state: "none",
+        evidence_score: 0.003,
+        evidence_confidence: 0,
+        extracted_symbols: [],
+        evidence_symbols: [],
+        evidence_files: [],
+        evidence_relationships: [],
+        related_files: [],
+        observed_evidence: ["Indexed repository files: 576 files analyzed."],
+        missing_evidence: ["Concrete code implementations or symbol definitions matching the task"],
+        abstained: true,
+        abstention_reason:
+          "Filesystem path references without matched code content or symbol definitions do not constitute sufficient repository evidence.",
+        model_claims_allowed: false,
+      },
+      "write a haiku about the ocean"
+    );
+
+    const body = text(frame(app, 120, 60).lines);
+    assert.match(body, /state: No evidence\s+strength: 0%/);
+    assert.match(body, /confidence: Not computed/);
+    assert.match(body, /engine abstained from unsupported claims/);
+    assert.match(body, /Filesystem\s+path\s+references\s+without\s+matched\s+code\s+content/);
+    assert.match(body, /missing evidence/);
+    assert.match(body, /Concrete\s+code\s+implementations\s+or\s+symbol\s+definitions\s+matching\s+the\s+task/);
+    assert.match(body, /symbols \(0\): none/, "no symbol evidence is invented");
+    assert.match(body, /files \(0\): none/, "no file evidence is invented");
+    assert.doesNotMatch(body, /state: Sufficient/);
   });
 });
 
