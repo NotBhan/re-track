@@ -12,7 +12,7 @@ Owns:
 
 - `gui/` — Tauri/React desktop application (`gui/index.html`, `gui/src/`, `gui/public/`).
 - `tui/` — Terminal user interface (`tui/retrack.mjs`).
-- `cli/` — Command-line interface and argument parsing (`cli/retrack.mjs`).
+- `cli/` — Command-line interface: command surface, argument parsing, help, persisted repository selection and its own backend lifecycle (`cli/retrack.mjs`, `cli/args.mjs`, `cli/help.mjs`, `cli/selection.mjs`, `cli/backend-lifecycle.mjs`).
 - `shared/` — Interface-agnostic backend contract client used by TUI and CLI.
 
 ---
@@ -49,7 +49,7 @@ The TUI and CLI are excluded from the GUI bundle: Vite only bundles what `gui/in
 
 - `shared/backend-client.mjs` is the single backend contract surface for non-GUI interfaces. New backend endpoints are added there, not inlined per interface.
 - Terminal interfaces must restore the terminal (cursor, alternate screen, raw mode) on every exit path, including Ctrl+C, EOF, and uncaught errors.
-- The TUI owns its backend process lifecycle (`tui/backend-lifecycle.mjs`, a port of the desktop runtime's startup contract): `npm run tui` attaches to a reachable backend and otherwise starts one, terminating only the process tree that invocation started. The CLI never spawns a backend.
+- The TUI and the CLI each own their backend process lifecycle (`tui/backend-lifecycle.mjs` and `cli/backend-lifecycle.mjs`, both ports of the desktop runtime's startup contract): an invocation attaches to a reachable backend and otherwise starts one, terminating only the process tree that invocation started and never signalling a pre-existing backend. The two modules exist because interfaces must not import one another; the contract, not the file, is shared. The CLI's `--no-start` disables startup entirely.
 - Keep interface-specific dependencies isolated. Do not introduce a framework solely to populate a folder.
 
 ---
@@ -60,6 +60,7 @@ The TUI and CLI are excluded from the GUI bundle: Vite only bundles what `gui/in
 npm run build                 # GUI typecheck + production build
 npm run test                  # GUI unit/integration suite
 npm run test:tui              # TUI node:test suites (keys, state, render, menu, scroll, export, clipboard, lifecycle, process, client)
+npm run test:cli              # CLI node:test suites (args, selection, lifecycle, commands against a stub backend)
 npm run lint                  # oxlint over gui, cli, tui, shared
 npx playwright test           # live-backend E2E (backend must be running on 127.0.0.1:8765)
 node frontend/cli/retrack.mjs help

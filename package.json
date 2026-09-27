@@ -9,6 +9,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:tui": "node --test frontend/tui/tests/",
+    "test:cli": "node --test frontend/cli/tests/",
     "preview": "vite preview",
     "tauri": "node scripts/tauri.mjs",
     "cli": "node frontend/cli/retrack.mjs",
