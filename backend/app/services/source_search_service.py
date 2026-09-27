@@ -82,6 +82,18 @@ class SourceSearchService(SourceSearchPort):
         all_terms = clean_hints + clean_symbols + clean_entities + sub_tokens + root_variants + prompt_words
         return list(dict.fromkeys(all_terms))[:40]
 
+    @staticmethod
+    def _is_within_root(path: Path, root_canon: Path) -> bool:
+        """Verify a source file still resolves inside the repository before it is read.
+
+        Re-checked at read time (not only during discovery) so a file swapped for an
+        escaping symlink after discovery cannot leak content from outside the root.
+        """
+        try:
+            return path.resolve().is_relative_to(root_canon)
+        except OSError:
+            return False
+
     def extract_relevant_snippets(
         self,
         repo_path: Path,
@@ -105,6 +117,7 @@ class SourceSearchService(SourceSearchPort):
         exact_symbols_set = {t.lower() for t in search_terms if "." not in t and len(t) > 2}
         distinct_terms = list(dict.fromkeys([t.lower() for t in search_terms if len(t) > 2]))
         source_exts = {".py", ".ts", ".tsx", ".js", ".jsx", ".rs", ".go", ".java", ".c", ".cpp"}
+        repo_canon = repo_path.resolve()
 
         # --- STAGE 1: In-Memory Metadata & Path Relevance (Zero Disk I/O) ---
         stage1_scored: list[tuple[float, str, Path]] = []
@@ -166,6 +179,8 @@ class SourceSearchService(SourceSearchPort):
         for s1_score, rel, fpath in candidates_to_inspect:
             score = s1_score
             try:
+                if not self._is_within_root(fpath, repo_canon):
+                    continue
                 if self._fs.get_file_size(fpath) < max_file_size:
                     content = self._fs.read_text(fpath, errors="replace")
                     content_lower = content.lower()
@@ -202,6 +217,8 @@ class SourceSearchService(SourceSearchPort):
         relevant_snippets: list[str] = []
         for score, rel_path, full_path in confident_candidates[:max_snippets]:
             try:
+                if not self._is_within_root(full_path, repo_canon):
+                    continue
                 text = self._fs.read_text(full_path, errors="replace")
                 lines = text.splitlines()
                 matching_indices = [

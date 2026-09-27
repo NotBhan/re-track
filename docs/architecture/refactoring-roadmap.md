@@ -436,7 +436,7 @@ External AI coding assistants (such as Claude Code, Cursor, Antigravity, and Gem
    - Sub-100ms warm response times through in-process caching.
    - Verified by 12 comprehensive unit, boundary, and protocol tests.
 - **Negative**:
-   - Adds `mcp>=1.0.0` dependency to backend.
+   - Adds `mcp` dependency to backend (currently `mcp>=2.0.0`, the SDK generation that exposes `MCPServer`).
 
 ---
 

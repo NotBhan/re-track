@@ -36,7 +36,7 @@ However, **Infrastructure Readiness $\neq$ Packaged Product Release Readiness**.
 
 | Gap ID | Area | Description | Impact | Proposed Resolution Phase |
 | :--- | :--- | :--- | :--- | :--- |
-| **GAP-P2-01** | **Native Desktop Packaging (Tauri)** | Frontend and Backend currently run as separate dev servers (`npm run dev` + `uvicorn` / `FastMCP`). Native Tauri binary bundling is not finalized. | Requires terminal interaction rather than a native `.dmg` / `.deb` / `.msi` app. | **Phase 9B** |
+| **GAP-P2-01** | **Native Desktop Packaging (Tauri)** | Frontend and Backend currently run as separate dev servers (`npm run dev` + `uvicorn` / `retrack-mcp`). Native Tauri binary bundling is not finalized. | Requires terminal interaction rather than a native `.dmg` / `.deb` / `.msi` app. | **Phase 9B** |
 | **GAP-P2-02** | **Automated Release Versioning** | Release version string is static (`0.1.0`) and not automated via Semantic Versioning and automated GitHub Releases. | Version tracking across frontend, backend, and MCP manifests requires manual edits. | **Phase 9D** |
 | **GAP-P2-03** | **In-App Health & Status Inspector** | Settings page displays basic connectivity, but lacks a detailed health check drill-down (database sizes, cache hit ratios, active concurrency queue depth). | Users cannot visually inspect cache performance or queue load from the UI. | **Phase 9C** |
 

@@ -5,8 +5,8 @@ Wires MCP protocol requests to Application Use Cases via ApplicationContainer.
 """
 
 import asyncio
+import contextlib
 import logging
-from pathlib import Path
 import sys
 from typing import Any, Optional
 
@@ -30,8 +30,11 @@ def create_mcp_server(container: Optional[ApplicationContainer] = None) -> MCPSe
         version=__version__,
         instructions=(
             "RE:Track (RefinedEngine Track) MCP server providing persistent repository memory, "
-            "deterministic AST call graphs, architectural summaries, and high-precision context packages "
-            "for AI coding agents."
+            "deterministic AST call graphs, architectural summaries, and evidence-grounded context "
+            "packages for AI coding agents. Repository access is restricted to repositories registered "
+            "with RE:Track and paths under configured workspace roots. Every tool returns a structured "
+            "payload whose 'success' field is authoritative; failures carry an 'error' and 'message' and "
+            "never fabricated results."
         ),
     )
 
@@ -39,8 +42,11 @@ def create_mcp_server(container: Optional[ApplicationContainer] = None) -> MCPSe
     @server.tool(
         name="get_agent_context",
         description=(
-            "Synthesizes a high-precision, token-budgeted Context Package for a coding task in a repository, "
-            "including AST call graphs, caller/callee relationships, symbol references, and relevant source snippets."
+            "Synthesizes a token-budgeted, evidence-grounded Context Package for a coding task in an "
+            "authorized repository, including source evidence, AST symbols, caller/callee relationships, "
+            "and provenance. Reports evidence state (sufficient/partial/insufficient/none), may abstain "
+            "when repository evidence is insufficient, and reports inference and fallback telemetry. "
+            "The repository must be registered with RE:Track or reside under a configured workspace root."
         ),
     )
     async def get_agent_context(
@@ -72,8 +78,10 @@ def create_mcp_server(container: Optional[ApplicationContainer] = None) -> MCPSe
     @server.tool(
         name="get_repository_summary",
         description=(
-            "Returns high-level structural knowledge of a repository: purpose, technology stack, "
-            "architectural layers, key components, and entry points."
+            "Returns live structural knowledge of an authorized repository: purpose, technology stack, "
+            "architectural layers, key components, entry points, and call-graph state. Computed from the "
+            "current filesystem/AST state, not from cached semantic memory. The repository must be "
+            "registered with RE:Track or reside under a configured workspace root."
         ),
     )
     async def get_repository_summary(
@@ -93,8 +101,10 @@ def create_mcp_server(container: Optional[ApplicationContainer] = None) -> MCPSe
     @server.tool(
         name="get_ast_call_graph",
         description=(
-            "Returns the deterministic AST call graph (nodes and caller/callee directed edges) "
-            "extracted from repository code."
+            "Returns the deterministic AST call graph extracted from authorized repository source: real "
+            "nodes (symbol label, file, kind, line) and caller-to-callee directed edges. call_graph_status "
+            "distinguishes analyzed / zero_edges / not_analyzed / failed; failed or unavailable graphs are "
+            "never replaced with synthetic nodes or edges."
         ),
     )
     async def get_ast_call_graph(
@@ -120,8 +130,10 @@ def create_mcp_server(container: Optional[ApplicationContainer] = None) -> MCPSe
     @server.tool(
         name="search_repository_code",
         description=(
-            "Searches repository source files for matching symbols, function definitions, classes, "
-            "and keyword references with relevance ranking."
+            "Searches source files inside an authorized repository for matching symbols, definitions, "
+            "classes, and keyword references, returning ranked repository-relative file paths with "
+            "matched symbols and bounded snippets. Reads are confined to the repository root; symlinks "
+            "that escape it are ignored."
         ),
     )
     async def search_repository_code(
@@ -147,8 +159,9 @@ def create_mcp_server(container: Optional[ApplicationContainer] = None) -> MCPSe
     @server.tool(
         name="list_indexed_repositories",
         description=(
-            "Lists all repositories registered in RE:Track with their metadata, local paths, "
-            "detected languages, and indexing status."
+            "Lists the repositories registered with this RE:Track installation, including local path, "
+            "branch, commit, indexing status, detected languages, frameworks, and call-graph state. "
+            "Only registered repositories are exposed."
         ),
     )
     async def list_indexed_repositories() -> dict[str, Any]:
@@ -161,11 +174,27 @@ def create_mcp_server(container: Optional[ApplicationContainer] = None) -> MCPSe
 
 
 async def run_mcp_stdio(container: Optional[ApplicationContainer] = None) -> None:
-    """Run the RE:Track MCP server over stdio transport."""
+    """Run the RE:Track MCP server over stdio transport.
+
+    The container is initialized before the stdio transport opens so every tool
+    reaches its authoritative use case (context synthesis requires the memory,
+    indexing and context services). stdout is protocol-only: third-party output
+    emitted during initialization is redirected to stderr.
+    """
     from app.core.logging import setup_logging
     setup_logging(level=logging.INFO, stream=sys.stderr)
 
     app_container = container or get_container()
+    logger.info("Initializing RE:Track backend services for MCP server...")
+    try:
+        with contextlib.redirect_stdout(sys.stderr):
+            await app_container.initialize()
+        logger.info("Backend services initialized successfully.")
+    except (asyncio.CancelledError, KeyboardInterrupt):
+        raise
+    except Exception as e:
+        logger.warning("Backend service initialization warning: %s", e)
+
     server = create_mcp_server(container=app_container)
     logger.info("Starting RE:Track MCP stdio server...")
     try:

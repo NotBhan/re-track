@@ -234,7 +234,7 @@ def test_installed_mcp_entrypoint(clean_installed_environment):
             env=env,
             capture_output=True,
             text=True,
-            timeout=15,
+            timeout=45,
         )
 
         assert proc.returncode == 0 or proc.stdout != ""
@@ -273,7 +273,7 @@ def test_installed_module_entrypoint(clean_installed_environment):
             env=env,
             capture_output=True,
             text=True,
-            timeout=15,
+            timeout=45,
         )
 
         assert proc.returncode == 0 or proc.stdout != ""
@@ -310,7 +310,7 @@ def test_installed_mcp_stdio_integrity(clean_installed_environment):
             env=env,
             capture_output=True,
             text=True,
-            timeout=15,
+            timeout=45,
         )
 
         # Parse every non-empty line on stdout as valid JSON

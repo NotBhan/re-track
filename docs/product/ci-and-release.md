@@ -21,7 +21,7 @@ graph TD
     AST --> PkgBuild
     Lint --> PkgBuild
     
-    PkgBuild --> CleanInstall[Clean Install Outside Repository<br/>CLI & FastMCP Validation]
+    PkgBuild --> CleanInstall[Clean Install Outside Repository<br/>CLI & MCP Validation]
     CleanInstall --> Checksums[Generate SHA-256 Checksums]
 ```
 
@@ -86,7 +86,7 @@ RE:Track enforces a strict single-source versioning model:
    ```
 3. **Runtime Reflection**:
    - `retrack --version` reads `app.__version__`.
-   - `retrack-mcp` FastMCP server instantiates with `version=app.__version__`.
+   - `retrack-mcp` MCP server instantiates with `version=app.__version__`.
    - `SystemUseCases` derives `self.version = app.__version__`.
 4. **Mechanical Drift Enforcement**: `tests/test_version_authority.py` fails CI if `package.json`, `tauri.conf.json`, or built distributions diverge from `app.__version__`.
 

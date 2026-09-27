@@ -1,7 +1,7 @@
 """RE:Track Model Context Protocol (MCP) Inbound Adapter Package.
 
 Exposes RE:Track context synthesis and repository knowledge capabilities
-to external AI coding agents via MCP stdio/SSE protocol.
+to external AI coding agents via the MCP stdio transport.
 """
 
 from app.mcp.server import create_mcp_server, run_mcp_stdio

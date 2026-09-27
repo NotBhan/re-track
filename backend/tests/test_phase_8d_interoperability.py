@@ -25,7 +25,7 @@ async def test_mcp_real_client_session_and_tool_execution():
         command=sys.executable,
         args=["mcp_server.py"],
         cwd=str(backend_dir),
-        env={**os.environ, "LLM_PROVIDER_BASE_URL": "http://127.0.0.1:1/v1"},
+        env={**os.environ, "LLM_ENDPOINT": "http://127.0.0.1:1/v1"},
     )
 
     t0 = time.perf_counter()
@@ -71,7 +71,7 @@ async def test_repeated_mcp_session_reconnect_cycles():
         command=sys.executable,
         args=["mcp_server.py"],
         cwd=str(backend_dir),
-        env={**os.environ, "LLM_PROVIDER_BASE_URL": "http://127.0.0.1:1/v1"},
+        env={**os.environ, "LLM_ENDPOINT": "http://127.0.0.1:1/v1"},
     )
 
     for cycle in range(5):

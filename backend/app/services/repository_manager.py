@@ -135,6 +135,21 @@ class RepositoryManager:
             except Exception:
                 pass
 
+    def reload(self) -> None:
+        """Refresh in-memory repository state from the persisted store.
+
+        Every mutation is persisted immediately, so the on-disk store reflects
+        repositories registered by other processes. Re-reading it lets a
+        long-lived process (for example the MCP server) observe those
+        registrations without restarting, while registrations that exist only in
+        this process's memory are preserved.
+        """
+        in_memory_only = dict(self._repositories)
+        self._repositories = {}
+        self._load()
+        for repo_id, data in in_memory_only.items():
+            self._repositories.setdefault(repo_id, data)
+
     def _save(self) -> None:
         self._store_path.parent.mkdir(parents=True, exist_ok=True)
         tmp_path = self._store_path.with_suffix(".tmp")

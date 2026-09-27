@@ -17,7 +17,7 @@ Rather than directly exposing memory backends to the frontend, all interactions 
 │                                INBOUND / DRIVING ADAPTERS                              │
 ├──────────────────────────────┬──────────────────────────────┬──────────────────────────┤
 │      Desktop UI (Tauri)      │         Headless CLI         │   MCP Server (stdio)     │
-│    React + Vite + Tailwind   │      Typer / Argparse        │  FastMCP 5 Tools Surface │
+│    React + Vite + Tailwind   │      Typer / Argparse        │  MCP Server (MCPServer)  │
 └──────────────┬───────────────┴──────────────┬───────────────┴─────────────┬────────────┘
                │                              │                             │
                ▼                              ▼                             ▼
@@ -76,7 +76,7 @@ The architecture follows six primary principles:
 
 - **FastAPI Modular Routers (`backend/app/api/routers/`)**: Exposes REST endpoints for the desktop Tauri interface across 7 domain modules.
 - **Headless CLI (`backend/app/cli/`)**: Standalone terminal interface for indexing, searching, and generating context packages.
-- **MCP Stdio Server (`backend/app/mcp/`)**: FastMCP stdio interface exposing 5 standardized tools with strict stderr logging and clean EOF/signal shutdown semantics.
+- **MCP Stdio Server (`backend/app/mcp/`)**: MCP stdio interface exposing 5 standardized tools with strict stderr logging and clean EOF/signal shutdown semantics.
 
 ## 2. Application Layer & Use Cases
 

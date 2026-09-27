@@ -54,9 +54,9 @@ retrack diagnostics --output /tmp/retrack-diagnostics.json
 - **Symptom**: MCP tool returns error: `"Path '/path/to/repo' is not within authorized workspace roots"`.
 - **Cause**: Security sandbox prevents AI coding agents from accessing arbitrary filesystem paths outside designated project folders.
 - **Resolution**:
-  1. Add the parent directory to `RETRACK_WORKSPACE_ROOTS` environment variable:
+  1. Add the parent directory to `RETRACK_WORKSPACE_ROOTS` environment variable (delimit multiple roots with `:` on Linux/macOS or `;` on Windows):
      ```bash
-     export RETRACK_WORKSPACE_ROOTS="/home/user/projects,/tmp/repos"
+     export RETRACK_WORKSPACE_ROOTS="/home/user/projects:/tmp/repos"
      ```
   2. Or register the repository in RE:Track:
      ```bash
@@ -70,7 +70,7 @@ retrack diagnostics --output /tmp/retrack-diagnostics.json
 - **Cause**: Standard output (`stdout`) was polluted by raw print statements or third-party library logging.
 - **Guarantee**:
   - RE:Track routes all diagnostic logs to `stderr` exclusively (`setup_logging(stream=sys.stderr)`).
-  - `stdout` is reserved 100% for FastMCP JSON-RPC communication.
+  - `stdout` is reserved 100% for MCP JSON-RPC communication.
 - **Diagnostic Verification**:
   Run MCP standalone in terminal to inspect stderr output:
   ```bash

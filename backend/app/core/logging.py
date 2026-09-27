@@ -1,6 +1,6 @@
 """Structured logging subsystem for RE:Track.
 
-Directs human-readable logs to stderr to preserve stdout for FastMCP JSON-RPC communication,
+Directs human-readable logs to stderr to preserve stdout for MCP JSON-RPC communication,
 and simultaneously writes structured JSONL records to canonical persistent storage (~/.retrack/logs/app.jsonl)
 with safe file rotation, retention limits, and automatic secret redaction.
 """
@@ -205,7 +205,7 @@ def setup_logging(
 ) -> None:
     """Configure structured logging for RE:Track.
 
-    Directs human-readable logs to stderr to preserve stdout for FastMCP JSON-RPC protocol,
+    Directs human-readable logs to stderr to preserve stdout for MCP JSON-RPC protocol,
     and optionally writes structured JSONL logs with rotation to log_dir.
 
     Args:

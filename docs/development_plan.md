@@ -57,7 +57,7 @@ This document tracks the phased development milestones and operational roadmap f
 
 ### Phase 8A: MCP Server Inbound Driving Adapter (Completed)
 
-- [x] FastMCP stdio server (`backend/app/mcp/`) exposing 5 standardized tools: `get_agent_context`, `get_repository_summary`, `get_ast_call_graph`, `search_repository_code`, `list_indexed_repositories`.
+- [x] MCP stdio server (`backend/app/mcp/`, `MCPServer`) exposing 5 standardized tools: `get_agent_context`, `get_repository_summary`, `get_ast_call_graph`, `search_repository_code`, `list_indexed_repositories`.
 - [x] Pure Hexagonal boundary wiring directly to `ApplicationContainer` use cases without database or Cognee coupling.
 - [x] In-process AST and search execution avoiding subprocess bottlenecks.
 
@@ -110,7 +110,7 @@ This document tracks the phased development milestones and operational roadmap f
 - [x] **Phase 9C: Observability, Diagnostics & Supportability (FROZEN)**
   - Structured persistent JSONL logging (`~/.retrack/logs/app.jsonl`) with `SafeRotatingFileHandler` size-based rotation and bounded retention.
   - In-flight secret redaction regex engine redacting API keys (`sk-...`), bearer tokens, passwords, and DB/HTTP connection strings.
-  - FastMCP stdio safety: `sys.stdout` 100% reserved for JSON-RPC, human diagnostics exclusively on `sys.stderr`.
+  - MCP stdio safety: `sys.stdout` 100% reserved for JSON-RPC, human diagnostics exclusively on `sys.stderr`.
   - In-application operational health state machine (`healthy`, `degraded`, `unavailable`, `not_configured`) and concurrency queue inspection.
   - Redacted diagnostic bundle generation and atomic export (`retrack diagnostics`, `POST /diagnostics/export`).
   - Interactive Desktop Settings Diagnostics UI for real-time monitoring and log stream inspection.
@@ -120,7 +120,7 @@ This document tracks the phased development milestones and operational roadmap f
   - Multi-platform GitHub Actions CI matrix (Ubuntu, macOS, Windows) supporting Python 3.11, 3.12, and 3.13 (`.github/workflows/ci.yml`).
   - Deterministic golden retrieval benchmark regression gate (`BenchmarkRegressionGate`, `app.evaluation.benchmark_gate`) preventing precision/recall regressions beyond mathematically established tolerances.
   - Single-source version authority (`backend/app/__init__.py`) with hatchling dynamic build derivation and mechanical version drift enforcement (`test_version_authority.py`).
-  - Artifact-first package validation and clean-install outside repository (`test_packaging_validation.py`) verifying CLI and FastMCP stdio framing cleanliness.
+  - Artifact-first package validation and clean-install outside repository (`test_packaging_validation.py`) verifying CLI and MCP stdio framing cleanliness.
   - Automated gate-protected release workflow (`.github/workflows/release.yml`) with SHA-256 checksum generation and supply-chain hardening.
   - 21 dedicated Phase 9D tests passing across 3 new test files (`test_version_authority.py`, `test_benchmark_baseline_contract.py`, `test_packaging_validation.py`).
   - Phase 9D audit sign-off (`docs/architecture/phase-9d-audit.md`, `docs/architecture/phase-9d-hosted-validation.md`), CI guide (`docs/product/ci-and-release.md`), and release runbook (`docs/product/release-process.md`).
@@ -195,7 +195,7 @@ This document tracks the phased development milestones and operational roadmap f
   - Hard negative gate: when a requested subsystem (e.g. JWT authentication, billing, celery workers) has no supporting repository evidence, the engine bypasses model inference and returns a deterministic **Abstention Package** (`# Task Intent`, `# Observed Repository Evidence`, `# Missing Evidence`, `# Suggested Next Action`).
   - Strict abstention invariant: `abstained=true => model_invoked=false, model_claims_allowed=false`.
   - Post-generation grounding validation: automatic stripping of `<think>...</think>` and `[THINKING]` reasoning blocks; validation of referenced symbols and files against indexed repository.
-  - Telemetry and DTO synchronization across REST API (`AgentContextResponse`, `ContextResponse`), FastMCP (`get_agent_context_tool`), and TypeScript interfaces (`src/lib/api.ts`).
+  - Telemetry and DTO synchronization across REST API (`AgentContextResponse`, `ContextResponse`), MCP (`get_agent_context_tool`), and TypeScript interfaces (`src/lib/api.ts`).
   - Frontend truth alignment in `ContextStudio.tsx`, `ContextPipelineVisualization.tsx`, and `ContextPackageOutputPanel.tsx` with dedicated badges (`Insufficient Repository Evidence`, `Partial Evidence`, `Model Synthesized`) and structured missing-evidence callouts.
   - 13 new dedicated automated tests across `test_context_evidence_gate.py`, `test_context_grounding.py`, and `test_context_evidence_contract.py` verifying critical Django negative case and positive grounded cases.
   - Authoritative Phase 10D.3 audit documentation (`docs/architecture/phase-10d3-grounded-context-audit.md`) and user guide (`docs/product/grounded-context-generation.md`).

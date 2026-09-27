@@ -53,10 +53,12 @@ def _resolve_and_validate_repo_path(
 
     # Verify authorization against WorkspaceAuthorizationPort if container is available
     c = container or get_container()
-    if c and hasattr(c, "workspace_auth") and c.workspace_auth:
-        is_auth, reason = c.workspace_auth.is_path_authorized(str(resolved))
-        if not is_auth:
-            return None, "AuthorizationError", reason or f"Access denied to unauthorized repository path: {repository_path}"
+    workspace_auth = getattr(c, "workspace_auth", None) if c is not None else None
+    if workspace_auth is None:
+        return None, "AuthorizationError", "Workspace authorization is unavailable; repository access is denied"
+    is_auth, reason = workspace_auth.is_path_authorized(str(resolved))
+    if not is_auth:
+        return None, "AuthorizationError", reason or f"Access denied to unauthorized repository path: {repository_path}"
 
     return resolved, None, None
 
@@ -112,7 +114,12 @@ async def get_agent_context_tool(
                 "callers": result.callers,
                 "callees": result.callees,
                 "related_files": result.related_files,
+                "quantization_warning": result.quantization_warning,
                 "estimated_tokens": result.estimated_tokens,
+                "generation_time_ms": result.generation_time_ms,
+                "retrieval_time_ms": result.retrieval_time_ms,
+                "ranking_time_ms": result.ranking_time_ms,
+                "synthesis_time_ms": result.synthesis_time_ms,
                 "total_time_ms": result.total_time_ms,
                 "model_invoked": result.model_invoked,
                 "provider_identity": result.provider_identity,
@@ -132,6 +139,7 @@ async def get_agent_context_tool(
                 "abstained": result.abstained,
                 "abstention_reason": result.abstention_reason,
                 "model_claims_allowed": result.model_claims_allowed,
+                "compaction": result.compaction,
             }
 
         return {"success": False, "error": "UnexpectedResponse", "message": "Unexpected response type from use case"}
@@ -335,15 +343,20 @@ async def list_indexed_repositories_tool(
                         "id": r.id,
                         "name": r.name,
                         "local_path": r.local_path,
+                        "branch": r.branch,
+                        "commit_hash": r.commit_hash,
                         "status": r.status,
                         "languages": r.languages,
                         "frameworks": r.frameworks,
                         "file_count": r.file_count,
+                        "size_bytes": r.size_bytes,
                         "indexed_at": r.indexed_at,
+                        "error_message": r.error_message,
                         "summary": r.summary,
                         "architecture": r.architecture,
                         "components": r.components,
                         "call_graph_status": r.call_graph_status,
+                        "call_graph_error": r.call_graph_error,
                     }
                     for r in result.repositories
                 ],

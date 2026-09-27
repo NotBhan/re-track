@@ -114,7 +114,7 @@ async def test_real_subprocess_provider_crash_and_recovery_5_cycles(tmp_path: Pa
 
     container = ApplicationContainer()
     guard = BoundedConcurrencyGuard(max_concurrent=1, max_queue=5, timeout=5.0)
-    container._shared_concurrency_guard = guard
+    container.concurrency_guard = guard
 
     container.workspace_auth.add_workspace_root(tmp_path)
     container.metadata_store.upsert(

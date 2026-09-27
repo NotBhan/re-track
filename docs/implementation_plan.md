@@ -253,7 +253,7 @@ Provide high-precision repository memory, AST call graphs, and context packages 
 
 ### Deliverables
 
-- **Phase 8A (MCP Inbound Adapter)**: FastMCP stdio server (`backend/app/mcp/`) exposing 5 tools (`get_agent_context`, `get_repository_summary`, `get_ast_call_graph`, `search_repository_code`, `list_indexed_repositories`).
+- **Phase 8A (MCP Inbound Adapter)**: MCP stdio server (`backend/app/mcp/`, `MCPServer`) exposing 5 tools (`get_agent_context`, `get_repository_summary`, `get_ast_call_graph`, `search_repository_code`, `list_indexed_repositories`).
 - **Phase 8B (Security & Trust Boundary Hardening)**: Workspace authorization boundary (`WorkspaceAuthorizationService`), symlink containment, collision-proof dataset identity isolation (`derive_dataset_name`), bounded context concurrency guard, and sanitized exception isolation.
 - **Phase 8C (Operational Lifecycle & Reliability Hardening)**: Process-scoped shared concurrency guard, stderr-only logging isolation, clean stdio EOF/signal termination (< 0.15s), and verified automatic same-process LLM provider recovery.
 

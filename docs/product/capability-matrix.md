@@ -30,7 +30,7 @@ RE:Track provides a local-first code intelligence and context synthesis platform
 
 | Domain | Capability | Maturity State | Target Persona | Latency & Performance Profile | Provider Dependency |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **MCP Integration** | FastMCP Stdio Transport | **Production** | AI Coding Agents (Claude, Cursor) | Sub-1ms frame processing | None (Native Stdio) |
+| **MCP Integration** | MCP Stdio Transport (MCPServer) | **Production** | AI Coding Agents (Claude, Cursor) | Measured ms-class tool round-trips | None (Native Stdio) |
 | **MCP Integration** | Architectural Summary (`get_repository_summary`) | **Production** | AI Coding Agents | **Cold**: ~30-50ms<br>**Warm/Cached**: < 2ms | None (Deterministic AST) |
 | **MCP Integration** | Deterministic AST Call Graph (`get_ast_call_graph`) | **Production** | AI Coding Agents | **Cold**: ~50-100ms<br>**Warm/Cached**: < 5ms | None (Native AST) |
 | **MCP Integration** | Ranked Code Search (`search_repository_code`) | **Production** | AI Coding Agents | **Cold**: ~10-25ms<br>**Warm**: < 3ms | None (Local Lexical Search) |
@@ -75,7 +75,7 @@ To prevent misleading claims, RE:Track latency characteristics are categorized i
 
 | Category | Production | Production with Limitations | Internal-Only | Planned (Roadmap) | Deferred / Excluded |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **MCP / Agent Transport** | Stdio FastMCP Server, 5 Standard Tools | — | — | — | Network HTTP/SSE Transport |
+| **MCP / Agent Transport** | Stdio MCP Server (MCPServer), 5 Standard Tools | — | — | — | Network HTTP/SSE Transport |
 | **Context Synthesis** | Token Budgeting, Section Selection, Context Studio | Local Summary Fallback when Cognee empty | Bounded Concurrency Guard (`max_concurrent=1`) | Dynamic Multi-Repo Context Union | Cloud-Hosted Multi-Tenant Synthesis |
 | **Code Intelligence** | Python Native AST, TypeScript/JS/JSX Tree-sitter AST | — | Context Cache Invalidation Engine | Native WASM Bindings | Dynamic Runtime Execution Tracing |
 | **Repository Management** | Local Repository Registration, File Scanning, Incremental / Diff-Aware Indexing (Manifest 2.0) | — | Workspace Authorization Sandboxing, Selective Cache Invalidation | — | Remote Git Ingestion (`git clone` API) |

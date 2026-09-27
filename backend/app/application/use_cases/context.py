@@ -201,7 +201,14 @@ class BoundedConcurrencyGuard:
         return self._waiting_count
 
     async def acquire(self) -> tuple[bool, Optional[str]]:
-        """Attempt to acquire execution slot within queue limit and timeout."""
+        """Attempt to acquire execution slot within queue limit and timeout.
+
+        If this returns ``(True, None)`` the caller owns the slot until ``release()``.
+        There is no suspension point between a successful acquisition and that
+        return, so a cancelled or disconnected waiter can never strand a slot: a
+        cancelled waiter either never acquired it, or is unwound through the
+        caller's own ``finally`` block which releases it.
+        """
         async with self._lock:
             if self._waiting_count >= self._max_queue:
                 return False, "BusyError"
@@ -209,14 +216,12 @@ class BoundedConcurrencyGuard:
 
         try:
             await asyncio.wait_for(self._semaphore.acquire(), timeout=self._timeout)
-            return True, None
         except asyncio.TimeoutError:
             return False, "TimeoutError"
-        except asyncio.CancelledError:
-            raise
         finally:
-            async with self._lock:
-                self._waiting_count -= 1
+            self._waiting_count -= 1
+
+        return True, None
 
     def release(self) -> None:
         """Release acquired execution slot."""

@@ -28,7 +28,7 @@ This document freezes the technical release contract for RE:Track. Every stateme
 | Executable / Invocation | Implementation Target | Transport / Protocol | Logging Target | Purpose |
 | :--- | :--- | :--- | :--- | :--- |
 | **`retrack`** | `app.cli.main:app` | Native Console (Typer / Rich) | `sys.stdout` (formatted text) | Primary developer CLI (init, status, health, index, context, reset, migrate). |
-| **`retrack-mcp`** | `app.mcp.server:main` | Standard I/O (JSON-RPC) | `sys.stderr` exclusively | Dedicated FastMCP server entrypoint for IDE agent configuration. |
+| **`retrack-mcp`** | `app.mcp.server:main` | Standard I/O (JSON-RPC) | `sys.stderr` exclusively | Dedicated MCP server entrypoint for IDE agent configuration. |
 | **`python -m app.mcp`** | `app.mcp.__main__` | Standard I/O (JSON-RPC) | `sys.stderr` exclusively | Python module execution syntax for MCP stdio clients. |
 | **`python mcp_server.py`** | `backend/mcp_server.py` | Standard I/O (JSON-RPC) | `sys.stderr` exclusively | Standalone backward-compatible script entrypoint in repository root. |
 
@@ -39,7 +39,7 @@ This document freezes the technical release contract for RE:Track. Every stateme
 Configuration is evaluated with deterministic precedence (highest priority first):
 1. **Runtime Arguments**: Passed explicitly via CLI flags or MCP tool parameters.
 2. **Environment Variables**:
-   - `RETRACK_WORKSPACE_ROOTS`: Comma-separated absolute paths authorized for scanning (e.g. `/home/user/projects,/tmp/repos`).
+   - `RETRACK_WORKSPACE_ROOTS`: Workspace roots authorized for scanning, delimited by `:` on Linux/macOS or `;` on Windows (e.g. `/home/user/projects:/tmp/repos`).
    - `OLLAMA_HOST` / `OLLAMA_PORT`: Hostname and port for local LLM provider (default: `localhost:11434`).
    - `LLM_MODEL`: Target completion model name (default: `phi3:mini`).
    - `EMBEDDING_MODEL`: Target vector embedding model (default: `nomic-embed-text:latest`).
@@ -76,7 +76,7 @@ Configuration is evaluated with deterministic precedence (highest priority first
 
 - **Ollama / LM Studio Online**: Full semantic vector search, knowledge graph triples extraction, and LLM-assisted context synthesis.
 - **Provider Offline / Unreachable**:
-  - Deterministic AST call graph extraction (`get_ast_call_graph`) remains **100% operational** (< 5ms latency).
+  - Deterministic AST call graph extraction (`get_ast_call_graph`) remains **100% operational** during provider outages.
   - High-level architectural summaries (`get_repository_summary`) remain **100% operational**.
   - Ranked code search (`search_repository_code`) remains **100% operational**.
   - Context synthesis (`get_agent_context`) falls back gracefully to deterministic local AST snippets and summaries without crashing.

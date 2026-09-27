@@ -147,6 +147,12 @@ class RepositoryUseCases:
         start = time.monotonic()
         logger.info("use_case: list_repositories()")
         try:
+            # Registrations performed by other processes are persisted immediately;
+            # re-read them (preserving in-process registrations) so a long-lived
+            # interface (e.g. the MCP server) never reports a stale repository set.
+            reload_fn = getattr(self._manager, "reload", None)
+            if callable(reload_fn):
+                reload_fn()
             repos = self._manager.list_repositories()
             response = RepositoryListResponse(
                 success=True,

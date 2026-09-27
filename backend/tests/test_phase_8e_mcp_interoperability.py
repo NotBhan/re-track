@@ -47,7 +47,7 @@ async def test_20_cycle_mcp_session_interoperability(tmp_path: Path):
         env={
             **os.environ,
             "RETRACK_WORKSPACE_ROOTS": str(tmp_path),
-            "LLM_PROVIDER_BASE_URL": "http://127.0.0.1:1/v1",
+            "LLM_ENDPOINT": "http://127.0.0.1:1/v1",
         },
     )
 

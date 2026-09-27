@@ -42,7 +42,7 @@ async def test_cache_and_resource_stability_under_churn(tmp_path: Path):
 
     container = ApplicationContainer()
     guard = BoundedConcurrencyGuard(max_concurrent=1, max_queue=5, timeout=5.0)
-    container._shared_concurrency_guard = guard
+    container.concurrency_guard = guard
     container.workspace_auth.add_workspace_root(tmp_path)
 
     for i, r in enumerate(repos):

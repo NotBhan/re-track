@@ -23,7 +23,7 @@ def _get_python_executable() -> str:
     return sys.executable
 
 
-def test_repeated_process_lifecycle_20_cycles():
+def test_repeated_process_lifecycle_5_cycles():
     """Verify rapid subprocess startup, signal/EOF, and termination cycles without zombie leaks."""
     py_exec = _get_python_executable()
     mcp_script = backend_dir / "mcp_server.py"

@@ -50,7 +50,7 @@ This runbook guides Release Engineers through the deterministic, gate-protected 
 GitHub Actions automatically triggers `.github/workflows/release.yml`:
 1. Validates `v0.2.0` matches `app.__version__`.
 2. Builds wheel (`retrack_ai-0.2.0-py3-none-any.whl`) and sdist (`retrack_ai-0.2.0.tar.gz`).
-3. Installs wheel into an isolated virtual environment and tests CLI and FastMCP entrypoints.
+3. Installs wheel into an isolated virtual environment and tests CLI and MCP entrypoints.
 4. Generates `SHA256SUMS.txt`.
 5. Creates the GitHub Release with generated release notes and attachments.
 
