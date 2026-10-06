@@ -42,6 +42,12 @@ dependencies = [
     "tree-sitter-javascript>=0.23.0, <0.26.0",
 ]
 
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.24",
+]
+
 [project.scripts]
 retrack = "app.cli.main:app"
 retrack-mcp = "app.mcp.server:main"
