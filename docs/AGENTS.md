@@ -22,6 +22,7 @@ Owns:
 - Cognee Integration (`cognee_integration.md`)
 - Development Plan (`development_plan.md`)
 - Demo Plan (`demo_plan.md`)
+- Canonical Implementation Benchmarks (`benchmarks/mcp_implementation_benchmark_20261012.md`)
 
 ---
 
@@ -58,3 +59,4 @@ Verify documentation remains synchronized with implementation after every milest
 # Child DOX Index
 
 - `docs/architecture/` — Architectural baseline, current system specifications, refactoring roadmap, and decision records (Phase 0).
+- `docs/benchmarks/` — Canonical benchmark evaluations, paired implementation experiments, telemetry reports, and empirical verification.

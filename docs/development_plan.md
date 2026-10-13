@@ -26,7 +26,7 @@ This document tracks the phased development milestones and operational roadmap f
 - [x] Two-column responsive Prompt Workbench (`Dashboard.tsx`) with preset templates and `Ctrl+Enter` shortcut.
 - [x] 6-stage animated synthesis pipeline progress feedback.
 - [x] Intent parsing & hallucination guardrails display card.
-- [x] Dynamic token budget manager with reduction gauge (~92% token savings).
+- [x] Dynamic token budget manager with token reduction gauge and budget enforcement.
 - [x] One-click save to versioned context package library and markdown export.
 
 ### Phase 4: Context Packages Library & Comparison (Completed)
@@ -38,7 +38,7 @@ This document tracks the phased development milestones and operational roadmap f
 
 ### Phase 5: Telemetry, Benchmarks & Provider Management (Completed)
 
-- [x] Automated benchmark suite measuring latency (< 200ms), token savings (~90%), and accuracy.
+- [x] Automated benchmark suite measuring latency (< 200ms), token compression, and accuracy.
 - [x] Visual Token Budget comparison bar chart (Raw Repo vs RE:Track Context).
 - [x] Settings tab for dynamic LLM provider configuration and hot-reloading (`OllamaSettings.tsx`).
 
@@ -93,6 +93,15 @@ This document tracks the phased development milestones and operational roadmap f
 - [x] 500-iteration cache & resource churn stability validation (+0.91MB RSS delta, zero leaks).
 - [x] Standalone and module deployment reproducibility verification.
 - [x] Comprehensive production readiness audit report (`docs/architecture/phase-8e-audit.md`) and definitive `PRODUCTION GRADE` certification.
+
+### Phase 8F: Empirical Implementation Benchmark (Completed)
+
+- [x] Controlled paired A/B implementation experiment on Next.js 15 repository (`team-epicode--student-voice`, commit `55236e6695f095b39e28c073ccd51efc83d1079f`).
+- [x] Host Agent: Command Code v1.79.1 with cloud-hosted DeepSeek V4.1 Flash.
+- [x] Local Context Engine: RE:Track MCP with local Phi-4-mini-reasoning on LM Studio.
+- [x] Diagnosed and fixed reasoning model output reservation headroom (`generation_budget >= 4096`).
+- [x] Measured 37.02% reduction in host input tokens (3,916,758 vs 6,219,438 tokens), 41.71% uncached reduction, 34.21% turn reduction (25 vs 38 turns), 34.71% estimated cloud cost reduction ($0.3468 vs $0.5312), with +7.04% duration trade-off and 100% acceptance parity (8/8).
+- [x] Canonical benchmark report published (`docs/benchmarks/mcp_implementation_benchmark_20261012.md`).
 
 ### Phase 9: Productization & Release Engineering (COMPLETED & FROZEN)
 

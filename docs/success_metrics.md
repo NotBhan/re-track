@@ -61,9 +61,22 @@ The following have been verified through end-to-end implementation and automated
 - Exact source code baseline tokenization against target repository
 - Immutable execution metadata recording (Git SHA, active model, device, cache state)
 
+## Verified Implementation Benchmark (Command Code + DeepSeek V4.1 Flash + LM Studio Phi-4-mini-reasoning)
+- **Methodology**: Paired A/B experiment on real software implementation (`team-epicode--student-voice`, Next.js 15, commit `55236e6695f095b39e28c073ccd51efc83d1079f`).
+- **Host Agent / Cloud Model**: Command Code v1.79.1 using cloud `deepseek/deepseek-v4.1-flash`.
+- **Local Context Model**: `microsoft/phi-4-mini-reasoning` via LM Studio (`http://127.0.0.1:1234/v1`).
+- **Host Input Tokens**: 37.02% reduction (3,916,758 vs 6,219,438 tokens).
+- **Uncached Host Input Tokens**: 41.71% reduction (119,638 vs 205,230 tokens).
+- **Host Model Request Turns**: 34.21% reduction (25 vs 38 turns).
+- **Estimated Cloud API Cost**: 34.71% reduction ($0.3468 vs $0.5312).
+- **Acceptance Parity**: 100% parity (8/8 criteria passed in both conditions).
+- **Latency Trade-Off**: +7.04% duration (1,029.18s vs 961.49s) due to local AST extraction and local reasoning model inference (43.53s).
+- **Boundary Qualification**: Single-task empirical result on one repository, agent, and configuration. Does not establish 90%+ savings for multi-turn autonomous coding workflows (where conversation history dominates), nor does it claim general code quality superiority. See [Canonical Benchmark Report](benchmarks/mcp_implementation_benchmark_20261012.md).
+
 ## Test Coverage
-- 415 backend unit, integration, and security tests passing across 28 suites (`backend/tests/`)
+- 1,052 backend unit, integration, and security tests passing across test suites (`backend/tests/`).
 - Frontend TypeScript type check (`tsc --noEmit`) and production bundle build (`vite build`) passing with 0 errors.
+- 36 frontend unit, integration, and lifecycle tests passing (`npm run test`).
 
 ---
 

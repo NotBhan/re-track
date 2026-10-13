@@ -147,6 +147,46 @@ Semantic memory, vector recall, and model synthesis never override source/AST
 evidence. When semantic/procedural memory is unavailable the response reports reduced
 evidence rather than inventing content.
 
+### Deterministic Evidence Retrieval vs. Model-Assisted Synthesis
+
+RE:Track's context pipeline operates in two distinct tiers:
+
+1. **Deterministic Evidence Assembly (Zero LLM Required)**:
+   - 2-pass deterministic AST call graph analysis (`ast.Call`, `ast.ClassDef`, React/JSX).
+   - Exact source search and symbol matching.
+   - File indexing, framework layout discovery, and boundary-aware budget compaction.
+   - Operates 100% locally and deterministically. If no local LLM is running, RE:Track still delivers grounded, hallucination-free code evidence packages without guessing.
+
+2. **Model-Assisted Intent Parsing & Context Synthesis (Optional Local LLM)**:
+   - When an OpenAI-compatible local model (e.g. `microsoft/phi-4-mini-reasoning` via LM Studio or Ollama) is configured, RE:Track uses it to classify task intent and synthesize high-level architectural narratives.
+   - **Reasoning Model Headroom**: Reasoning models emit internal chain-of-thought traces (`<think> ... </think>`) that consume completion tokens before outputting user-facing text. RE:Track dynamically expands the generation headroom to a minimum of `4096` tokens when a reasoning model is detected.
+   - **Graceful Deterministic Fallback**: If inference times out, is unconfigured, or output is truncated, RE:Track cleanly falls back to deterministic AST assembly, setting `fallback_used: true` with the precise failure reason (`"no_active_provider"`, `"truncated_reasoning"`, `"insufficient_output"`). It never masks fallback text as model output.
+
+### Host Agent & Local Model Separation Architecture
+
+The MCP interface enforces strict physical and economic separation between the host coding agent and RE:Track:
+
+| Attribute | Host Coding Agent | RE:Track Context Engine |
+|---|---|---|
+| **Typical Environment** | External CLI or IDE (Command Code, Claude Code, Cursor) | In-process MCP server over stdio |
+| **Inference Model** | Remote Cloud API (DeepSeek V4.1 Flash, Claude Sonnet, GPT-4o) | Local Inference Runner (LM Studio, Ollama) |
+| **Model Role** | Multi-turn planning, code generation, shell tool execution | Single-turn AST context synthesis & ranking |
+| **Cost Basis** | Billed per token (cloud API rates) | $0 (runs entirely on local host hardware) |
+
+The host agent communicates with RE:Track solely through MCP tool calls (`get_agent_context`). The cloud model never ingests the raw repository and never pays for RE:Track's local reasoning traces.
+
+### Empirical Validation (2026-10-12 Implementation Benchmark)
+
+In a controlled paired A/B benchmark on a real full-stack web application (`team-epicode--student-voice`), Command Code v1.79.1 with cloud-hosted DeepSeek V4.1 Flash used RE:Track backed by local Phi-4-mini-reasoning on LM Studio:
+- **Host Input Tokens**: 37.02% reduction (3,916,758 vs 6,219,438 tokens).
+- **Uncached Input Tokens**: 41.71% reduction (119,638 vs 205,230 tokens).
+- **Host Turns**: 34.21% reduction (25 vs 38 turns).
+- **Estimated Cloud Cost**: 34.71% reduction ($0.3468 vs $0.5312).
+- **Acceptance Parity**: 8/8 criteria passed in both conditions.
+- **Duration Trade-Off**: +7.04% (+67.7s) due to local AST extraction and local reasoning inference (43.53s).
+
+*(Note: This represents a single-task empirical benchmark under the specified setup, not a universal guarantee across all tasks or codebases. See [docs/benchmarks/mcp_implementation_benchmark_20261012.md](benchmarks/mcp_implementation_benchmark_20261012.md) for full telemetry.)*
+
 ---
 
 ## 4. Security Model & Trust Boundary

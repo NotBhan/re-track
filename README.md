@@ -7,7 +7,7 @@
 
 [![TypeScript](https://img.shields.io/badge/Frontend-React%20%7C%20Vite%20%7C%20Tauri-blue?style=flat-square)](https://tauri.app/)
 [![Python](https://img.shields.io/badge/Backend-Python%203.12%20%7C%20Cognee-green?style=flat-square)](https://fastapi.tiangolo.com/)
-[![Tests](https://img.shields.io/badge/Tests-294%20passed-brightgreen?style=flat-square)](https://pytest.org/)
+[![Tests](https://img.shields.io/badge/Tests-1052%20passed-brightgreen?style=flat-square)](https://pytest.org/)
 [![License](https://img.shields.io/badge/License-Apache%202.0-orange?style=flat-square)](LICENSE)
 
 </div>
@@ -23,7 +23,7 @@ Instead of dumping raw multi-thousand-token files into an LLM prompt, RE:Track c
 1. **Deterministic AST Call Graph**: Statically resolves call hierarchies, class inheritance, import aliases, and React/JSX rendering paths using a strict 2-pass AST walker.
 2. **Multi-Layer Memory Model**: Separates raw ingested source files, LanceDB vector semantic embeddings, and Kùzu knowledge graph entities into independent, verifiable storage tiers.
 3. **Intent-Guided Retrieval**: Combines task intent parsing, symbol extraction, and Cognee hybrid memory recall into a 2-stage progressive synthesis pipeline.
-4. **Token Budget Enforcement**: Employs line-boundary compression and priority-tier trimming to reduce codebase prompt footprints by **85–95%**.
+4. **Token Budget Enforcement**: Employs line-boundary compression and priority-tier trimming to enforce bounded prompt budgets (e.g. 8,000 tokens). In an empirical paired implementation benchmark on a real web application, this achieved a **37.02% reduction in host input tokens** for a single tested feature task (see [Verified Implementation Benchmark](#verified-mcp-implementation-benchmark)).
 5. **Truth Boundary Guarantee**: Zero synthetic data, zero inferred graph edges, and zero demo metric fallbacks. The UI reflects exact backend reality across 5 explicit graph states.
 
 ---
@@ -37,7 +37,8 @@ Instead of dumping raw multi-thousand-token files into an LLM prompt, RE:Track c
 | **5 Explicit Graph States** | `not_analyzed`, `analyzing`, `analyzed` (>0 edges), `zero_edges` (isolated symbols), and `failed`. |
 | **Multi-Tier Memory Topology** | Independent layers for Ingested Source Files, LanceDB Vector Embeddings (`Active`), and Knowledge Graph Entities. |
 | **Context Studio** | Split Prompt Workbench with preset suggestions, live token counter, discrete latency decomposition, and evidence provenance. |
-| **Reproducible Benchmarks** | Evaluates prompt savings against exact codebase token baselines with immutable execution metadata (Git SHA, device, cache state). |
+| **MCP stdio Server** | Exposes 5 standardized tools (`get_agent_context`, `get_repository_summary`, `get_ast_call_graph`, `search_repository_code`, `list_indexed_repositories`) with bounded concurrency and strict stderr logging. |
+| **Reproducible Benchmarks** | Evaluates empirical agent token reduction and static prompt compression with immutable execution metadata. |
 | **Hardware & RAM Telemetry** | Differentiates detected GPU presence (AMD/NVIDIA) from active execution device (`CPU`/`GPU`) with high-pressure memory alerts. |
 | **Local-First & Offline** | 100% local execution via Tauri IPC, local Ollama/LM Studio LLMs, and local LanceDB/SQLite databases. |
 
@@ -190,6 +191,39 @@ Content-Type: application/json
 
 ---
 
+---
+
+## Verified MCP Implementation Benchmark
+
+In an end-to-end controlled A/B experiment on real software implementation ([Canonical Benchmark Report](docs/benchmarks/mcp_implementation_benchmark_20261012.md)), an autonomous coding agent (**Command Code v1.79.1** backed by cloud-hosted **DeepSeek V4.1 Flash**) implemented a new feature in a full-stack Next.js 15 application (`team-epicode--student-voice`), both with and without RE:Track MCP assistance.
+
+RE:Track ran locally using **Phi-4-mini-reasoning** via LM Studio (`http://127.0.0.1:1234/v1`) to synthesize architectural context packages.
+
+### Measured Results
+
+| Metric | Condition A (Baseline) | Condition B (RE:Track-Assisted) | Delta | Reported Change |
+|---|---:|---:|---:|---:|
+| **Host Input Tokens** | 6,219,438 | 3,916,758 | -2,302,680 | **37.02% reduction** |
+| — *Uncached Host Input Tokens* | 205,230 | 119,638 | -85,592 | **41.71% reduction** |
+| — *Cached Host Input Tokens* | 6,014,208 | 3,797,120 | -2,217,088 | **36.86% reduction** |
+| **Host Output Tokens** | 49,778 | 44,286 | -5,492 | **11.03% reduction** |
+| **Host Model Request Turns** | 38 | 25 | -13 | **34.21% reduction** |
+| **Native Agent Tool Calls** | 62 | 53 | -9 | **14.52% reduction** |
+| **Estimated Cloud API Cost** | $0.5312 | $0.3468 | -$0.1844 | **34.71% reduction** |
+| **End-to-End Task Duration** | 961.49s (~16.0 min) | 1,029.18s (~17.2 min) | +67.69s | **7.04% increase** |
+| **Acceptance Criteria Passed** | 8 / 8 (100.0%) | 8 / 8 (100.0%) | 0 | **100% parity** |
+
+> [!IMPORTANT]
+> **Single-Task Scope & Empirical Interpretation**:
+> - **Scope**: This benchmark measures one realistic feature implementation task on one repository. It demonstrates a **37.02% reduction in host input tokens** under the specified configuration, but does not represent a universal guarantee across all tasks or codebases.
+> - **Correctness Parity**: Both implementations passed the exact same 8-point acceptance criteria; RE:Track did not produce "superior" code, but achieved equal correctness with significantly fewer host turns and tokens.
+> - **Latency & Compute Trade-Off**: Task duration increased by 7.04% (+67.7s) due to local AST extraction and local reasoning model inference (43.53s). Local computation has real execution costs even when it incurs $0 in cloud API charges.
+> - **Distinction from Static Compression**: Static codebase token compression (which compresses entire repositories into compact packages) should not be conflated with multi-turn autonomous coding agent token reductions, where conversation history dominates total token consumption.
+>
+> See [docs/benchmarks/mcp_implementation_benchmark_20261012.md](docs/benchmarks/mcp_implementation_benchmark_20261012.md) for full methodology, raw telemetry, and defect resolution details.
+
+---
+
 ## Benchmark & Telemetry Methodology
 
 RE:Track calculates compression and token efficiency deterministically against the target repository:
@@ -205,17 +239,20 @@ RE:Track calculates compression and token efficiency deterministically against t
 ## Verification & Test Suite
 
 ```bash
-# Run all backend unit tests (294 tests)
-cd backend
-source .venv/bin/activate
-pytest tests/ -q
+# Run all backend unit and integration tests (1,052 passed)
+cd backend && uv run pytest tests/ -q
 
 # Run deterministic AST integrity tests
-pytest tests/test_ast_integrity.py -v
+cd backend && uv run pytest tests/test_ast_integrity.py -v
+
+# Run shutdown resource-release regression tests
+cd backend && uv run pytest tests/test_shutdown_resource_release.py -v
 
 # Frontend TypeScript check & production build
-cd ..
 npm run build
+
+# Frontend unit and integration tests (36 passed)
+npm run test
 ```
 
 ---

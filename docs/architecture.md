@@ -67,6 +67,7 @@ The architecture follows six primary principles:
 4. **Deterministic Static Certainty**: AST and call graph analysis prioritize static certainty over graph completeness. Ambiguous symbols produce no internal edge.
 5. **Collision-Proof Dataset Identity**: Context memory is partitioned via `{sanitized_name}_{path_sha256_10hex}` to physically prevent cross-repository memory pollution.
 6. **Explicit Context Budgeting**: A requested context budget is split into task prompt, fixed prompt overhead, generation reservation and an evidence allowance, then filled by deterministic, evidence-aware packing that follows the truth hierarchy. Oversized evidence is progressively reduced with its provenance intact — never tail-truncated, and never dropped silently. See `docs/architecture/context-compaction.md`.
+7. **Host Agent and Local Model Decoupling**: External AI coding agents (frequently cloud models such as Claude 3.7 or DeepSeek V4.1 Flash) interface strictly through MCP stdio tool contracts. Context synthesis is performed independently by local inference runners (LM Studio / Ollama) or deterministic AST assembly. The cloud host agent never pays for local context reasoning tokens or raw repository scanning.
 
 ---
 
@@ -140,16 +141,38 @@ Lifecycle contract:
 
 ---
 
+# Empirical Verification: Paired MCP Implementation Benchmark
+
+The architecture was evaluated in a controlled, end-to-end implementation experiment ([Canonical Benchmark Report](benchmarks/mcp_implementation_benchmark_20261012.md)):
+- **Host Agent**: Command Code v1.79.1 backed by cloud-hosted DeepSeek V4.1 Flash.
+- **Local Context Model**: `microsoft/phi-4-mini-reasoning` via LM Studio (`http://127.0.0.1:1234/v1`).
+- **Target Application**: `team-epicode--student-voice` (Next.js 15, Server Actions, SQLite).
+- **Measured Outcomes**:
+  - **37.02% reduction in host input tokens** (3,916,758 vs 6,219,438 tokens).
+  - **41.71% reduction in uncached host input tokens** (119,638 vs 205,230 tokens).
+  - **34.21% reduction in request turns** (25 vs 38 turns).
+  - **34.71% reduction in estimated cloud API cost** ($0.3468 vs $0.5312).
+  - **Equal implementation score** (8/8 acceptance criteria passed in both conditions).
+  - **Duration trade-off**: +7.04% (+67.7s) driven by local AST extraction and local reasoning model inference (43.53s).
+
+---
+
 # Verification & Test Coverage
 
-The system is validated through 415 automated unit, integration, security, and benchmark tests:
+The system is validated through 1,052 automated unit, integration, security, and benchmark tests:
 
 ```bash
-# Full test suite (415 passed)
+# Full test suite (1,052 passed)
 cd backend && uv run pytest tests/ -q
 
 # MCP and Security regression suite
 cd backend && uv run pytest tests/test_workspace_authorization.py tests/test_dataset_identity_isolation.py tests/test_mcp_concurrency_lifecycle.py tests/test_mcp_stdio_shutdown.py tests/test_mcp_logging_integrity.py tests/test_mcp_provider_recovery.py tests/test_mcp_adapter.py -v
+
+# Context model invocation and reasoning headroom regression suite
+cd backend && uv run pytest tests/test_context_model_invocation.py -v
+
+# Runtime capability probe tests
+cd backend && uv run pytest tests/test_model_capability_probe.py -v
 
 # AST deterministic resolution tests
 cd backend && uv run pytest tests/test_ast_integrity.py -v

@@ -72,6 +72,7 @@ After meaningful changes:
 8. `docs/cognee_integration.md`
 9. `docs/development_plan.md`
 10. `docs/success_metrics.md`
+11. `docs/benchmarks/mcp_implementation_benchmark_20261012.md`
 
 ---
 
@@ -80,7 +81,7 @@ After meaningful changes:
 Before completing work:
 
 ```bash
-# Backend unit & integration tests (1024 passed)
+# Backend unit & integration tests (1052 passed)
 cd backend && uv run pytest tests/ -q
 
 # AST integrity tests

@@ -160,3 +160,15 @@ LM Studio is reached through litellm's `lm_studio` provider, for which litellm r
 support. Cognee therefore constrains structured output with `response_format: json_schema`, which
 LM Studio accepts. Routing LM Studio through the generic `openai` provider makes Cognee send
 `response_format: json_object`, which LM Studio rejects with HTTP 400.
+
+---
+
+## Host Agent vs. Local Context Model Separation in MCP
+
+When RE:Track is used by external coding agents (Command Code, Claude Code, Cursor) via MCP:
+
+1. **Host Agent Model**: Cloud-hosted multi-turn model (e.g. `deepseek/deepseek-v4.1-flash`, `claude-3-7-sonnet`). Billed per token by the cloud API provider.
+2. **RE:Track Local Model**: Local reasoning model running in LM Studio or Ollama (e.g. `microsoft/phi-4-mini-reasoning`). Billed at $0 on local host hardware.
+3. **Reasoning Model Headroom**: When reasoning models are configured for interactive synthesis, RE:Track dynamically expands the generation headroom to at least `4096` tokens. This prevents chain-of-thought traces (`<think> ... </think>`) from exhausting completion reservations before emitting structured markdown.
+4. **Runtime Capability Probing**: RE:Track probes endpoints live (`detect_model_capabilities`) for chat, tool calling, JSON mode, and separate embedding support without inferring capabilities solely from model names. Unverified capabilities remain strictly `unknown`.
+5. **Verified Implementation Benchmark**: Evaluated in a controlled paired experiment on Next.js 15 repository `team-epicode--student-voice` with Command Code + DeepSeek V4.1 Flash + local LM Studio Phi-4-mini-reasoning, delivering a measured **37.02% reduction in host input tokens** and **34.71% reduction in estimated cloud API cost** (see [Canonical Benchmark Report](../benchmarks/mcp_implementation_benchmark_20261012.md)).

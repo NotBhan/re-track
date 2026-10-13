@@ -256,6 +256,7 @@ Provide high-precision repository memory, AST call graphs, and context packages 
 - **Phase 8A (MCP Inbound Adapter)**: MCP stdio server (`backend/app/mcp/`, `MCPServer`) exposing 5 tools (`get_agent_context`, `get_repository_summary`, `get_ast_call_graph`, `search_repository_code`, `list_indexed_repositories`).
 - **Phase 8B (Security & Trust Boundary Hardening)**: Workspace authorization boundary (`WorkspaceAuthorizationService`), symlink containment, collision-proof dataset identity isolation (`derive_dataset_name`), bounded context concurrency guard, and sanitized exception isolation.
 - **Phase 8C (Operational Lifecycle & Reliability Hardening)**: Process-scoped shared concurrency guard, stderr-only logging isolation, clean stdio EOF/signal termination (< 0.15s), and verified automatic same-process LLM provider recovery.
+- **Phase 8D/8F (Empirical Implementation Benchmark)**: Controlled paired A/B experiment on Next.js 15 repository (`team-epicode--student-voice`) with Command Code v1.79.1 (DeepSeek V4.1 Flash) and local Phi-4-mini-reasoning (LM Studio). Measured 37.02% host input token reduction, 41.71% uncached reduction, 34.21% turn reduction, and 34.71% estimated cloud cost reduction with equal 8/8 acceptance score.
 
 Status: **Completed (Production Ready)**
 
@@ -263,7 +264,7 @@ Status: **Completed (Production Ready)**
 
 # Current Status
 
-Current Phase: **Phase 8C Completed — Production Ready**
+Current Phase: **Phase 8 Completed — Production Ready**
 
 Completed Components:
 - `ApplicationContainer` (Composition Root) ✅
@@ -278,5 +279,5 @@ Completed Components:
 - `SourceSearchService` (In-Process Fast Symbol & Keyword Search) ✅
 - `MCPServer` & 5 Standardized MCP Tools ✅
 - React + Vite + Tauri Frontend (Context Studio, Knowledge Explorer, Memory, Benchmarks, Settings) ✅
-- 415 passing backend unit, integration, and security tests ✅
+- 1,052 passing backend unit, integration, and security tests ✅
 - Clean frontend TypeScript compile & Vite build ✅
