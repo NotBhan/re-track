@@ -1,6 +1,4 @@
-"""System health, status, and settings DTOs."""
-
-from typing import Optional
+from typing import Any, Optional
 from pydantic import BaseModel, Field
 
 
@@ -218,4 +216,5 @@ class ProviderStatusResponse(BaseModel):
     quantization_warning: Optional[str] = None
     api_key_configured: bool = False
     api_key_masked: str = "local"
+    capabilities: Optional[dict[str, Any]] = None
 

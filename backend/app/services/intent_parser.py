@@ -102,15 +102,20 @@ class IntentParserService:
             # The budget is enforced caller-side so it applies to any provider
             # implementation without extending the LLMProviderPort contract.
             # Cancelling this await aborts the underlying HTTP request.
+            model_name_lower = (model_name or "").lower()
+            is_reasoning = any(k in model_name_lower for k in ("reasoning", "deepseek-r1", "-r1", "phi-4"))
+            intent_max_tokens = 2048 if is_reasoning else 1024
+            effective_timeout = max(self._intent_timeout, 45.0) if is_reasoning else self._intent_timeout
+
             raw = await asyncio.wait_for(
                 self._llm.generate_completion(
                     prompt=prompt,
                     system_prompt=system_prompt,
                     model=model_name,
                     temperature=0.0,
-                    max_tokens=1024,
+                    max_tokens=intent_max_tokens,
                 ),
-                timeout=self._intent_timeout,
+                timeout=effective_timeout,
             )
             elapsed_ms = int((time.perf_counter() - t_start) * 1000)
             actual_model = getattr(self._llm, "last_invoked_model", None) or model_name

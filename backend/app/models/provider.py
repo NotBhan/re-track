@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Optional
+from typing import Any, Optional
 
 
 class ProviderType(str, Enum):
@@ -48,6 +48,49 @@ class LoadedModelInfo:
 
 
 @dataclass
+class ModelCapabilities:
+    """Probed runtime capabilities for a model endpoint."""
+
+    model: str
+    chat: str = "unknown"
+    tool_calling: str = "unknown"
+    json_mode: str = "unknown"
+    reasoning: str = "unknown"
+    embeddings: str = "not_tested"
+    context_window: Optional[int] = None
+    embedding_model: Optional[str] = None
+    provider: Optional[str] = None
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert capabilities to dictionary format."""
+        d: dict[str, Any] = {
+            "model": self.model,
+            "chat": self.chat,
+            "tool_calling": self.tool_calling,
+            "json_mode": self.json_mode,
+            "reasoning": self.reasoning,
+            "embeddings": self.embeddings,
+        }
+        if self.context_window is not None:
+            d["context_window"] = self.context_window
+        if self.embedding_model is not None:
+            d["embedding_model"] = self.embedding_model
+        if self.provider is not None:
+            d["provider"] = self.provider
+        return d
+
+
+class CapabilityStatus(str, Enum):
+    """Status tiers for probed model capabilities."""
+
+    SUPPORTED = "supported"
+    UNSUPPORTED = "unsupported"
+    UNAVAILABLE = "unavailable"
+    UNKNOWN = "unknown"
+    NOT_TESTED = "not_tested"
+
+
+@dataclass
 class ProviderHealthStatus:
     """Health and model availability details for the configured provider."""
 
@@ -58,6 +101,7 @@ class ProviderHealthStatus:
     loaded_models: list[LoadedModelInfo] = field(default_factory=list)
     quantization_warning: Optional[str] = None
     discovery_status: DiscoveryStatus = DiscoveryStatus.NOT_CONFIGURED
+    capabilities: Optional[dict[str, Any]] = None
 
 
 @dataclass
@@ -71,4 +115,5 @@ class ProviderDiscoveryResult:
     models: list[LoadedModelInfo] = field(default_factory=list)
     message: str = ""
     error_details: Optional[str] = None
+
 

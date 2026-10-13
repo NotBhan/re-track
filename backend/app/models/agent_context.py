@@ -68,5 +68,9 @@ class AgentContextResponse(BaseModel):
             "retained/reduced/omitted evidence with reasons, and whether mandatory evidence fit."
         ),
     )
+    model_capabilities: Optional[dict[str, Any]] = Field(
+        default=None,
+        description="Probed runtime capabilities of the active model endpoint",
+    )
 
 

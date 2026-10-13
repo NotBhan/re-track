@@ -384,6 +384,20 @@ class ApplicationContainer:
         health_status = await self.llm_provider.check_health()
         loaded = [m.model_id for m in health_status.loaded_models]
 
+        capabilities = None
+        if health_status.is_reachable:
+            try:
+                emb_ident = self.settings.embedding_identity() if hasattr(self.settings, "embedding_identity") else {}
+                capabilities = await self.llm_provider.probe_capabilities(
+                    force_refresh=True,
+                    embedding_endpoint=emb_ident.get("endpoint"),
+                    embedding_model=emb_ident.get("model"),
+                    configured_context_window=getattr(getattr(self.settings, "ollama", None), "context_window", None),
+                )
+            except Exception as e:
+                logger.debug("Capability probe during update_provider skipped: %s", e)
+                capabilities = self.llm_provider.get_capabilities()
+
         masked_key = "local"
         if api_key in ("local", "ollama", "lm-studio"):
             masked_key = api_key
@@ -401,9 +415,11 @@ class ApplicationContainer:
             "health_state": "healthy" if health_status.is_reachable else "unavailable",
             "loaded_models": loaded,
             "quantization_warning": health_status.quantization_warning,
+            "capabilities": capabilities or health_status.capabilities,
             "api_key_configured": bool(api_key and api_key != "local"),
             "api_key_masked": masked_key,
         }
+
 
 
     # Factory methods returning explicit use cases with injected dependencies:

@@ -51,6 +51,7 @@ class MockLLMProvider(LLMProviderPort):
         self.last_prompt = None
         self.last_model = None
         self.last_system_prompt = None
+        self.intent_response_text = None
 
     async def generate_completion(
         self,
@@ -64,9 +65,12 @@ class MockLLMProvider(LLMProviderPort):
         self.last_prompt = prompt
         self.last_system_prompt = system_prompt
         self.last_model = model or self.default_model
+        self.last_max_tokens = max_tokens
 
         if self.should_fail:
             raise self.failure_exception
+        if system_prompt and "query analyzer" in system_prompt.lower() and self.intent_response_text is not None:
+            return self.intent_response_text
         return self.response_text
 
     async def check_health(self) -> Any:
@@ -255,3 +259,203 @@ async def test_generate_context_truthfully_reports_deterministic_mode():
     assert resp.fallback_used is True
     assert resp.inference_status == "not_configured"
     assert "Deterministic retrieval" in str(resp.fallback_reason)
+
+
+@pytest.mark.asyncio
+async def test_get_agent_context_allocates_reasoning_headroom_for_phi4():
+    """Verify get_agent_context allocates >= 4096 tokens when reasoning model is configured."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        repo_path = Path(tmp_dir) / "test_repo"
+        repo_path.mkdir()
+        (repo_path / "auth.py").write_text("class AuthService:\n    def login(self): pass\n")
+
+        mock_provider = MockLLMProvider(
+            provider_type=ProviderType.LM_STUDIO,
+            default_model="microsoft/phi-4-mini-reasoning",
+            response_text="<think>Step 1... </think>\n# Task Architecture\nThis is a clean context package.",
+        )
+        mock_provider.intent_response_text = '{"task_summary": "Auth login refactor", "category": "refactoring", "extracted_symbols": ["AuthService"], "relevant_file_hints": ["auth.py"], "is_vague": false}'
+
+        container = ApplicationContainer.create()
+        container.llm_provider = mock_provider
+        container.intent_parser = IntentParserService(mock_provider)
+        container.cognee_service = MagicMock()
+        container.indexing_service = MagicMock()
+        container.indexing_service.discover_files.return_value = [repo_path / "auth.py"]
+        container.indexing_service.filter_files.return_value = [repo_path / "auth.py"]
+
+        mock_pkg = MagicMock()
+        mock_pkg.markdown = "# Synthetic Context Package"
+        mock_pkg.sections = []
+        mock_pkg.references = []
+        container.context_service = MagicMock()
+        container.context_service.generate_context_package = AsyncMock(return_value=mock_pkg)
+
+        auth_svc = WorkspaceAuthorizationService(workspace_roots=[Path(tmp_dir)])
+        container.workspace_auth = auth_svc
+
+        context_uc = container.get_context_use_cases()
+
+        req = AgentContextRequest(
+            task_prompt="Refactor AuthService login method in auth.py",
+            repository_path=str(repo_path),
+            dataset_name="test_repo",
+        )
+
+        resp = await context_uc.get_agent_context(req)
+
+        assert isinstance(resp, AgentContextResponse)
+        assert resp.success is True
+        assert resp.model_invoked is True
+        assert resp.inference_status == "completed"
+        assert resp.fallback_used is False
+        assert resp.fallback_reason is None
+        assert mock_provider.last_max_tokens >= 4096
+
+
+@pytest.mark.asyncio
+async def test_get_agent_context_truncated_reasoning_reports_truthful_status():
+    """Verify truncated reasoning (unclosed think tag) produces truncated_reasoning status and explicit fallback reason."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        repo_path = Path(tmp_dir) / "test_repo"
+        repo_path.mkdir()
+        (repo_path / "auth.py").write_text("class AuthService:\n    def login(self): pass\n")
+
+        mock_provider = MockLLMProvider(
+            provider_type=ProviderType.LM_STUDIO,
+            default_model="microsoft/phi-4-mini-reasoning",
+            response_text="<think>I am thinking about the user count dashboard but the token budget ran out",
+        )
+        mock_provider.intent_response_text = '{"task_summary": "Auth login refactor", "category": "refactoring", "extracted_symbols": ["AuthService"], "relevant_file_hints": ["auth.py"], "is_vague": false}'
+
+        container = ApplicationContainer.create()
+        container.llm_provider = mock_provider
+        container.intent_parser = IntentParserService(mock_provider)
+        container.cognee_service = MagicMock()
+        container.indexing_service = MagicMock()
+        container.indexing_service.discover_files.return_value = [repo_path / "auth.py"]
+        container.indexing_service.filter_files.return_value = [repo_path / "auth.py"]
+
+        mock_pkg = MagicMock()
+        mock_pkg.markdown = "# Synthetic Context Package"
+        mock_pkg.sections = []
+        mock_pkg.references = []
+        container.context_service = MagicMock()
+        container.context_service.generate_context_package = AsyncMock(return_value=mock_pkg)
+
+        auth_svc = WorkspaceAuthorizationService(workspace_roots=[Path(tmp_dir)])
+        container.workspace_auth = auth_svc
+
+        context_uc = container.get_context_use_cases()
+
+        req = AgentContextRequest(
+            task_prompt="Refactor AuthService login method in auth.py",
+            repository_path=str(repo_path),
+            dataset_name="test_repo",
+        )
+
+        resp = await context_uc.get_agent_context(req)
+
+        assert isinstance(resp, AgentContextResponse)
+        assert resp.success is True
+        assert resp.model_invoked is False
+        assert resp.fallback_used is True
+        assert resp.inference_status == "truncated_reasoning"
+        assert "truncated" in str(resp.fallback_reason).lower()
+        assert resp.fallback_reason != "No active LLM provider configured"
+
+
+@pytest.mark.asyncio
+async def test_get_agent_context_unconfigured_provider_reports_not_configured():
+    """Verify get_agent_context reports not_configured when no LLM provider is present."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        repo_path = Path(tmp_dir) / "test_repo"
+        repo_path.mkdir()
+        (repo_path / "auth.py").write_text("class AuthService:\n    def login(self): pass\n")
+
+        container = ApplicationContainer.create()
+        container.llm_provider = None
+        container.intent_parser = None
+        container.cognee_service = MagicMock()
+        container.indexing_service = MagicMock()
+        container.indexing_service.discover_files.return_value = [repo_path / "auth.py"]
+        container.indexing_service.filter_files.return_value = [repo_path / "auth.py"]
+
+        mock_pkg = MagicMock()
+        mock_pkg.markdown = "# Synthetic Context Package"
+        mock_pkg.sections = []
+        mock_pkg.references = []
+        container.context_service = MagicMock()
+        container.context_service.generate_context_package = AsyncMock(return_value=mock_pkg)
+
+        auth_svc = WorkspaceAuthorizationService(workspace_roots=[Path(tmp_dir)])
+        container.workspace_auth = auth_svc
+
+        context_uc = container.get_context_use_cases()
+
+        req = AgentContextRequest(
+            task_prompt="Refactor AuthService login method in auth.py",
+            repository_path=str(repo_path),
+            dataset_name="test_repo",
+        )
+
+        resp = await context_uc.get_agent_context(req)
+
+        assert isinstance(resp, AgentContextResponse)
+        assert resp.success is True
+        assert resp.model_invoked is False
+        assert resp.fallback_used is True
+        assert resp.inference_status == "not_configured"
+        assert resp.fallback_reason == "No active LLM provider configured"
+
+
+@pytest.mark.asyncio
+async def test_get_agent_context_provider_error_reports_failed():
+    """Verify get_agent_context reports failed status and error details when synthesis raises."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        repo_path = Path(tmp_dir) / "test_repo"
+        repo_path.mkdir()
+        (repo_path / "auth.py").write_text("class AuthService:\n    def login(self): pass\n")
+
+        mock_provider = MockLLMProvider(
+            provider_type=ProviderType.LM_STUDIO,
+            default_model="qwen2.5-coder:7b",
+            should_fail=True,
+            failure_exception=RuntimeError("LM Studio endpoint timeout during synthesis"),
+        )
+
+        container = ApplicationContainer.create()
+        container.llm_provider = mock_provider
+        container.intent_parser = IntentParserService(mock_provider)
+        container.cognee_service = MagicMock()
+        container.indexing_service = MagicMock()
+        container.indexing_service.discover_files.return_value = [repo_path / "auth.py"]
+        container.indexing_service.filter_files.return_value = [repo_path / "auth.py"]
+
+        mock_pkg = MagicMock()
+        mock_pkg.markdown = "# Synthetic Context Package"
+        mock_pkg.sections = []
+        mock_pkg.references = []
+        container.context_service = MagicMock()
+        container.context_service.generate_context_package = AsyncMock(return_value=mock_pkg)
+
+        auth_svc = WorkspaceAuthorizationService(workspace_roots=[Path(tmp_dir)])
+        container.workspace_auth = auth_svc
+
+        context_uc = container.get_context_use_cases()
+
+        req = AgentContextRequest(
+            task_prompt="Refactor AuthService login method in auth.py",
+            repository_path=str(repo_path),
+            dataset_name="test_repo",
+        )
+
+        resp = await context_uc.get_agent_context(req)
+
+        assert isinstance(resp, AgentContextResponse)
+        assert resp.success is True
+        assert resp.model_invoked is False
+        assert resp.fallback_used is True
+        assert resp.inference_status == "failed"
+        assert "LM Studio endpoint timeout" in str(resp.fallback_reason)
+

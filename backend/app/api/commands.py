@@ -384,3 +384,28 @@ async def run_benchmark() -> BenchmarkSuiteResponse | ErrorResponse:
     container = _get_active_container()
     return await container.get_benchmark_use_cases().run_benchmark()
 
+
+# --- Model Capabilities ---
+
+from app.services.capability_probe import (
+    detect_model_capabilities,
+    async_detect_model_capabilities,
+    get_capability_store,
+)
+
+
+async def probe_model_capabilities(
+    base_url: Optional[str] = None,
+    model: Optional[str] = None,
+    timeout: int = 15,
+    force_refresh: bool = False,
+) -> dict:
+    """Probe and return runtime capabilities for the configured or requested model."""
+    container = _get_active_container()
+    llm = container.llm_provider
+    target_url = base_url or (getattr(llm, "base_url", None) if llm else "http://localhost:11434/v1")
+    target_model = model or (getattr(llm, "default_model", None) if llm else "phi4-mini")
+    if llm and (not base_url or base_url == getattr(llm, "base_url", None)) and (not model or model == getattr(llm, "default_model", None)):
+        return await llm.probe_capabilities(force_refresh=force_refresh, timeout=float(timeout))
+    return await async_detect_model_capabilities(target_url, target_model, timeout=timeout)
+

@@ -14,6 +14,7 @@ Owns:
 - IndexingService (incremental delta indexing + .gitignore-aware filtering)
 - ManifestService (SHA256 file fingerprinting)
 - LLMProviderService (OpenAI-compatible multi-provider & model health)
+- CapabilityProbeService & CapabilityStore (runtime model capability probing & caching: chat, tools, json, reasoning, embeddings, context window)
 - CGCService (CodeGraphContext structural graph queries)
 - IntentParserService (task intent & symbol extraction)
 - ContextService & PackageBuilder (dedup → rank → compress → render)
@@ -152,7 +153,7 @@ Run backend server:
 - `app/config/` — Environment loading, provider configuration, Cognee config setup.
 - `app/core/` — Structured logging.
 - `app/models/` — Data models (`CallNode`, `CallEdge`, `RepositorySummary`, `AgentContextResponse`, `HealthResponse`, `MemoryStatsResponse`).
-- `app/services/` — `CogneeService`, `IndexingService`, `ContextService`, `ContextCompactor`, `PackageBuilder`, `BudgetManager`, `token_budget`, `MarkdownRenderer`, `RepositorySummaryGenerator`.
+- `app/services/` — `CogneeService`, `IndexingService`, `ContextService`, `ContextCompactor`, `PackageBuilder`, `BudgetManager`, `token_budget`, `MarkdownRenderer`, `RepositorySummaryGenerator`, `capability_probe`.
 - `app/services/pipeline/` — Pipeline stages: Deduplicator, Ranker, Compressor, Categorizer, ReferenceResolver.
 - `app/api/` — API commands, Pydantic schemas, benchmark runner, repo metadata persistence.
 - `app/cli/` — Typer CLI application.

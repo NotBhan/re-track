@@ -860,6 +860,7 @@ class SystemUseCases:
                 quantization_warning=health.quantization_warning,
                 api_key_configured=bool(api_key and api_key not in ("local", "ollama", "lm-studio")),
                 api_key_masked=masked_key,
+                capabilities=getattr(health, "capabilities", None),
             )
         except Exception as e:
             elapsed = time.monotonic() - start

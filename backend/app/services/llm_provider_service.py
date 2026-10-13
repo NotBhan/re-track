@@ -71,6 +71,7 @@ class LLMProviderService:
         self.verified_active_model: Optional[str] = None
         self.discovered_models: list[str] = []
         self._health_checked: bool = False
+        self.capabilities: Optional[dict[str, Any]] = None
 
     @staticmethod
     def parse_quantization(model_id: str) -> QuantizationLevel:
@@ -307,6 +308,13 @@ class LLMProviderService:
 
         self.verified_active_model = active_model
 
+        caps = self.get_capabilities()
+        if caps is None and is_reachable and active_model:
+            try:
+                caps = await self.probe_capabilities(force_refresh=False)
+            except Exception as e:
+                logger.debug("Capability probe during check_health skipped or failed: %s", e)
+
         return ProviderHealthStatus(
             provider=self.provider_type,
             base_url=self.base_url,
@@ -315,7 +323,54 @@ class LLMProviderService:
             loaded_models=models,
             quantization_warning=quant_warning,
             discovery_status=discovery.status,
+            capabilities=caps,
         )
+
+    async def probe_capabilities(
+        self,
+        force_refresh: bool = False,
+        timeout: float = 15.0,
+        embedding_endpoint: Optional[str] = None,
+        embedding_model: Optional[str] = None,
+        configured_context_window: Optional[int] = None,
+    ) -> dict[str, Any]:
+        """Probe and refresh runtime capabilities for the active provider and model."""
+        from app.services.capability_probe import get_capability_store
+
+        store = get_capability_store()
+        prov_str = self.provider_type.value if hasattr(self.provider_type, "value") else str(self.provider_type)
+        target_model = self.verified_active_model or self.default_model or "phi4-mini"
+
+        if not force_refresh:
+            cached = store.get(prov_str, self.base_url, target_model)
+            if cached:
+                self.capabilities = cached
+                return cached
+
+        caps = await store.refresh_async(
+            provider=prov_str,
+            base_url=self.base_url,
+            model=target_model,
+            timeout=int(timeout),
+            api_key=self.api_key,
+            embedding_base_url=embedding_endpoint,
+            embedding_model=embedding_model,
+            context_window=configured_context_window,
+        )
+        self.capabilities = caps
+        return caps
+
+    def get_capabilities(self) -> Optional[dict[str, Any]]:
+        """Return currently probed or cached capabilities."""
+        if self.capabilities:
+            return self.capabilities
+        from app.services.capability_probe import get_capability_store
+
+        store = get_capability_store()
+        prov_str = self.provider_type.value if hasattr(self.provider_type, "value") else str(self.provider_type)
+        target_model = self.verified_active_model or self.default_model or "phi4-mini"
+        self.capabilities = store.get(prov_str, self.base_url, target_model)
+        return self.capabilities
 
     async def generate_completion(
         self,

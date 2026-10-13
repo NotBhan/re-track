@@ -1004,6 +1004,9 @@ class ContextUseCases:
                         # The generation budget is the budget's explicit output
                         # reservation — never the input context budget.
                         generation_budget = budget_plan.output_reservation_tokens or min(target_tokens, 8192)
+                        model_name_lower = (synth_model_name or "").lower()
+                        if any(k in model_name_lower for k in ("reasoning", "deepseek-r1", "-r1", "phi-4")):
+                            generation_budget = max(generation_budget, 4096)
                         synth_raw = await self._await_or_disconnect(
                             self._llm_provider.generate_completion(
                                 prompt=synth_user_prompt,
@@ -1049,9 +1052,20 @@ class ContextUseCases:
                             # Task-specific synthesis leads; the packed evidence set
                             # that grounded it travels with it.
                             final_markdown = compacted.compose(synth_clean)
+                        else:
+                            synth_model_invoked = False
+                            synth_fallback_used = True
+                            if "<think>" in synth_raw and "</think>" not in synth_raw:
+                                synth_inference_status = "truncated_reasoning"
+                                synth_fallback_reason = "Model reasoning truncated before completion; no response produced"
+                            else:
+                                synth_inference_status = "insufficient_output"
+                                synth_fallback_reason = "Model synthesis produced empty or insufficient text"
                     except Exception as e:
                         logger.warning("LLM task context synthesis failed, falling back to deterministic assembly: %s", e)
+                        synth_model_invoked = False
                         synth_fallback_used = True
+                        synth_inference_status = "failed"
                         synth_fallback_reason = f"Model synthesis error: {e}"
 
                 # Fallback to the deterministic compacted package if the model was
@@ -1090,13 +1104,17 @@ class ContextUseCases:
                     ranking_time_ms=ranking_time_ms,
                     synthesis_time_ms=synthesis_time_ms,
                     total_time_ms=elapsed_ms,
-                    model_invoked=synth_model_invoked or getattr(intent, "model_invoked", False),
+                    model_invoked=synth_model_invoked if self._llm_provider else getattr(intent, "model_invoked", False),
                     provider_identity=synth_provider_identity or getattr(intent, "provider_identity", None),
                     model_name=synth_model_name or getattr(intent, "model_name", None),
-                    inference_status=synth_inference_status if synth_model_invoked else getattr(intent, "inference_status", "not_configured"),
-                    fallback_used=synth_fallback_used and getattr(intent, "fallback_used", False),
+                    inference_status=(
+                        synth_inference_status
+                        if (self._llm_provider and synth_inference_status != "not_configured")
+                        else getattr(intent, "inference_status", "not_configured")
+                    ),
+                    fallback_used=synth_fallback_used if self._llm_provider else getattr(intent, "fallback_used", False),
                     fallback_reason=synth_fallback_reason if not synth_model_invoked else None,
-                    inference_time_ms=synth_inference_time_ms or getattr(intent, "inference_time_ms", 0),
+                    inference_time_ms=synth_inference_time_ms if self._llm_provider else getattr(intent, "inference_time_ms", 0),
                     evidence_state=evidence.evidence_state,
                     evidence_score=evidence.evidence_score,
                     evidence_confidence=evidence.evidence_confidence,
@@ -1109,6 +1127,7 @@ class ContextUseCases:
                     abstention_reason=None,
                     model_claims_allowed=True,
                     compaction=compaction_report.to_dict(),
+                    model_capabilities=getattr(self._llm_provider, "capabilities", None) if self._llm_provider else None,
                 )
 
                 log_event(
